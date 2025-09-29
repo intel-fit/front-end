@@ -1,13 +1,20 @@
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import Splash from "./pages/Splash";
+import MyPage from "./pages/MyPage";
 import "./App.css";
 
-function App() {
+export default function App() {
   return (
-    <div className="screen">
+    <div className="app-wrapper">
       <div className="phone">
-        <h1 className="logo">INTEL FIT</h1>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Navigate to="/splash" replace />} />
+            <Route path="/splash" element={<Splash />} />
+            <Route path="/mypage" element={<MyPage />} />
+          </Routes>
+        </BrowserRouter>
       </div>
     </div>
   );
 }
-
-export default App;
