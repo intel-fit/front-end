@@ -1,23 +1,4 @@
 .tabbar {
-  height: 64px;
-  background: #16161a;
-  border-top: 1px solid #2a2b31;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-}
-
-.item {
-  display: grid;
-  place-items: center;
-  color: #9aa0a6;
-  font-size: 22px;
-  text-decoration: none;
-}
-
-.active {
-  color: #b6f36e;
-}
-.tabbar {
   position: absolute;
 
   bottom: 0;

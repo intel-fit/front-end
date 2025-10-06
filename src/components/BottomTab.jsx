@@ -1,20 +1,32 @@
+import { NavLink } from "react-router-dom";
 import "./BottomTab.css";
+import {
+  IoHomeOutline,
+  IoStatsChartOutline,
+  IoChatboxEllipsesOutline,
+  IoPersonOutline,
+} from "react-icons/io5";
 
-export default function BottomTab({ active }) {
+export default function BottomTab() {
+  const navItems = [
+    { name: "home", icon: IoHomeOutline, link: "/home" },
+    { name: "stats", icon: IoStatsChartOutline, link: "/stats" },
+    { name: "chat", icon: IoChatboxEllipsesOutline, link: "/chat" },
+    { name: "profile", icon: IoPersonOutline, link: "/profile" },
+  ];
+
   return (
     <nav className="tabbar">
-      <a className={`item ${active === "log" ? "active" : ""}`} href="#">
-        🧾
-      </a>
-      <a className={`item ${active === "home" ? "active" : ""}`} href="#">
-        🏠
-      </a>
-      <a
-        className={`item ${active === "mypage" ? "active" : ""}`}
-        href="/mypage"
-      >
-        👤
-      </a>
+      {navItems.map(({ name, icon: Icon, link }) => (
+        <NavLink
+          key={name}
+          to={link}
+          end
+          className={({ isActive }) => `item ${isActive ? "active" : ""}`}
+        >
+          <Icon />
+        </NavLink>
+      ))}
     </nav>
   );
 }
