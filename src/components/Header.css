@@ -1,0 +1,15 @@
+.floating-bell {
+  position: absolute;
+  top: 40px;
+  right: 20px;
+  z-index: 30;
+}
+
+.bell {
+  position: initial;
+  right: initial;
+  background: transparent;
+  border: 0;
+  color: #fff;
+  cursor: pointer;
+}
