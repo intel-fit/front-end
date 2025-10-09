@@ -98,6 +98,10 @@
   background-color: #374151;
 }
 
+.post-card {
+  background-color: aqua;
+}
+
 .menu-item span:first-child {
   font-size: 24px;
 }
