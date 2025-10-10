@@ -1,0 +1,57 @@
+.goal-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #2a2a2a;
+  border-radius: 12px;
+  padding: 8px 20px;
+  margin: 8px 20px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.goal-card:hover {
+  background-color: #3a3a3a;
+}
+
+.goal-content {
+  flex: 1;
+}
+
+.goal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 8px 0;
+}
+
+.goal-description {
+  font-size: 14px;
+  color: #ccc;
+  margin: 0 0 16px 0;
+}
+
+.progress-container {
+  width: 100%;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background-color: #404040;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: #ffd700;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.goal-arrow {
+  color: #fff;
+  font-size: 18px;
+  margin-left: 16px;
+}

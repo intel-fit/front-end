@@ -1,0 +1,31 @@
+.stats-page {
+  background-color: #1a1a1a;
+  min-height: 100vh;
+  color: #fff;
+  padding-bottom: 80px; /* BottomTab을 위한 여백 */
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.stats-page::-webkit-scrollbar {
+  display: none;
+}
+
+.stats-page .header {
+  background-color: #1a1a1a;
+  border-bottom: 1px solid #333;
+}
+
+.empty-tab {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+  margin: 20px;
+}
+
+.empty-tab p {
+  color: #666;
+  font-size: 16px;
+}

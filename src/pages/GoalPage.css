@@ -1,0 +1,74 @@
+.goal-page {
+  background-color: #1a1a1a;
+  min-height: 100vh;
+  color: #fff;
+  padding-bottom: 80px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.goal-page::-webkit-scrollbar {
+  display: none;
+}
+
+.goal-content {
+  padding: 20px;
+}
+
+.goal-section {
+  margin-bottom: 30px;
+}
+
+.goal-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #fff;
+}
+
+.goal-options {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.option {
+  padding: 12px 20px;
+  border: 1px solid #404040;
+  background-color: transparent;
+  color: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+.option:hover {
+  border-color: #e3ff7c;
+  color: #e3ff7c;
+}
+
+.option.active {
+  background-color: #e3ff7c;
+  color: #000;
+  border-color: #e3ff7c;
+}
+
+.save-btn {
+  width: 100%;
+  padding: 16px;
+  background-color: #e3ff7c;
+  color: #000;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  margin-top: 20px;
+}
+
+.save-btn:hover {
+  background-color: #d4f06a;
+}
