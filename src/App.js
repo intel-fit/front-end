@@ -7,6 +7,9 @@ import {
 } from "react-router-dom";
 import Splash from "./pages/Splash";
 import MyPage from "./pages/MyPage";
+import StatsPage from "./pages/StatsPage";
+import GoalPage from "./pages/GoalPage";
+import Nav from "./components/Nav";
 import Header from "./components/Header";
 import BottomTab from "./components/BottomTab";
 import Community from "./pages/Community";
@@ -16,11 +19,10 @@ import "./App.css";
 function Layout() {
   return (
     <div className="app">
-      <Header />
       <main className="main">
         <Outlet />
       </main>
-      <BottomTab />
+      <Nav />
     </div>
   );
 }
@@ -37,6 +39,8 @@ export default function App() {
             <Route element={<Layout />}>
               <Route index element={<Navigate to="/mypage" replace />} />
               <Route path="/mypage" element={<MyPage />} />
+              <Route path="/stats" element={<StatsPage />} />
+              <Route path="/goal" element={<GoalPage />} />
               <Route path="/community" element={<Community />} />
               <Route path="/write" element={<Write />} />
             </Route>

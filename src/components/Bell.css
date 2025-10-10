@@ -1,0 +1,25 @@
+.bell-container {
+  position: relative;
+}
+
+.bell {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+  color: #666;
+}
+
+.bell:hover {
+  background-color: #f5f5f5;
+  color: #333;
+}
+
+.bell:active {
+  transform: scale(0.95);
+}

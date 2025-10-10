@@ -1,0 +1,153 @@
+.goal-page {
+  background-color: #1a1a1a;
+  min-height: 100vh;
+  color: #fff;
+  padding-bottom: 80px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.goal-page::-webkit-scrollbar {
+  display: none;
+}
+
+.goal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #333;
+}
+
+.goal-header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+
+.back-btn,
+.save-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
+
+.back-btn:hover,
+.save-btn:hover {
+  background-color: #333;
+}
+
+.goal-content {
+  padding: 20px;
+}
+
+.goal-section {
+  margin-bottom: 30px;
+}
+
+.goal-section h3 {
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 12px;
+  color: #fff;
+}
+
+.frequency-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #2a2a2a;
+  padding: 16px 20px;
+  border-radius: 12px;
+}
+
+.frequency-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.adjust-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.adjust-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #404040;
+  border: none;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.adjust-btn:hover {
+  background-color: #555;
+}
+
+.time-field,
+.calorie-field {
+  background-color: #2a2a2a;
+  padding: 16px 20px;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.time-field:hover,
+.calorie-field:hover {
+  background-color: #333;
+}
+
+.edit-input {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 16px;
+  width: 100%;
+  outline: none;
+}
+
+.edit-input::placeholder {
+  color: #666;
+}
+
+.type-options {
+  display: flex;
+  gap: 8px;
+}
+
+.type-btn {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid #404040;
+  background-color: #2a2a2a;
+  color: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+.type-btn:hover {
+  border-color: #e3ff7c;
+}
+
+.type-btn.active {
+  background-color: #e3ff7c;
+  color: #000;
+  border-color: #e3ff7c;
+}

@@ -1,10 +1,8 @@
-.tabbar {
+.nav {
   position: absolute;
-
   bottom: 0;
   left: 0;
   right: 0;
-
   height: 64px;
   background: #1c1c1c;
   border-top: 1px solid #333;

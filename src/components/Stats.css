@@ -1,0 +1,11 @@
+.stats {
+  display: flex;
+  gap: 8px;
+  margin: 10px 20px;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+}
+
+.stats::-webkit-scrollbar {
+  display: none;
+}
