@@ -1,23 +1,47 @@
 import { useState } from "react";
 import LogItem from "./LogItem";
+import ExerciseModal from "./ExerciseModal";
 import "./LogSection.css";
 
 export default function LogSection() {
   const [activities, setActivities] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState("add");
+  const [selectedExercise, setSelectedExercise] = useState(null);
 
   const handleAddWorkout = () => {
+    setModalMode("add");
+    setIsModalOpen(true);
+  };
+
+  const handleExerciseClick = (exercise) => {
+    setModalMode("detail");
+    setSelectedExercise(exercise);
+    setIsModalOpen(true);
+  };
+
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    setSelectedExercise(null);
+  };
+
+  const handleExerciseSave = (sets) => {
+    const allSetsCompleted = sets.every((set) => set.completed);
     const newWorkout = {
       id: Date.now(),
-      name: "새로운 운동",
-      details: "무게 10회 3세트",
+      name: selectedExercise?.name || "새로운 운동",
+      details: `${sets[0]?.weight || 20}kg ${sets[0]?.reps || 12}회 ${
+        sets.length
+      }세트`,
       time: new Date().toLocaleTimeString("ko-KR", {
         hour: "2-digit",
         minute: "2-digit",
         hour12: true,
       }),
-      isCompleted: false,
+      isCompleted: allSetsCompleted,
     };
     setActivities([...activities, newWorkout]);
+    handleModalClose();
   };
 
   return (
@@ -32,6 +56,7 @@ export default function LogSection() {
             time={activity.time}
             isCompleted={activity.isCompleted}
             isLast={index === activities.length - 1}
+            onClick={() => handleExerciseClick(activity)}
           />
         ))}
         <div className="add-item">
@@ -41,6 +66,14 @@ export default function LogSection() {
           </button>
         </div>
       </div>
+
+      <ExerciseModal
+        isOpen={isModalOpen}
+        onClose={handleModalClose}
+        mode={modalMode}
+        exerciseData={selectedExercise}
+        onSave={handleExerciseSave}
+      />
     </div>
   );
 }

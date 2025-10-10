@@ -12,6 +12,38 @@
   display: none;
 }
 
+.goal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #333;
+}
+
+.goal-header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+
+.back-btn,
+.save-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
+
+.back-btn:hover,
+.save-btn:hover {
+  background-color: #333;
+}
+
 .goal-content {
   padding: 20px;
 }
@@ -21,22 +53,88 @@
 }
 
 .goal-section h3 {
-  font-size: 18px;
-  font-weight: 600;
-  margin-bottom: 16px;
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 12px;
   color: #fff;
 }
 
-.goal-options {
+.frequency-control {
   display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #2a2a2a;
+  padding: 16px 20px;
+  border-radius: 12px;
 }
 
-.option {
-  padding: 12px 20px;
+.frequency-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.adjust-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.adjust-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #404040;
+  border: none;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.adjust-btn:hover {
+  background-color: #555;
+}
+
+.time-field,
+.calorie-field {
+  background-color: #2a2a2a;
+  padding: 16px 20px;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.time-field:hover,
+.calorie-field:hover {
+  background-color: #333;
+}
+
+.edit-input {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 16px;
+  width: 100%;
+  outline: none;
+}
+
+.edit-input::placeholder {
+  color: #666;
+}
+
+.type-options {
+  display: flex;
+  gap: 8px;
+}
+
+.type-btn {
+  flex: 1;
+  padding: 12px 16px;
   border: 1px solid #404040;
-  background-color: transparent;
+  background-color: #2a2a2a;
   color: #fff;
   border-radius: 8px;
   cursor: pointer;
@@ -44,31 +142,12 @@
   font-size: 14px;
 }
 
-.option:hover {
-  border-color: #e3ff7c;
-  color: #e3ff7c;
-}
-
-.option.active {
-  background-color: #e3ff7c;
-  color: #000;
+.type-btn:hover {
   border-color: #e3ff7c;
 }
 
-.save-btn {
-  width: 100%;
-  padding: 16px;
+.type-btn.active {
   background-color: #e3ff7c;
   color: #000;
-  border: none;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-  margin-top: 20px;
-}
-
-.save-btn:hover {
-  background-color: #d4f06a;
+  border-color: #e3ff7c;
 }

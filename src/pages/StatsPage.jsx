@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Header from "../components/Header";
 import Tabs from "../components/Tabs";
 import Stats from "../components/Stats";
@@ -8,6 +8,14 @@ import "./StatsPage.css";
 
 export default function StatsPage() {
   const [activeTab, setActiveTab] = useState(0);
+  const [goalData, setGoalData] = useState(null);
+
+  useEffect(() => {
+    const savedGoals = localStorage.getItem("workoutGoals");
+    if (savedGoals) {
+      setGoalData(JSON.parse(savedGoals));
+    }
+  }, []);
 
   const handleTabChange = (index) => {
     setActiveTab(index);
@@ -19,7 +27,7 @@ export default function StatsPage() {
         return (
           <>
             <Stats />
-            <GoalCard />
+            <GoalCard goalData={goalData} />
             <LogSection />
           </>
         );
