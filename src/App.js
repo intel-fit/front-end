@@ -14,7 +14,11 @@ import SignupPage from "./pages/SignupPage";
 import FindIdPage from "./pages/FindIdPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import Nav from "./components/Nav";
+import Header from "./components/Header";
+import Community from "./pages/Community";
+import Write from "./pages/Write";
 import "./App.css";
+import Challenge from "./pages/Challenge";
 
 function Layout() {
   return (
@@ -44,8 +48,10 @@ export default function App() {
               <Route path="/mypage" element={<MyPage />} />
               <Route path="/stats" element={<StatsPage />} />
               <Route path="/goal" element={<GoalPage />} />
+              <Route path="/community" element={<Community />} />
+              <Route path="/write" element={<Write />} />
+              <Route path="/challenge" element={<Challenge />} />
             </Route>
-
             <Route path="*" element={<Navigate to="/mypage" replace />} />
           </Routes>
         </BrowserRouter>
