@@ -1,30 +1,25 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import "./Splash.css";
 
 export default function Splash() {
   const nav = useNavigate();
 
   useEffect(() => {
-    const t = setTimeout(() => nav("/mypage", { replace: true }), 3000);
+    const t = setTimeout(() => nav("/login", { replace: true }), 3000);
     return () => clearTimeout(t);
   }, [nav]);
 
   return (
-    <div
-      style={{
-        flex: 1,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#111",
-        color: "#b6f36e",
-        fontSize: 28,
-        fontStyle: "italic",
-        fontWeight: 800,
-        letterSpacing: 1.5,
-      }}
-    >
-      INTEL FIT
+    <div className="splash-container">
+      <div className="splash-content">
+        <h1 className="splash-logo">INTEL FIT</h1>
+        <div className="loading-dots">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </div>
     </div>
   );
 }
