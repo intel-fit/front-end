@@ -11,10 +11,10 @@ import StatsPage from "./pages/StatsPage";
 import GoalPage from "./pages/GoalPage";
 import Nav from "./components/Nav";
 import Header from "./components/Header";
-import BottomTab from "./components/BottomTab";
 import Community from "./pages/Community";
 import Write from "./pages/Write";
 import "./App.css";
+import Challenge from "./pages/Challenge";
 
 function Layout() {
   return (
@@ -43,6 +43,7 @@ export default function App() {
               <Route path="/goal" element={<GoalPage />} />
               <Route path="/community" element={<Community />} />
               <Route path="/write" element={<Write />} />
+              <Route path="/challenge" element={<Challenge />} />
             </Route>
             <Route path="*" element={<Navigate to="/mypage" replace />} />
           </Routes>

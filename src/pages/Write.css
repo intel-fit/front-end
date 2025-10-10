@@ -68,7 +68,7 @@
 }
 
 .write-input::placeholder {
-  color: white;
+  color: gray;
 }
 
 .write-phto-section p {
@@ -97,12 +97,13 @@
   border: none;
   min-height: 250px;
   background-color: #2a2a2a;
-
+  color: white;
   resize: none;
   font-family: inherit;
   box-sizing: border-box;
+  padding: 20px;
 }
 
 .write-textarea::placeholder {
-  color: white;
+  color: gray;
 }

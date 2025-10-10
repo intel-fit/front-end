@@ -11,7 +11,7 @@ export default function Nav() {
   const navItems = [
     { name: "home", icon: IoHomeOutline, link: "/home" },
     { name: "stats", icon: IoStatsChartOutline, link: "/stats" },
-    { name: "communit", icon: IoChatboxEllipsesOutline, link: "/community" },
+    { name: "community", icon: IoChatboxEllipsesOutline, link: "/community" },
     { name: "profile", icon: IoPersonOutline, link: "/profile" },
   ];
 
