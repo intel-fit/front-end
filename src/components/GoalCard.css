@@ -4,8 +4,8 @@
   justify-content: space-between;
   background-color: #2a2a2a;
   border-radius: 12px;
-  padding: 8px 20px;
-  margin: 8px 20px;
+  padding: 6px 20px;
+  margin: 6px 20px;
   cursor: pointer;
   transition: background-color 0.2s ease;
 }
@@ -26,9 +26,11 @@
 }
 
 .goal-description {
-  font-size: 14px;
+  font-size: 12px;
   color: #ccc;
-  margin: 0 0 16px 0;
+  margin: 0;
+  line-height: 1.4;
+  word-break: break-all;
 }
 
 .progress-container {
@@ -54,4 +56,34 @@
   color: #fff;
   font-size: 18px;
   margin-left: 16px;
+}
+
+.progress-container {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  background-color: #404040;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: #e3ff7c;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: #e3ff7c;
+  font-weight: 600;
+  min-width: 30px;
+  text-align: right;
 }

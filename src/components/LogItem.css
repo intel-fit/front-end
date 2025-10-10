@@ -17,6 +17,16 @@
   position: relative;
 }
 
+.timeline-dot.completed {
+  background-color: #fff;
+  border: 3px solid #1a1a1a;
+}
+
+.timeline-dot.pending {
+  background-color: transparent;
+  border: 3px solid #404040;
+}
+
 .timeline-line {
   position: absolute;
   left: 12px;
@@ -40,11 +50,13 @@
 .log-card.completed {
   background-color: #2a2a2a;
   color: #fff;
+  border: 1px solid #404040;
 }
 
 .log-card.pending {
   background-color: #fff;
   color: #000;
+  border: 1px solid #e0e0e0;
 }
 
 .log-info {
