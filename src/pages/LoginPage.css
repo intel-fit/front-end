@@ -1,0 +1,202 @@
+/* LoginPage.css */
+.login-page {
+  min-height: 100vh;
+  background-color: #252525;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.login-container {
+  width: 402px;
+  height: 874px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 120px;
+}
+
+.logo { margin-bottom: 30px; }
+
+.logo h1 {
+  font-family: 'Inter', sans-serif;
+  font-style: italic;
+  font-weight: 800;
+  font-size: 40px;
+  color: #e3ff7c;
+  margin: 0;
+  letter-spacing: 0;
+  text-align: center;
+  line-height: 48.4px;
+}
+
+.login-form {
+  width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.input-group input {
+  width: 100%;
+  height: 60px;
+  background-color: #434343;
+  border: none;
+  border-radius: 20px;
+  padding: 0 20px;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-style: regular;
+  font-weight: 400;
+  box-sizing: border-box;
+  transition: all 0.3s ease;
+}
+
+.input-group input::placeholder {
+  color: #ffffff;
+  opacity: 0.7;
+}
+
+.input-group input:focus {
+  outline: none;
+  background-color: #555555;
+  box-shadow: 0 0 0 2px #e3ff7c;
+}
+
+.input-group input.error {
+  border: 2px solid #ff6b6b;
+  background-color: #4a2a2a;
+}
+
+.error-message {
+  color: #ff6b6b;
+  font-size: 14px;
+  font-family: 'Inter', sans-serif;
+  margin-left: 5px;
+}
+
+.login-btn {
+  width: 100%;
+  height: 60px;
+  background-color: #434343;
+  border: none;
+  border-radius: 100px;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  font-size: 18px;
+  font-style: regular;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  opacity: 0.6;
+}
+
+.login-btn:hover {
+  background-color: #e3ff7c;
+  color: #000000;
+  opacity: 1;
+}
+
+.login-btn:active {
+  transform: scale(0.98);
+}
+
+.login-links {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  width: 360px;
+  margin-bottom: 30px;
+}
+
+.login-links .link {
+  color: #ffffff;
+  text-decoration: none;
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-style: regular;
+  font-weight: 400;
+  transition: color 0.3s ease;
+}
+
+.login-links .link:hover {
+  color: #e3ff7c;
+}
+
+.kakao-login-btn {
+  width: 360px;
+  height: 50px;
+  background-color: #ffe617;
+  border: none;
+  border-radius: 20px;
+  color: #47292b;
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-style: regular;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  padding: 0 20px;
+}
+
+.kakao-login-btn span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  text-align: center;
+}
+
+.kakao-login-btn::before {
+  content: '';
+  display: block;
+  width: 22px;
+  height: 22px;
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjIiIGhlaWdodD0iMjIiIHZpZXdCb3g9IjAgMCAyMiAyMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cGF0aCBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGNsaXAtcnVsZT0iZXZlbm9kZCIgZD0iTTExIDJDNS45MiAyIDIgNS4wMiAyIDguODJjMCAyLjQgMS42OSA0LjUgNC4yIDUuNzFsLTEuMDcgMy43N2MtLjA3LjIuMDYuNC4yOC40LjA4IDAgLjE2LS4wMi4yMy0uMDhsNC41OC0zYy4yNi4wNC41Mi4wNS43OC4wNSA1LjA4IDAgOS0zLjAyIDktNi44NUMyMCA1LjAyIDE2LjA4IDIgMTEgMnoiIGZpbGw9IiMzODFFMUYiLz4KPC9zdmc+Cg==');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+.kakao-login-btn:hover {
+  background-color: #ffed4a;
+  transform: translateY(-2px);
+}
+
+.kakao-login-btn:active {
+  transform: scale(0.98);
+}
+
+/* 반응형 디자인 */
+@media (max-width: 480px) {
+  .login-container {
+    padding: 0 20px;
+  }
+  
+  .logo h1 {
+    font-size: 40px;
+  }
+  
+  .login-links {
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+  }
+}
