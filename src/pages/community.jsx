@@ -1,38 +1,51 @@
-import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import "./Community.css";
 
 const Community = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState("커뮤니티");
+
   const [posts, setPosts] = useState(() => {
     const savedPosts = localStorage.getItem("posts");
     return savedPosts ? JSON.parse(savedPosts) : [];
   });
 
-  useEffect(() => {
-    if (location.state?.newPost) {
-      const post = {
-        id: Date.now(),
-        title: location.state.newPost.title,
-        content: location.state.newPost.content,
-        time: Date.now(),
-        author: "나",
-        likes: 0,
-      };
+  const isProcessing = useRef(false);
 
-      setPosts((prevPosts) => {
-        const updatePosts = [post, ...prevPosts];
-        localStorage.setItem("post", JSON.stringify(updatePosts));
-        return updatePosts;
-      });
-      window.history.replaceState({}, document.title);
+  useEffect(() => {
+    if (isProcessing.current || !location.state?.newPost) {
+      return;
     }
+    isProcessing.current = true;
+
+    const post = {
+      id: Date.now(),
+      title: location.state.newPost.title,
+      content: location.state.newPost.content,
+      time: new Date().toLocaleTimeString("ko-KR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      author: "익명",
+      likes: 0,
+    };
+
+    setPosts((prevPosts) => {
+      const updatedPosts = [post, ...prevPosts];
+      localStorage.setItem("posts", JSON.stringify(updatedPosts));
+      return updatedPosts;
+    });
+    window.history.replaceState({}, document.title);
+
+    setTimeout(() => {
+      isProcessing.current = false;
+    }, 100);
   }, [location]);
 
-  const handlLike = (postId) => {
-    const updatePosts = posts.map((post) => {
+  const handleLike = (postId) => {
+    const updatedPosts = posts.map((post) => {
       if (post.id === postId) {
         return {
           ...post,
@@ -42,12 +55,14 @@ const Community = () => {
       return post;
     });
 
-    setPosts(updatePosts);
-    localStorage.setItem("posts", JSON.stringify(updatePosts));
+    setPosts(updatedPosts);
+    localStorage.setItem("posts", JSON.stringify(updatedPosts));
   };
 
   return (
     <div>
+      <div className="top-menu">소셜</div>
+
       <div className="tab-menu">
         <button
           className={activeTab === "커뮤니티" ? "active" : ""}
@@ -55,9 +70,13 @@ const Community = () => {
         >
           커뮤니티
         </button>
+
         <button
           className={activeTab === "챌린지" ? "active" : ""}
-          onClick={() => setActiveTab("챌린지")}
+          onClick={() => {
+            setActiveTab("챌린지");
+            navigate("/challenge");
+          }}
         >
           챌린지
         </button>
@@ -67,7 +86,6 @@ const Community = () => {
         {posts.length === 0 ? (
           <div className="no-posts">
             <p>아직 작성된 게시글이 없습니다.</p>
-            <p>첫 번째 글을 작성해 보세✏️.</p>
           </div>
         ) : (
           posts.map((post) => (
@@ -82,7 +100,7 @@ const Community = () => {
                 </div>
                 <button
                   className="like-button"
-                  onClick={() => handlLike(post.id)}
+                  onClick={() => handleLike(post.id)}
                 >
                   <span>👍</span>
                   <span>{post.likes}</span>

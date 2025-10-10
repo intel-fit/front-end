@@ -9,6 +9,8 @@ import Splash from "./pages/Splash";
 import MyPage from "./pages/MyPage";
 import Header from "./components/Header";
 import BottomTab from "./components/BottomTab";
+import Community from "./pages/Community";
+import Write from "./pages/Write";
 import "./App.css";
 
 function Layout() {
@@ -35,8 +37,9 @@ export default function App() {
             <Route element={<Layout />}>
               <Route index element={<Navigate to="/mypage" replace />} />
               <Route path="/mypage" element={<MyPage />} />
+              <Route path="/community" element={<Community />} />
+              <Route path="/write" element={<Write />} />
             </Route>
-
             <Route path="*" element={<Navigate to="/mypage" replace />} />
           </Routes>
         </BrowserRouter>

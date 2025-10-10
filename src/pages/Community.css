@@ -1,21 +1,23 @@
+.top-menu {
+  color: white;
+  text-align: center;
+  padding: 15px 20px;
+  margin-top: 25px;
+}
+
 .tab-menu {
   display: flex;
-  gap: 5px;
+  gap: 20px;
   padding: 20px;
   background-color: #111;
-  min-height: 100px;
+  min-height: 20px;
 }
 
 .tab-menu button {
-  background-color: #111;
-  background: none;
   border: none;
-  color: #888888;
-  font-weight: 500px;
-  font-size: 16px;
+  background: none;
+  color: white;
   cursor: pointer;
-  padding: 5px 1px;
-  transition: color 0.3s;
 }
 
 .tab-menu button.active {
@@ -31,6 +33,46 @@
   text-align: center;
   padding: 60px 20px;
   color: rgb(255, 255, 255);
+}
+
+.post-card {
+  background: #464646;
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.post-title {
+  font-size: 17px;
+  font-weight: bold;
+  margin: 0 0 8px 0;
+}
+
+.post-content {
+  font-size: 12px;
+  margin: 0 0 8px 0;
+}
+
+.post-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+}
+
+.post-info {
+  display: flex;
+  gap: 5px;
+}
+
+.like-button {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  color: #b6f36e;
+  cursor: pointer;
 }
 
 .write-button {
