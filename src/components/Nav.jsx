@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import "./BottomTab.css";
+import "./Nav.css";
 import {
   IoHomeOutline,
   IoStatsChartOutline,
@@ -7,7 +7,7 @@ import {
   IoPersonOutline,
 } from "react-icons/io5";
 
-export default function BottomTab() {
+export default function Nav() {
   const navItems = [
     { name: "home", icon: IoHomeOutline, link: "/home" },
     { name: "stats", icon: IoStatsChartOutline, link: "/stats" },
@@ -16,7 +16,7 @@ export default function BottomTab() {
   ];
 
   return (
-    <nav className="tabbar">
+    <nav className="nav">
       {navItems.map(({ name, icon: Icon, link }) => (
         <NavLink
           key={name}

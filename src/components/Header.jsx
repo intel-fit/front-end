@@ -1,12 +1,11 @@
-import { IoNotificationsOutline } from "react-icons/io5";
+import Bell from "./Bell";
 import "./Header.css";
 
-export default function Header() {
+export default function Header({ title }) {
   return (
-    <div className="floating-bell">
-      <button className="bell" aria-label="알림">
-        <IoNotificationsOutline size={22} />
-      </button>
-    </div>
+    <header className="header">
+      <h1 className="title">{title}</h1>
+      <Bell />
+    </header>
   );
 }
