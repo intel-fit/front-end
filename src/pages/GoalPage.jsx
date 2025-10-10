@@ -1,106 +1,152 @@
 import { useState } from "react";
-import Header from "../components/Header";
+import { useNavigate } from "react-router-dom";
+import { IoArrowBack, IoCheckmark } from "react-icons/io5";
 import "./GoalPage.css";
 
 export default function GoalPage() {
-  const [goals, setGoals] = useState({
-    frequency: "",
-    duration: "",
-    type: "",
+  const navigate = useNavigate();
+  const [goals, setGoals] = useState(() => {
+    const savedGoals = localStorage.getItem("workoutGoals");
+    return savedGoals
+      ? JSON.parse(savedGoals)
+      : {
+          frequency: 3,
+          duration: "30분 이상",
+          type: "유산소",
+          calories: 1500,
+        };
   });
 
+  const [isEditingDuration, setIsEditingDuration] = useState(false);
+  const [isEditingCalories, setIsEditingCalories] = useState(false);
+
   const handleSave = () => {
-    // 목표 저장 로직
     console.log("목표 저장:", goals);
-    // 실제로는 API 호출이나 상태 관리
+    // localStorage에 목표 저장
+    localStorage.setItem("workoutGoals", JSON.stringify(goals));
+    navigate("/stats");
+  };
+
+  const handleBack = () => {
+    navigate("/stats");
+  };
+
+  const adjustFrequency = (change) => {
+    setGoals((prev) => ({
+      ...prev,
+      frequency: Math.max(1, Math.min(7, prev.frequency + change)),
+    }));
   };
 
   return (
     <div className="goal-page">
-      <Header title="운동 목표 설정" />
+      <div className="goal-header">
+        <button className="back-btn" onClick={handleBack}>
+          <IoArrowBack />
+        </button>
+        <h1>운동 목표 설정</h1>
+        <button className="save-btn" onClick={handleSave}>
+          <IoCheckmark />
+        </button>
+      </div>
 
       <div className="goal-content">
         <div className="goal-section">
-          <h3>운동 빈도</h3>
-          <div className="goal-options">
-            <button
-              className={`option ${
-                goals.frequency === "주 3회" ? "active" : ""
-              }`}
-              onClick={() => setGoals({ ...goals, frequency: "주 3회" })}
-            >
-              주 3회
-            </button>
-            <button
-              className={`option ${
-                goals.frequency === "주 4회" ? "active" : ""
-              }`}
-              onClick={() => setGoals({ ...goals, frequency: "주 4회" })}
-            >
-              주 4회
-            </button>
-            <button
-              className={`option ${
-                goals.frequency === "주 5회" ? "active" : ""
-              }`}
-              onClick={() => setGoals({ ...goals, frequency: "주 5회" })}
-            >
-              주 5회
-            </button>
+          <h3>주간 운동 횟수</h3>
+          <div className="frequency-control">
+            <span className="frequency-value">주 {goals.frequency}회</span>
+            <div className="adjust-buttons">
+              <button
+                className="adjust-btn"
+                onClick={() => adjustFrequency(-1)}
+              >
+                -
+              </button>
+              <button className="adjust-btn" onClick={() => adjustFrequency(1)}>
+                +
+              </button>
+            </div>
           </div>
         </div>
 
         <div className="goal-section">
-          <h3>운동 시간</h3>
-          <div className="goal-options">
-            <button
-              className={`option ${goals.duration === "30분" ? "active" : ""}`}
-              onClick={() => setGoals({ ...goals, duration: "30분" })}
-            >
-              30분
-            </button>
-            <button
-              className={`option ${goals.duration === "45분" ? "active" : ""}`}
-              onClick={() => setGoals({ ...goals, duration: "45분" })}
-            >
-              45분
-            </button>
-            <button
-              className={`option ${goals.duration === "60분" ? "active" : ""}`}
-              onClick={() => setGoals({ ...goals, duration: "60분" })}
-            >
-              60분
-            </button>
+          <h3>1회 운동 시간</h3>
+          <div
+            className="time-field"
+            onClick={() => setIsEditingDuration(true)}
+          >
+            {isEditingDuration ? (
+              <input
+                type="text"
+                value={goals.duration}
+                onChange={(e) =>
+                  setGoals({ ...goals, duration: e.target.value })
+                }
+                onBlur={() => setIsEditingDuration(false)}
+                onKeyPress={(e) =>
+                  e.key === "Enter" && setIsEditingDuration(false)
+                }
+                className="edit-input"
+                autoFocus
+              />
+            ) : (
+              <span>{goals.duration}</span>
+            )}
           </div>
         </div>
 
         <div className="goal-section">
-          <h3>운동 유형</h3>
-          <div className="goal-options">
+          <h3>운동 종류</h3>
+          <div className="type-options">
             <button
-              className={`option ${goals.type === "유산소" ? "active" : ""}`}
+              className={`type-btn ${goals.type === "전체" ? "active" : ""}`}
+              onClick={() => setGoals({ ...goals, type: "전체" })}
+            >
+              전체
+            </button>
+            <button
+              className={`type-btn ${goals.type === "유산소" ? "active" : ""}`}
               onClick={() => setGoals({ ...goals, type: "유산소" })}
             >
               유산소
             </button>
             <button
-              className={`option ${goals.type === "근력" ? "active" : ""}`}
-              onClick={() => setGoals({ ...goals, type: "근력" })}
+              className={`type-btn ${goals.type === "무산소" ? "active" : ""}`}
+              onClick={() => setGoals({ ...goals, type: "무산소" })}
             >
-              근력
-            </button>
-            <button
-              className={`option ${goals.type === "혼합" ? "active" : ""}`}
-              onClick={() => setGoals({ ...goals, type: "혼합" })}
-            >
-              혼합
+              무산소
             </button>
           </div>
         </div>
 
-        <button className="save-btn" onClick={handleSave}>
-          목표 저장하기
-        </button>
+        <div className="goal-section">
+          <h3>주간 칼로리 소모 목표</h3>
+          <div
+            className="calorie-field"
+            onClick={() => setIsEditingCalories(true)}
+          >
+            {isEditingCalories ? (
+              <input
+                type="number"
+                value={goals.calories}
+                onChange={(e) =>
+                  setGoals({
+                    ...goals,
+                    calories: parseInt(e.target.value) || 0,
+                  })
+                }
+                onBlur={() => setIsEditingCalories(false)}
+                onKeyPress={(e) =>
+                  e.key === "Enter" && setIsEditingCalories(false)
+                }
+                className="edit-input"
+                autoFocus
+              />
+            ) : (
+              <span>{goals.calories}kcal</span>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
