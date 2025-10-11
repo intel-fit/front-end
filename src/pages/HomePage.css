@@ -1,0 +1,23 @@
+.home-page {
+  background-color: #1a1a1a;
+  min-height: 100vh;
+  color: #fff;
+  padding-bottom: 80px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.home-page::-webkit-scrollbar {
+  display: none;
+}
+
+.divider {
+  height: 1px;
+  background-color: #333;
+  margin: 0;
+}
+
+.home-content {
+  padding: 20px;
+}

@@ -9,12 +9,12 @@ import Splash from "./pages/Splash";
 import MyPage from "./pages/MyPage";
 import StatsPage from "./pages/StatsPage";
 import GoalPage from "./pages/GoalPage";
+import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import FindIdPage from "./pages/FindIdPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import Nav from "./components/Nav";
-import Header from "./components/Header";
 import Community from "./pages/Community";
 import Write from "./pages/Write";
 import "./App.css";
@@ -45,6 +45,7 @@ export default function App() {
             <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             <Route element={<Layout />}>
+              <Route path="/home" element={<HomePage />} />
               <Route path="/mypage" element={<MyPage />} />
               <Route path="/stats" element={<StatsPage />} />
               <Route path="/goal" element={<GoalPage />} />
@@ -52,7 +53,7 @@ export default function App() {
               <Route path="/write" element={<Write />} />
               <Route path="/challenge" element={<Challenge />} />
             </Route>
-            <Route path="*" element={<Navigate to="/mypage" replace />} />
+            <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </BrowserRouter>
       </div>

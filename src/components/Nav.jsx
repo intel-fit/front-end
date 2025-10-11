@@ -12,7 +12,7 @@ export default function Nav() {
     { name: "home", icon: IoHomeOutline, link: "/home" },
     { name: "stats", icon: IoStatsChartOutline, link: "/stats" },
     { name: "community", icon: IoChatboxEllipsesOutline, link: "/community" },
-    { name: "profile", icon: IoPersonOutline, link: "/profile" },
+    { name: "profile", icon: IoPersonOutline, link: "/mypage" },
   ];
 
   return (
