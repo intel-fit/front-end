@@ -1,0 +1,333 @@
+.ai-analysis-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.ai-analysis-modal-content {
+  background-color: #2a2a2a;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 400px;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-analysis-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #404040;
+  flex-shrink: 0;
+}
+
+.ai-analysis-modal-title {
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.ai-analysis-modal-close {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-analysis-modal-close:hover {
+  background-color: #404040;
+}
+
+.ai-analysis-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  min-height: 0;
+}
+
+/* 분석 시작 화면 */
+.analysis-start {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.analysis-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+}
+
+.analysis-start h3 {
+  color: #fff;
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+}
+
+.analysis-description {
+  color: #ccc;
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0 0 32px 0;
+}
+
+.analyzing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 0;
+}
+
+.analyzing-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #404040;
+  border-top: 4px solid #4ade80;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.analyzing-text {
+  color: #4ade80;
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0;
+}
+
+.start-analysis-btn {
+  width: 100%;
+  padding: 14px 24px;
+  background-color: #4ade80;
+  color: #000;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.start-analysis-btn:hover {
+  background-color: #22c55e;
+}
+
+/* 분석 결과 화면 */
+.analysis-result {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.result-score {
+  text-align: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+  border-radius: 12px;
+}
+
+.score-circle {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.2);
+  margin-bottom: 12px;
+}
+
+.score-value {
+  color: #fff;
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.score-label {
+  color: #fff;
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.score-status {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.insights-section,
+.recommendations-section {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.section-title {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+}
+
+.insights-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.insight-item {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.insight-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.insight-category {
+  color: #4ade80;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.status-icon {
+  font-size: 18px;
+}
+
+.status-icon.excellent {
+  color: #4ade80;
+}
+
+.status-icon.good {
+  color: #60a5fa;
+}
+
+.status-icon.warning {
+  color: #fbbf24;
+}
+
+.insight-message {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0 0 4px 0;
+}
+
+.insight-detail {
+  color: #ccc;
+  font-size: 12px;
+  margin: 0;
+}
+
+.recommendations-list {
+  color: #fff;
+  font-size: 14px;
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.6;
+}
+
+.recommendations-list li {
+  margin-bottom: 8px;
+}
+
+.recommendations-list li:last-child {
+  margin-bottom: 0;
+}
+
+/* 스크롤바 스타일 */
+.ai-analysis-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ai-analysis-modal-body::-webkit-scrollbar-track {
+  background: #2a2a2a;
+}
+
+.ai-analysis-modal-body::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 3px;
+}
+
+.ai-analysis-modal-body::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 480px) {
+  .ai-analysis-modal-overlay {
+    padding: 16px;
+  }
+
+  .ai-analysis-modal-content {
+    max-width: 100%;
+    max-height: 88vh;
+    border-radius: 12px;
+  }
+
+  .ai-analysis-modal-body {
+    padding: 16px;
+  }
+
+  .analysis-icon {
+    font-size: 56px;
+  }
+
+  .analysis-start h3 {
+    font-size: 18px;
+  }
+
+  .analysis-description {
+    font-size: 13px;
+  }
+
+  .score-circle {
+    width: 90px;
+    height: 90px;
+  }
+
+  .score-value {
+    font-size: 32px;
+  }
+
+  .insights-section,
+  .recommendations-section {
+    padding: 14px;
+  }
+}

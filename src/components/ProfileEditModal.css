@@ -1,0 +1,353 @@
+.profile-edit-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.profile-edit-modal-content {
+  background-color: #2a2a2a;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 400px;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-edit-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #404040;
+  flex-shrink: 0;
+}
+
+.profile-edit-modal-title {
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.profile-edit-modal-close {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-edit-modal-close:hover {
+  background-color: #404040;
+}
+
+.profile-edit-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 20px;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+/* 프로필 이미지 섹션 */
+.profile-image-section {
+  text-align: center;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #404040;
+}
+
+.profile-image-container {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  margin: 0 auto 12px;
+}
+
+.profile-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.profile-img-placeholder {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background-color: #404040;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+  font-size: 48px;
+}
+
+.image-upload-btn {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 32px;
+  height: 32px;
+  background-color: #4ade80;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #000;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border: 3px solid #2a2a2a;
+}
+
+.image-upload-btn:hover {
+  background-color: #22c55e;
+}
+
+.image-guide {
+  color: #ccc;
+  font-size: 12px;
+  margin: 0;
+}
+
+/* 폼 섹션 */
+.form-section {
+  margin-bottom: 20px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.section-title {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+}
+
+.form-group {
+  margin-bottom: 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.form-group:last-child {
+  margin-bottom: 0;
+}
+
+.form-group label {
+  display: block;
+  color: #ccc;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.form-group input[type="text"],
+.form-group input[type="email"],
+.form-group input[type="tel"],
+.form-group input[type="date"],
+.form-group input[type="number"] {
+  width: 100%;
+  max-width: 100%;
+  padding: 10px 12px;
+  background-color: #404040;
+  border: 1px solid #555;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+  box-sizing: border-box;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #4ade80;
+}
+
+.form-group input::placeholder {
+  color: #999;
+}
+
+/* 라디오 그룹 */
+.radio-group {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.radio-label input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #4ade80;
+}
+
+/* 폼 행 */
+.form-row {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.form-row .form-group {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 푸터 */
+.profile-edit-modal-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #404040;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.cancel-btn,
+.save-btn {
+  flex: 1;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 8px;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  height: 44px !important;
+  min-height: 44px !important;
+  max-height: 44px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+  line-height: 1 !important;
+  vertical-align: top !important;
+  overflow: hidden !important;
+}
+
+.cancel-btn {
+  background-color: #404040 !important;
+  color: #fff !important;
+  border: 1px solid #555 !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  max-height: 44px !important;
+}
+
+.cancel-btn:hover {
+  background-color: #555 !important;
+}
+
+.save-btn {
+  background-color: #4ade80 !important;
+  color: #000 !important;
+  border: 1px solid #4ade80 !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  max-height: 44px !important;
+}
+
+.save-btn:hover {
+  background-color: #22c55e !important;
+  border-color: #22c55e !important;
+}
+
+/* 스크롤바 스타일 */
+.profile-edit-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.profile-edit-modal-body::-webkit-scrollbar-track {
+  background: #2a2a2a;
+}
+
+.profile-edit-modal-body::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 3px;
+}
+
+.profile-edit-modal-body::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 480px) {
+  .profile-edit-modal-overlay {
+    padding: 16px;
+  }
+
+  .profile-edit-modal-content {
+    max-width: 100%;
+    max-height: 88vh;
+    border-radius: 12px;
+  }
+
+  .profile-edit-modal-body {
+    padding: 16px;
+  }
+
+  .profile-image-container {
+    width: 90px;
+    height: 90px;
+  }
+
+  .profile-img-placeholder {
+    font-size: 42px;
+  }
+
+  .image-upload-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .form-row .form-group {
+    width: 100%;
+  }
+
+  .radio-group {
+    gap: 12px;
+  }
+
+  .profile-edit-modal-footer {
+    padding: 14px 16px;
+  }
+}

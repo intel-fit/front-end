@@ -1,0 +1,281 @@
+.inbody-history-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.inbody-history-modal-content {
+  background-color: #2a2a2a;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 400px;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.inbody-history-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #404040;
+  flex-shrink: 0;
+}
+
+.inbody-history-modal-title {
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.inbody-history-modal-close {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.inbody-history-modal-close:hover {
+  background-color: #404040;
+}
+
+.period-selector {
+  display: flex;
+  gap: 6px;
+  padding: 12px 20px;
+  border-bottom: 1px solid #404040;
+  flex-shrink: 0;
+}
+
+.period-btn {
+  flex: 1;
+  padding: 6px 8px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid #555;
+  border-radius: 6px;
+  color: #ccc;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.period-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.period-btn.active {
+  background-color: #4ade80;
+  color: #000;
+  border-color: #4ade80;
+  font-weight: 600;
+}
+
+.inbody-history-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  min-height: 0;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.empty-state p {
+  color: #ccc;
+  font-size: 16px;
+  margin: 0 0 8px 0;
+}
+
+.empty-state-sub {
+  color: #999;
+  font-size: 14px;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.history-item {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 12px;
+  border: 1px solid #404040;
+}
+
+.history-date {
+  color: #4ade80;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.history-data-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.history-data-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.data-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.data-label {
+  color: #ccc;
+  font-size: 11px;
+}
+
+.data-value {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.data-change {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.data-change.positive {
+  color: #4ade80;
+}
+
+.data-change.negative {
+  color: #ff6b6b;
+}
+
+.trend-up,
+.trend-down {
+  font-size: 11px;
+}
+
+.trend-up {
+  color: #4ade80;
+}
+
+.trend-down {
+  color: #ff6b6b;
+}
+
+/* 스크롤바 스타일 */
+.inbody-history-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.inbody-history-modal-body::-webkit-scrollbar-track {
+  background: #2a2a2a;
+}
+
+.inbody-history-modal-body::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 3px;
+}
+
+.inbody-history-modal-body::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 480px) {
+  .inbody-history-modal-overlay {
+    padding: 16px;
+  }
+
+  .inbody-history-modal-content {
+    max-width: 100%;
+    max-height: 88vh;
+    border-radius: 12px;
+  }
+
+  .inbody-history-modal-header {
+    padding: 14px 16px;
+  }
+
+  .inbody-history-modal-title {
+    font-size: 16px;
+  }
+
+  .period-selector {
+    padding: 10px 16px;
+    gap: 5px;
+  }
+
+  .period-btn {
+    padding: 6px 6px;
+    font-size: 11px;
+  }
+
+  .inbody-history-modal-body {
+    padding: 12px;
+  }
+
+  .history-list {
+    gap: 10px;
+  }
+
+  .history-item {
+    padding: 10px;
+  }
+
+  .history-date {
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .history-data-grid {
+    gap: 8px;
+  }
+
+  .data-label {
+    font-size: 10px;
+  }
+
+  .data-value {
+    font-size: 13px;
+  }
+
+  .data-change {
+    font-size: 9px;
+  }
+
+  .trend-up,
+  .trend-down {
+    font-size: 10px;
+  }
+}
