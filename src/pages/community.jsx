@@ -1,29 +1,33 @@
 import { useState, useEffect, useRef } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import "./Community.css";
 
 const Community = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState("커뮤니티");
-
   const [posts, setPosts] = useState(() => {
     const savedPosts = localStorage.getItem("posts");
     return savedPosts ? JSON.parse(savedPosts) : [];
   });
-
   const isProcessing = useRef(false);
 
   useEffect(() => {
-    if (isProcessing.current || !location.state?.newPost) {
+    if (isProcessing.current) {
       return;
     }
+
+    if (!location.state?.newPost) {
+      return;
+    }
+
     isProcessing.current = true;
 
     const post = {
       id: Date.now(),
       title: location.state.newPost.title,
       content: location.state.newPost.content,
+      images: location.state.newPost.images,
       time: new Date().toLocaleTimeString("ko-KR", {
         hour: "2-digit",
         minute: "2-digit",
@@ -44,6 +48,19 @@ const Community = () => {
     }, 100);
   }, [location]);
 
+  const getCommentCount = (postId) => {
+    const savedComments = localStorage.getItem("comments");
+
+    if (!savedComments) {
+      return 0;
+    }
+
+    const allComments = JSON.parse(savedComments);
+    const postComments = allComments[postId] || [];
+
+    return postComments.length;
+  };
+
   const handleLike = (postId) => {
     const updatedPosts = posts.map((post) => {
       if (post.id === postId) {
@@ -54,7 +71,6 @@ const Community = () => {
       }
       return post;
     });
-
     setPosts(updatedPosts);
     localStorage.setItem("posts", JSON.stringify(updatedPosts));
   };
@@ -62,7 +78,6 @@ const Community = () => {
   return (
     <div>
       <div className="top-menu">소셜</div>
-
       <div className="tab-menu">
         <button
           className={activeTab === "커뮤니티" ? "active" : ""}
@@ -70,12 +85,11 @@ const Community = () => {
         >
           커뮤니티
         </button>
-
         <button
           className={activeTab === "챌린지" ? "active" : ""}
           onClick={() => {
             setActiveTab("챌린지");
-            navigate("/challenge");
+            navigate("/Challenge");
           }}
         >
           챌린지
@@ -85,37 +99,66 @@ const Community = () => {
       <div className="post-container">
         {posts.length === 0 ? (
           <div className="no-posts">
-            <p>아직 작성된 게시글이 없습니다.</p>
+            <p>아직 작성된 글이 없습니다.</p>
           </div>
         ) : (
           posts.map((post) => (
-            <div key={post.id} className="post-card">
-              <h3 className="post-title">{post.title}</h3>
-              <p className="post-content">{post.content}</p>
+            <div
+              key={post.id}
+              className="post-card"
+              onClick={() => navigate(`/post/${post.id}`)}
+            >
+              <h3>{post.title}</h3>
+
+              {post.images && post.images.length > 0 && (
+                <div className="post-images">
+                  {post.images.map((image, index) => (
+                    <img
+                      key={index}
+                      src={image}
+                      alt={`${post.title} 이미지 ${index + 1}`}
+                      className="post-image"
+                    />
+                  ))}
+                </div>
+              )}
+              <p>{post.content}</p>
 
               <div className="post-footer">
                 <div className="post-info">
-                  <span className="post-time">{post.time}</span>
-                  <span className="post-author">{post.author}</span>
+                  <span>{post.time}</span>
+                  <span>{post.author}</span>
                 </div>
                 <button
-                  className="like-button"
-                  onClick={() => handleLike(post.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleLike(post.id);
+                  }}
                 >
                   <span>👍</span>
                   <span>{post.likes}</span>
+                </button>
+
+                <button
+                  className="action-button comment-button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/post/${post.id}`);
+                  }}
+                >
+                  <span>💬</span>
+                  <span>{getCommentCount(post.id)}</span>
                 </button>
               </div>
             </div>
           ))
         )}
-      </div>
 
-      <button className="write-button" onClick={() => navigate("/write")}>
-        ✏️ 글쓰기
-      </button>
+        <button className="write-button" onClick={() => navigate("/write")}>
+          ✏️ 글쓰기
+        </button>
+      </div>
     </div>
   );
 };
-
 export default Community;

@@ -1,5 +1,144 @@
-.challenge {
+.top-menu {
   color: white;
-  margin-top: 300px;
-  margin-left: 140px;
+  text-align: center;
+  padding: 15px 20px;
+  margin-top: 25px;
+}
+
+.tab-menu {
+  display: flex;
+  gap: 20px;
+  padding: 20px;
+  background-color: #111;
+  min-height: 20px;
+}
+
+.tab-menu button {
+  border: none;
+  background: none;
+  color: white;
+  cursor: pointer;
+}
+
+.tab-menu button.active {
+  color: #b6f36e;
+}
+
+.section-title1 {
+  color: white;
+  font-size: 15px;
+  margin-top: 10px;
+  margin-left: 10px;
+}
+
+.top-challenges {
+  display: flex;
+  color: white;
+  overflow-x: auto;
+  padding-bottom: 10px;
+}
+
+.challenge-card {
+  background-color: #464646;
+  color: white;
+  min-width: 200px;
+  max-width: 200px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  align-items: center;
+  margin-right: 5px;
+  margin-left: 5px;
+}
+
+.challenge-image {
+  width: 100px;
+  height: 150px;
+  background-color: red;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.challenge-info {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+}
+
+.challenge-tag {
+  font-size: 11px;
+  color: white;
+}
+
+.challenge-title {
+  font-size: 15px;
+  font-weight: bold;
+  margin: 0;
+  color: white;
+  margin-bottom: 10px;
+}
+
+.join-btn {
+  background-color: #b6f36e;
+  border: none;
+  color: black;
+  cursor: pointer;
+  margin-bottom: 10px;
+  border-radius: 5px;
+}
+
+.section-title2 {
+  color: white;
+  font-size: 15px;
+  margin-top: 10px;
+  margin-left: 10px;
+}
+
+.exercise-challenges {
+  color: white;
+}
+
+.exercise-card {
+  width: 350px;
+  display: flex;
+  gap: 15px;
+  background-color: #464646;
+  margin-bottom: 5px;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 10px;
+  padding: 10px;
+  cursor: pointer;
+  margin-left: 10px;
+}
+
+.exercise-image {
+  width: 60px;
+  height: 60px;
+  background-color: red;
+  border-radius: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.exercise-card h3 {
+  font-size: 16px;
+  font-weight: bold;
+  margin: 0;
+}
+
+.make-challenge {
+  position: fixed;
+  bottom: 300px;
+  right: 360px;
+  background-color: white;
+  border-radius: 10px;
+  cursor: pointer;
 }
