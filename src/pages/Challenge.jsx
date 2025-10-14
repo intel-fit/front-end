@@ -97,7 +97,9 @@ const Challenge = () => {
 
               <button
                 className="join-btn"
-                onClick={() => navigate("/joinchallenge")}
+                onClick={() =>
+                  navigate("/joinchallenge", { state: { challenge } })
+                }
               >
                 참여하기
               </button>
