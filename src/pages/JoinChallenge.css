@@ -1,0 +1,24 @@
+.join-challenge-page {
+  color: white;
+}
+
+.back-button {
+  position: absolute;
+  cursor: pointer;
+  top: 20px;
+  left: 20px;
+}
+
+.challenge-header-img {
+  width: 100%;
+  height: 250px;
+  background: red;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.challenge-emoji {
+  font-size: 100px;
+}

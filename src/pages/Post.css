@@ -1,0 +1,267 @@
+.post-detail-page {
+  min-height: 100vh;
+  background-color: #111;
+  color: white;
+  padding-bottom: 80px;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background-color: #000;
+  color: white;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  background-color: #000;
+  border-bottom: 1px solid #333;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.back-btn {
+  background-color: #000;
+  color: white;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-title {
+  font-size: 18px;
+  font-weight: bold;
+  margin: 0;
+}
+
+.detail-content {
+  padding: 20px;
+  padding-bottom: 140px;
+}
+
+.author-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.author-avatar {
+  width: 48px;
+  height: 48px;
+  background-color: #2a2a2a;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 24px;
+}
+
+.author-details {
+  flex: 1;
+}
+
+.author-name {
+  font-size: 16px;
+  font-weight: bold;
+  margin: 0 0 4px 0;
+}
+
+.post-time {
+  font-size: 12px;
+  color: #999;
+  margin: 0;
+}
+
+.detail-title {
+  font-size: 24px;
+  font-weight: bold;
+  margin: 0 0 20px 0;
+  line-height: 1.4;
+}
+
+.detail-images {
+  margin: 20px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-image {
+  width: 100%;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+.detail-text {
+  font-size: 16px;
+  line-height: 1.6;
+  color: #ccc;
+  margin: 20px 0;
+  white-space: pre-wrap;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  background-color: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.action-btn:hover {
+  background-color: #252525;
+}
+
+.btn-icon {
+  font-size: 20px;
+}
+
+.btn-text {
+  font-size: 14px;
+}
+
+.btn-count {
+  font-size: 14px;
+  color: white;
+  font-weight: bold;
+}
+
+.divider {
+  height: 1px;
+  background-color: #333;
+  margin: 30px 0;
+}
+
+.comments-section {
+  margin-top: 20px;
+}
+
+.comments-title {
+  font-size: 18px;
+  font-weight: bold;
+  margin: 0 0 20px 0;
+}
+
+.no-comments {
+  text-align: center;
+  color: #666;
+  padding: 40px 20px;
+  font-size: 14px;
+}
+
+.comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.comment-item {
+  display: flex;
+  gap: 12px;
+}
+
+.comment-avatar {
+  width: 36px;
+  height: 36px;
+  background-color: #2a2a2a;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.comment-content {
+  flex: 1;
+}
+
+.comment-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.comment-author {
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.comment-time {
+  font-size: 12px;
+  color: #666;
+}
+
+.comment-text {
+  font-size: 14px;
+  color: #ccc;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.comment-input-container {
+  position: fixed;
+  bottom: 260px;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  display: flex;
+  max-width: 350px;
+  background-color: #1a1a1a;
+  border-top: 1px solid #333;
+  padding: 12px 20px;
+  gap: 10px;
+  align-items: center;
+  z-index: 99;
+}
+
+.comment-input {
+  flex: 1;
+  background-color: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 20px;
+  padding: 10px 16px;
+  color: white;
+  font-size: 14px;
+  outline: none;
+}
+.comment-submit-btn {
+  width: 40px;
+  height: 40px;
+  background-color: #b6f36e;
+  border: none;
+  border-radius: 50%;
+  color: #000;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: background-color 0.3s;
+}
+
+.back-btn:hover {
+  background-color: transparent;
+}
