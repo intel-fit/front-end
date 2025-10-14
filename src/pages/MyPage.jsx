@@ -151,11 +151,11 @@ export default function MyPage() {
               </div>
               <div className="user-title">풀업의 신</div>
             </div>
-            <IoPencilOutline
-              className="edit-icon"
-              onClick={handleProfileEditClick}
-            />
           </div>
+          <IoPencilOutline
+            className="edit-icon"
+            onClick={handleProfileEditClick}
+          />
         </div>
 
         {/* 뱃지 섹션 */}

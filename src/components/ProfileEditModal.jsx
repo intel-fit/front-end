@@ -1,214 +1,275 @@
 import { useState } from "react";
-import { IoClose, IoCamera, IoPersonOutline } from "react-icons/io5";
+import { useNavigate } from "react-router-dom";
+import { IoChevronForward, IoPencil } from "react-icons/io5";
 import "./ProfileEditModal.css";
 
 export default function ProfileEditModal({ isOpen, onClose }) {
+  const navigate = useNavigate();
   const [profileData, setProfileData] = useState({
     name: "김민수",
-    nickname: "풀업의 신",
-    email: "user@example.com",
-    phone: "010-1234-5678",
-    birthDate: "1995-05-15",
-    gender: "남성",
-    height: "175",
-    weight: "70",
-    targetWeight: "68",
+    email: "dd@gmail.com",
+    userId: "dfdfd",
+    birthDate: "2023.24.03",
+    gender: "여자",
+    height: "170",
+    weight: "60",
+    nicknamePublic: true,
   });
 
-  const [profileImage, setProfileImage] = useState(null);
+  const [editingField, setEditingField] = useState(null);
+  const [tempValue, setTempValue] = useState("");
 
   if (!isOpen) return null;
 
-  const handleInputChange = (field, value) => {
-    setProfileData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
+  const handleFieldClick = (field) => {
+    if (field === "password") {
+      // 비밀번호 재설정 페이지로 이동
+      navigate("/reset-password");
+      onClose();
+      return;
+    }
 
-  const handleImageChange = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setProfileImage(e.target.result);
-      };
-      reader.readAsDataURL(file);
+    setEditingField(field);
+    if (field === "nicknamePublic") {
+      setTempValue(profileData[field] ? "true" : "false");
+    } else {
+      setTempValue(profileData[field] || "");
     }
   };
 
   const handleSave = () => {
-    console.log("프로필 저장:", profileData);
-    alert("프로필이 수정되었습니다!");
-    onClose();
+    if (editingField) {
+      if (editingField === "nicknamePublic") {
+        setProfileData((prev) => ({
+          ...prev,
+          [editingField]: tempValue === "true",
+        }));
+      } else if (editingField === "bodyInfo") {
+        // 신체정보는 이미 실시간으로 업데이트되므로 추가 저장 불필요
+      } else {
+        setProfileData((prev) => ({
+          ...prev,
+          [editingField]: tempValue,
+        }));
+      }
+    }
+    setEditingField(null);
+    setTempValue("");
+  };
+
+  const handleCancel = () => {
+    if (editingField === "bodyInfo") {
+      // 신체정보 편집 취소 시 원래 값으로 복원
+      setProfileData((prev) => ({
+        ...prev,
+        height: "170",
+        weight: "60",
+      }));
+    }
+    setEditingField(null);
+    setTempValue("");
+  };
+
+  const handleInputChange = (e) => {
+    setTempValue(e.target.value);
   };
 
   return (
     <div className="profile-edit-modal-overlay">
       <div className="profile-edit-modal-content">
-        <div className="profile-edit-modal-header">
-          <h2 className="profile-edit-modal-title">프로필 수정</h2>
-          <button className="profile-edit-modal-close" onClick={onClose}>
-            <IoClose />
+        {/* 상단 네비게이션 */}
+        <div className="edit-nav">
+          <button className="nav-back-btn" onClick={onClose}>
+            ←
+          </button>
+          <h1 className="nav-title">정보 수정</h1>
+          <button
+            className="nav-save-btn"
+            onClick={() => {
+              handleSave();
+              onClose();
+            }}
+          >
+            ✓
           </button>
         </div>
 
-        <div className="profile-edit-modal-body">
-          {/* 프로필 사진 */}
-          <div className="profile-image-section">
-            <div className="profile-image-container">
-              {profileImage ? (
-                <img src={profileImage} alt="프로필" className="profile-img" />
-              ) : (
-                <div className="profile-img-placeholder">
-                  <IoPersonOutline />
-                </div>
-              )}
-              <label className="image-upload-btn">
-                <IoCamera />
+        {/* 프로필 섹션 */}
+        <div className="profile-section">
+          <div className="profile-avatar">
+            <div className="avatar-placeholder"></div>
+          </div>
+          <div className="profile-info">
+            <span className="profile-name">김민수님</span>
+            <button className="profile-edit-btn">
+              <IoPencil />
+            </button>
+          </div>
+        </div>
+
+        {/* 정보 목록 */}
+        <div className="info-list">
+          <div className="info-item">
+            <span className="info-label">이메일</span>
+            <span className="info-value">{profileData.email}</span>
+          </div>
+
+          <div className="info-item">
+            <span className="info-label">아이디</span>
+            <span className="info-value">{profileData.userId}</span>
+          </div>
+
+          <div
+            className="info-item clickable"
+            onClick={() => handleFieldClick("password")}
+          >
+            <span className="info-label">비밀번호</span>
+            <div className="info-value-with-arrow">
+              <span className="info-value">재설정하기</span>
+              <IoChevronForward />
+            </div>
+          </div>
+
+          {editingField === "birthDate" ? (
+            <div className="info-item editing">
+              <span className="info-label">생년월일</span>
+              <div className="edit-controls">
                 <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  style={{ display: "none" }}
+                  type="text"
+                  value={tempValue}
+                  onChange={handleInputChange}
+                  placeholder="YYYY.MM.DD"
+                  className="edit-input"
                 />
-              </label>
-            </div>
-            <p className="image-guide">프로필 사진을 변경하려면 클릭하세요</p>
-          </div>
-
-          {/* 기본 정보 */}
-          <div className="form-section">
-            <h3 className="section-title">기본 정보</h3>
-
-            <div className="form-group">
-              <label>이름</label>
-              <input
-                type="text"
-                value={profileData.name}
-                onChange={(e) => handleInputChange("name", e.target.value)}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>닉네임</label>
-              <input
-                type="text"
-                value={profileData.nickname}
-                onChange={(e) => handleInputChange("nickname", e.target.value)}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>이메일</label>
-              <input
-                type="email"
-                value={profileData.email}
-                onChange={(e) => handleInputChange("email", e.target.value)}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>전화번호</label>
-              <input
-                type="tel"
-                value={profileData.phone}
-                onChange={(e) => handleInputChange("phone", e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* 개인 정보 */}
-          <div className="form-section">
-            <h3 className="section-title">개인 정보</h3>
-
-            <div className="form-group">
-              <label>생년월일</label>
-              <input
-                type="date"
-                value={profileData.birthDate}
-                onChange={(e) => handleInputChange("birthDate", e.target.value)}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>성별</label>
-              <div className="radio-group">
-                <label className="radio-label">
-                  <input
-                    type="radio"
-                    name="gender"
-                    value="남성"
-                    checked={profileData.gender === "남성"}
-                    onChange={(e) =>
-                      handleInputChange("gender", e.target.value)
-                    }
-                  />
-                  남성
-                </label>
-                <label className="radio-label">
-                  <input
-                    type="radio"
-                    name="gender"
-                    value="여성"
-                    checked={profileData.gender === "여성"}
-                    onChange={(e) =>
-                      handleInputChange("gender", e.target.value)
-                    }
-                  />
-                  여성
-                </label>
+                <button onClick={handleSave} className="save-edit-btn">
+                  ✓
+                </button>
               </div>
             </div>
-          </div>
+          ) : (
+            <div
+              className="info-item clickable"
+              onClick={() => handleFieldClick("birthDate")}
+            >
+              <span className="info-label">생년월일</span>
+              <div className="info-value-with-arrow">
+                <span className="info-value">{profileData.birthDate}</span>
+                <IoChevronForward />
+              </div>
+            </div>
+          )}
 
-          {/* 신체 정보 */}
-          <div className="form-section">
-            <h3 className="section-title">신체 정보</h3>
+          {editingField === "gender" ? (
+            <div className="info-item editing">
+              <span className="info-label">성별</span>
+              <div className="edit-controls">
+                <select
+                  value={tempValue}
+                  onChange={handleInputChange}
+                  className="edit-select"
+                >
+                  <option value="남자">남자</option>
+                  <option value="여자">여자</option>
+                </select>
+                <button onClick={handleSave} className="save-edit-btn">
+                  ✓
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              className="info-item clickable"
+              onClick={() => handleFieldClick("gender")}
+            >
+              <span className="info-label">성별</span>
+              <div className="info-value-with-arrow">
+                <span className="info-value">{profileData.gender}</span>
+                <IoChevronForward />
+              </div>
+            </div>
+          )}
 
-            <div className="form-row">
-              <div className="form-group">
-                <label>키 (cm)</label>
+          {editingField === "bodyInfo" ? (
+            <div className="info-item editing">
+              <span className="info-label">신체정보</span>
+              <div className="edit-controls body-info">
                 <input
                   type="number"
                   value={profileData.height}
-                  onChange={(e) => handleInputChange("height", e.target.value)}
-                  step="0.1"
+                  onChange={(e) =>
+                    setProfileData((prev) => ({
+                      ...prev,
+                      height: e.target.value,
+                    }))
+                  }
+                  placeholder="키"
+                  className="edit-input body-input"
                 />
-              </div>
-
-              <div className="form-group">
-                <label>현재 체중 (kg)</label>
+                <span>cm</span>
                 <input
                   type="number"
                   value={profileData.weight}
-                  onChange={(e) => handleInputChange("weight", e.target.value)}
-                  step="0.1"
+                  onChange={(e) =>
+                    setProfileData((prev) => ({
+                      ...prev,
+                      weight: e.target.value,
+                    }))
+                  }
+                  placeholder="몸무게"
+                  className="edit-input body-input"
                 />
+                <span>kg</span>
+                <button onClick={handleSave} className="save-edit-btn">
+                  ✓
+                </button>
               </div>
             </div>
-
-            <div className="form-group">
-              <label>목표 체중 (kg)</label>
-              <input
-                type="number"
-                value={profileData.targetWeight}
-                onChange={(e) =>
-                  handleInputChange("targetWeight", e.target.value)
-                }
-                step="0.1"
-              />
+          ) : (
+            <div
+              className="info-item clickable"
+              onClick={() => handleFieldClick("bodyInfo")}
+            >
+              <span className="info-label">신체정보</span>
+              <div className="info-value-with-arrow">
+                <span className="info-value">
+                  {profileData.height}cm • {profileData.weight}kg
+                </span>
+                <IoChevronForward />
+              </div>
             </div>
-          </div>
-        </div>
+          )}
 
-        <div className="profile-edit-modal-footer">
-          <button className="cancel-btn" onClick={onClose}>
-            취소
-          </button>
-          <button className="save-btn" onClick={handleSave}>
-            저장하기
-          </button>
+          {editingField === "nicknamePublic" ? (
+            <div className="info-item editing">
+              <span className="info-label">별명 표시 공개</span>
+              <div className="edit-controls">
+                <select
+                  value={tempValue}
+                  onChange={handleInputChange}
+                  className="edit-select"
+                >
+                  <option value="true">네</option>
+                  <option value="false">아니오</option>
+                </select>
+                <button onClick={handleSave} className="save-edit-btn">
+                  ✓
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              className="info-item clickable"
+              onClick={() => handleFieldClick("nicknamePublic")}
+            >
+              <span className="info-label">별명 표시 공개</span>
+              <div className="info-value-with-arrow">
+                <span className="info-value">
+                  {profileData.nicknamePublic ? "네" : "아니오"}
+                </span>
+                <IoChevronForward />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
