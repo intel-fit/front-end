@@ -15,13 +15,14 @@ import SignupPage from "./pages/SignupPage";
 import FindIdPage from "./pages/FindIdPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import Nav from "./components/Nav";
-import Community from "./pages/community";
+import Community from "./pages/Community";
 import Write from "./pages/Write";
 import "./App.css";
 import Challenge from "./pages/Challenge";
 import Post from "./pages/Post";
 import JoinChallenge from "./pages/JoinChallenge";
 import MakeChallenge from "./pages/MakeChallenge";
+import ConfirmChallenge from "./pages/ConfirmChallenge";
 
 function Layout() {
   return (
@@ -58,6 +59,7 @@ export default function App() {
               <Route path="/post/:postId" element={<Post />} />
               <Route path="/joinchallenge" element={<JoinChallenge />} />
               <Route path="/makechallenge" element={<MakeChallenge />} />
+              <Route path="/confirmchallenge" element={<ConfirmChallenge />} />
             </Route>
             <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>

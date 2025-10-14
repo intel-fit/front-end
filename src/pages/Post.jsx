@@ -92,7 +92,6 @@ const PostDetail = () => {
         <button className="back-btn" onClick={() => navigate("/community")}>
           ←
         </button>
-        <h2 className="header-title">소셜</h2>
       </div>
 
       <div className="detail-content">
@@ -158,24 +157,24 @@ const PostDetail = () => {
             </div>
           )}
         </div>
-      </div>
 
-      <div className="comment-input-container">
-        <input
-          type="text"
-          className="comment-input"
-          placeholder="댓글을 입력하세요..."
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          onKeyPress={(e) => {
-            if (e.key === "Enter") {
-              handleCommentSubmit();
-            }
-          }}
-        />
-        <button className="comment-submit-btn" onClick={handleCommentSubmit}>
-          →
-        </button>
+        <div className="comment-input-container">
+          <input
+            type="text"
+            className="comment-input"
+            placeholder="댓글을 입력하세요..."
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === "Enter") {
+                handleCommentSubmit();
+              }
+            }}
+          />
+          <button className="comment-submit-btn" onClick={handleCommentSubmit}>
+            →
+          </button>
+        </div>
       </div>
     </div>
   );

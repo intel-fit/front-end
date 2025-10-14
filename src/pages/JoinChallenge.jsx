@@ -24,6 +24,9 @@ const JoinChallenge = () => {
       alert("참여가 해제되었습니다.");
     }
   };
+  const handleConfirm = () => {
+    navigate("/confirmchallenge");
+  };
 
   return (
     <div className="join-challenge-page">
@@ -44,15 +47,28 @@ const JoinChallenge = () => {
         </div>
       </div>
 
-      {!isJoined ? (
-        <button className="join-btn" onClick={handleJoin}>
-          참여하기
-        </button>
-      ) : (
-        <button className="leave-btn" onClick={handleLeave}>
-          참혀해제
-        </button>
-      )}
+      <div>
+        {!isJoined ? (
+          <button className="join-btn" onClick={handleJoin}>
+            참여하기
+          </button>
+        ) : (
+          <>
+            <button className="leave-btn" onClick={handleLeave}>
+              참여해제
+            </button>
+            <button
+              className="confirm-btn"
+              onClick={() => {
+                handleConfirm();
+                navigate("/confirmchallenge");
+              }}
+            >
+              인증하기
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 };
