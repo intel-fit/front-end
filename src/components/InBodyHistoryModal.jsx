@@ -1,232 +1,301 @@
 import { useState } from "react";
-import { IoClose, IoTrendingUp, IoTrendingDown } from "react-icons/io5";
+import { IoClose, IoChevronBack } from "react-icons/io5";
+import { FaCrown } from "react-icons/fa";
 import "./InBodyHistoryModal.css";
 
 export default function InBodyHistoryModal({ isOpen, onClose }) {
-  const [selectedPeriod, setSelectedPeriod] = useState("all");
+  const [showMuscleDetails, setShowMuscleDetails] = useState(false);
+  const [selectedBodyPart, setSelectedBodyPart] = useState(null);
 
   if (!isOpen) return null;
 
-  // 샘플 데이터 (실제로는 서버에서 가져오거나 localStorage에서 불러옴)
-  const historyData = [
-    {
-      id: 1,
-      date: "2025-10-11",
-      weight: "70.5",
-      muscleMass: "35.2",
-      bodyFat: "15.3",
-      bmr: "1650",
-      changes: {
-        weight: "+0.5",
-        muscleMass: "+0.3",
-        bodyFat: "-0.2",
-        bmr: "+20",
-      },
+  const muscleData = {
+    before: {
+      head: "3.2kg",
+      leftArm: "2.8kg",
+      rightArm: "2.9kg",
+      torso: "8.5kg",
+      leftLeg: "4.1kg",
+      rightLeg: "4.0kg",
     },
-    {
-      id: 2,
-      date: "2025-10-04",
-      weight: "70.0",
-      muscleMass: "34.9",
-      bodyFat: "15.5",
-      bmr: "1630",
-      changes: {
-        weight: "-0.3",
-        muscleMass: "+0.2",
-        bodyFat: "-0.3",
-        bmr: "+10",
-      },
+    after: {
+      head: "3.4kg",
+      leftArm: "3.1kg",
+      rightArm: "3.2kg",
+      torso: "9.2kg",
+      leftLeg: "4.3kg",
+      rightLeg: "4.2kg",
     },
-    {
-      id: 3,
-      date: "2025-09-27",
-      weight: "70.3",
-      muscleMass: "34.7",
-      bodyFat: "15.8",
-      bmr: "1620",
-      changes: {
-        weight: "+0.8",
-        muscleMass: "+0.5",
-        bodyFat: "-0.5",
-        bmr: "+30",
-      },
-    },
-    {
-      id: 4,
-      date: "2025-09-20",
-      weight: "69.5",
-      muscleMass: "34.2",
-      bodyFat: "16.3",
-      bmr: "1590",
-      changes: {
-        weight: "-0.2",
-        muscleMass: "+0.1",
-        bodyFat: "-0.1",
-        bmr: "+5",
-      },
-    },
-  ];
-
-  const getTrendIcon = (value) => {
-    if (!value) return null;
-    const numValue = parseFloat(value);
-    if (numValue > 0) return <IoTrendingUp className="trend-up" />;
-    if (numValue < 0) return <IoTrendingDown className="trend-down" />;
-    return null;
   };
 
-  const formatChange = (value) => {
-    if (!value) return "";
-    const numValue = parseFloat(value);
-    return numValue > 0 ? `+${value}` : value;
+  const handleBodyPartClick = (bodyPart) => {
+    setSelectedBodyPart(bodyPart);
+    setShowMuscleDetails(true);
+  };
+
+  const closeMuscleDetails = () => {
+    setShowMuscleDetails(false);
+    setSelectedBodyPart(null);
   };
 
   return (
     <div className="inbody-history-modal-overlay">
       <div className="inbody-history-modal-content">
-        <div className="inbody-history-modal-header">
-          <h2 className="inbody-history-modal-title">전체 내역</h2>
-          <button className="inbody-history-modal-close" onClick={onClose}>
-            <IoClose />
+        {/* 상단 네비게이션 */}
+        <div className="inbody-header">
+          <button className="nav-back-btn" onClick={onClose}>
+            <IoChevronBack />
           </button>
+          <h1 className="nav-title">인바디 정보</h1>
         </div>
 
-        <div className="period-selector">
-          <button
-            className={`period-btn ${selectedPeriod === "all" ? "active" : ""}`}
-            onClick={() => setSelectedPeriod("all")}
-          >
-            전체
-          </button>
-          <button
-            className={`period-btn ${
-              selectedPeriod === "3months" ? "active" : ""
-            }`}
-            onClick={() => setSelectedPeriod("3months")}
-          >
-            3개월
-          </button>
-          <button
-            className={`period-btn ${
-              selectedPeriod === "6months" ? "active" : ""
-            }`}
-            onClick={() => setSelectedPeriod("6months")}
-          >
-            6개월
-          </button>
-          <button
-            className={`period-btn ${
-              selectedPeriod === "1year" ? "active" : ""
-            }`}
-            onClick={() => setSelectedPeriod("1year")}
-          >
-            1년
-          </button>
-        </div>
-
-        <div className="inbody-history-modal-body">
-          {historyData.length === 0 ? (
-            <div className="empty-state">
-              <p>아직 검사 기록이 없습니다.</p>
-              <p className="empty-state-sub">
-                검사 결과를 입력하여 변화를 추적하세요
-              </p>
+        <div className="inbody-body">
+          {/* 메인 점수 섹션 */}
+          <div className="score-section">
+            <div className="main-score">
+              <span className="score-number">74</span>
+              <span className="score-unit">점/100점</span>
             </div>
-          ) : (
-            <div className="history-list">
-              {historyData.map((record) => (
-                <div key={record.id} className="history-item">
-                  <div className="history-date">
-                    {new Date(record.date).toLocaleDateString("ko-KR", {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}
+            <button className="compare-btn">이전 기록과 비교</button>
+          </div>
+
+          {/* 기본 정보 */}
+          <div className="basic-info">
+            <span>여성</span>
+            <span>29세</span>
+            <span>162cm</span>
+            <span>검사일 2025.08.04</span>
+          </div>
+
+          {/* 체성분 분석 */}
+          <div className="analysis-section">
+            <h3 className="section-title">체성분 분석</h3>
+            <div className="analysis-list">
+              <div className="analysis-item">
+                <span className="item-name">체수분</span>
+                <span className="item-value">30.4 (26.1 ~ 34.3)</span>
+              </div>
+              <div className="analysis-item">
+                <span className="item-name">단백질</span>
+                <span className="item-value">8.2 (7.6 ~ 9.2)</span>
+              </div>
+              <div className="analysis-item">
+                <span className="item-name">무기질</span>
+                <span className="item-value">2.89 (2.60 ~ 3.18)</span>
+              </div>
+              <div className="analysis-item">
+                <span className="item-name">체지방량</span>
+                <span className="item-value">17.3 (11.0 ~ 17.6)</span>
+              </div>
+              <div className="analysis-item">
+                <span className="item-name">체중</span>
+                <span className="item-value">58.8 (46.8 ~ 63.4)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 골격근 | 지방분석 - 첫 번째 차트 */}
+          <div className="chart-section">
+            <h3 className="section-title">골격근 | 지방분석</h3>
+            <div className="chart-container">
+              <div className="chart-item">
+                <span className="chart-label">체중</span>
+                <div className="chart-bar">
+                  <div className="bar-range">
+                    <span>표준이하</span>
+                    <span>표준</span>
+                    <span>표준이상</span>
                   </div>
-
-                  <div className="history-data-grid">
-                    <div className="history-data-item">
-                      <div className="data-header">
-                        <span className="data-label">체중</span>
-                        {record.changes?.weight && (
-                          <span
-                            className={`data-change ${
-                              parseFloat(record.changes.weight) > 0
-                                ? "positive"
-                                : "negative"
-                            }`}
-                          >
-                            {getTrendIcon(record.changes.weight)}
-                            {formatChange(record.changes.weight)}kg
-                          </span>
-                        )}
-                      </div>
-                      <span className="data-value">{record.weight}kg</span>
-                    </div>
-
-                    <div className="history-data-item">
-                      <div className="data-header">
-                        <span className="data-label">근육량</span>
-                        {record.changes?.muscleMass && (
-                          <span
-                            className={`data-change ${
-                              parseFloat(record.changes.muscleMass) > 0
-                                ? "positive"
-                                : "negative"
-                            }`}
-                          >
-                            {getTrendIcon(record.changes.muscleMass)}
-                            {formatChange(record.changes.muscleMass)}kg
-                          </span>
-                        )}
-                      </div>
-                      <span className="data-value">{record.muscleMass}kg</span>
-                    </div>
-
-                    <div className="history-data-item">
-                      <div className="data-header">
-                        <span className="data-label">체지방률</span>
-                        {record.changes?.bodyFat && (
-                          <span
-                            className={`data-change ${
-                              parseFloat(record.changes.bodyFat) < 0
-                                ? "positive"
-                                : "negative"
-                            }`}
-                          >
-                            {getTrendIcon(record.changes.bodyFat)}
-                            {formatChange(record.changes.bodyFat)}%
-                          </span>
-                        )}
-                      </div>
-                      <span className="data-value">{record.bodyFat}%</span>
-                    </div>
-
-                    <div className="history-data-item">
-                      <div className="data-header">
-                        <span className="data-label">기초대사량</span>
-                        {record.changes?.bmr && (
-                          <span
-                            className={`data-change ${
-                              parseFloat(record.changes.bmr) > 0
-                                ? "positive"
-                                : "negative"
-                            }`}
-                          >
-                            {getTrendIcon(record.changes.bmr)}
-                            {formatChange(record.changes.bmr)}kcal
-                          </span>
-                        )}
-                      </div>
-                      <span className="data-value">{record.bmr}kcal</span>
-                    </div>
+                  <div className="bar-fill weight-bar">
+                    <span className="bar-value">58.8</span>
                   </div>
                 </div>
-              ))}
+              </div>
+              <div className="chart-item">
+                <span className="chart-label">골격근량</span>
+                <div className="chart-bar">
+                  <div className="bar-range">
+                    <span>표준이하</span>
+                    <span>표준</span>
+                    <span>표준이상</span>
+                  </div>
+                  <div className="bar-fill muscle-bar">
+                    <span className="bar-value">22.9</span>
+                  </div>
+                </div>
+              </div>
+              <div className="chart-item">
+                <span className="chart-label">체지방량</span>
+                <div className="chart-bar">
+                  <div className="bar-range">
+                    <span>표준이하</span>
+                    <span>표준</span>
+                    <span>표준이상</span>
+                  </div>
+                  <div className="bar-fill fat-bar">
+                    <span className="bar-value">17.3</span>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
+          </div>
+
+          {/* 골격근 | 지방분석 - 두 번째 차트 */}
+          <div className="chart-section">
+            <div className="chart-container">
+              <div className="chart-item">
+                <span className="chart-label">BMI</span>
+                <div className="chart-bar">
+                  <div className="bar-range">
+                    <span>표준이하</span>
+                    <span>표준</span>
+                    <span>표준이상</span>
+                  </div>
+                  <div className="bar-fill bmi-bar">
+                    <span className="bar-value">22.4</span>
+                  </div>
+                </div>
+              </div>
+              <div className="chart-item">
+                <span className="chart-label">체지방률</span>
+                <div className="chart-bar">
+                  <div className="bar-range">
+                    <span>표준이하</span>
+                    <span>표준</span>
+                    <span>표준이상</span>
+                  </div>
+                  <div className="bar-fill fat-percent-bar">
+                    <span className="bar-value">29.4</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 체중 조절 */}
+          <div className="weight-control-section">
+            <h3 className="section-title">체중 조절</h3>
+            <div className="weight-control-list">
+              <div className="weight-item">
+                <span className="weight-label">적정체중</span>
+                <span className="weight-value">55.1kg</span>
+              </div>
+              <div className="weight-item">
+                <span className="weight-label">체중조절</span>
+                <span className="weight-value">-3.7kg</span>
+              </div>
+              <div className="weight-item">
+                <span className="weight-label">지방조절</span>
+                <span className="weight-value">-4.6kg</span>
+              </div>
+              <div className="weight-item">
+                <span className="weight-label">근육조절</span>
+                <span className="weight-value">+0.9kg</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 복부지방률 & 내장지방레벨 */}
+          <div className="fat-analysis-section">
+            <div className="fat-item">
+              <span className="fat-label">복부지방률</span>
+              <span className="fat-value">0.86</span>
+            </div>
+            <div className="fat-item">
+              <span className="fat-label">내장지방레벨</span>
+              <span className="fat-value">6 (1~20)</span>
+            </div>
+          </div>
+
+          {/* 부위별근육분석 */}
+          <div className="muscle-analysis-section">
+            <h3 className="section-title">부위별근육분석</h3>
+            <div className="human-figures">
+              <div className="figure-container">
+                <div className="figure-title">측정 전</div>
+                <div
+                  className="human-figure clickable"
+                  onClick={() => handleBodyPartClick("before")}
+                >
+                  🏋️
+                </div>
+              </div>
+              <div className="figure-container">
+                <div className="figure-title">측정 후</div>
+                <div
+                  className="human-figure clickable"
+                  onClick={() => handleBodyPartClick("after")}
+                >
+                  🧍
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* 근육량 상세 팝업 */}
+      {showMuscleDetails && selectedBodyPart && (
+        <div className="muscle-details-overlay" onClick={closeMuscleDetails}>
+          <div
+            className="muscle-details-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="muscle-details-header">
+              <h3 className="muscle-details-title">
+                {selectedBodyPart === "before" ? "측정 전" : "측정 후"} 부위별
+                근육량
+              </h3>
+              <button
+                className="muscle-details-close"
+                onClick={closeMuscleDetails}
+              >
+                <IoClose />
+              </button>
+            </div>
+            <div className="muscle-details-body">
+              <div className="muscle-details-grid">
+                <div className="muscle-detail-item">
+                  <span className="detail-label">머리</span>
+                  <span className="detail-value">
+                    {muscleData[selectedBodyPart].head}
+                  </span>
+                </div>
+                <div className="muscle-detail-item">
+                  <span className="detail-label">왼쪽 팔</span>
+                  <span className="detail-value">
+                    {muscleData[selectedBodyPart].leftArm}
+                  </span>
+                </div>
+                <div className="muscle-detail-item">
+                  <span className="detail-label">오른쪽 팔</span>
+                  <span className="detail-value">
+                    {muscleData[selectedBodyPart].rightArm}
+                  </span>
+                </div>
+                <div className="muscle-detail-item">
+                  <span className="detail-label">몸통</span>
+                  <span className="detail-value">
+                    {muscleData[selectedBodyPart].torso}
+                  </span>
+                </div>
+                <div className="muscle-detail-item">
+                  <span className="detail-label">왼쪽 다리</span>
+                  <span className="detail-value">
+                    {muscleData[selectedBodyPart].leftLeg}
+                  </span>
+                </div>
+                <div className="muscle-detail-item">
+                  <span className="detail-label">오른쪽 다리</span>
+                  <span className="detail-value">
+                    {muscleData[selectedBodyPart].rightLeg}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

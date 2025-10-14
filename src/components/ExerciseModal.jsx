@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { IoClose, IoSearch, IoAdd, IoCheckmark } from "react-icons/io5";
 import "./ExerciseModal.css";
 
@@ -14,10 +14,41 @@ export default function ExerciseModal({
   const [currentMode, setCurrentMode] = useState(mode);
   const [selectedExercise, setSelectedExercise] = useState(null);
   const [sets, setSets] = useState([
-    { id: 1, weight: 20, reps: 15, completed: true },
+    { id: 1, weight: 20, reps: 15, completed: false },
     { id: 2, weight: 20, reps: 12, completed: false },
     { id: 3, weight: 20, reps: 12, completed: false },
   ]);
+
+  // 모달이 열릴 때마다 모드를 초기화
+  useEffect(() => {
+    if (isOpen) {
+      if (mode === "add") {
+        setCurrentMode("add");
+        setSelectedExercise(null);
+        setSets([
+          { id: 1, weight: 20, reps: 15, completed: false },
+          { id: 2, weight: 20, reps: 12, completed: false },
+          { id: 3, weight: 20, reps: 12, completed: false },
+        ]);
+      } else if (mode === "edit") {
+        // 기존 운동 수정 모드 - 세트 화면으로 바로 이동
+        setCurrentMode("detail");
+        setSelectedExercise(exerciseData);
+        // 저장된 세트 정보가 있으면 불러오기, 없으면 기본 3세트
+        if (exerciseData?.sets && exerciseData.sets.length > 0) {
+          setSets(exerciseData.sets);
+        } else {
+          setSets([
+            { id: 1, weight: 20, reps: 15, completed: false },
+            { id: 2, weight: 20, reps: 12, completed: false },
+            { id: 3, weight: 20, reps: 12, completed: false },
+          ]);
+        }
+      } else {
+        setCurrentMode(mode);
+      }
+    }
+  }, [isOpen, mode, exerciseData]);
 
   const categories = ["전체", "가슴", "등", "하체", "어깨", "팔", "코어"];
 
@@ -64,13 +95,26 @@ export default function ExerciseModal({
 
   const handleRemoveSet = (setId) => {
     if (sets.length > 1) {
-      setSets((prev) => prev.filter((set) => set.id !== setId));
+      setSets((prev) => {
+        const filtered = prev.filter((set) => set.id !== setId);
+        // ID를 1부터 다시 정렬
+        return filtered.map((set, index) => ({
+          ...set,
+          id: index + 1,
+        }));
+      });
     }
   };
 
   const handleExerciseSelect = (exercise) => {
     setSelectedExercise(exercise);
     setCurrentMode("detail");
+    // 새로운 운동 선택 시 세트를 3개로 초기화
+    setSets([
+      { id: 1, weight: 20, reps: 15, completed: false },
+      { id: 2, weight: 20, reps: 12, completed: false },
+      { id: 3, weight: 20, reps: 12, completed: false },
+    ]);
   };
 
   const handleBackToAdd = () => {
@@ -154,7 +198,7 @@ export default function ExerciseModal({
               <div className="sets-header">
                 <button
                   className="remove-set-btn"
-                  onClick={() => handleRemoveSet(1)}
+                  onClick={() => handleRemoveSet(sets[sets.length - 1]?.id)}
                 >
                   -
                 </button>
@@ -198,7 +242,10 @@ export default function ExerciseModal({
 
             <button
               className="save-exercise-btn"
-              onClick={() => onSave && onSave(sets)}
+              onClick={() =>
+                onSave &&
+                onSave(sets, selectedExercise?.name || exerciseData?.name)
+              }
             >
               운동 저장
             </button>

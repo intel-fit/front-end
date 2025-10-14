@@ -15,12 +15,16 @@
 /* 프로필 섹션 */
 .profile-section {
   margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .profile-info {
   display: flex;
   align-items: center;
   gap: 16px;
+  flex: 1;
 }
 
 .profile-avatar {
@@ -60,9 +64,17 @@
 }
 
 .edit-icon {
-  color: white;
+  color: #fff;
   font-size: 20px;
   cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.edit-icon:hover {
+  background-color: #333;
+  color: #fff;
 }
 
 /* 뱃지 섹션 */
