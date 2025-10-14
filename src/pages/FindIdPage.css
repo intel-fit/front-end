@@ -152,7 +152,12 @@
 
 .cancel-btn {
   background: none;
-  border: none;
+  background-color: transparent !important;
+  -webkit-appearance: none;
+  appearance: none;
+  box-shadow: none;
+  border: none !important;
+  outline: none;
   color: #ffffff;
   font-family: "Inter", sans-serif;
   font-size: 12px;
@@ -163,7 +168,31 @@
 }
 
 .cancel-btn:hover {
-  color: #e3ff7c;
+  color: #e3ff7c !important;
+  background-color: transparent !important;
+  text-decoration: none;
+  border: none !important;
+}
+
+.cancel-btn:focus,
+.cancel-btn:active {
+  outline: none !important;
+  border: none !important;
+  background-color: transparent !important;
+  box-shadow: none;
+}
+
+/* Page-scoped specificity to override any generic rules */
+.find-id-page .cancel-btn {
+  border: none !important;
+  background-color: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.find-id-page .cancel-btn:hover {
+  color: #e3ff7c !important;
+  background-color: transparent !important;
 }
 
 /* 반응형 디자인 */

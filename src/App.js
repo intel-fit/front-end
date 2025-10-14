@@ -15,7 +15,7 @@ import SignupPage from "./pages/SignupPage";
 import FindIdPage from "./pages/FindIdPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import Nav from "./components/Nav";
-import Community from "./pages/Community";
+import Community from "./pages/community";
 import Write from "./pages/Write";
 import "./App.css";
 import Challenge from "./pages/Challenge";

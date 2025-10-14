@@ -15,7 +15,7 @@ export default function LogSection() {
   };
 
   const handleExerciseClick = (exercise) => {
-    setModalMode("detail");
+    setModalMode("edit");
     setSelectedExercise(exercise);
     setIsModalOpen(true);
   };
@@ -25,23 +25,51 @@ export default function LogSection() {
     setSelectedExercise(null);
   };
 
-  const handleExerciseSave = (sets) => {
+  const handleExerciseSave = (sets, exerciseName) => {
     const allSetsCompleted = sets.every((set) => set.completed);
-    const newWorkout = {
-      id: Date.now(),
-      name: selectedExercise?.name || "새로운 운동",
-      details: `${sets[0]?.weight || 20}kg ${sets[0]?.reps || 12}회 ${
-        sets.length
-      }세트`,
-      time: new Date().toLocaleTimeString("ko-KR", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      }),
-      isCompleted: allSetsCompleted,
-    };
-    setActivities([...activities, newWorkout]);
+
+    if (modalMode === "edit" && selectedExercise) {
+      // 기존 운동 수정
+      setActivities(
+        activities.map((activity) => {
+          if (activity.id === selectedExercise.id) {
+            return {
+              ...activity,
+              details: `${sets[0]?.weight || 20}kg ${sets[0]?.reps || 12}회 ${
+                sets.length
+              }세트`,
+              isCompleted: allSetsCompleted,
+              sets: sets, // 세트 정보 저장
+            };
+          }
+          return activity;
+        })
+      );
+    } else {
+      // 새로운 운동 추가
+      const newWorkout = {
+        id: Date.now(),
+        name: exerciseName || "새로운 운동",
+        details: `${sets[0]?.weight || 20}kg ${sets[0]?.reps || 12}회 ${
+          sets.length
+        }세트`,
+        time: new Date().toLocaleTimeString("ko-KR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        }),
+        isCompleted: allSetsCompleted,
+        sets: sets, // 세트 정보 저장
+      };
+      setActivities([...activities, newWorkout]);
+    }
     handleModalClose();
+  };
+
+  const handleDeleteWorkout = (workoutId) => {
+    if (window.confirm("이 운동을 삭제하시겠습니까?")) {
+      setActivities(activities.filter((activity) => activity.id !== workoutId));
+    }
   };
 
   return (
@@ -57,6 +85,7 @@ export default function LogSection() {
             isCompleted={activity.isCompleted}
             isLast={index === activities.length - 1}
             onClick={() => handleExerciseClick(activity)}
+            onDelete={() => handleDeleteWorkout(activity.id)}
           />
         ))}
         <div className="add-item">
