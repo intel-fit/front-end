@@ -47,7 +47,7 @@ export default function PaymentMethodModal({ isOpen, onClose }) {
   };
 
   const handleDeleteCard = (id) => {
-    if (confirm("이 결제 수단을 삭제하시겠습니까?")) {
+    if (window.confirm("이 결제 수단을 삭제하시겠습니까?")) {
       console.log("카드 삭제:", id);
       alert("결제 수단이 삭제되었습니다.");
     }
