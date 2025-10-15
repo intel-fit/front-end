@@ -1,16 +1,27 @@
 import { useState } from "react";
-import { IoClose, IoChevronBack } from "react-icons/io5";
+import {
+  IoClose,
+  IoChevronBack,
+  IoPencilOutline,
+  IoTrashOutline,
+} from "react-icons/io5";
 import { FaCrown } from "react-icons/fa";
 import "./InBodyHistoryModal.css";
 
-export default function InBodyHistoryModal({ isOpen, onClose }) {
+export default function InBodyHistoryModal({
+  isOpen,
+  onClose,
+  onEdit,
+  onDelete,
+  inBodyRecords = [],
+}) {
   const [showMuscleDetails, setShowMuscleDetails] = useState(false);
   const [selectedBodyPart, setSelectedBodyPart] = useState(null);
 
   if (!isOpen) return null;
 
   const muscleData = {
-    before: {
+    muscle: {
       head: "3.2kg",
       leftArm: "2.8kg",
       rightArm: "2.9kg",
@@ -18,7 +29,7 @@ export default function InBodyHistoryModal({ isOpen, onClose }) {
       leftLeg: "4.1kg",
       rightLeg: "4.0kg",
     },
-    after: {
+    fat: {
       head: "3.4kg",
       leftArm: "3.1kg",
       rightArm: "3.2kg",
@@ -38,6 +49,74 @@ export default function InBodyHistoryModal({ isOpen, onClose }) {
     setSelectedBodyPart(null);
   };
 
+  // 가장 최근 인바디 데이터 가져오기 (없으면 기본값)
+  const currentInBodyData =
+    inBodyRecords.length > 0
+      ? inBodyRecords[inBodyRecords.length - 1]
+      : {
+          id: null,
+          measurementDate: "2025-08-04",
+          weight: 58.8,
+          muscleMass: 25.2,
+          bodyFatPercentage: 18.5,
+          basalMetabolicRate: 1420,
+          bodyFatMass: 10.9,
+          skeletalMuscleMass: 23.8,
+          totalBodyWater: 30.4,
+          protein: 8.2,
+          mineral: 2.89,
+          bmi: 22.4,
+          obesityDegree: 95.2,
+          bodyFatPercentageStandard: 18.0,
+          visceralFatLevel: 3,
+        };
+
+  const handleEdit = () => {
+    if (onEdit) {
+      onEdit(currentInBodyData);
+    }
+  };
+
+  const handleDelete = () => {
+    if (currentInBodyData.id === null) {
+      alert("삭제할 데이터가 없습니다.");
+      return;
+    }
+    if (window.confirm("정말로 이 인바디 데이터를 삭제하시겠습니까?")) {
+      if (onDelete) {
+        onDelete(currentInBodyData.id);
+      }
+    }
+  };
+
+  // 날짜 포맷팅 함수
+  const formatDate = (dateString) => {
+    if (!dateString) return "2025.08.04";
+    const date = new Date(dateString);
+    return date
+      .toLocaleDateString("ko-KR", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      })
+      .replace(/\. /g, ".")
+      .replace(".", "");
+  };
+
+  // 점수 계산 (임시)
+  const calculateScore = (data) => {
+    if (!data.weight || !data.bodyFatPercentage) return 74;
+    // 간단한 점수 계산 로직 (실제로는 더 복잡할 것)
+    const bmiScore = data.bmi
+      ? Math.max(0, 100 - Math.abs(data.bmi - 22) * 10)
+      : 70;
+    const bodyFatScore = Math.max(
+      0,
+      100 - Math.abs(data.bodyFatPercentage - 15) * 5
+    );
+    return Math.round((bmiScore + bodyFatScore) / 2);
+  };
+
   return (
     <div className="inbody-history-modal-overlay">
       <div className="inbody-history-modal-content">
@@ -47,13 +126,24 @@ export default function InBodyHistoryModal({ isOpen, onClose }) {
             <IoChevronBack />
           </button>
           <h1 className="nav-title">인바디 정보</h1>
+          <div className="header-actions">
+            <button
+              className="action-btn edit-btn"
+              onClick={handleEdit}
+              title="수정"
+            >
+              <IoPencilOutline />
+            </button>
+          </div>
         </div>
 
         <div className="inbody-body">
           {/* 메인 점수 섹션 */}
           <div className="score-section">
             <div className="main-score">
-              <span className="score-number">74</span>
+              <span className="score-number">
+                {calculateScore(currentInBodyData)}
+              </span>
               <span className="score-unit">점/100점</span>
             </div>
             <button className="compare-btn">이전 기록과 비교</button>
@@ -64,7 +154,7 @@ export default function InBodyHistoryModal({ isOpen, onClose }) {
             <span>여성</span>
             <span>29세</span>
             <span>162cm</span>
-            <span>검사일 2025.08.04</span>
+            <span>검사일 {formatDate(currentInBodyData.measurementDate)}</span>
           </div>
 
           {/* 체성분 분석 */}
@@ -73,23 +163,33 @@ export default function InBodyHistoryModal({ isOpen, onClose }) {
             <div className="analysis-list">
               <div className="analysis-item">
                 <span className="item-name">체수분</span>
-                <span className="item-value">30.4 (26.1 ~ 34.3)</span>
+                <span className="item-value">
+                  {currentInBodyData.totalBodyWater || "30.4"} (26.1 ~ 34.3)
+                </span>
               </div>
               <div className="analysis-item">
                 <span className="item-name">단백질</span>
-                <span className="item-value">8.2 (7.6 ~ 9.2)</span>
+                <span className="item-value">
+                  {currentInBodyData.protein || "8.2"} (7.6 ~ 9.2)
+                </span>
               </div>
               <div className="analysis-item">
                 <span className="item-name">무기질</span>
-                <span className="item-value">2.89 (2.60 ~ 3.18)</span>
+                <span className="item-value">
+                  {currentInBodyData.mineral || "2.89"} (2.60 ~ 3.18)
+                </span>
               </div>
               <div className="analysis-item">
                 <span className="item-name">체지방량</span>
-                <span className="item-value">17.3 (11.0 ~ 17.6)</span>
+                <span className="item-value">
+                  {currentInBodyData.bodyFatMass || "17.3"} (11.0 ~ 17.6)
+                </span>
               </div>
               <div className="analysis-item">
                 <span className="item-name">체중</span>
-                <span className="item-value">58.8 (46.8 ~ 63.4)</span>
+                <span className="item-value">
+                  {currentInBodyData.weight || "58.8"} (46.8 ~ 63.4)
+                </span>
               </div>
             </div>
           </div>
@@ -207,24 +307,25 @@ export default function InBodyHistoryModal({ isOpen, onClose }) {
             </div>
           </div>
 
-          {/* 부위별근육분석 */}
-          <div className="muscle-analysis-section">
-            <h3 className="section-title">부위별근육분석</h3>
-            <div className="human-figures">
+          {/* 부위별 분석 */}
+          <div className="analysis-sections">
+            <h3 className="analysis-section-title">
+              <span>부위별 근육 분석</span>
+              <span>부위별 체지방 분석</span>
+            </h3>
+            <div className="analysis-icons">
               <div className="figure-container">
-                <div className="figure-title">측정 전</div>
                 <div
                   className="human-figure clickable"
-                  onClick={() => handleBodyPartClick("before")}
+                  onClick={() => handleBodyPartClick("muscle")}
                 >
                   🏋️
                 </div>
               </div>
               <div className="figure-container">
-                <div className="figure-title">측정 후</div>
                 <div
                   className="human-figure clickable"
-                  onClick={() => handleBodyPartClick("after")}
+                  onClick={() => handleBodyPartClick("fat")}
                 >
                   🧍
                 </div>
@@ -243,8 +344,9 @@ export default function InBodyHistoryModal({ isOpen, onClose }) {
           >
             <div className="muscle-details-header">
               <h3 className="muscle-details-title">
-                {selectedBodyPart === "before" ? "측정 전" : "측정 후"} 부위별
-                근육량
+                {selectedBodyPart === "muscle"
+                  ? "부위별 근육량"
+                  : "부위별 체지방량"}
               </h3>
               <button
                 className="muscle-details-close"

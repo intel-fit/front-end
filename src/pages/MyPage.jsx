@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Header from "../components/Header";
 import BadgeModal from "../components/BadgeModal";
 import BadgeListModal from "../components/BadgeListModal";
@@ -27,11 +27,98 @@ export default function MyPage() {
   const [isInBodyManualModalOpen, setIsInBodyManualModalOpen] = useState(false);
   const [isInBodyHistoryModalOpen, setIsInBodyHistoryModalOpen] =
     useState(false);
+  const [editInBodyData, setEditInBodyData] = useState(null);
+  const [inBodyRecords, setInBodyRecords] = useState([]);
   const [isAIAnalysisModalOpen, setIsAIAnalysisModalOpen] = useState(false);
   const [isMyPlanModalOpen, setIsMyPlanModalOpen] = useState(false);
   const [isPaymentMethodModalOpen, setIsPaymentMethodModalOpen] =
     useState(false);
   const [isProfileEditModalOpen, setIsProfileEditModalOpen] = useState(false);
+
+  // 프로필 데이터 상태
+  const [profileData, setProfileData] = useState({
+    id: null,
+    userId: "",
+    name: "",
+    email: "",
+    birthDate: "",
+    phoneNumber: "",
+    height: 0,
+    weight: 0,
+    gender: "",
+    membershipType: "",
+    healthGoal: "",
+    workoutDaysPerWeek: "",
+    weightGoal: 0,
+    lastLoginAt: null,
+    createdAt: "",
+  });
+
+  // 프로필 조회 API 호출 (준비된 코드 - 실제 호출 안함)
+  const fetchProfile = async () => {
+    try {
+      // API 호출 준비 코드 (실제로는 호출하지 않음)
+      const token = localStorage.getItem("token"); // 저장된 토큰 가져오기
+
+      console.log("프로필 조회 API 호출 준비:");
+      console.log("URL: http://15.165.68.196/api/profile");
+      console.log("Method: GET");
+      console.log("Headers:", {
+        Authorization: `Bearer ${token}`,
+      });
+
+      // 실제 API 호출 코드 (주석 처리)
+      /*
+      const response = await fetch("http://15.165.68.196/api/profile", {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setProfileData(data);
+        console.log("프로필 데이터 로드 완료:", data);
+      } else {
+        console.error("프로필 조회 오류:", data.message);
+        alert("프로필 정보를 불러오는데 실패했습니다.");
+      }
+      */
+
+      // 임시 프로필 데이터 (시뮬레이션)
+      const mockProfileData = {
+        id: 5,
+        userId: "test1",
+        name: "홍길동",
+        email: "test1@naver.com",
+        birthDate: "2002-01-04",
+        phoneNumber: "01000000000",
+        height: 187,
+        weight: 90,
+        gender: "M",
+        membershipType: "FREE",
+        healthGoal: "DIET",
+        workoutDaysPerWeek: "3-4일",
+        weightGoal: 80,
+        lastLoginAt: null,
+        createdAt: "2025-09-29T16:15:28",
+      };
+
+      setProfileData(mockProfileData);
+      console.log("프로필 조회 API 호출 준비 완료!");
+      console.log("임시 프로필 데이터:", mockProfileData);
+    } catch (error) {
+      console.error("프로필 조회 오류:", error);
+      alert("프로필 정보를 불러오는 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 컴포넌트 마운트 시 프로필 조회
+  useEffect(() => {
+    fetchProfile();
+  }, []);
 
   const handleBadgeClick = (badgeType) => {
     setSelectedBadge({ type: badgeType });
@@ -82,13 +169,34 @@ export default function MyPage() {
 
   const handleInBodyManualModalClose = () => {
     setIsInBodyManualModalOpen(false);
+    setEditInBodyData(null);
   };
 
   const handleInBodySave = (data) => {
-    console.log("InBody 데이터 저장:", data);
-    alert("검사 결과가 저장되었습니다!");
+    if (editInBodyData) {
+      // 수정 모드
+      const updatedRecords = inBodyRecords.map((record) =>
+        record.id === editInBodyData.id
+          ? { ...data, id: editInBodyData.id, createdAt: record.createdAt }
+          : record
+      );
+      setInBodyRecords(updatedRecords);
+      console.log("InBody 데이터 수정:", { ...data, id: editInBodyData.id });
+      alert("검사 결과가 수정되었습니다!");
+    } else {
+      // 새로 추가 모드
+      const newRecord = {
+        ...data,
+        id: Date.now(), // 임시 ID
+        createdAt: new Date().toISOString(),
+      };
+      setInBodyRecords((prev) => [...prev, newRecord]);
+      console.log("InBody 데이터 저장:", newRecord);
+      alert("검사 결과가 저장되었습니다!");
+    }
     setIsInBodyPhotoModalOpen(false);
     setIsInBodyManualModalOpen(false);
+    setEditInBodyData(null);
   };
 
   const handleInBodyHistoryClick = () => {
@@ -96,6 +204,24 @@ export default function MyPage() {
   };
 
   const handleInBodyHistoryModalClose = () => {
+    setIsInBodyHistoryModalOpen(false);
+  };
+
+  // 인바디 수정 핸들러
+  const handleInBodyEdit = (inBodyData) => {
+    setEditInBodyData(inBodyData);
+    setIsInBodyHistoryModalOpen(false);
+    setIsInBodyManualModalOpen(true);
+  };
+
+  // 인바디 삭제 핸들러
+  const handleInBodyDelete = (inBodyId) => {
+    const updatedRecords = inBodyRecords.filter(
+      (record) => record.id !== inBodyId
+    );
+    setInBodyRecords(updatedRecords);
+    console.log("InBody 데이터 삭제:", inBodyId);
+    alert("검사 결과가 삭제되었습니다!");
     setIsInBodyHistoryModalOpen(false);
   };
 
@@ -134,6 +260,135 @@ export default function MyPage() {
   const handleProfileEditModalClose = () => {
     setIsProfileEditModalOpen(false);
   };
+
+  // 로그아웃 핸들러
+  const handleLogoutClick = () => {
+    if (window.confirm("정말로 로그아웃하시겠습니까?")) {
+      // API 호출
+      logout();
+    }
+  };
+
+  // 로그아웃 API 호출 (준비된 코드 - 실제 호출 안함)
+  const logout = async () => {
+    try {
+      // API 호출 준비 코드 (실제로는 호출하지 않음)
+      const accessToken = localStorage.getItem("token"); // 저장된 토큰 가져오기
+
+      console.log("로그아웃 API 호출 준비:");
+      console.log("URL: http://15.165.68.196/api/users/logout");
+      console.log("Method: POST");
+      console.log("Headers:", {
+        "Content-Type": "application/json",
+      });
+      console.log("Body:", {
+        accessToken: accessToken,
+      });
+
+      // 실제 API 호출 코드 (주석 처리)
+      /*
+      const response = await fetch("http://15.165.68.196/api/users/logout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          accessToken: accessToken,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert("로그아웃이 완료되었습니다.");
+        localStorage.removeItem("token");
+        window.location.href = "/login";
+      } else {
+        alert("로그아웃 중 오류가 발생했습니다: " + (data.message || "알 수 없는 오류"));
+      }
+      */
+
+      // 임시 성공 처리
+      alert("로그아웃 API 호출 준비 완료!\n(실제 API 호출은 주석 처리됨)");
+      console.log("로그아웃 처리 완료 (시뮬레이션)");
+    } catch (error) {
+      console.error("로그아웃 오류:", error);
+      alert("로그아웃 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 회원탈퇴 핸들러
+  const handleDeleteAccountClick = () => {
+    if (
+      window.confirm(
+        "정말로 회원탈퇴하시겠습니까?\n탈퇴 시 모든 데이터가 삭제되며 복구할 수 없습니다."
+      )
+    ) {
+      // 비밀번호와 탈퇴 사유 입력받기
+      const password = prompt("탈퇴를 위해 비밀번호를 입력해주세요:");
+      if (!password) return;
+
+      const reason = prompt("탈퇴 사유를 입력해주세요 (선택사항):");
+
+      // API 호출
+      deleteAccount(password, reason || "");
+    }
+  };
+
+  // 회원탈퇴 API 호출 (준비된 코드 - 실제 호출 안함)
+  const deleteAccount = async (password, reason) => {
+    try {
+      // API 호출 준비 코드 (실제로는 호출하지 않음)
+      const token = localStorage.getItem("token"); // 저장된 토큰 가져오기
+
+      console.log("회원탈퇴 API 호출 준비:");
+      console.log("URL: http://15.165.68.196/api/profile");
+      console.log("Method: DELETE");
+      console.log("Headers:", {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      });
+      console.log("Body:", {
+        password: password,
+        reason: reason,
+      });
+
+      // 실제 API 호출 코드 (주석 처리)
+      /*
+      const response = await fetch("http://15.165.68.196/api/profile", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          password: password,
+          reason: reason,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert("회원탈퇴가 완료되었습니다.");
+        localStorage.removeItem("token");
+        window.location.href = "/login";
+      } else {
+        alert(
+          "회원탈퇴 중 오류가 발생했습니다: " +
+            (data.message || "알 수 없는 오류")
+        );
+      }
+      */
+
+      // 임시 성공 처리
+      alert("회원탈퇴 API 호출 준비 완료!\n(실제 API 호출은 주석 처리됨)");
+      console.log("회원탈퇴 처리 완료 (시뮬레이션)");
+    } catch (error) {
+      console.error("회원탈퇴 오류:", error);
+      alert("회원탈퇴 중 오류가 발생했습니다.");
+    }
+  };
   return (
     <div className="mypage">
       <Header title="마이페이지" />
@@ -147,9 +402,16 @@ export default function MyPage() {
             </div>
             <div className="profile-details">
               <div className="username">
-                김민수님 <FaCrown className="crown-icon" />
+                {profileData.name || "김민수"}님{" "}
+                <FaCrown className="crown-icon" />
               </div>
-              <div className="user-title">풀업의 신</div>
+              <div className="user-title">
+                {profileData.membershipType === "FREE"
+                  ? "무료 회원"
+                  : profileData.membershipType === "PREMIUM"
+                  ? "프리미엄 회원"
+                  : "풀업의 신"}
+              </div>
             </div>
           </div>
           <IoPencilOutline
@@ -215,6 +477,22 @@ export default function MyPage() {
             </div>
           </div>
         </div>
+
+        {/* 계정 관리 섹션 */}
+        <div className="account-section">
+          <div className="section-title">계정 관리</div>
+          <div className="section-links">
+            <div className="link-item logout-item" onClick={handleLogoutClick}>
+              로그아웃
+            </div>
+            <div
+              className="link-item delete-account-item"
+              onClick={handleDeleteAccountClick}
+            >
+              회원탈퇴
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* 뱃지 상세 모달 */}
@@ -251,12 +529,16 @@ export default function MyPage() {
         isOpen={isInBodyManualModalOpen}
         onClose={handleInBodyManualModalClose}
         onSave={handleInBodySave}
+        editData={editInBodyData}
       />
 
       {/* InBody 전체 내역 모달 */}
       <InBodyHistoryModal
         isOpen={isInBodyHistoryModalOpen}
         onClose={handleInBodyHistoryModalClose}
+        onEdit={handleInBodyEdit}
+        onDelete={handleInBodyDelete}
+        inBodyRecords={inBodyRecords}
       />
 
       {/* AI 분석 모달 */}

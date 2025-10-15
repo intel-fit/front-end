@@ -204,6 +204,31 @@
   color: white;
 }
 
+/* 계정 관리 섹션 */
+.account-section {
+  padding: 20px 0;
+}
+
+.account-section .section-title {
+  color: white;
+}
+
+.logout-item {
+  color: #4ade80;
+}
+
+.logout-item:hover {
+  color: #22c55e;
+}
+
+.delete-account-item {
+  color: #ef4444;
+}
+
+.delete-account-item:hover {
+  color: #dc2626;
+}
+
 /* 반응형 디자인 */
 @media (max-width: 480px) {
   .mypage-content {

@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { IoClose, IoCheckmark } from "react-icons/io5";
 import "./InBodyManualModal.css";
 
-export default function InBodyManualModal({ isOpen, onClose, onSave }) {
+export default function InBodyManualModal({
+  isOpen,
+  onClose,
+  onSave,
+  editData = null,
+}) {
   const [formData, setFormData] = useState({
     // 기본 정보
     measurementDate: new Date().toISOString().split("T")[0],
@@ -40,6 +45,68 @@ export default function InBodyManualModal({ isOpen, onClose, onSave }) {
   });
 
   const firstInputRef = useRef(null);
+
+  // 수정 모드일 때 기존 데이터 로드
+  useEffect(() => {
+    if (isOpen && editData) {
+      setFormData({
+        measurementDate:
+          editData.measurementDate || new Date().toISOString().split("T")[0],
+        weight: editData.weight?.toString() || "",
+        muscleMass: editData.muscleMass?.toString() || "",
+        bodyFatPercentage: editData.bodyFatPercentage?.toString() || "",
+        basalMetabolicRate: editData.basalMetabolicRate?.toString() || "",
+        bodyFatMass: editData.bodyFatMass?.toString() || "",
+        skeletalMuscleMass: editData.skeletalMuscleMass?.toString() || "",
+        totalBodyWater: editData.totalBodyWater?.toString() || "",
+        protein: editData.protein?.toString() || "",
+        mineral: editData.mineral?.toString() || "",
+        bmi: editData.bmi?.toString() || "",
+        obesityDegree: editData.obesityDegree?.toString() || "",
+        bodyFatPercentageStandard:
+          editData.bodyFatPercentageStandard?.toString() || "",
+        visceralFatLevel: editData.visceralFatLevel?.toString() || "",
+        leftArmMuscle: editData.leftArmMuscle?.toString() || "",
+        rightArmMuscle: editData.rightArmMuscle?.toString() || "",
+        trunkMuscle: editData.trunkMuscle?.toString() || "",
+        leftLegMuscle: editData.leftLegMuscle?.toString() || "",
+        rightLegMuscle: editData.rightLegMuscle?.toString() || "",
+        leftArmFat: editData.leftArmFat?.toString() || "",
+        rightArmFat: editData.rightArmFat?.toString() || "",
+        trunkFat: editData.trunkFat?.toString() || "",
+        leftLegFat: editData.leftLegFat?.toString() || "",
+        rightLegFat: editData.rightLegFat?.toString() || "",
+      });
+    } else if (isOpen) {
+      // 새로 추가하는 경우 초기화
+      setFormData({
+        measurementDate: new Date().toISOString().split("T")[0],
+        weight: "",
+        muscleMass: "",
+        bodyFatPercentage: "",
+        basalMetabolicRate: "",
+        bodyFatMass: "",
+        skeletalMuscleMass: "",
+        totalBodyWater: "",
+        protein: "",
+        mineral: "",
+        bmi: "",
+        obesityDegree: "",
+        bodyFatPercentageStandard: "",
+        visceralFatLevel: "",
+        leftArmMuscle: "",
+        rightArmMuscle: "",
+        trunkMuscle: "",
+        leftLegMuscle: "",
+        rightLegMuscle: "",
+        leftArmFat: "",
+        rightArmFat: "",
+        trunkFat: "",
+        leftLegFat: "",
+        rightLegFat: "",
+      });
+    }
+  }, [isOpen, editData]);
 
   useEffect(() => {
     if (isOpen) {
@@ -174,7 +241,7 @@ export default function InBodyManualModal({ isOpen, onClose, onSave }) {
       <div className="inbody-manual-modal-content">
         <div className="inbody-manual-modal-header">
           <h2 id="inbody-manual-title" className="inbody-manual-modal-title">
-            수기 입력
+            {editData ? "인바디 수정" : "수기 입력"}
           </h2>
           <button
             className="inbody-manual-modal-close"
@@ -605,7 +672,7 @@ export default function InBodyManualModal({ isOpen, onClose, onSave }) {
             disabled={!isFormValid}
           >
             <IoCheckmark />
-            저장하기
+            {editData ? "수정하기" : "저장하기"}
           </button>
         </div>
       </div>

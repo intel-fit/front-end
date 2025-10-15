@@ -121,13 +121,6 @@ export default function PaymentMethodModal({ isOpen, onClose }) {
                           기본으로 설정
                         </button>
                       )}
-                      <button
-                        className="action-btn delete-btn"
-                        onClick={() => handleDeleteCard(method.id)}
-                      >
-                        <IoTrash />
-                        삭제
-                      </button>
                     </div>
                   </div>
                 ))
