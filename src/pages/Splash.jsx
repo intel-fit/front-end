@@ -12,12 +12,14 @@ export default function Splash() {
 
   return (
     <div className="splash-container">
-      <div className="splash-content">
-        <h1 className="splash-logo">INTEL FIT</h1>
-        <div className="loading-dots">
-          <span></span>
-          <span></span>
-          <span></span>
+      <div className="splash-wrapper">
+        <div className="splash-content">
+          <h1 className="splash-logo">INTEL FIT</h1>
+          <div className="loading-dots">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
         </div>
       </div>
     </div>

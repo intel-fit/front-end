@@ -23,9 +23,8 @@ export default function ProfileEditModal({ isOpen, onClose }) {
 
   const handleFieldClick = (field) => {
     if (field === "password") {
-      // 비밀번호 재설정 페이지로 이동
-      navigate("/reset-password");
-      onClose();
+      // 비밀번호 변경 모달 열기
+      handlePasswordChange();
       return;
     }
 
@@ -34,6 +33,82 @@ export default function ProfileEditModal({ isOpen, onClose }) {
       setTempValue(profileData[field] ? "true" : "false");
     } else {
       setTempValue(profileData[field] || "");
+    }
+  };
+
+  // 비밀번호 변경 API 호출 (준비된 코드 - 실제 호출 안함)
+  const handlePasswordChange = () => {
+    const currentPassword = prompt("현재 비밀번호를 입력해주세요:");
+    if (!currentPassword) return;
+
+    const newPassword = prompt("새 비밀번호를 입력해주세요:");
+    if (!newPassword) return;
+
+    const newPasswordConfirm = prompt("새 비밀번호를 다시 입력해주세요:");
+    if (!newPasswordConfirm) return;
+
+    if (newPassword !== newPasswordConfirm) {
+      alert("새 비밀번호가 일치하지 않습니다.");
+      return;
+    }
+
+    // API 호출
+    changePassword(currentPassword, newPassword, newPasswordConfirm);
+  };
+
+  const changePassword = async (
+    currentPassword,
+    newPassword,
+    newPasswordConfirm
+  ) => {
+    try {
+      // API 호출 준비 코드 (실제로는 호출하지 않음)
+      const token = localStorage.getItem("token"); // 저장된 토큰 가져오기
+
+      console.log("비밀번호 변경 API 호출 준비:");
+      console.log("URL: http://15.165.68.196/api/profile/password");
+      console.log("Method: PUT");
+      console.log("Headers:", {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      });
+      console.log("Body:", {
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+        newPasswordConfirm: newPasswordConfirm,
+      });
+
+      // 실제 API 호출 코드 (주석 처리)
+      /*
+      const response = await fetch("http://15.165.68.196/api/profile/password", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          currentPassword: currentPassword,
+          newPassword: newPassword,
+          newPasswordConfirm: newPasswordConfirm,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert("비밀번호가 변경되었습니다.");
+        onClose();
+      } else {
+        alert("비밀번호 변경 중 오류가 발생했습니다: " + (data.message || "알 수 없는 오류"));
+      }
+      */
+
+      // 임시 성공 처리
+      alert("비밀번호 변경 API 호출 준비 완료!\n(실제 API 호출은 주석 처리됨)");
+      console.log("비밀번호 변경 처리 완료 (시뮬레이션)");
+    } catch (error) {
+      console.error("비밀번호 변경 오류:", error);
+      alert("비밀번호 변경 중 오류가 발생했습니다.");
     }
   };
 
