@@ -1,7 +1,9 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import './DietPage.css';
 
 const DietPage = () => {
+  const navigate = useNavigate();
   // 7일간의 날짜 데이터
   const dates = Array.from({ length: 7 }, (_, i) => ({
     day: 15 + i,
@@ -142,7 +144,7 @@ const DietPage = () => {
 
       {/* 식단 추가하기 버튼 */}
       <div className="add-meal-section">
-        <button className="add-meal-button">
+        <button className="add-meal-button" onClick={() => navigate('/add-meal')}>
           식단 추가하기
         </button>
       </div>

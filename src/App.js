@@ -23,6 +23,7 @@ import Post from "./pages/Post";
 import JoinChallenge from "./pages/JoinChallenge";
 import MakeChallenge from "./pages/MakeChallenge";
 import ConfirmChallenge from "./pages/ConfirmChallenge";
+import AddMealPage from "./pages/AddMealPage";
 
 function Layout() {
   return (
@@ -60,6 +61,7 @@ export default function App() {
               <Route path="/joinchallenge" element={<JoinChallenge />} />
               <Route path="/makechallenge" element={<MakeChallenge />} />
               <Route path="/confirmchallenge" element={<ConfirmChallenge />} />
+              <Route path="/add-meal" element={<AddMealPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
