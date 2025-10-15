@@ -1,0 +1,286 @@
+.add-meal-page {
+  min-height: 100vh;
+  background-color: #252525;
+  padding: 20px;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+}
+
+/* 헤더 */
+.add-meal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding-top: 40px;
+}
+
+.back-button,
+.save-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-button svg,
+.save-button svg {
+  width: 28px;
+  height: 28px;
+}
+
+.header-title {
+  font-size: 20px;
+  font-weight: 800;
+  font-style: italic;
+  color: #ffffff;
+  margin: 0;
+}
+
+/* 날짜 및 식사 시간 */
+.meal-time-section {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.time-chip,
+.meal-type-chip {
+  background-color: #393a38;
+  border-radius: 10px;
+  padding: 6px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.time-chip {
+  flex: 1;
+}
+
+.meal-type-chip {
+  flex: 1;
+}
+
+.time-chip span,
+.meal-type-chip span {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+/* 칼로리 요약 */
+.calorie-summary {
+  background-color: #393a38;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.calorie-text {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 15px;
+}
+
+.nutrition-inline {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.nutrition-inline-item {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.nutrition-inline-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.nutrition-inline-value {
+  font-size: 10px;
+  font-weight: 400;
+  color: #ffffff;
+}
+
+/* 사진 섹션 */
+.meal-photo-section {
+  display: flex;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.meal-photo-box {
+  width: 136px !important;
+  height: 124px !important;
+  min-width: 136px;
+  min-height: 124px;
+  max-width: 136px;
+  max-height: 124px;
+  background-color: #393a38;
+  border-radius: 20px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.camera-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-icon svg {
+  width: 34px;
+  height: 34px;
+}
+
+/* 음식 목록 */
+.food-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.food-item {
+  background-color: #393a38;
+  border-radius: 10px;
+  padding: 18px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.food-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.food-calories {
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
+  text-align: right;
+}
+
+/* 추가 버튼 */
+.add-more-section {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.add-more-button {
+  width: 34px;
+  height: 34px;
+  background-color: #393a38;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s ease;
+  padding: 0;
+}
+
+.add-more-button:hover {
+  background-color: #4a4b48;
+}
+
+.plus-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.plus-icon svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+/* 하단 검색 섹션 */
+.bottom-search-section {
+  background-color: #393a38;
+  padding: 20px;
+  margin: 0 -20px -20px -20px;
+  min-height: 192px;
+  display: flex;
+  flex-direction: column;
+}
+
+.search-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.search-tag {
+  background-color: #7e7e7b;
+  border-radius: 10px;
+  padding: 5px 15px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #000000;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.search-tag:hover {
+  background-color: #8e8e8b;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .add-meal-page {
+    padding: 15px;
+  }
+  
+  .add-meal-header {
+    padding-top: 20px;
+    margin-bottom: 20px;
+  }
+  
+  .header-title {
+    font-size: 18px;
+  }
+  
+  .meal-photo-section {
+    gap: 15px;
+  }
+  
+  .meal-photo-box {
+    width: 120px !important;
+    height: 110px !important;
+    min-width: 120px;
+    min-height: 110px;
+    max-width: 120px;
+    max-height: 110px;
+  }
+  
+  .search-tags {
+    gap: 8px;
+  }
+  
+  .search-tag {
+    font-size: 14px;
+    padding: 4px 12px;
+  }
+}
+
