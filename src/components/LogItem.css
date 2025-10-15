@@ -88,31 +88,35 @@
   white-space: nowrap;
 }
 
-.delete-btn {
-  background: none;
-  border: none;
+.log-item .delete-btn {
+  background: none !important;
+  border: none !important;
+  color: #ff6b6b !important;
+  font-size: 16px !important;
+  cursor: pointer !important;
+  padding: 5px !important;
+  border-radius: 50% !important;
+  transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  min-height: 22px !important;
+  max-width: 22px !important;
+  max-height: 22px !important;
+}
+
+.log-item .delete-btn:hover {
+  background-color: rgba(255, 107, 107, 0.1) !important;
+  transform: scale(1.1) !important;
+}
+
+.log-item .log-card.completed .delete-btn {
   color: #ff6b6b;
-  font-size: 16px;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 50%;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
 }
 
-.delete-btn:hover {
-  background-color: rgba(255, 107, 107, 0.1);
-  transform: scale(1.1);
-}
-
-.log-card.completed .delete-btn {
-  color: #ff6b6b;
-}
-
-.log-card.pending .delete-btn {
+.log-item .log-card.pending .delete-btn {
   color: #ff6b6b;
 }
