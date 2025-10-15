@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import AddFoodModal from '../components/AddFoodModal';
 import './AddMealPage.css';
 
 const AddMealPage = () => {
   const navigate = useNavigate();
   const [selectedFoods, setSelectedFoods] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleBack = () => {
     navigate(-1);
@@ -15,21 +17,18 @@ const AddMealPage = () => {
     navigate(-1);
   };
 
-  const toggleFood = (food) => {
-    if (selectedFoods.includes(food)) {
-      setSelectedFoods(selectedFoods.filter(f => f !== food));
-    } else {
-      setSelectedFoods([...selectedFoods, food]);
-    }
+  const handleOpenModal = () => {
+    setIsModalOpen(true);
   };
 
-  const foodItems = [
-    { name: '요거트', calories: 52 },
-    { name: '소', calories: null },
-    { name: '소고기', calories: null },
-    { name: '소고기 무국', calories: null },
-    { name: '직접 추가하기', calories: null }
-  ];
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+  };
+
+  const handleSaveFood = (foodData) => {
+    console.log('저장된 음식:', foodData);
+    // 여기에 음식 추가 로직 추가 가능
+  };
 
   const nutritionData = {
     total: 384,
@@ -131,9 +130,16 @@ const AddMealPage = () => {
         <div className="search-tags">
           <div className="search-tag">소고기</div>
           <div className="search-tag">소고기 무국</div>
-          <div className="search-tag">직접 추가하기</div>
+          <div className="search-tag" onClick={handleOpenModal}>직접 추가하기</div>
         </div>
       </div>
+
+      {/* 음식 추가 모달 */}
+      <AddFoodModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        onSave={handleSaveFood}
+      />
     </div>
   );
 };
