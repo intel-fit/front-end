@@ -11,7 +11,7 @@ export default function HomePage() {
         <div className="greeting-section">
           <div className="profile-group">
             <div className="profile-image">
-              <img src="/api/placeholder/50/50" alt="프로필" />
+              <div className="profile-placeholder">👤</div>
             </div>
             <div className="greeting-text">님 어서오세요😊</div>
           </div>
@@ -22,7 +22,7 @@ export default function HomePage() {
           <div className="progress-grid">
             {[1, 2, 3, 4, 5, 6, 7].map((day) => (
               <div key={day} className="progress-item">
-                <div className="progress-number">15</div>
+                <div className={`progress-number ${day === 4 ? 'today' : ''}`}>15</div>
                 <div className="progress-calories">388k</div>
                 <div className="progress-percentage">97%</div>
               </div>
@@ -33,8 +33,10 @@ export default function HomePage() {
         {/* 칼로리 섹션 */}
         <div className="calorie-section">
           <div className="calorie-header">
-            <div className="calorie-current">384</div>
-            <div className="calorie-goal">/ 1,157kcal</div>
+            <div className="calorie-left">
+              <span className="calorie-current">384</span>
+              <span className="calorie-goal">/ 1,157kcal</span>
+            </div>
             <div className="calorie-percentage">30%</div>
           </div>
           <div className="calorie-progress-bar">
@@ -58,17 +60,21 @@ export default function HomePage() {
 
         {/* 추가 메뉴 섹션 */}
         <div className="additional-menu-section">
-          <div className="menu-grid">
+          <div className="menu-grid-3x1">
             <div className="menu-item weight-item">
               <div className="menu-title">체중</div>
               <div className="menu-value">51 / 58.6kg</div>
-              <div className="menu-icon">+</div>
             </div>
             <div className="menu-item nutrition-item">
               <div className="nutrition-content">
                 <div className="nutrition-line">탄 | 52g</div>
                 <div className="nutrition-line">단 | 120g</div>
                 <div className="nutrition-line">지 | 9g</div>
+              </div>
+            </div>
+            <div className="menu-item plus-item">
+              <div className="plus-button">
+                <div className="plus-icon">+</div>
               </div>
             </div>
           </div>
