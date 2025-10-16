@@ -126,131 +126,135 @@ export default function ExerciseModal({
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content">
-        {currentMode === "add" ? (
-          // 종목 추가 모달
-          <div className="add-exercise-modal">
-            <div className="modal-header">
-              <h2>종목 추가</h2>
-              <button className="close-btn" onClick={onClose}>
-                <IoClose />
-              </button>
-            </div>
-
-            <div className="search-container">
-              <div className="search-bar">
-                <IoSearch className="search-icon" />
-                <input
-                  type="text"
-                  placeholder="종목 이름을 검색하세요."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="filter-buttons">
-              {categories.map((category) => (
-                <button
-                  key={category}
-                  className={`filter-btn ${
-                    selectedCategory === category ? "active" : ""
-                  }`}
-                  onClick={() => setSelectedCategory(category)}
-                >
-                  {category}
+      <div className="phone-wrapper">
+        <div className="modal-content">
+          {currentMode === "add" ? (
+            // 종목 추가 모달
+            <div className="add-exercise-modal">
+              <div className="modal-header">
+                <h2>종목 추가</h2>
+                <button className="close-btn" onClick={onClose}>
+                  <IoClose />
                 </button>
-              ))}
-            </div>
+              </div>
 
-            <div className="exercise-list">
-              {filteredExercises.map((exercise, index) => (
-                <div
-                  key={index}
-                  className="exercise-item"
-                  onClick={() => handleExerciseSelect(exercise)}
-                >
-                  <div className="exercise-icon">🏋️</div>
-                  <div className="exercise-info">
-                    <div className="exercise-name">{exercise.name}</div>
-                    <div className="exercise-last-used">
-                      {exercise.lastUsed}
+              <div className="search-container">
+                <div className="search-bar">
+                  <IoSearch className="search-icon" />
+                  <input
+                    type="text"
+                    placeholder="종목 이름을 검색하세요."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="filter-buttons">
+                {categories.map((category) => (
+                  <button
+                    key={category}
+                    className={`filter-btn ${
+                      selectedCategory === category ? "active" : ""
+                    }`}
+                    onClick={() => setSelectedCategory(category)}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+
+              <div className="exercise-list">
+                {filteredExercises.map((exercise, index) => (
+                  <div
+                    key={index}
+                    className="exercise-item"
+                    onClick={() => handleExerciseSelect(exercise)}
+                  >
+                    <div className="exercise-icon">🏋️</div>
+                    <div className="exercise-info">
+                      <div className="exercise-name">{exercise.name}</div>
+                      <div className="exercise-last-used">
+                        {exercise.lastUsed}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        ) : (
-          // 운동 상세 모달
-          <div className="exercise-detail-modal">
-            <div className="modal-header">
-              <button className="back-btn" onClick={handleBackToAdd}>
-                ←
-              </button>
-              <h2>{selectedExercise?.name || exerciseData?.name || "운동"}</h2>
-              <button className="close-btn" onClick={onClose}>
-                <IoClose />
-              </button>
-            </div>
-
-            <div className="sets-container">
-              <div className="sets-header">
-                <button
-                  className="remove-set-btn"
-                  onClick={() => handleRemoveSet(sets[sets.length - 1]?.id)}
-                >
-                  -
+          ) : (
+            // 운동 상세 모달
+            <div className="exercise-detail-modal">
+              <div className="modal-header">
+                <button className="back-btn" onClick={handleBackToAdd}>
+                  ←
                 </button>
-                <span>세트</span>
-                <button className="add-set-btn" onClick={handleAddSet}>
-                  +
+                <h2>
+                  {selectedExercise?.name || exerciseData?.name || "운동"}
+                </h2>
+                <button className="close-btn" onClick={onClose}>
+                  <IoClose />
                 </button>
-                <span>추천 세트</span>
-                <span></span>
               </div>
 
-              {sets.map((set) => (
-                <div key={set.id} className="set-row">
-                  <div className="set-number">{set.id}</div>
-                  <div className="weight-input">
-                    <input
-                      type="number"
-                      value={set.weight}
-                      onChange={(e) =>
-                        handleSetChange(
-                          set.id,
-                          "weight",
-                          parseInt(e.target.value)
-                        )
-                      }
-                    />
-                    <span>kg</span>
-                  </div>
-                  <div className="reps-display">{set.reps}회</div>
+              <div className="sets-container">
+                <div className="sets-header">
                   <button
-                    className={`complete-btn ${
-                      set.completed ? "completed" : ""
-                    }`}
-                    onClick={() => handleSetComplete(set.id)}
+                    className="remove-set-btn"
+                    onClick={() => handleRemoveSet(sets[sets.length - 1]?.id)}
                   >
-                    <IoCheckmark />
+                    -
                   </button>
+                  <span>세트</span>
+                  <button className="add-set-btn" onClick={handleAddSet}>
+                    +
+                  </button>
+                  <span>추천 세트</span>
+                  <span></span>
                 </div>
-              ))}
-            </div>
 
-            <button
-              className="save-exercise-btn"
-              onClick={() =>
-                onSave &&
-                onSave(sets, selectedExercise?.name || exerciseData?.name)
-              }
-            >
-              운동 저장
-            </button>
-          </div>
-        )}
+                {sets.map((set) => (
+                  <div key={set.id} className="set-row">
+                    <div className="set-number">{set.id}</div>
+                    <div className="weight-input">
+                      <input
+                        type="number"
+                        value={set.weight}
+                        onChange={(e) =>
+                          handleSetChange(
+                            set.id,
+                            "weight",
+                            parseInt(e.target.value)
+                          )
+                        }
+                      />
+                      <span>kg</span>
+                    </div>
+                    <div className="reps-display">{set.reps}회</div>
+                    <button
+                      className={`complete-btn ${
+                        set.completed ? "completed" : ""
+                      }`}
+                      onClick={() => handleSetComplete(set.id)}
+                    >
+                      <IoCheckmark />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                className="save-exercise-btn"
+                onClick={() =>
+                  onSave &&
+                  onSave(sets, selectedExercise?.name || exerciseData?.name)
+                }
+              >
+                운동 저장
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
