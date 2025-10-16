@@ -111,13 +111,14 @@
 .profile-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 16px;
 }
 
 .profile-name {
   font-size: 18px;
   font-weight: 700;
   color: #fff;
+  margin-left: 8px;
 }
 
 .profile-edit-btn {
