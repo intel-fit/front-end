@@ -1,25 +1,38 @@
 .modal-overlay {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: transparent;
   display: flex;
   align-items: flex-end;
   justify-content: center;
   z-index: 1000;
+  pointer-events: none;
+}
+
+.phone-wrapper {
+  width: 390px;
+  height: 844px;
+  background-color: transparent;
+  border-radius: 20px;
+  position: relative;
+  overflow: hidden;
+  pointer-events: auto;
 }
 
 .modal-content {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
   background-color: #2a2a2a;
-  border-radius: 16px 16px 0 0;
-  width: 100%;
-  max-height: 80vh;
+  border-radius: 20px 20px 0 0;
+  max-height: 70%;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  margin-bottom: 0;
 }
 
 .modal-header {
