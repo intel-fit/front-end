@@ -107,14 +107,27 @@
 }
 
 .write-button {
-  position: fixed;
-  bottom: 300px;
-  right: 360px;
+  position: absolute; /* fixed → absolute로 변경 */
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
   background-color: white;
-  border-radius: 10px;
+  border: none;
+  border-radius: 25px;
+  padding: 12px 20px;
+  color: #000;
+  font-weight: bold;
   cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  transition: all 0.3s;
+}
+
+.write-button:hover {
+  background-color: #f0f0f0;
+  transform: translateX(-50%) scale(1.05);
 }
 
 .write-button:active {
-  transform: scale(0.9);
+  transform: translateX(-50%) scale(0.95);
 }

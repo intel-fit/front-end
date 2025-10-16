@@ -57,6 +57,7 @@ export default function App() {
               <Route path="/community" element={<Community />} />
               <Route path="/write" element={<Write />} />
               <Route path="/challenge" element={<Challenge />} />
+              <Route path="/challenge/:category" element={<Challenge />} />
               <Route path="/post/:postId" element={<Post />} />
               <Route path="/joinchallenge" element={<JoinChallenge />} />
               <Route path="/makechallenge" element={<MakeChallenge />} />

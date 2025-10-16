@@ -5,14 +5,12 @@ import "./Write.css";
 const Write = () => {
   const navigate = useNavigate();
 
-  // 게시글 정보
   const [newPost, setNewPost] = useState({
     title: "",
     content: "",
     images: [],
   });
 
-  // 이미지 추가 함수
   const handleImageAdd = (e) => {
     const file = e.target.files[0];
 
@@ -20,17 +18,14 @@ const Write = () => {
       return;
     }
 
-    // 이미지 파일인지 확인
     if (!file.type.startsWith("image/")) {
       alert("이미지 파일만 선택해주세요!");
       return;
     }
 
-    // 파일을 읽어서 Base64로 변환
     const reader = new FileReader();
 
     reader.onloadend = () => {
-      // 기존 images 배열에 새 이미지 추가
       setNewPost({
         ...newPost,
         images: [...newPost.images, reader.result],
@@ -40,7 +35,6 @@ const Write = () => {
     reader.readAsDataURL(file);
   };
 
-  // 이미지 삭제 함수
   const handleImageRemove = (indexToRemove) => {
     const updatedImages = newPost.images.filter(
       (_, index) => index !== indexToRemove
@@ -52,7 +46,6 @@ const Write = () => {
     });
   };
 
-  // 완료 버튼 클릭
   const handleComplete = () => {
     if (!newPost.title.trim() || !newPost.content.trim()) {
       alert("제목과 내용을 입력해 주세요");
@@ -72,7 +65,6 @@ const Write = () => {
 
   return (
     <div className="write-page">
-      {/* 헤더 */}
       <div className="write-header">
         <button className="write-close" onClick={() => navigate("/community")}>
           ✕
@@ -83,7 +75,6 @@ const Write = () => {
         </button>
       </div>
 
-      {/* 제목 입력 */}
       <input
         type="text"
         className="write-input"
@@ -92,12 +83,10 @@ const Write = () => {
         onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
       />
 
-      {/* 사진 갤러리 섹션 */}
       <div className="write-photo-section">
         <p>사진 추가</p>
 
         <div className="photo-gallery">
-          {/* 기존 이미지들 표시 */}
           {newPost.images.map((image, index) => (
             <div key={index} className="photo-item">
               <img
@@ -114,7 +103,6 @@ const Write = () => {
             </div>
           ))}
 
-          {/* 사진 추가 버튼 (회색 박스) */}
           <label className="photo-add-box">
             <input
               type="file"
@@ -127,7 +115,6 @@ const Write = () => {
         </div>
       </div>
 
-      {/* 내용 입력 */}
       <textarea
         className="write-textarea"
         placeholder="내용을 입력해주세요"
