@@ -1,0 +1,153 @@
+.meal-detail-page {
+  min-height: 100vh;
+  background-color: #000;
+  color: white;
+  padding-bottom: 100px;
+}
+
+.meal-header {
+  display: flex;
+  align-items: center;
+  padding: 15px 20px;
+  background-color: #000;
+  position: relative;
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 8px;
+  position: absolute;
+  left: 20px;
+}
+
+.page-title {
+  font-size: 18px;
+  font-weight: bold;
+  margin: 0;
+  text-align: center;
+  width: 100%;
+}
+
+.meal-name-section {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.meal-name {
+  font-size: 20px;
+  font-weight: bold;
+  margin: 0;
+  color: white;
+}
+
+.meal-type {
+  font-size: 14px;
+  color: #ff9500;
+  background-color: rgba(255, 149, 0, 0.1);
+  padding: 4px 8px;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.meal-image-container {
+  padding: 0 20px 20px 20px;
+}
+
+.meal-image-placeholder {
+  width: 100%;
+  height: 250px;
+  background-color: #464646;
+  border-radius: 16px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.meal-image-placeholder::before {
+  content: "식단 이미지";
+  color: #999;
+  font-size: 16px;
+}
+
+.meal-info-container {
+  display: flex;
+  justify-content: space-around;
+  padding: 0 20px 20px 20px;
+  margin-bottom: 20px;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.info-label {
+  font-size: 12px;
+  color: #999;
+}
+
+.info-value {
+  font-size: 16px;
+  font-weight: bold;
+  color: white;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: bold;
+  margin: 0 0 15px 0;
+  color: white;
+  padding-left: 5px;
+  position: relative;
+}
+
+.section-title::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 18px;
+  background-color: #ff9500;
+  border-radius: 2px;
+}
+
+.nutrition-section {
+  padding: 0 20px 30px 20px;
+}
+
+.nutrition-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.nutrition-item {
+  background-color: #464646;
+  padding: 12px;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.nutrition-label {
+  font-size: 14px;
+  color: #ccc;
+}
+
+.nutrition-value {
+  font-size: 14px;
+  font-weight: bold;
+  color: #ff9500;
+}

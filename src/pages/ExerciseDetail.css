@@ -1,0 +1,156 @@
+.exercise-detail-page {
+  min-height: 100vh;
+  background-color: #111;
+  color: white;
+  padding-bottom: 100px;
+}
+
+.exercise-header {
+  display: flex;
+  align-items: center;
+  padding: 15px 20px;
+  background-color: #000;
+  position: relative;
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 8px;
+  position: absolute;
+  left: 20px;
+}
+
+.page-title {
+  font-size: 18px;
+  font-weight: bold;
+  margin: 0;
+  text-align: center;
+  width: 100%;
+}
+
+.exercise-name-section {
+  padding: 20px;
+}
+
+.exercise-name {
+  font-size: 20px;
+  font-weight: bold;
+  margin: 0;
+  color: white;
+}
+
+.exercise-image-container {
+  padding: 0 20px 20px 20px;
+}
+
+.exercise-image-placeholder {
+  width: 100%;
+  height: 300px;
+  background-color: #464646;
+  border-radius: 16px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.exercise-image-placeholder::before {
+  content: "운동 이미지";
+  color: #999;
+  font-size: 16px;
+}
+
+.sets-container {
+  padding: 0 20px;
+  margin-bottom: 30px;
+}
+
+.set-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #464646;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.set-item:hover {
+  background-color: #525252;
+}
+
+.set-item.completed {
+  background-color: #2d5a2d;
+  border: 2px solid #4a7c59;
+}
+
+.set-number {
+  font-size: 16px;
+  font-weight: bold;
+  flex: 1;
+}
+
+.set-weight {
+  font-size: 16px;
+  flex: 1;
+  text-align: center;
+}
+
+.set-reps {
+  font-size: 16px;
+  flex: 1;
+  text-align: center;
+}
+
+.check-icon {
+  font-size: 20px;
+  color: #b6f36e;
+  font-weight: bold;
+  margin-left: 10px;
+}
+
+.action-buttons {
+  position: absolute;
+  bottom: 70px;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  display: flex;
+  max-width: 350px;
+  background-color: #111;
+  border-top: 1px solid #333;
+  padding: 12px 20px;
+  gap: 10px;
+  align-items: center;
+  z-index: 99;
+  border: none;
+}
+
+.rest-timer-btn,
+.set-complete-btn {
+  flex: 1;
+  padding: 16px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.rest-timer-btn {
+  background-color: #b6f36e;
+  color: #000;
+}
+
+.set-complete-btn {
+  background-color: #b6f36e;
+  color: #000;
+}

@@ -3,6 +3,7 @@ import DietPage from "../pages/DietPage";
 import Stats from "./Stats";
 import GoalCard from "./GoalCard";
 import LogSection from "./LogSection";
+import AIRecommend from "./AIRecommend";
 
 export default function Tabs({ activeTab, onTabChange }) {
   const tabs = ["운동기록", "식단기록", "AI 추천"];
@@ -20,7 +21,7 @@ export default function Tabs({ activeTab, onTabChange }) {
       case 1:
         return <DietPage />;
       case 2:
-        return <div className="tab-content">AI 추천 페이지</div>;
+        return <AIRecommend />;
       default:
         return <div className="tab-content">기본 페이지</div>;
     }

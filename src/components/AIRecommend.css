@@ -1,0 +1,135 @@
+.ai-recommend {
+  max-width: 360px;
+  margin: 0 auto;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.day-selector {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 30px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+}
+
+.day-selector::-webkit-scrollbar {
+  display: none;
+}
+
+.day-button {
+  background-color: #464646;
+  color: white;
+  border: none;
+  padding: 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  white-space: nowrap;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.day-button.active {
+  background-color: #d0fd3e;
+  color: #000000;
+}
+.recommendation-section {
+  margin-bottom: 40px;
+}
+
+.section-title {
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 15px;
+  color: #ffffff;
+}
+
+.exercise-list,
+.meal-list {
+  display: flex;
+  overflow-x: auto;
+  gap: 15px;
+  padding-bottom: 15px;
+}
+
+.exercise-list::-webkit-scrollbar,
+.meal-list::-webkit-scrollbar {
+  height: 5px;
+}
+
+.exercise-list::-webkit-scrollbar-track,
+.meal-list::-webkit-scrollbar-track {
+  background: #2c2c2e;
+}
+
+.exercise-list::-webkit-scrollbar-thumb,
+.meal-list::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 5px;
+}
+
+.exercise-item,
+.meal-item {
+  flex-shrink: 0;
+}
+
+.exercise-placeholder,
+.meal-placeholder {
+  width: 140px;
+  height: 140px;
+  background-color: #2c2c2e;
+  border-radius: 20px;
+  margin-bottom: 30px;
+}
+
+.exercise-info {
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.meal-info {
+  text-align: left;
+}
+
+.exercise-name,
+.meal-name {
+  font-size: 16px;
+  font-weight: bold;
+  margin: 0 0 4px 0;
+  color: #f2f2f7;
+}
+
+.exercise-duration,
+.meal-description {
+  font-size: 13px;
+  color: #8e8e93;
+  margin: 0;
+}
+
+.start-button {
+  background-color: #d0fd3e;
+  color: #000000;
+  border: none;
+  width: 100%;
+  padding: 18px;
+  border-radius: 15px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  margin-top: 20px;
+  transition: opacity 0.3s;
+}
+
+.start-button:hover {
+  opacity: 0.9;
+}

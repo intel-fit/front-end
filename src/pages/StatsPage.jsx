@@ -38,11 +38,7 @@ export default function StatsPage() {
           </div>
         );
       case 2: // AI 추천
-        return (
-          <div className="empty-tab">
-            <p>AI 추천 기능은 준비 중입니다.</p>
-          </div>
-        );
+        return <div className="empty-tab"></div>;
       default:
         return null;
     }

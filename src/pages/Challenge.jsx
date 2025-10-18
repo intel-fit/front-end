@@ -78,7 +78,6 @@ const Challenge = () => {
     { id: 5, title: "기타", image: "🎯" },
   ];
 
-  // localStorage에서 커스텀 챌린지 로드
   useEffect(() => {
     const savedChallenges = localStorage.getItem("customChallenges");
     if (savedChallenges) {
@@ -86,35 +85,28 @@ const Challenge = () => {
     }
   }, []);
 
-  // URL 파라미터 변경 시 뷰 업데이트
   useEffect(() => {
     if (category) {
-      // URL에 카테고리가 있으면 해당 카테고리 뷰로 이동
       setSelectedCategory(decodeURIComponent(category));
       setCurrentView("category");
     } else {
-      // URL에 카테고리가 없으면 메인 뷰로 이동
       setCurrentView("main");
       setSelectedCategory("");
     }
   }, [category]);
 
-  // 카테고리 클릭 핸들러 - URL 변경
   const handleCategoryClick = (categoryName) => {
     navigate(`/challenge/${encodeURIComponent(categoryName)}`);
   };
 
-  // 메인으로 돌아가기 - URL 변경
   const handleBackToMain = () => {
     navigate("/challenge");
   };
 
-  // 현재 활성화된 카테고리인지 확인
   const isActiveCategory = (categoryName) => {
     return selectedCategory === categoryName;
   };
 
-  // 이미지 렌더링 함수
   const renderChallengeImage = (challenge) => {
     if (challenge.hasCustomImage && challenge.image.startsWith("data:image")) {
       return (
@@ -209,7 +201,6 @@ const Challenge = () => {
         </>
       ) : (
         <div className="category-view">
-          {/* 브레드크럼 네비게이션 */}
           <div className="breadcrumb">
             <button className="breadcrumb-link" onClick={handleBackToMain}>
               챌린지

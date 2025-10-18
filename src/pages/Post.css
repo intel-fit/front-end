@@ -88,16 +88,17 @@
 }
 
 .detail-images {
-  margin: 20px 0;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  position: relative;
 }
 
 .detail-image {
-  width: 100%;
-  border-radius: 12px;
-  object-fit: cover;
+  flex: 1 1 100%;
+  min-width: 0;
 }
 
 .detail-text {
@@ -111,22 +112,11 @@
 .action-buttons {
   display: flex;
   gap: 12px;
-  margin: 20px 0;
+  margin-top: 5px;
 }
 
 .action-btn {
-  flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px;
-  background-color: #1a1a1a;
-  border: 1px solid #333;
-  border-radius: 8px;
-  color: white;
-  cursor: pointer;
-  transition: background-color 0.3s;
 }
 
 .action-btn:hover {
@@ -222,8 +212,8 @@
 }
 
 .comment-input-container {
-  position: absolute;
-  bottom: 70px;
+  position: fixed;
+  bottom: 260px;
   left: 0;
   right: 0;
   margin: 0 auto;
