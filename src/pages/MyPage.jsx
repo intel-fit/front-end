@@ -2,10 +2,6 @@ import { useState, useEffect } from "react";
 import Header from "../components/Header";
 import BadgeModal from "../components/BadgeModal";
 import BadgeListModal from "../components/BadgeListModal";
-import InBodyInputModal from "../components/InBodyInputModal";
-import InBodyPhotoModal from "../components/InBodyPhotoModal";
-import InBodyManualModal from "../components/InBodyManualModal";
-import InBodyHistoryModal from "../components/InBodyHistoryModal";
 import AIAnalysisModal from "../components/AIAnalysisModal";
 import MyPlanModal from "../components/MyPlanModal";
 import PaymentMethodModal from "../components/PaymentMethodModal";
@@ -22,13 +18,6 @@ export default function MyPage() {
   const [selectedBadge, setSelectedBadge] = useState(null);
   const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false);
   const [isBadgeListModalOpen, setIsBadgeListModalOpen] = useState(false);
-  const [isInBodyInputModalOpen, setIsInBodyInputModalOpen] = useState(false);
-  const [isInBodyPhotoModalOpen, setIsInBodyPhotoModalOpen] = useState(false);
-  const [isInBodyManualModalOpen, setIsInBodyManualModalOpen] = useState(false);
-  const [isInBodyHistoryModalOpen, setIsInBodyHistoryModalOpen] =
-    useState(false);
-  const [editInBodyData, setEditInBodyData] = useState(null);
-  const [inBodyRecords, setInBodyRecords] = useState([]);
   const [isAIAnalysisModalOpen, setIsAIAnalysisModalOpen] = useState(false);
   const [isMyPlanModalOpen, setIsMyPlanModalOpen] = useState(false);
   const [isPaymentMethodModalOpen, setIsPaymentMethodModalOpen] =
@@ -142,87 +131,6 @@ export default function MyPage() {
     setIsBadgeListModalOpen(false);
     setSelectedBadge(badge);
     setIsBadgeModalOpen(true);
-  };
-
-  // InBody 관련 핸들러
-  const handleInBodyInputClick = () => {
-    setIsInBodyInputModalOpen(true);
-  };
-
-  const handleInBodyInputModalClose = () => {
-    setIsInBodyInputModalOpen(false);
-  };
-
-  const handleSelectPhoto = () => {
-    setIsInBodyInputModalOpen(false);
-    setIsInBodyPhotoModalOpen(true);
-  };
-
-  const handleSelectManual = () => {
-    setIsInBodyInputModalOpen(false);
-    setIsInBodyManualModalOpen(true);
-  };
-
-  const handleInBodyPhotoModalClose = () => {
-    setIsInBodyPhotoModalOpen(false);
-  };
-
-  const handleInBodyManualModalClose = () => {
-    setIsInBodyManualModalOpen(false);
-    setEditInBodyData(null);
-  };
-
-  const handleInBodySave = (data) => {
-    if (editInBodyData) {
-      // 수정 모드
-      const updatedRecords = inBodyRecords.map((record) =>
-        record.id === editInBodyData.id
-          ? { ...data, id: editInBodyData.id, createdAt: record.createdAt }
-          : record
-      );
-      setInBodyRecords(updatedRecords);
-      console.log("InBody 데이터 수정:", { ...data, id: editInBodyData.id });
-      alert("검사 결과가 수정되었습니다!");
-    } else {
-      // 새로 추가 모드
-      const newRecord = {
-        ...data,
-        id: Date.now(), // 임시 ID
-        createdAt: new Date().toISOString(),
-      };
-      setInBodyRecords((prev) => [...prev, newRecord]);
-      console.log("InBody 데이터 저장:", newRecord);
-      alert("검사 결과가 저장되었습니다!");
-    }
-    setIsInBodyPhotoModalOpen(false);
-    setIsInBodyManualModalOpen(false);
-    setEditInBodyData(null);
-  };
-
-  const handleInBodyHistoryClick = () => {
-    setIsInBodyHistoryModalOpen(true);
-  };
-
-  const handleInBodyHistoryModalClose = () => {
-    setIsInBodyHistoryModalOpen(false);
-  };
-
-  // 인바디 수정 핸들러
-  const handleInBodyEdit = (inBodyData) => {
-    setEditInBodyData(inBodyData);
-    setIsInBodyHistoryModalOpen(false);
-    setIsInBodyManualModalOpen(true);
-  };
-
-  // 인바디 삭제 핸들러
-  const handleInBodyDelete = (inBodyId) => {
-    const updatedRecords = inBodyRecords.filter(
-      (record) => record.id !== inBodyId
-    );
-    setInBodyRecords(updatedRecords);
-    console.log("InBody 데이터 삭제:", inBodyId);
-    alert("검사 결과가 삭제되었습니다!");
-    setIsInBodyHistoryModalOpen(false);
   };
 
   // AI 분석 핸들러
@@ -449,22 +357,6 @@ export default function MyPage() {
           </div>
         </div>
 
-        {/* InBody 섹션 */}
-        <div className="inbody-section">
-          <div className="section-title">InBody</div>
-          <div className="section-links">
-            <div className="link-item" onClick={handleInBodyInputClick}>
-              검사결과 입력하기
-            </div>
-            <div className="link-item" onClick={handleInBodyHistoryClick}>
-              전체 내역보기
-            </div>
-          </div>
-          <button className="ai-analysis-btn" onClick={handleAIAnalysisClick}>
-            AI 분석 받기
-          </button>
-        </div>
-
         {/* 구독/결제 섹션 */}
         <div className="subscription-section">
           <div className="section-title">구독/결제</div>
@@ -507,38 +399,6 @@ export default function MyPage() {
         isOpen={isBadgeListModalOpen}
         onClose={handleBadgeListModalClose}
         onBadgeClick={handleBadgeItemClick}
-      />
-
-      {/* InBody 입력 방식 선택 모달 */}
-      <InBodyInputModal
-        isOpen={isInBodyInputModalOpen}
-        onClose={handleInBodyInputModalClose}
-        onSelectPhoto={handleSelectPhoto}
-        onSelectManual={handleSelectManual}
-      />
-
-      {/* InBody 사진 인식 모달 */}
-      <InBodyPhotoModal
-        isOpen={isInBodyPhotoModalOpen}
-        onClose={handleInBodyPhotoModalClose}
-        onSave={handleInBodySave}
-      />
-
-      {/* InBody 수기 입력 모달 */}
-      <InBodyManualModal
-        isOpen={isInBodyManualModalOpen}
-        onClose={handleInBodyManualModalClose}
-        onSave={handleInBodySave}
-        editData={editInBodyData}
-      />
-
-      {/* InBody 전체 내역 모달 */}
-      <InBodyHistoryModal
-        isOpen={isInBodyHistoryModalOpen}
-        onClose={handleInBodyHistoryModalClose}
-        onEdit={handleInBodyEdit}
-        onDelete={handleInBodyDelete}
-        inBodyRecords={inBodyRecords}
       />
 
       {/* AI 분석 모달 */}
