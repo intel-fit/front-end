@@ -1,0 +1,253 @@
+/* Graph Page */
+.graph-page {
+  min-height: 100vh;
+  background: #1a1a1a;
+  color: white;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.graph-content {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Tab Navigation */
+.tab-navigation {
+  display: flex;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #333;
+}
+
+.tab {
+  flex: 1;
+  text-align: center;
+  padding: 12px 0;
+  font-size: 0.9rem;
+  color: #aaa;
+  cursor: pointer;
+  position: relative;
+}
+
+.tab.active {
+  color: white;
+}
+
+.tab.active::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80px;
+  height: 2px;
+  background: #daff50;
+}
+
+/* Filter Buttons */
+.filter-buttons {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.filter-btn {
+  background: #333;
+  color: #aaa;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex: 1;
+  text-align: center;
+  min-width: 0;
+}
+
+.filter-btn:hover {
+  background: #333 !important;
+  color: #aaa !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.filter-btn:active {
+  background: #333 !important;
+  color: #aaa !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.filter-btn:focus {
+  background: #333 !important;
+  color: #aaa !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.filter-btn.active {
+  background: #daff50;
+  color: #1c1c1c;
+}
+
+.filter-btn.active:hover {
+  background: #daff50 !important;
+  color: #1c1c1c !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.filter-btn.active:active {
+  background: #daff50 !important;
+  color: #1c1c1c !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.filter-btn.active:focus {
+  background: #daff50 !important;
+  color: #1c1c1c !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* 사용자 메시지 */
+.user-message {
+  font-size: 1rem;
+  line-height: 1.5;
+  margin-bottom: 24px;
+  color: white;
+}
+
+.highlight-name {
+  color: #daff50;
+  font-weight: 600;
+}
+
+/* Graph Section */
+.graph-section {
+  background: #2a2a2a;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.chart-container {
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.chart-title {
+  font-weight: 600;
+  margin: 0 0 12px 2px;
+  font-size: 14px;
+  color: #cfcfcf;
+}
+
+#chart-host svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.y-label {
+  font-size: 10px;
+  fill: #bdbdbd;
+}
+
+.x-label {
+  font-size: 10px;
+  fill: #bdbdbd;
+}
+
+.guide {
+  stroke: #8f8f8f55;
+  stroke-dasharray: 6 6;
+}
+
+.line {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+
+.dot {
+  fill: #0e0e0e;
+  stroke: #d6ff4b;
+  stroke-width: 2;
+}
+
+.active-dot {
+  filter: drop-shadow(0 0 4px #d6ff4b);
+}
+
+.tooltip {
+  position: absolute;
+  transform: translate(-50%, -120%);
+  padding: 4px 6px;
+  border-radius: 8px;
+  background: #d6ff4b;
+  color: #0b0b0b;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  display: none;
+}
+
+/* 체중 조절 섹션 */
+.weight-control-section {
+  background: #2a2a2a;
+  border-radius: 12px;
+  padding: 20px;
+  position: relative;
+}
+
+.weight-control-tag {
+  background: #333;
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 12px;
+  display: inline-block;
+  margin-bottom: 16px;
+}
+
+.weight-control-content {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+
+.trainer-avatar {
+  width: 50px;
+  height: 50px;
+  background: transparent;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  border: 1px solid #666;
+}
+
+.weight-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.weight-text {
+  font-size: 1rem;
+  color: white;
+  font-weight: 500;
+}
+
+.weight-detail {
+  font-size: 0.9rem;
+  color: #ccc;
+}
