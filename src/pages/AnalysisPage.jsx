@@ -1,20 +1,52 @@
-import React from "react";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "./AnalysisPage.css";
 import Header from "../components/Header";
+import InBodyPhotoModal from "../components/InBodyPhotoModal";
+import InBodyManualModal from "../components/InBodyManualModal";
 import {
   IoCameraOutline,
   IoPencilOutline,
   IoBarChartOutline,
 } from "react-icons/io5";
-import {
-  FaDumbbell,
-  FaFire,
-  FaArrowUp,
-  FaArrowDown,
-  FaMinus,
-} from "react-icons/fa";
+import { FaDumbbell, FaArrowUp, FaArrowDown, FaMinus } from "react-icons/fa";
 
 export default function AnalysisPage() {
+  const navigate = useNavigate();
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+
+  const handleInBodyClick = () => {
+    navigate("/inbody");
+  };
+
+  const handlePhotoClick = () => {
+    setIsPhotoModalOpen(true);
+  };
+
+  const handleManualClick = () => {
+    console.log("수기 입력 버튼 클릭됨");
+    setIsManualModalOpen(true);
+  };
+
+  const handlePhotoSave = (data) => {
+    console.log("인바디 사진 저장:", data);
+    // 여기서 실제로 데이터를 저장하거나 처리합니다
+  };
+
+  const handleManualSave = (data) => {
+    console.log("인바디 수기 입력 저장:", data);
+    // 여기서 실제로 데이터를 저장하거나 처리합니다
+  };
+
+  const handlePhotoModalClose = () => {
+    setIsPhotoModalOpen(false);
+  };
+
+  const handleManualModalClose = () => {
+    setIsManualModalOpen(false);
+  };
+
   return (
     <div className="analysis-page">
       <Header title="분석하기" />
@@ -35,16 +67,19 @@ export default function AnalysisPage() {
             <p>최근 측정일 2025.10.05</p>
           </div>
           <div className="input-buttons">
-            <button className="input-btn photo-btn">
+            <button className="input-btn photo-btn" onClick={handlePhotoClick}>
               <IoCameraOutline />
               <span>사진으로 입력</span>
             </button>
-            <button className="input-btn manual-btn">
+            <button
+              className="input-btn manual-btn"
+              onClick={handleManualClick}
+            >
               <IoPencilOutline />
               <span>수기로 입력</span>
             </button>
           </div>
-          <button className="analysis-btn">
+          <button className="analysis-btn" onClick={handleInBodyClick}>
             <IoBarChartOutline />
             <span>정보/분석</span>
           </button>
@@ -199,6 +234,20 @@ export default function AnalysisPage() {
           </div>
         </div>
       </div>
+
+      {/* 인바디 사진 입력 모달 */}
+      <InBodyPhotoModal
+        isOpen={isPhotoModalOpen}
+        onClose={handlePhotoModalClose}
+        onSave={handlePhotoSave}
+      />
+
+      {/* 인바디 수기 입력 모달 */}
+      <InBodyManualModal
+        isOpen={isManualModalOpen}
+        onClose={handleManualModalClose}
+        onSave={handleManualSave}
+      />
     </div>
   );
 }

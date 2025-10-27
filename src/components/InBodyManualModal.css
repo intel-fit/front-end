@@ -1,0 +1,126 @@
+/* InBody Manual Modal */
+.manual-modal-bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  box-sizing: border-box;
+  backdrop-filter: blur(4px);
+}
+
+.manual-modal {
+  width: 360px;
+  max-width: 95vw;
+  max-height: 90vh;
+  background: linear-gradient(135deg, #2a2a2a 0%, #1e1e1e 100%);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  border: 1px solid #333;
+  display: flex;
+  flex-direction: column;
+}
+
+.manual-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #333 0%, #2a2a2a 100%);
+  border-bottom: 1px solid #444;
+  flex-shrink: 0;
+}
+
+.manual-modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  color: white;
+}
+
+.manual-modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+  min-height: 0;
+}
+
+/* Form 스타일 오버라이드 */
+.manual-modal-content form {
+  width: 100% !important;
+  max-width: 100% !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  padding: 16px !important;
+  box-sizing: border-box !important;
+}
+
+.manual-modal-content h2 {
+  display: none !important;
+}
+
+/* 스크롤바 스타일링 */
+.manual-modal-content::-webkit-scrollbar {
+  width: 3px;
+}
+
+.manual-modal-content::-webkit-scrollbar-track {
+  background: #2a2a2a;
+}
+
+.manual-modal-content::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 2px;
+}
+
+.manual-modal-content::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+/* 모바일 최적화 */
+@media (max-width: 480px) {
+  .manual-modal-bg {
+    padding: 10px;
+  }
+
+  .manual-modal {
+    width: 100%;
+    max-width: 98vw;
+    max-height: 95vh;
+    border-radius: 12px;
+  }
+
+  .manual-modal-header {
+    padding: 12px 16px;
+  }
+
+  .manual-modal-header h2 {
+    font-size: 16px;
+  }
+
+  .manual-modal-content form {
+    padding: 12px !important;
+  }
+}

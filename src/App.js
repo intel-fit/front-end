@@ -16,15 +16,13 @@ import FindIdPage from "./pages/FindIdPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import Nav from "./components/Nav";
 import "./App.css";
-import Challenge from "./pages/Challenge";
-import JoinChallenge from "./pages/JoinChallenge";
-import MakeChallenge from "./pages/MakeChallenge";
-import ConfirmChallenge from "./pages/ConfirmChallenge";
 import AddMealPage from "./pages/AddMealPage";
 import ExerciseDetail from "./pages/ExerciseDetail";
 import MealDetail from "./pages/MealDetail";
 import ChatbotPage from "./pages/ChatbotPage";
 import AnalysisPage from "./pages/AnalysisPage";
+import InBodyPage from "./pages/InBodyPage";
+import GraphPage from "./pages/GraphPage";
 
 function Layout() {
   return (
@@ -57,11 +55,8 @@ export default function App() {
               <Route path="/goal" element={<GoalPage />} />
               <Route path="/chatbot" element={<ChatbotPage />} />
               <Route path="/analysis" element={<AnalysisPage />} />
-              <Route path="/challenge" element={<Challenge />} />
-              <Route path="/challenge/:category" element={<Challenge />} />
-              <Route path="/joinchallenge" element={<JoinChallenge />} />
-              <Route path="/makechallenge" element={<MakeChallenge />} />
-              <Route path="/confirmchallenge" element={<ConfirmChallenge />} />
+              <Route path="/inbody" element={<InBodyPage />} />
+              <Route path="/graph" element={<GraphPage />} />
               <Route path="/add-meal" element={<AddMealPage />} />
               <Route path="/exercise-detail" element={<ExerciseDetail />} />
               <Route path="/meal-detail" element={<MealDetail />} />
