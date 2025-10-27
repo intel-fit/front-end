@@ -15,7 +15,7 @@
 .manual-modal {
   width: 360px;
   max-width: 95vw;
-  max-height: 90vh;
+  max-height: 75vh;
   background: linear-gradient(135deg, #2a2a2a 0%, #1e1e1e 100%);
   border-radius: 16px;
   overflow: hidden;
@@ -108,7 +108,7 @@
   .manual-modal {
     width: 100%;
     max-width: 98vw;
-    max-height: 95vh;
+    max-height: 80vh;
     border-radius: 12px;
   }
 
@@ -118,6 +118,21 @@
 
   .manual-modal-header h2 {
     font-size: 16px;
+  }
+
+  .manual-modal-content form {
+    padding: 12px !important;
+  }
+}
+
+/* 작은 화면 최적화 */
+@media (max-height: 600px) {
+  .manual-modal {
+    max-height: 80vh;
+  }
+
+  .manual-modal-header {
+    padding: 12px 16px;
   }
 
   .manual-modal-content form {
