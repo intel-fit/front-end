@@ -148,14 +148,6 @@
   background-color: #ef4444;
 }
 
-/* InBody 섹션 */
-.inbody-section {
-  margin-bottom: 24px;
-  padding: 20px 0;
-  border-top: 1px solid #333;
-  border-bottom: 1px solid #333;
-}
-
 .section-title {
   font-size: 16px;
   font-weight: bold;
@@ -177,23 +169,6 @@
 
 .link-item:hover {
   color: #ccc;
-}
-
-.ai-analysis-btn {
-  width: 100%;
-  padding: 12px 24px;
-  background-color: #4ade80;
-  color: black;
-  border: none;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.ai-analysis-btn:hover {
-  background-color: #22c55e;
 }
 
 /* 구독/결제 섹션 */
