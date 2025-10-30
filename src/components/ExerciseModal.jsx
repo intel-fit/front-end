@@ -186,9 +186,6 @@ export default function ExerciseModal({
             // 운동 상세 모달
             <div className="exercise-detail-modal">
               <div className="modal-header">
-                <button className="back-btn" onClick={handleBackToAdd}>
-                  ←
-                </button>
                 <h2>
                   {selectedExercise?.name || exerciseData?.name || "운동"}
                 </h2>

@@ -1,0 +1,200 @@
+.exercise-page {
+  background: #252525;
+  color: #fff;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+/* 상단 헤더는 공용 Header 컴포넌트를 사용해 분석하기와 동일한 폰트/위치 적용 */
+
+/* 탭 */
+.ex-tabs {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 12px;
+}
+.ex-tab {
+  background: none;
+  border: none;
+  color: #bdbdbd;
+  font-size: 18px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ex-tab.active {
+  color: #daff50;
+}
+
+/* 미니 통계 라인 */
+.ex-mini-stats {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 18px;
+  margin-bottom: 18px;
+}
+.ex-mini-stat {
+  text-align: center;
+  color: #c8ffc0;
+}
+.ex-ms-top {
+  font-weight: 800;
+  color: #c7ff5e;
+}
+.ex-ms-mid {
+  font-size: 12px;
+  color: #cfcfcf;
+  white-space: nowrap;
+}
+.ex-ms-btm {
+  font-size: 12px;
+  color: #cfcfcf;
+  white-space: nowrap;
+}
+
+.ex-goal {
+  background: #3a3a3a;
+  border-radius: 20px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+.ex-goal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ex-goal-title {
+  font-weight: 800;
+  font-size: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ex-goal-arrow {
+  background: none;
+  border: none;
+  color: #ccc;
+  cursor: pointer;
+}
+.ex-goal-sub {
+  color: #cfcfcf;
+  font-size: 14px;
+  margin-top: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ex-goal-bar {
+  height: 16px;
+  background: #cfcfcf;
+  border-radius: 999px;
+  margin-top: 14px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0 8px; /* 좌우 여백으로 캡 공간 확보 */
+  box-sizing: border-box;
+}
+.ex-goal-fill {
+  height: 100%;
+  background: #d6ff4b;
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.ex-section {
+  font-size: 20px;
+  font-weight: 800;
+  margin: 0 0 12px 0;
+}
+
+.ex-timeline {
+  position: relative;
+  padding-left: 28px;
+}
+.ex-line {
+  position: absolute;
+  left: 12px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #7a7a7a;
+}
+.ex-item {
+  margin-bottom: 16px;
+  position: relative;
+}
+.ex-dot {
+  position: absolute;
+  left: 5px;
+  top: 14px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #d9d9d9;
+  background: #252525;
+}
+
+.ex-card {
+  background: #f4f4f4;
+  color: #111;
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ex-card.muted {
+  background: #555;
+  color: #e9e9e9;
+}
+.ex-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.ex-name {
+  font-weight: 800;
+  font-size: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ex-meta {
+  color: #7a7a7a;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ex-time {
+  color: #7a7a7a;
+  font-size: 14px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ex-item.last .ex-dot {
+  top: 24px;
+}
+.ex-add {
+  width: 100%;
+  background: #fff;
+  color: #111;
+  border: none;
+  border-radius: 16px;
+  padding: 18px 16px;
+  font-weight: 800;
+  font-size: 18px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .exercise-page {
+    padding: 15px;
+  }
+}

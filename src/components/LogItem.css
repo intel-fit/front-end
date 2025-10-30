@@ -6,23 +6,24 @@
 }
 
 .timeline-dot {
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   margin-right: 16px;
   flex-shrink: 0;
   z-index: 2;
   position: relative;
+  box-sizing: border-box;
+  border: 3px solid #ffffff;
+  background: transparent;
 }
 
 .timeline-dot.completed {
-  background-color: #e3ff7c;
-  border: 3px solid #1a1a1a;
+  background-color: #ffffff;
 }
 
 .timeline-dot.pending {
   background-color: transparent;
-  border: 3px solid #404040;
 }
 
 .timeline-line {
@@ -31,7 +32,7 @@
   top: 24px;
   bottom: -16px;
   width: 2px;
-  background-color: #404040;
+  background-color: #eaeaea;
   z-index: 1;
 }
 
