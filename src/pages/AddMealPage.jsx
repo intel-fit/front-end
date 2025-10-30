@@ -1,148 +1,166 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import AddFoodModal from '../components/AddFoodModal';
-import './AddMealPage.css';
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import "./AddMealPage.css";
 
 const AddMealPage = () => {
   const navigate = useNavigate();
-  const [selectedFoods, setSelectedFoods] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("exercise");
+  const [workoutGoals, setWorkoutGoals] = useState(() => {
+    try {
+      const saved = localStorage.getItem("workoutGoals");
+      return saved
+        ? JSON.parse(saved)
+        : {
+            frequency: 3,
+            duration: "30분 이상",
+            type: "유산소",
+            calories: 1500,
+          };
+    } catch (_) {
+      return {
+        frequency: 3,
+        duration: "30분 이상",
+        type: "유산소",
+        calories: 1500,
+      };
+    }
+  });
+  const [completedThisWeek, setCompletedThisWeek] = useState(() => {
+    const raw = localStorage.getItem("workoutCompletedThisWeek");
+    const n = raw ? parseInt(raw, 10) : 0;
+    return Number.isFinite(n) ? n : 0;
+  });
 
-  const handleBack = () => {
-    navigate(-1);
-  };
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("workoutGoals");
+      if (saved) setWorkoutGoals(JSON.parse(saved));
+      const raw = localStorage.getItem("workoutCompletedThisWeek");
+      const n = raw ? parseInt(raw, 10) : 0;
+      setCompletedThisWeek(Number.isFinite(n) ? n : 0);
+    } catch (_) {}
+  }, []);
 
-  const handleSave = () => {
-    // 저장 로직 추가 가능
-    navigate(-1);
-  };
+  const goalSubtitle = useMemo(() => {
+    const freq = workoutGoals?.frequency ?? 3;
+    const dur = workoutGoals?.duration ?? "30분 이상";
+    return `주 ${freq}회 하루 ${dur}`;
+  }, [workoutGoals]);
 
-  const handleOpenModal = () => {
-    setIsModalOpen(true);
-  };
+  const goalProgressPercent = useMemo(() => {
+    const target = Math.max(1, workoutGoals?.frequency ?? 1);
+    const done = Math.max(0, completedThisWeek);
+    return Math.max(0, Math.min(100, Math.round((done / target) * 100)));
+  }, [workoutGoals, completedThisWeek]);
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-  };
+  const GoalCard = () => (
+    <div className="goal-card">
+      <div className="goal-card-header">
+        <div className="goal-title">운동 목표 설정</div>
+        <button
+          className="goal-arrow"
+          aria-label="open-goal"
+          onClick={() => navigate("/goal")}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M9 18l6-6-6-6"
+              stroke="#ccc"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      </div>
+      <div className="goal-sub">{goalSubtitle}</div>
+      <div className="goal-progress">
+        <div
+          className="goal-progress-fill"
+          style={{ width: `${goalProgressPercent}%` }}
+        />
+      </div>
+    </div>
+  );
 
-  const handleSaveFood = (foodData) => {
-    console.log('저장된 음식:', foodData);
-    // 여기에 음식 추가 로직 추가 가능
-  };
+  const ExerciseTimeline = () => (
+    <div className="exercise-timeline">
+      <div className="timeline-line" />
 
-  const nutritionData = {
-    total: 384,
-    target: 1157,
-    carbs: { current: 51, target: 198 },
-    protein: { current: 15, target: 132 },
-    fat: { current: 15, target: 49 }
-  };
+      <div className="timeline-item completed">
+        <div className="dot" />
+        <div className="exercise-card muted">
+          <div className="exercise-left">
+            <div className="exercise-name">펙 덱 플라이</div>
+            <div className="exercise-meta">20kg 15회 3세트</div>
+          </div>
+          <div className="exercise-time">9:00 AM</div>
+        </div>
+      </div>
+
+      <div className="timeline-item">
+        <div className="dot" />
+        <div className="exercise-card">
+          <div className="exercise-left">
+            <div className="exercise-name">리버스 펙 덱 플라이</div>
+            <div className="exercise-meta">20kg 15회 3세트</div>
+          </div>
+          <div className="exercise-time">9:04 AM</div>
+        </div>
+      </div>
+
+      <div className="timeline-item last">
+        <div className="dot" />
+        <button
+          className="exercise-add-card"
+          onClick={() => navigate("/exercise-detail")}
+        >
+          운동 추가하기
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="add-meal-page">
-      {/* 헤더 */}
-      <div className="add-meal-header">
-        <button className="back-button" onClick={handleBack}>
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-            <path d="M17.5 21L10.5 14L17.5 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
-        <h1 className="header-title">정보 수정</h1>
-        <button className="save-button" onClick={handleSave}>
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-            <path d="M23.3334 7L10.5001 19.8333L4.66675 14" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
+      <div className="record-header">
+        <h1 className="record-title">기록하기</h1>
+        <button className="bell-btn" aria-label="알림">
+          🔔
         </button>
       </div>
 
-      {/* 날짜 및 식사 시간 */}
-      <div className="meal-time-section">
-        <div className="time-chip">
-          <span>today, 20:38</span>
-        </div>
-        <div className="meal-type-chip">
-          <span>저녁</span>
-        </div>
-      </div>
-
-      {/* 칼로리 요약 */}
-      <div className="calorie-summary">
-        <div className="calorie-text">384 / 1,157kcal</div>
-        <div className="nutrition-inline">
-          <div className="nutrition-inline-item">
-            <span className="nutrition-inline-label">탄수화물</span>
-            <span className="nutrition-inline-value">51 / 198g</span>
-          </div>
-          <div className="nutrition-inline-item">
-            <span className="nutrition-inline-label">단백질</span>
-            <span className="nutrition-inline-value">15 / 132g</span>
-          </div>
-          <div className="nutrition-inline-item">
-            <span className="nutrition-inline-label">지방</span>
-            <span className="nutrition-inline-value">15 / 49g</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 사진 추가 섹션 */}
-      <div className="meal-photo-section">
-        <div className="meal-photo-box">
-          {/* 피그마 디자인의 이미지 placeholder */}
-        </div>
-        <div className="meal-photo-box">
-          <div className="camera-icon">
-            <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
-              <path d="M21.25 14.1667C21.25 15.9916 19.7749 17.4667 17.95 17.4667C16.1251 17.4667 14.65 15.9916 14.65 14.1667C14.65 12.3418 16.1251 10.8667 17.95 10.8667C19.7749 10.8667 21.25 12.3418 21.25 14.1667Z" stroke="white" strokeWidth="2"/>
-              <path d="M11.3333 6.41667H14.1667L15.5833 4.25H19.4167L20.8333 6.41667H23.6667C25.3236 6.41667 26.6667 7.75978 26.6667 9.41667V19.8333C26.6667 21.4902 25.3236 22.8333 23.6667 22.8333H11.3333C9.67645 22.8333 8.33333 21.4902 8.33333 19.8333V9.41667C8.33333 7.75978 9.67645 6.41667 11.3333 6.41667Z" stroke="white" strokeWidth="2"/>
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      {/* 음식 목록 */}
-      <div className="food-list">
-        {/* 요거트 */}
-        <div className="food-item">
-          <span className="food-name">요거트</span>
-          <span className="food-calories">52kcal</span>
-        </div>
-
-        {/* 소 */}
-        <div className="food-item">
-          <span className="food-name">소</span>
-          <span className="food-calories">kcal</span>
-        </div>
-      </div>
-
-      {/* 추가 버튼 */}
-      <div className="add-more-section">
-        <button className="add-more-button">
-          <div className="plus-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path d="M12 5V19M5 12H19" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </div>
+      <div className="record-tabs">
+        <button
+          className={`record-tab ${activeTab === "exercise" ? "active" : ""}`}
+          onClick={() => setActiveTab("exercise")}
+        >
+          운동기록
+        </button>
+        <button
+          className={`record-tab ${activeTab === "meal" ? "active" : ""}`}
+          onClick={() => setActiveTab("meal")}
+        >
+          식단기록
         </button>
       </div>
 
-      {/* 하단 검색 섹션 */}
-      <div className="bottom-search-section">
-        <div className="search-tags">
-          <div className="search-tag">소고기</div>
-          <div className="search-tag">소고기 무국</div>
-          <div className="search-tag" onClick={handleOpenModal}>직접 추가하기</div>
-        </div>
+      <div className="mini-stats">
+        {Array.from({ length: 8 }).map((_, idx) => (
+          <div key={idx} className="mini-stat">
+            <div className="ms-top">15</div>
+            <div className="ms-mid">388k</div>
+            <div className="ms-btm">97%</div>
+          </div>
+        ))}
       </div>
 
-      {/* 음식 추가 모달 */}
-      <AddFoodModal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        onSave={handleSaveFood}
-      />
+      <GoalCard />
+
+      <h2 className="section-title">운동 기록하기</h2>
+      <ExerciseTimeline />
     </div>
   );
 };
 
 export default AddMealPage;
-

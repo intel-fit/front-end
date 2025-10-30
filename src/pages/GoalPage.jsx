@@ -24,6 +24,10 @@ export default function GoalPage() {
     console.log("목표 저장:", goals);
     // localStorage에 목표 저장
     localStorage.setItem("workoutGoals", JSON.stringify(goals));
+    // 다른 페이지에 변경 알림
+    try {
+      window.dispatchEvent(new Event("workout-goals-updated"));
+    } catch (_) {}
     navigate("/stats");
   };
 

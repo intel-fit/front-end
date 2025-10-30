@@ -16,23 +16,18 @@
 .add-item {
   position: relative;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center; /* 버튼을 가운데 정렬 */
 }
 
 .add-item .timeline-dot {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background-color: #404040;
-  border: 3px solid #1a1a1a;
-  margin-right: 16px;
-  flex-shrink: 0;
-  z-index: 2;
-  position: relative;
+  display: none;
 }
 
 .add-btn {
   flex: 1;
+  width: 100%;
+  text-align: center;
   padding: 16px;
   background-color: #fff;
   color: #000;
@@ -42,6 +37,15 @@
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.2s ease;
+}
+
+/* 운동이 하나라도 있으면 카드와 같은 너비로, 카드 아래 정렬 */
+.log-timeline.has-items .add-item {
+  justify-content: flex-start;
+}
+.log-timeline.has-items .add-btn {
+  width: calc(100% - 40px); /* 점(24) + 간격(16) 만큼 들여쓰기 */
+  margin-left: 40px;
 }
 
 .add-btn:hover {

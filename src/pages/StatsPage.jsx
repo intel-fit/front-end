@@ -8,13 +8,37 @@ import "./StatsPage.css";
 
 export default function StatsPage() {
   const [activeTab, setActiveTab] = useState(0);
-  const [goalData, setGoalData] = useState(null);
+  const [goalData, setGoalData] = useState(() => {
+    try {
+      const savedGoals = localStorage.getItem("workoutGoals");
+      return savedGoals ? JSON.parse(savedGoals) : null;
+    } catch (_) {
+      return null;
+    }
+  });
 
   useEffect(() => {
-    const savedGoals = localStorage.getItem("workoutGoals");
-    if (savedGoals) {
-      setGoalData(JSON.parse(savedGoals));
-    }
+    const readGoals = () => {
+      try {
+        const savedGoals = localStorage.getItem("workoutGoals");
+        setGoalData(savedGoals ? JSON.parse(savedGoals) : null);
+      } catch (_) {
+        setGoalData(null);
+      }
+    };
+
+    readGoals();
+
+    const onStorage = (e) => {
+      if (e.key === "workoutGoals") readGoals();
+    };
+    const onCustom = () => readGoals();
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("workout-goals-updated", onCustom);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("workout-goals-updated", onCustom);
+    };
   }, []);
 
   const handleTabChange = (index) => {
@@ -47,7 +71,11 @@ export default function StatsPage() {
   return (
     <div className="stats-page">
       <Header title="기록하기" />
-      <Tabs activeTab={activeTab} onTabChange={handleTabChange} />
+      <Tabs
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        goalData={goalData}
+      />
 
       {renderTabContent()}
     </div>

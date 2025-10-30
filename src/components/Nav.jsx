@@ -14,7 +14,7 @@ export default function Nav() {
     {
       name: "record",
       icon: IoAddCircleOutline,
-      link: "/add-meal",
+      link: "/stats",
       label: "기록하기",
     },
     {

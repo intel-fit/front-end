@@ -1,20 +1,21 @@
 .modal-overlay {
-  position: fixed;
+  position: absolute; /* 브라우저가 아닌 .phone 컨테이너 기준 */
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
   background-color: transparent;
   display: flex;
-  align-items: flex-end;
+  align-items: flex-end; /* 하단 정렬 */
   justify-content: center;
   z-index: 1000;
   pointer-events: none;
 }
 
 .phone-wrapper {
-  width: 390px;
-  height: 844px;
+  width: 100%;
+  max-width: none;
+  height: 100%; /* .phone 높이에 맞춤 */
   background-color: transparent;
   border-radius: 20px;
   position: relative;
@@ -29,8 +30,9 @@
   right: 0;
   background-color: #2a2a2a;
   border-radius: 20px 20px 0 0;
-  max-height: 70%;
-  overflow: hidden;
+  max-height: 80%; /* 폰 컨테이너 대비 80% */
+  overflow-y: auto; /* 내부 스크롤 허용 */
+  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
 }
@@ -136,6 +138,9 @@
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center; /* 텍스트 도형 중앙 정렬 */
+  justify-content: center;
 }
 
 .filter-btn.active {
@@ -144,7 +149,7 @@
 }
 
 .exercise-list {
-  max-height: 300px;
+  max-height: 45dvh; /* 폰 높이에 맞춰 리스트 높이 제한 */
   overflow-y: auto;
   padding: 0 20px 20px;
   scrollbar-width: none;
@@ -194,6 +199,8 @@
 /* 운동 상세 모달 */
 .sets-container {
   padding: 20px;
+  max-height: 48dvh; /* 세트 영역도 안전 높이 제한 */
+  overflow-y: auto;
 }
 
 .sets-header {
@@ -201,7 +208,10 @@
   grid-template-columns: 40px 1fr 40px 1fr 40px;
   gap: 12px;
   align-items: center;
-  margin-bottom: 16px;
+  margin-top: 10px; /* 상단에서 총 10px 내림 */
+  padding-bottom: 12px; /* 구분선과 버튼이 닿지 않도록 여백 확대 */
+  border-bottom: 1px solid #333; /* 헤더 아래 구분선 */
+  margin-bottom: 8px;
   color: #666;
   font-size: 12px;
   text-align: center;
@@ -219,6 +229,10 @@
   font-weight: 600;
   cursor: pointer;
   transition: background-color 0.2s ease;
+  display: inline-flex; /* 버튼 내용 중앙 정렬 */
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2px; /* 구분선과 살짝 간격 */
 }
 
 .remove-set-btn:hover,
@@ -233,6 +247,11 @@
   align-items: center;
   padding: 12px 0;
   border-bottom: 1px solid #333;
+}
+
+/* 헤더 구분선과 첫 행 구분선이 겹치지 않도록 처리 */
+.set-row:first-child {
+  border-top: none;
 }
 
 .set-number {
@@ -303,6 +322,25 @@
   cursor: pointer;
   transition: background-color 0.2s ease;
   margin: 20px;
+}
+/* 작은 세로 화면 최적화 */
+@media (max-height: 700px) {
+  .modal-content {
+    max-height: min(72dvh, 72vh);
+  }
+  .exercise-list {
+    max-height: 40dvh;
+  }
+  .sets-container {
+    max-height: 42dvh;
+  }
+}
+
+/* iOS 사파리 대체값 */
+@supports not (height: 100dvh) {
+  .phone-wrapper {
+    height: 100vh;
+  }
 }
 
 .save-exercise-btn:hover {

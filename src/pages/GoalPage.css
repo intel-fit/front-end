@@ -18,7 +18,7 @@
   margin: 0;
 }
 
-.goal-header {
+.goal-page .goal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -26,7 +26,7 @@
   border-bottom: 1px solid #333;
 }
 
-.goal-header h1 {
+.goal-page .goal-header h1 {
   font-size: 18px;
   font-weight: 600;
   color: #fff;
@@ -59,22 +59,22 @@
   background-color: #333;
 }
 
-.goal-content {
+.goal-page .goal-content {
   padding: 20px;
 }
 
-.goal-section {
+.goal-page .goal-section {
   margin-bottom: 30px;
 }
 
-.goal-section h3 {
+.goal-page .goal-section h3 {
   font-size: 16px;
   font-weight: 500;
   margin-bottom: 12px;
   color: #fff;
 }
 
-.frequency-control {
+.goal-page .frequency-control {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -83,18 +83,18 @@
   border-radius: 12px;
 }
 
-.frequency-value {
+.goal-page .frequency-value {
   font-size: 18px;
   font-weight: 600;
   color: #fff;
 }
 
-.adjust-buttons {
+.goal-page .adjust-buttons {
   display: flex;
   gap: 8px;
 }
 
-.adjust-btn {
+.goal-page .adjust-btn {
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -107,12 +107,12 @@
   transition: background-color 0.2s ease;
 }
 
-.adjust-btn:hover {
+.goal-page .adjust-btn:hover {
   background-color: #555;
 }
 
-.time-field,
-.calorie-field {
+.goal-page .time-field,
+.goal-page .calorie-field {
   background-color: #2a2a2a;
   padding: 16px 20px;
   border-radius: 12px;
@@ -122,12 +122,12 @@
   transition: background-color 0.2s ease;
 }
 
-.time-field:hover,
-.calorie-field:hover {
+.goal-page .time-field:hover,
+.goal-page .calorie-field:hover {
   background-color: #333;
 }
 
-.edit-input {
+.goal-page .edit-input {
   background: none;
   border: none;
   color: #fff;
@@ -136,16 +136,16 @@
   outline: none;
 }
 
-.edit-input::placeholder {
+.goal-page .edit-input::placeholder {
   color: #666;
 }
 
-.type-options {
+.goal-page .type-options {
   display: flex;
   gap: 8px;
 }
 
-.type-btn {
+.goal-page .type-btn {
   flex: 1;
   padding: 12px 16px;
   border: 1px solid #404040;
@@ -157,11 +157,11 @@
   font-size: 14px;
 }
 
-.type-btn:hover {
+.goal-page .type-btn:hover {
   border-color: #e3ff7c;
 }
 
-.type-btn.active {
+.goal-page .type-btn.active {
   background-color: #e3ff7c;
   color: #000;
   border-color: #e3ff7c;

@@ -72,10 +72,12 @@ export default function LogSection() {
     }
   };
 
+  const hasItems = activities.length > 0;
+
   return (
     <div className="log-section">
       <h3 className="section-title">운동 기록하기</h3>
-      <div className="log-timeline">
+      <div className={`log-timeline ${hasItems ? "has-items" : "empty"}`}>
         {activities.map((activity, index) => (
           <LogItem
             key={activity.id}

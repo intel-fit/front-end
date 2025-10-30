@@ -18,14 +18,14 @@ export default function GoalCard({ goalData }) {
 
   const getProgressPercentage = () => {
     if (!goalData) return 0;
-    // 예시: 주 3회 목표 중 2회 완료했다면 67%
-    // 실제로는 완료된 운동 횟수를 계산해야 함
-    const completedWorkouts = 2; // 임시 값
-    const targetWorkouts = goalData.frequency;
-    return Math.min(
-      100,
-      Math.round((completedWorkouts / targetWorkouts) * 100)
-    );
+    try {
+      const raw = localStorage.getItem("workoutCompletedThisWeek");
+      const completed = raw ? parseInt(raw, 10) : 0;
+      const target = Math.max(1, goalData.frequency || 1);
+      return Math.min(100, Math.max(0, Math.round((completed / target) * 100)));
+    } catch (_) {
+      return 0;
+    }
   };
 
   return (
