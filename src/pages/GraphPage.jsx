@@ -47,6 +47,7 @@ export default function GraphPage() {
       const scaleX = (i) => padding.left + (iw * i) / (data.length - 1);
       const scaleY = (v) => padding.top + ih * (1 - (v - minY) / (maxY - minY));
 
+      // 부드러운 곡선 경로 (사진처럼 스무딩)
       function pathSmooth(points, k = 0.22) {
         if (points.length < 2) return "";
         const cps = (p0, p1, p2, t) => ({
@@ -59,7 +60,6 @@ export default function GraphPage() {
           const p1 = points[i];
           const p2 = points[i + 1];
           const p3 = points[i + 2] ?? p2;
-
           const c1 = cps(p0, p1, p2, k);
           const c2 = cps(p1, p2, p3, -k);
           d += ` C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${p2.x} ${p2.y}`;
@@ -175,21 +175,21 @@ export default function GraphPage() {
   }, []); // Empty dependency array to run once on mount
 
   return (
-    <div className={styles['graph-page']}>
+    <div className={styles["graph-page"]}>
       <Header title="인바디 정보" />
-      <div className={styles['graph-content']}>
+      <div className={styles["graph-content"]}>
         {/* Tab Navigation */}
-        <div className={styles['tab-navigation']}>
-          <div className={styles['tab']} onClick={handleInBodyClick}>
+        <div className={styles["tab-navigation"]}>
+          <div className={styles["tab"]} onClick={handleInBodyClick}>
             인바디 정보
           </div>
           <div className={`${styles.tab} ${styles.active}`}>그래프</div>
         </div>
 
         {/* Filter Buttons */}
-        <div className={styles['filter-buttons']}>
+        <div className={styles["filter-buttons"]}>
           <button
-            className={`${styles['filter-btn']} ${
+            className={`${styles["filter-btn"]} ${
               selectedFilter === "체중" ? styles.active : ""
             }`}
             onClick={() => handleFilterClick("체중")}
@@ -197,7 +197,7 @@ export default function GraphPage() {
             체중
           </button>
           <button
-            className={`${styles['filter-btn']} ${
+            className={`${styles["filter-btn"]} ${
               selectedFilter === "체지방량" ? styles.active : ""
             }`}
             onClick={() => handleFilterClick("체지방량")}
@@ -205,7 +205,7 @@ export default function GraphPage() {
             체지방량
           </button>
           <button
-            className={`${styles['filter-btn']} ${
+            className={`${styles["filter-btn"]} ${
               selectedFilter === "골격근량" ? styles.active : ""
             }`}
             onClick={() => handleFilterClick("골격근량")}
@@ -215,36 +215,36 @@ export default function GraphPage() {
         </div>
 
         {/* 사용자 메시지 */}
-        <div className={styles['user-message']}>
-          <span className={styles['highlight-name']}>유정님</span>, 지난주보다 체중이 1.2%
-          감소했어요!
+        <div className={styles["user-message"]}>
+          <span className={styles["highlight-name"]}>유정님</span>, 지난주보다
+          체중이 1.2% 감소했어요!
           <br /> 목표치가 얼마 안 남았어요 👍
         </div>
 
         {/* 그래프 섹션 */}
-        <div className={styles['graph-section']}>
-          <div className={styles['chart-container']}>
-            <p className={styles['chart-title']}>체중 변화</p>
+        <div className={styles["graph-section"]}>
+          <div className={styles["chart-container"]}>
+            <p className={styles["chart-title"]}>체중 변화</p>
             <div id="chart-host" style={{ position: "relative" }}></div>
           </div>
         </div>
 
         {/* 체중 조절 섹션 */}
-        <div className={styles['weight-control-section']}>
-          <div className={styles['weight-control-tag']}>
+        <div className={styles["weight-control-section"]}>
+          <div className={styles["weight-control-tag"]}>
             {selectedFilter === "체중" && "체중 조절"}
             {selectedFilter === "체지방량" && "지방량 조절"}
             {selectedFilter === "골격근량" && "근육량 조절"}
           </div>
-          <div className={styles['weight-control-content']}>
-            <div className={styles['trainer-avatar']}>👨‍💼</div>
-            <div className={styles['weight-info']}>
-              <div className={styles['weight-text']}>
+          <div className={styles["weight-control-content"]}>
+            <div className={styles["trainer-avatar"]}>👨‍💼</div>
+            <div className={styles["weight-info"]}>
+              <div className={styles["weight-text"]}>
                 {selectedFilter === "체중" && "적정 체중 | 50.0kg"}
                 {selectedFilter === "체지방량" && "적정 체지방량 | 12.5kg"}
                 {selectedFilter === "골격근량" && "적정 근육량 | 25.0kg"}
               </div>
-              <div className={styles['weight-detail']}>
+              <div className={styles["weight-detail"]}>
                 {selectedFilter === "체중" && "-1.4kg의 체중 감량이 필요합니다"}
                 {selectedFilter === "체지방량" &&
                   "-0.8kg의 체지방 감량이 필요합니다"}
