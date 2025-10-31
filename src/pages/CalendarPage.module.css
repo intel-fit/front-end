@@ -234,14 +234,35 @@
   transition: width 0.3s ease;
 }
 
-/* 섹션 제목 */
+/* 섹션 헤더 */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
 .section-title {
   font-family: "Inter", sans-serif;
   font-weight: 800;
   font-style: italic;
   font-size: 16px;
   color: #ffffff;
-  margin-bottom: 15px;
+  margin: 0;
+}
+
+.more-link {
+  font-family: "Inter", sans-serif;
+  font-weight: 400;
+  font-size: 14px;
+  color: #ffffff;
+  cursor: pointer;
+  transition: color 0.3s ease;
+  margin-right: 20px;
+}
+
+.more-link:hover {
+  color: #e3ff7c;
 }
 
 /* 식단 내역 */

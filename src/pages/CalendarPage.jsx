@@ -7,6 +7,7 @@ import { IoChevronBack, IoChevronForward, IoMenu } from "react-icons/io5";
 export default function CalendarPage() {
   const navigate = useNavigate();
   const [currentMonth, setCurrentMonth] = useState("10월");
+  const [showFullCalendar, setShowFullCalendar] = useState(true);
 
   // 4주간 운동 데이터 (7일 × 4주)
   const weekData = Array(4).fill(null).map(() =>
@@ -83,7 +84,10 @@ export default function CalendarPage() {
               <IoChevronForward size={18} />
             </button>
           </div>
-          <button className={styles['menu-btn']} onClick={() => {}}>
+          <button 
+            className={styles['menu-btn']} 
+            onClick={() => setShowFullCalendar(!showFullCalendar)}
+          >
             <IoMenu size={20} />
           </button>
         </div>
@@ -99,8 +103,8 @@ export default function CalendarPage() {
             ))}
           </div>
 
-          {/* 4주간 데이터 */}
-          {weekData.map((week, weekIndex) => (
+          {/* 1주 또는 4주간 데이터 */}
+          {weekData.slice(0, showFullCalendar ? 4 : 1).map((week, weekIndex) => (
             <div key={weekIndex} className={styles['week-row']}>
               {week.map((day, dayIndex) => (
                 <div key={dayIndex} className={styles['day-item']}>
@@ -131,7 +135,10 @@ export default function CalendarPage() {
         </div>
 
         {/* 식단 내역 */}
-        <h3 className={styles['section-title']}>식단 내역</h3>
+        <div className={styles['section-header']}>
+          <h3 className={styles['section-title']}>식단 내역</h3>
+          <span className={styles['more-link']}>더보기</span>
+        </div>
         <div className={styles['meals-section']}>
           {meals.map((meal, index) => (
             <div key={index} className={styles['meal-card']}>
@@ -168,7 +175,10 @@ export default function CalendarPage() {
         </div>
 
         {/* 운동 내역 */}
-        <h3 className={styles['section-title']}>운동 내역</h3>
+        <div className={styles['section-header']}>
+          <h3 className={styles['section-title']}>운동 내역</h3>
+          <span className={styles['more-link']}>더보기</span>
+        </div>
         <div className={styles['exercise-list']}>
           {exercises.map((exercise, index) => (
             <div key={index} className={styles['exercise-card']}>
