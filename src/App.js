@@ -15,7 +15,7 @@ import SignupPage from "./pages/SignupPage";
 import FindIdPage from "./pages/FindIdPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import Nav from "./components/Nav";
-import "./App.css";
+import styles from "./App.module.css";
 import AddMealPage from "./pages/AddMealPage";
 import ExerciseDetail from "./pages/ExerciseDetail";
 import MealDetail from "./pages/MealDetail";
@@ -25,11 +25,12 @@ import InBodyPage from "./pages/InBodyPage";
 import GraphPage from "./pages/GraphPage";
 import MealRecommend from "./pages/MealRecommend";
 import RoutineRecommend from "./pages/RoutineRecommend";
+import CalendarPage from "./pages/CalendarPage";
 
 function Layout() {
   return (
-    <div className="app">
-      <main className="main">
+    <div className={styles.app}>
+      <main className={styles.main}>
         <Outlet />
       </main>
       <Nav />
@@ -39,8 +40,8 @@ function Layout() {
 
 export default function App() {
   return (
-    <div className="app-wrapper">
-      <div className="phone">
+    <div className={styles['app-wrapper']}>
+      <div className={styles.phone}>
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Navigate to="/splash" replace />} />
@@ -64,6 +65,7 @@ export default function App() {
               <Route path="/meal-detail" element={<MealDetail />} />
               <Route path="/meal-recommend" element={<MealRecommend />} />
               <Route path="/routine" element={<RoutineRecommend />} />
+              <Route path="/calendar" element={<CalendarPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
