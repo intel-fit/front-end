@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import styles from "./CalendarPage.module.css";
-import { IoChevronBack, IoChevronForward } from "react-icons/io5";
+import { IoChevronBack, IoChevronForward, IoMenu } from "react-icons/io5";
 
 export default function CalendarPage() {
   const navigate = useNavigate();
@@ -74,12 +74,17 @@ export default function CalendarPage() {
       <div className={styles['calendar-content']}>
         {/* 월 네비게이션 */}
         <div className={styles['month-navigation']}>
-          <button className={styles['nav-btn']} onClick={() => {}}>
-            <IoChevronBack size={20} />
-          </button>
-          <span className={styles['month-text']}>{currentMonth}</span>
-          <button className={styles['nav-btn']} onClick={() => {}}>
-            <IoChevronForward size={20} />
+          <div className={styles['month-nav-left']}>
+            <button className={styles['nav-btn']} onClick={() => {}}>
+              <IoChevronBack size={18} />
+            </button>
+            <span className={styles['month-text']}>{currentMonth}</span>
+            <button className={styles['nav-btn']} onClick={() => {}}>
+              <IoChevronForward size={18} />
+            </button>
+          </div>
+          <button className={styles['menu-btn']} onClick={() => {}}>
+            <IoMenu size={20} />
           </button>
         </div>
 

@@ -26,12 +26,18 @@
 .month-navigation {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 20px;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.month-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .nav-btn {
-  background: none;
+  background: transparent !important;
   border: none;
   color: #fff;
   cursor: pointer;
@@ -39,6 +45,25 @@
   align-items: center;
   justify-content: center;
   padding: 0;
+  margin: 0;
+  outline: none;
+  box-shadow: none;
+  transition: opacity 0.2s;
+}
+
+.nav-btn:hover {
+  opacity: 0.7;
+  background: transparent !important;
+}
+
+.nav-btn:active {
+  opacity: 0.5;
+  background: transparent !important;
+}
+
+.nav-btn:focus {
+  outline: none;
+  background: transparent !important;
 }
 
 .month-text {
@@ -46,6 +71,38 @@
   font-weight: 800;
   font-size: 18px;
   color: #ffffff;
+  line-height: 22px;
+}
+
+.menu-btn {
+  background: transparent !important;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  margin-right: 10px;
+  outline: none;
+  box-shadow: none;
+  transition: opacity 0.2s;
+}
+
+.menu-btn:hover {
+  opacity: 0.7;
+  background: transparent !important;
+}
+
+.menu-btn:active {
+  opacity: 0.5;
+  background: transparent !important;
+}
+
+.menu-btn:focus {
+  outline: none;
+  background: transparent !important;
 }
 
 /* 달력 컨테이너 */

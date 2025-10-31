@@ -1,9 +1,6 @@
 import "./Tabs.css";
 import DietPage from "../pages/DietPage";
-import Stats from "./Stats";
-import GoalCard from "./GoalCard";
-import LogSection from "./LogSection";
-import WeeklyCalendar from "./WeeklyCalendar";
+import ExerciseRecordPage from "../pages/ExerciseRecordPage";
 // AI 추천 탭 제거
 
 export default function Tabs({ activeTab, onTabChange, goalData }) {
@@ -12,21 +9,9 @@ export default function Tabs({ activeTab, onTabChange, goalData }) {
   const renderTabContent = () => {
     switch (activeTab) {
       case 0:
-        return (
-          <>
-            <WeeklyCalendar />
-            <Stats />
-            <GoalCard goalData={goalData} />
-            <LogSection />
-          </>
-        );
+        return <ExerciseRecordPage goalData={goalData} />;
       case 1:
-        return (
-          <>
-            <WeeklyCalendar />
-            <DietPage />
-          </>
-        );
+        return <DietPage />;
       // AI 추천 탭 제거됨
       default:
         return <div className="tab-content">기본 페이지</div>;

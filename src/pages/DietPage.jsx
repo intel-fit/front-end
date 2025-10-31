@@ -1,14 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { IoChevronBack, IoChevronForward, IoMenu } from 'react-icons/io5';
 import './DietPage.css';
 
 const DietPage = () => {
   const navigate = useNavigate();
-  // 7일간의 날짜 데이터
-  const dates = Array.from({ length: 7 }, (_, i) => ({
-    day: 15 + i,
-    isActive: i === 0 // 첫 번째 날이 활성화됨
-  }));
+  const [currentMonth, setCurrentMonth] = useState("10월");
 
   const nutritionData = {
     total: 384,
@@ -52,15 +49,33 @@ const DietPage = () => {
 
   return (
     <div className="diet-page">
-      {/* 날짜 선택 섹션 */}
-      <div className="date-selector">
-        {dates.map((date, index) => (
-          <div key={index} className={`date-item ${date.isActive ? 'active' : ''}`}>
-            <div className="date-number">{date.day}</div>
-            <div className="date-calories">388k</div>
-            <div className="date-percentage">97%</div>
-          </div>
-        ))}
+      {/* 월 네비게이션 */}
+      <div className="month-navigation">
+        <div className="month-nav-left">
+          <button className="nav-btn" onClick={() => {}}>
+            <IoChevronBack size={18} />
+          </button>
+          <span className="month-text">{currentMonth}</span>
+          <button className="nav-btn" onClick={() => {}}>
+            <IoChevronForward size={18} />
+          </button>
+        </div>
+        <button className="menu-btn" onClick={() => {}}>
+          <IoMenu size={20} />
+        </button>
+      </div>
+
+      {/* 7일 캘린더 위젯 */}
+      <div className="week-calendar">
+        <div className="calendar-grid">
+          {[1, 2, 3, 4, 5, 6, 7].map((day) => (
+            <div key={day} className="calendar-item">
+              <div className="calendar-number">15</div>
+              <div className="calendar-calories">388k</div>
+              <div className="calendar-percentage">97%</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* 칼로리 섹션 */}
