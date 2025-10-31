@@ -18,6 +18,7 @@ import Nav from "./components/Nav";
 import styles from "./App.module.css";
 import DietPage from "./pages/DietPage";
 import MealAddPage from "./pages/MealAddPage";
+import FoodSearchPage from "./pages/FoodSearchPage";
 import ExerciseDetail from "./pages/ExerciseDetail";
 import MealDetail from "./pages/MealDetail";
 import ChatbotPage from "./pages/ChatbotPage";
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             <Route path="/meal-add" element={<MealAddPage />} />
+            <Route path="/food-search" element={<FoodSearchPage />} />
             
             <Route element={<Layout />}>
               <Route path="/home" element={<HomePage />} />
