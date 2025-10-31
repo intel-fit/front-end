@@ -23,6 +23,8 @@ import ChatbotPage from "./pages/ChatbotPage";
 import AnalysisPage from "./pages/AnalysisPage";
 import InBodyPage from "./pages/InBodyPage";
 import GraphPage from "./pages/GraphPage";
+import MealRecommend from "./pages/MealRecommend";
+import RoutineRecommend from "./pages/RoutineRecommend";
 
 function Layout() {
   return (
@@ -60,6 +62,8 @@ export default function App() {
               <Route path="/add-meal" element={<AddMealPage />} />
               <Route path="/exercise-detail" element={<ExerciseDetail />} />
               <Route path="/meal-detail" element={<MealDetail />} />
+              <Route path="/meal-recommend" element={<MealRecommend />} />
+              <Route path="/routine" element={<RoutineRecommend />} />
             </Route>
             <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
