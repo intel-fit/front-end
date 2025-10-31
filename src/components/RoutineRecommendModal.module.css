@@ -25,7 +25,7 @@
   background-color: #1a1a1a;
   border-radius: 20px;
   width: 90%;
-  max-width: 500px;
+  max-width: 390px;
   max-height: 80vh;
   overflow: hidden;
   display: flex;
@@ -288,7 +288,10 @@
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding-bottom: 5px;
+  padding-bottom: 8px;
+  flex-shrink: 0;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
 
 .day-tabs::-webkit-scrollbar {
