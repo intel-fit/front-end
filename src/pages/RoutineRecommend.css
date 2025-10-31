@@ -100,12 +100,12 @@
 }
 
 .day-tab {
-  padding: 8px 16px;
+  padding: 5px;
   background-color: #222;
-  color: #999;
+  color: white;
   border: none;
   border-radius: 20px;
-  font-size: 14px;
+  font-size: 12px;
   white-space: nowrap;
   cursor: pointer;
   transition: all 0.2s;
