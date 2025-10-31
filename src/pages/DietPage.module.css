@@ -5,6 +5,140 @@
   font-family: 'Inter', sans-serif;
 }
 
+/* 월 네비게이션 */
+.month-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.month-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.nav-btn {
+  background: transparent !important;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  outline: none;
+  box-shadow: none;
+  transition: opacity 0.2s;
+}
+
+.nav-btn:hover {
+  opacity: 0.7;
+  background: transparent !important;
+}
+
+.nav-btn:active {
+  opacity: 0.5;
+  background: transparent !important;
+}
+
+.nav-btn:focus {
+  outline: none;
+  background: transparent !important;
+}
+
+.month-text {
+  font-family: "Inter", sans-serif;
+  font-weight: 800;
+  font-size: 18px;
+  color: #ffffff;
+  line-height: 22px;
+}
+
+.menu-btn {
+  background: transparent !important;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  margin-right: 10px;
+  outline: none;
+  box-shadow: none;
+  transition: opacity 0.2s;
+}
+
+.menu-btn:hover {
+  opacity: 0.7;
+  background: transparent !important;
+}
+
+.menu-btn:active {
+  opacity: 0.5;
+  background: transparent !important;
+}
+
+.menu-btn:focus {
+  outline: none;
+  background: transparent !important;
+}
+
+/* 7일 캘린더 위젯 */
+.week-calendar {
+  margin-bottom: 20px;
+}
+
+.calendar-grid {
+  display: flex;
+  justify-content: space-between;
+  gap: 0;
+  height: 79px;
+}
+
+.calendar-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.calendar-number {
+  font-family: "Inter", sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  color: #738700;
+  text-align: center;
+  height: 19px;
+  line-height: 19.36px;
+}
+
+.calendar-calories {
+  font-family: "Inter", sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  color: #ffffff;
+  text-align: center;
+  height: 15px;
+  line-height: 14.52px;
+}
+
+.calendar-percentage {
+  font-family: "Inter", sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  color: #ffffff;
+  text-align: center;
+  height: 15px;
+  line-height: 14.52px;
+}
+
 /* 날짜 선택 섹션 */
 .date-selector {
   display: flex;

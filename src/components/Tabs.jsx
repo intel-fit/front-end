@@ -1,8 +1,6 @@
 import styles from "./Tabs.module.css";
 import DietPage from "../pages/DietPage";
-import GoalCard from "./GoalCard";
-import LogSection from "./LogSection";
-import WorkoutCalendar from "./WorkoutCalendar";
+import ExerciseRecordPage from "../pages/ExerciseRecordPage";
 // AI 추천 탭 제거
 
 export default function Tabs({ activeTab, onTabChange, goalData }) {
@@ -11,13 +9,7 @@ export default function Tabs({ activeTab, onTabChange, goalData }) {
   const renderTabContent = () => {
     switch (activeTab) {
       case 0:
-        return (
-          <>
-            <WorkoutCalendar />
-            <GoalCard goalData={goalData} />
-            <LogSection />
-          </>
-        );
+        return <ExerciseRecordPage goalData={goalData} />;
       case 1:
         return <DietPage />;
       // AI 추천 탭 제거됨

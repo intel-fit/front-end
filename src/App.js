@@ -25,11 +25,12 @@ import InBodyPage from "./pages/InBodyPage";
 import GraphPage from "./pages/GraphPage";
 import MealRecommend from "./pages/MealRecommend";
 import RoutineRecommend from "./pages/RoutineRecommend";
+import CalendarPage from "./pages/CalendarPage";
 
 function Layout() {
   return (
-    <div className={styles['app']}>
-      <main className={styles['main']}>
+    <div className={styles.app}>
+      <main className={styles.main}>
         <Outlet />
       </main>
       <Nav />
@@ -40,7 +41,7 @@ function Layout() {
 export default function App() {
   return (
     <div className={styles['app-wrapper']}>
-      <div className={styles['phone']}>
+      <div className={styles.phone}>
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Navigate to="/splash" replace />} />
@@ -64,6 +65,7 @@ export default function App() {
               <Route path="/meal-detail" element={<MealDetail />} />
               <Route path="/meal-recommend" element={<MealRecommend />} />
               <Route path="/routine" element={<RoutineRecommend />} />
+              <Route path="/calendar" element={<CalendarPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>

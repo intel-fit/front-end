@@ -1,7 +1,14 @@
+import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import styles from "./HomePage.module.css";
 
 export default function HomePage() {
+  const navigate = useNavigate();
+
+  const handleCalendarClick = () => {
+    navigate("/calendar");
+  };
+
   return (
     <div className={styles['home-page']}>
       <Header title="홈" />
@@ -18,8 +25,9 @@ export default function HomePage() {
         </div>
 
         {/* 운동 진행률 섹션 */}
-        <div className={styles['exercise-progress-section']}>
+        <div className={styles['exercise-progress-section']} onClick={handleCalendarClick} style={{ cursor: 'pointer' }}>
           <div className={styles['progress-grid']}>
+
             {[1, 2, 3, 4, 5, 6, 7].map((day) => (
               <div key={day} className={styles['progress-item']}>
                 <div className={`${styles['progress-number']} ${day === 4 ? styles.today : ''}`}>15</div>
