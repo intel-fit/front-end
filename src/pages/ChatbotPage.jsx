@@ -9,7 +9,7 @@ const ChatbotPage = () => {
 
   //API호출
   const callGeminiAPI = async (userMessage) => {
-    const API_KEY = ""; //AIzaSyAJ_nUzuKky57CuS36IUVopQp6qzR7POOE
+    const API_KEY = "";
     console.log("=== API 키 테스트 시작 ===");
     console.log("API 키:", API_KEY);
     const API_URL =
@@ -102,64 +102,68 @@ const ChatbotPage = () => {
   };
 
   return (
-    <div className={styles['chatbot-container']}>
-      <div className={styles['main-content']}>
+    <div className={styles["chatbot-container"]}>
+      <div className={styles["main-content"]}>
         {messages.length === 0 ? (
           <>
-            <div className={styles['welcome-section']}>
-              <h1 className={styles['title']}>안녕하세요!</h1>
-              <p className={styles['subtitle']}>어떻게 도와드릴까요?</p>
+            <div className={styles["welcome-section"]}>
+              <h1 className={styles["title"]}>안녕하세요!</h1>
+              <p className={styles["subtitle"]}>어떻게 도와드릴까요?</p>
             </div>
 
-            <div className={styles['bot-image-container']}>
+            <div className={styles["bot-image-container"]}>
               <img
                 src={chatbotImage}
                 alt="AI Assistant"
-                className={styles['bot-image']}
+                className={styles["bot-image"]}
               />
             </div>
 
-            <div className={styles['quick-actions']}>
+            <div className={styles["quick-actions"]}>
               <button
-                className={styles['action-btn']}
+                className={styles["action-btn"]}
                 onClick={() => handleQuickSelect("exercise")}
               >
-                <span className={styles['action-icon']}>🏋️</span>
-                <span className={styles['action-text']}>운동 추천</span>
+                <span className={styles["action-icon"]}>🏋️</span>
+                <span className={styles["action-text"]}>운동 추천</span>
               </button>
 
               <button
-                className={`${styles['action-btn']} ${styles['highlighted']}`}
+                className={`${styles["action-btn"]} ${styles["highlighted"]}`}
                 onClick={() => handleQuickSelect("food")}
               >
-                <span className={styles['action-icon']}>🍗</span>
-                <span className={styles['action-text']}>식단 추천</span>
+                <span className={styles["action-icon"]}>🍗</span>
+                <span className={styles["action-text"]}>식단 추천</span>
               </button>
 
               <button
-                className={styles['action-btn']}
+                className={styles["action-btn"]}
                 onClick={() => handleQuickSelect("plan")}
               >
-                <span className={styles['action-icon']}>📅</span>
-                <span className={styles['action-text']}>계획 수립</span>
+                <span className={styles["action-icon"]}>📅</span>
+                <span className={styles["action-text"]}>계획 수립</span>
               </button>
             </div>
           </>
         ) : (
-          <div className={styles['messages-container']}>
+          <div className={styles["messages-container"]}>
             {messages.map((msg, index) => (
               <div
                 key={index}
-                className={`${styles['message']} ${
-                  msg.type === "user" ? styles['user-message'] : styles['bot-message']
+                className={`${styles["message"]} ${
+                  msg.type === "user"
+                    ? styles["user-message"]
+                    : styles["bot-message"]
                 }`}
               >
                 {msg.text}
               </div>
             ))}
             {isLoading && (
-              <div className={`${styles.message} ${styles['bot-message']} ${styles.loading}`}>
-                <span className={styles['loading-dots']}>
+              <div
+                className={`${styles.message} ${styles["bot-message"]} ${styles.loading}`}
+              >
+                <span className={styles["loading-dots"]}>
                   <span>.</span>
                   <span>.</span>
                   <span>.</span>
@@ -170,17 +174,17 @@ const ChatbotPage = () => {
         )}
       </div>
 
-      <div className={styles['input-container']}>
+      <div className={styles["input-container"]}>
         <input
           type="text"
-          className={styles['message-input']}
+          className={styles["message-input"]}
           placeholder="무엇이든 물어보세요"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyPress={(e) => e.key === "Enter" && handleSend()}
         />
-        <button className={styles['send-btn']} onClick={handleSend}>
-          <span className={styles['send-icon']}>➤</span>
+        <button className={styles["send-btn"]} onClick={handleSend}>
+          <span className={styles["send-icon"]}>➤</span>
         </button>
       </div>
     </div>
