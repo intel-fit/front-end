@@ -17,6 +17,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import Nav from "./components/Nav";
 import styles from "./App.module.css";
 import AddMealPage from "./pages/AddMealPage";
+import MealAddPage from "./pages/MealAddPage";
 import ExerciseDetail from "./pages/ExerciseDetail";
 import MealDetail from "./pages/MealDetail";
 import ChatbotPage from "./pages/ChatbotPage";
@@ -61,6 +62,7 @@ export default function App() {
               <Route path="/inbody" element={<InBodyPage />} />
               <Route path="/graph" element={<GraphPage />} />
               <Route path="/add-meal" element={<AddMealPage />} />
+              <Route path="/meal-add" element={<MealAddPage />} />
               <Route path="/exercise-detail" element={<ExerciseDetail />} />
               <Route path="/meal-detail" element={<MealDetail />} />
               <Route path="/meal-recommend" element={<MealRecommend />} />

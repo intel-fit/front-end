@@ -24,8 +24,12 @@
   background: none;
   border: none;
   color: #fff;
-  font-size: 18px;
+  font-size: 24px;
   cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* 탭 */
@@ -38,21 +42,22 @@
 .add-meal-page .record-tab {
   background: none;
   border: none;
-  color: #bdbdbd;
+  color: #d9d9d9;
   font-size: 18px;
   font-weight: 800;
   cursor: pointer;
   white-space: nowrap;
+  padding: 8px 0;
 }
 
 .add-meal-page .record-tab.active {
-  color: #daff50;
+  color: #e3ff7d;
 }
 
 /* 미니 통계 라인 */
 .add-meal-page .mini-stats {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: 18px;
   margin-bottom: 18px;
 }
@@ -114,6 +119,11 @@
   background: none;
   border: none;
   cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .add-meal-page .goal-progress {
@@ -231,7 +241,7 @@
   width: calc(100% + 48px); /* 달력과 시각적으로 동일 폭 맞춤 */
   transform: translateX(-24px);
   background: #fff;
-  color: #111;
+  color: #111 !important;
   border: none;
   border-radius: 16px;
   padding: 18px 16px;
@@ -239,6 +249,8 @@
   font-size: 18px;
   cursor: pointer;
   white-space: nowrap;
+  display: block;
+  text-align: center;
 }
 
 /* 헤더 */
@@ -479,6 +491,183 @@
 
 .search-tag:hover {
   background-color: #8e8e8b;
+}
+
+/* 칼로리 카드 */
+.calorie-card {
+  background: #393a38;
+  border-radius: 20px;
+  padding: 20px;
+  margin-bottom: 15px;
+  margin-left: -24px;
+  margin-right: -24px;
+  width: calc(100% + 48px);
+}
+
+.calorie-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.calorie-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.calorie-subtitle {
+  font-size: 12px;
+  font-weight: 400;
+  color: #ffffff;
+}
+
+.calorie-percentage {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.calorie-progress-bar {
+  height: 40px;
+  background: #bdbdbd;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.calorie-progress-fill {
+  height: 100%;
+  background: #daff50;
+  transition: width 0.3s ease;
+}
+
+.nutrition-summary {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.nutrition-item {
+  flex: 1;
+  text-align: center;
+}
+
+.nutrition-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.nutrition-value {
+  font-size: 10px;
+  font-weight: 400;
+  color: #ffffff;
+}
+
+/* 식사 카드 */
+.meal-card {
+  background: #393a38;
+  border-radius: 20px;
+  padding: 18px;
+  margin-bottom: 15px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.meal-card:hover {
+  background: #4a4b48;
+}
+
+.meal-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.meal-card-title-group {
+  flex: 1;
+}
+
+.meal-card-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.meal-card-subtitle {
+  font-size: 15px;
+  font-weight: 400;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.meal-card-time {
+  font-size: 15px;
+  font-weight: 400;
+  color: #ffffff;
+}
+
+.meal-card-calories {
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.meal-foods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.food-tag {
+  background: #e3ff7c;
+  border-radius: 10px;
+  padding: 5px 15px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #000000;
+  display: inline-block;
+}
+
+.food-tag-recommended {
+  background: #7e7e7b;
+  color: #000000;
+}
+
+/* 식단 추가 버튼 */
+.add-meal-button {
+  width: 100%;
+  background: #393a38;
+  border: none;
+  border-radius: 10px;
+  padding: 20px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff !important;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  margin-top: 15px;
+  display: block;
+  text-align: center;
+}
+
+.add-meal-button:hover {
+  background: #4a4b48;
+}
+
+/* 과거기록 플레이스홀더 */
+.history-placeholder {
+  text-align: center;
+  padding: 60px 20px;
+  color: #ffffff;
+  font-size: 16px;
 }
 
 /* 반응형 디자인 */

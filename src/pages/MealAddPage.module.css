@@ -1,0 +1,308 @@
+.meal-add-page {
+  min-height: 100vh;
+  background-color: #252525;
+  padding: 0;
+  color: #ffffff;
+  font-family: "Inter", sans-serif;
+  padding-bottom: 40px;
+}
+
+/* 헤더 */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 40px 20px 30px 20px;
+  position: sticky;
+  top: 0;
+  background-color: #252525;
+  z-index: 100;
+}
+
+.back-button,
+.save-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.back-button svg,
+.save-button svg {
+  width: 28px;
+  height: 28px;
+}
+
+.header-title {
+  font-size: 20px;
+  font-weight: 800;
+  font-style: italic;
+  color: #ffffff;
+  margin: 0;
+}
+
+/* 식단 이름 입력 */
+.name-input-section {
+  padding: 0 20px;
+  margin-bottom: 15px;
+}
+
+.name-input {
+  width: 100%;
+  background-color: #393a38;
+  border: none;
+  border-radius: 10px;
+  padding: 20px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  font-family: "Inter", sans-serif;
+  box-sizing: border-box;
+}
+
+.name-input::placeholder {
+  color: #ffffff;
+  opacity: 0.7;
+}
+
+.name-input:focus {
+  outline: none;
+  background-color: #4a4b48;
+}
+
+/* 날짜 및 식사 시간 */
+.time-section {
+  display: flex;
+  gap: 15px;
+  padding: 0 20px;
+  margin-bottom: 15px;
+}
+
+.time-chip,
+.meal-type-chip {
+  background-color: #393a38;
+  border-radius: 10px;
+  padding: 6px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+
+.time-chip span,
+.meal-type-chip span {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+/* 칼로리 요약 */
+.calorie-summary {
+  background-color: #393a38;
+  border-radius: 10px;
+  padding: 20px;
+  margin: 0 20px 15px 20px;
+}
+
+.calorie-text {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 15px;
+}
+
+.nutrition-inline {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.nutrition-inline-item {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.nutrition-inline-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.nutrition-inline-value {
+  font-size: 10px;
+  font-weight: 400;
+  color: #ffffff;
+}
+
+/* 사진 섹션 */
+.photo-section {
+  display: flex;
+  gap: 18px;
+  padding: 0 20px;
+  margin-bottom: 15px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.photo-section::-webkit-scrollbar {
+  display: none;
+}
+
+.photo-box {
+  width: 136px;
+  height: 124px;
+  min-width: 136px;
+  min-height: 124px;
+  max-width: 136px;
+  max-height: 124px;
+  background-color: #393a38;
+  border-radius: 20px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  position: relative;
+}
+
+.photo-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.camera-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-icon svg {
+  width: 34px;
+  height: 34px;
+}
+
+/* 음식 목록 */
+.food-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 0 20px;
+  margin-bottom: 15px;
+}
+
+.food-item {
+  background-color: #393a38;
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+
+.food-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.food-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.food-calories {
+  font-size: 20px;
+  font-weight: 400;
+  color: #ffffff;
+  text-align: right;
+}
+
+.food-nutrition {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-start;
+}
+
+.food-nutrition .nutrition-item {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.food-nutrition .nutrition-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.food-nutrition .nutrition-value {
+  font-size: 10px;
+  font-weight: 400;
+  color: #ffffff;
+}
+
+/* 음식 추가하기 버튼 */
+.add-food-button {
+  width: calc(100% - 40px);
+  margin: 0 20px;
+  background-color: #e3ff7c;
+  border: none;
+  border-radius: 10px;
+  padding: 18px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #000000;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  display: block;
+  text-align: center;
+  font-family: "Inter", sans-serif;
+}
+
+.add-food-button:hover {
+  background-color: #d4f060;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .header {
+    padding: 20px 15px;
+  }
+
+  .header-title {
+    font-size: 18px;
+  }
+
+  .name-input-section,
+  .time-section,
+  .calorie-summary,
+  .photo-section,
+  .food-list {
+    padding: 0 15px;
+  }
+
+  .calorie-summary {
+    margin: 0 15px 15px 15px;
+  }
+
+  .add-food-button {
+    width: calc(100% - 30px);
+    margin: 0 15px;
+  }
+
+  .photo-box {
+    width: 120px;
+    height: 110px;
+    min-width: 120px;
+    min-height: 110px;
+    max-width: 120px;
+    max-height: 110px;
+  }
+}
+
