@@ -19,7 +19,7 @@
 }
 
 .home-content {
-  padding: 20px;
+  padding: 10px 20px 20px; /* 상단 여백 축소 */
 }
 
 /* 인사말 섹션 */
@@ -53,7 +53,7 @@
 }
 
 .greeting-text {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 700;
   font-size: 16px;
   color: #ffffff;
@@ -82,7 +82,7 @@
 }
 
 .progress-number {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 700;
   font-size: 16px;
   color: #738700;
@@ -94,7 +94,7 @@
 }
 
 .progress-number.today {
-  background-color: #E3FF7C;
+  background-color: #e3ff7c;
   color: #000000;
   width: 30px;
   height: 30px;
@@ -107,7 +107,7 @@
 }
 
 .progress-calories {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 700;
   font-size: 12px;
   color: #ffffff;
@@ -115,7 +115,7 @@
 }
 
 .progress-percentage {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 700;
   font-size: 12px;
   color: #ffffff;
@@ -144,21 +144,21 @@
 }
 
 .calorie-current {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 700;
   font-size: 20px;
   color: #ffffff;
 }
 
 .calorie-goal {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 400;
   font-size: 12px;
   color: #ffffff;
 }
 
 .calorie-percentage {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 700;
   font-size: 16px;
   color: #ffffff;
@@ -174,7 +174,7 @@
 
 .calorie-progress-fill {
   height: 100%;
-  background-color: #E3FF7C;
+  background-color: #e3ff7c;
   border-radius: 10px;
   transition: width 0.3s ease;
 }
@@ -192,7 +192,7 @@
 }
 
 .recommendation-title {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 700;
   font-size: 20px;
   color: #e3ff7c;
@@ -200,7 +200,7 @@
 }
 
 .recommendation-subtitle {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 700;
   font-size: 20px;
   color: #ffffff;
@@ -219,7 +219,7 @@
   color: #000000;
   padding: 8px 12px;
   border-radius: 10px;
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 700;
   font-size: 15px;
   text-align: center;
@@ -227,7 +227,7 @@
 }
 
 .recommendation-question {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 700;
   font-size: 20px;
   color: #ffffff;
@@ -259,7 +259,7 @@
 }
 
 .menu-title {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 700;
   font-size: 15px;
   color: #ffffff;
@@ -268,7 +268,7 @@
 }
 
 .menu-value {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 700;
   font-size: 15px;
   color: #ffffff;
@@ -287,7 +287,7 @@
 }
 
 .nutrition-line {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 15px;
   color: #ffffff;
 }
@@ -323,43 +323,42 @@
   font-weight: 400;
 }
 
-
 /* 반응형 디자인 */
 @media (max-width: 480px) {
   .home-content {
     padding: 15px;
   }
-  
+
   .progress-grid {
     gap: 5px;
   }
-  
+
   .progress-item {
     gap: 3px;
   }
-  
+
   .progress-number {
     font-size: 14px;
   }
-  
+
   .progress-calories,
   .progress-percentage {
     font-size: 10px;
   }
-  
+
   .food-recommendations {
     gap: 8px;
   }
-  
+
   .food-item {
     padding: 6px 10px;
     font-size: 13px;
   }
-  
+
   .menu-grid {
     gap: 10px;
   }
-  
+
   .menu-item {
     padding: 12px;
   }

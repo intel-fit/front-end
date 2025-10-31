@@ -15,6 +15,26 @@
 .stats-page .header {
   background-color: #1a1a1a;
   border-bottom: 1px solid #333;
+  padding: 12px 20px 14px !important; /* 구분선을 더 아래로 */
+}
+.stats-page .header .title {
+  margin: 0 !important;
+  line-height: 1.1;
+}
+
+/* 기록하기 본문 위 여백 축소 */
+.stats-page .tabs-container {
+  margin-top: 0;
+}
+
+/* 기록하기 탭 바 자체 여백 축소 */
+.stats-page .tabs-container .tabs {
+  margin: 12px 20px 16px !important; /* 공백 확대 */
+}
+
+/* 탭 내용 시작도 살짝 당김 */
+.stats-page .tabs-container .tab-content {
+  padding-top: 0;
 }
 
 .empty-tab {

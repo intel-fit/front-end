@@ -45,9 +45,6 @@ export default function GoalPage() {
   return (
     <div className="goal-page">
       <div className="goal-header">
-        <button className="back-btn" onClick={handleBack}>
-          <IoArrowBack />
-        </button>
         <h1>운동 목표 설정</h1>
         <button className="save-btn" onClick={handleSave}>
           <IoCheckmark />

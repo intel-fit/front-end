@@ -1,9 +1,6 @@
 import { useState, useEffect } from "react";
 import Header from "../components/Header";
 import Tabs from "../components/Tabs";
-import Stats from "../components/Stats";
-import GoalCard from "../components/GoalCard";
-import LogSection from "../components/LogSection";
 import "./StatsPage.css";
 
 export default function StatsPage() {
@@ -45,28 +42,7 @@ export default function StatsPage() {
     setActiveTab(index);
   };
 
-  const renderTabContent = () => {
-    switch (activeTab) {
-      case 0: // 운동기록
-        return (
-          <>
-            <Stats />
-            <GoalCard goalData={goalData} />
-            <LogSection />
-          </>
-        );
-      case 1: // 식단기록
-        return (
-          <div className="empty-tab">
-            <p>식단기록 기능은 준비 중입니다.</p>
-          </div>
-        );
-      case 2: // AI 추천
-        return <div className="empty-tab"></div>;
-      default:
-        return null;
-    }
-  };
+  // 탭 콘텐츠는 Tabs 컴포넌트에서 렌더링합니다.
 
   return (
     <div className="stats-page">
@@ -77,7 +53,7 @@ export default function StatsPage() {
         goalData={goalData}
       />
 
-      {renderTabContent()}
+      {/* 탭 콘텐츠는 Tabs 내부에서 렌더링됨 */}
     </div>
   );
 }
