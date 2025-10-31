@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import styles from "./MealRecommend.module.css";
+import MealRecommendModal from "../components/MealRecommendModal";
 
 const MEAL_DATABASE = {
   breakfast: [
@@ -157,6 +158,7 @@ const MealRecommend = () => {
   const [newIngredient, setNewIngredient] = useState("");
   const [loading, setLoading] = useState(false);
   const [savedMeals, setSavedMeals] = useState([]);
+  const [showModal, setShowModal] = useState(false);
 
   // 로컬 스토리지에서 데이터 불러오기
   useEffect(() => {
@@ -261,15 +263,9 @@ const MealRecommend = () => {
     alert("식단이 저장되었습니다!");
   };
 
-  // 저장된 식단 불러오기
-  const handleLoadMealPlan = (savedMeal) => {
-    setWeeklyMeals(savedMeal.meals);
-    setScreen("meals");
-    setCurrentDay(0);
-  };
-
   // 저장된 식단 삭제
-  const handleDeleteSavedMeal = (id) => {
+  const handleDeleteSavedMeal = (id, e) => {
+    e.stopPropagation();
     const updated = savedMeals.filter((meal) => meal.id !== id);
     setSavedMeals(updated);
     localStorage.setItem("savedMealPlans", JSON.stringify(updated));
@@ -279,11 +275,11 @@ const MealRecommend = () => {
 
   if (screen === "welcome") {
     return (
-      <div className={styles['app-container']}>
-        <div className={styles['content-wrapper']}>
-          <div className={styles['welcome-header']}>
-            <h1 className={styles['welcome-title']}>안녕하세요 - 회원님!</h1>
-            <p className={styles['welcome-subtitle']}>
+      <div className={styles["app-container"]}>
+        <div className={styles["content-wrapper"]}>
+          <div className={styles["welcome-header"]}>
+            <h1 className={styles["welcome-title"]}>안녕하세요 - 회원님!</h1>
+            <p className={styles["welcome-subtitle"]}>
               회원님께 최적화된 식단을 추천해드릴게요!
             </p>
           </div>
@@ -291,14 +287,14 @@ const MealRecommend = () => {
           <button
             onClick={handleGetRecommendation}
             disabled={loading}
-            className={`${styles['btn']} ${styles['btn-primary']}`}
+            className={`${styles["btn"]} ${styles["btn-primary"]}`}
           >
             {loading ? "로딩 중..." : "추천 식단 받기"}
           </button>
 
           <button
             onClick={() => setScreen("excludedIngredients")}
-            className={`${styles['btn']} ${styles['btn-secondary']}`}
+            className={`${styles["btn"]} ${styles["btn-secondary"]}`}
           >
             금지 식재료 관리{" "}
             {excludedIngredients.length > 0 &&
@@ -306,11 +302,16 @@ const MealRecommend = () => {
           </button>
 
           {excludedIngredients.length > 0 && (
-            <div className={styles['excluded-preview']}>
-              <p className={styles['excluded-preview-label']}>현재 금지 식재료:</p>
-              <div className={styles['tag-list']}>
+            <div className={styles["excluded-preview"]}>
+              <p className={styles["excluded-preview-label"]}>
+                현재 금지 식재료:
+              </p>
+              <div className={styles["tag-list"]}>
                 {excludedIngredients.map((ingredient, index) => (
-                  <span key={index} className={`${styles['tag']} ${styles['tag-excluded']}`}>
+                  <span
+                    key={index}
+                    className={`${styles["tag"]} ${styles["tag-excluded"]}`}
+                  >
                     {ingredient}
                   </span>
                 ))}
@@ -319,29 +320,30 @@ const MealRecommend = () => {
           )}
 
           {savedMeals.length > 0 && (
-            <div className={styles['saved-meals-section']}>
-              <h3 className={styles['saved-meals-title']}>저장된 식단 📋</h3>
-              <div className={styles['saved-meals-list']}>
+            <div className={styles["saved-meals-section"]}>
+              <h3 className={styles["saved-meals-title"]}>저장된 식단 📋</h3>
+              <div className={styles["saved-meals-list"]}>
                 {savedMeals.map((savedMeal) => (
-                  <div key={savedMeal.id} className={styles['saved-meal-item']}>
-                    <div className={styles['saved-meal-info']}>
-                      <p className={styles['saved-meal-date']}>{savedMeal.date}</p>
-                      <p className={styles['saved-meal-summary']}>
+                  <div
+                    key={savedMeal.id}
+                    className={styles["saved-meal-item"]}
+                    onClick={() => setShowModal(true)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <div className={styles["saved-meal-info"]}>
+                      <p className={styles["saved-meal-date"]}>
+                        {savedMeal.date}
+                      </p>
+                      <p className={styles["saved-meal-summary"]}>
                         {savedMeal.meals[0]?.totalCalories}kcal · 7일 식단
                       </p>
                     </div>
-                    <div className={styles['saved-meal-actions']}>
+                    <div className={styles["saved-meal-actions"]}>
                       <button
-                        onClick={() => handleLoadMealPlan(savedMeal)}
-                        className={`${styles['btn-small']} ${styles['btn-load']}`}
+                        onClick={(e) => handleDeleteSavedMeal(savedMeal.id, e)}
+                        className={styles["btn-icon-small"]}
                       >
-                        불러오기
-                      </button>
-                      <button
-                        onClick={() => handleDeleteSavedMeal(savedMeal.id)}
-                        className={styles['btn-icon-small']}
-                      >
-                        <span className={styles['icon-tiny']}>✕</span>
+                        <span className={styles["icon-tiny"]}>✕</span>
                       </button>
                     </div>
                   </div>
@@ -350,24 +352,33 @@ const MealRecommend = () => {
             </div>
           )}
         </div>
+
+        {/* 모달 */}
+        <MealRecommendModal
+          isOpen={showModal}
+          onClose={() => setShowModal(false)}
+        />
       </div>
     );
   }
 
   if (screen === "excludedIngredients") {
     return (
-      <div className={styles['app-container']}>
-        <div className={styles['content-wrapper']}>
-          <div className={styles['header']}>
-            <button onClick={() => setScreen("welcome")} className={styles['icon-btn']}>
-              <span className={styles['icon']}>←</span>
+      <div className={styles["app-container"]}>
+        <div className={styles["content-wrapper"]}>
+          <div className={styles["header"]}>
+            <button
+              onClick={() => setScreen("welcome")}
+              className={styles["icon-btn"]}
+            >
+              <span className={styles["icon"]}>←</span>
             </button>
-            <h1 className={styles['header-title']}>금지 식재료 관리</h1>
-            <div className={styles['icon-placeholder']} />
+            <h1 className={styles["header-title"]}>금지 식재료 관리</h1>
+            <div className={styles["icon-placeholder"]} />
           </div>
 
-          <div className={styles['excluded-form']}>
-            <div className={styles['input-group']}>
+          <div className={styles["excluded-form"]}>
+            <div className={styles["input-group"]}>
               <input
                 type="text"
                 value={newIngredient}
@@ -376,37 +387,39 @@ const MealRecommend = () => {
                   e.key === "Enter" && handleAddExcludedIngredient()
                 }
                 placeholder="알러지 식재료를 입력하세요"
-                className={styles['text-input']}
+                className={styles["text-input"]}
               />
               <button
                 onClick={handleAddExcludedIngredient}
-                className={`${styles['icon-btn']} ${styles['btn-add']}`}
+                className={`${styles["icon-btn"]} ${styles["btn-add"]}`}
               >
-                <span className={styles['icon']}>＋</span>
+                <span className={styles["icon"]}>＋</span>
               </button>
             </div>
 
-            <div className={styles['excluded-list']}>
+            <div className={styles["excluded-list"]}>
               {excludedIngredients.map((ingredient, index) => (
-                <div key={index} className={styles['excluded-item']}>
+                <div key={index} className={styles["excluded-item"]}>
                   <span>{ingredient}</span>
                   <button
                     onClick={() => handleRemoveExcludedIngredient(ingredient)}
-                    className={`${styles['icon-btn']} ${styles['btn-delete']}`}
+                    className={`${styles["icon-btn"]} ${styles["btn-delete"]}`}
                   >
-                    <span className={styles['icon']}>✕</span>
+                    <span className={styles["icon"]}>✕</span>
                   </button>
                 </div>
               ))}
 
               {excludedIngredients.length === 0 && (
-                <p className={styles['empty-message']}>등록된 금지 식재료가 없습니다</p>
+                <p className={styles["empty-message"]}>
+                  등록된 금지 식재료가 없습니다
+                </p>
               )}
             </div>
 
             <button
               onClick={() => setScreen("welcome")}
-              className={`${styles['btn']} ${styles['btn-primary']} ${styles['btn-complete']}`}
+              className={`${styles["btn"]} ${styles["btn-primary"]} ${styles["btn-complete"]}`}
             >
               완료
             </button>
@@ -417,25 +430,32 @@ const MealRecommend = () => {
   }
 
   return (
-    <div className={styles['app-container']}>
-      <div className={styles['content-wrapper']}>
-        <div className={styles['meal-header']}>
-          <div className={styles['header']}>
-            <button onClick={() => setScreen("welcome")} className={styles['icon-btn']}>
-              <span className={styles['icon']}>←</span>
+    <div className={styles["app-container"]}>
+      <div className={styles["content-wrapper"]}>
+        <div className={styles["meal-header"]}>
+          <div className={styles["header"]}>
+            <button
+              onClick={() => setScreen("welcome")}
+              className={styles["icon-btn"]}
+            >
+              <span className={styles["icon"]}>←</span>
             </button>
-            <h1 className={styles['header-title']}>7일 식단표</h1>
-            <div className={styles['icon-placeholder']} />
+            <h1 className={styles["header-title"]}>7일 식단표</h1>
+            <div className={styles["icon-placeholder"]} />
           </div>
-          {currentMeal && <p className={styles['meal-date']}>{currentMeal.fullDate}</p>}
+          {currentMeal && (
+            <p className={styles["meal-date"]}>{currentMeal.fullDate}</p>
+          )}
         </div>
 
-        <div className={styles['day-tabs']}>
+        <div className={styles["day-tabs"]}>
           {weeklyMeals.map((_, index) => (
             <button
               key={index}
               onClick={() => setCurrentDay(index)}
-              className={`${styles['day-tab']} ${currentDay === index  ? styles['active'] : ""}`}
+              className={`${styles["day-tab"]} ${
+                currentDay === index ? styles["active"] : ""
+              }`}
             >
               {index + 1}일차
             </button>
@@ -443,53 +463,61 @@ const MealRecommend = () => {
         </div>
 
         {currentMeal && (
-          <div className={styles['meal-content']}>
-            <div className={styles['nutrition-card']}>
-              <h2 className={styles['calories-total']}>
+          <div className={styles["meal-content"]}>
+            <div className={styles["nutrition-card"]}>
+              <h2 className={styles["calories-total"]}>
                 {currentMeal.totalCalories}Kcal
               </h2>
-              <div className={styles['nutrition-info']}>
-                <div className={styles['nutrition-item']}>
-                  <p className={styles['nutrition-label']}>탄수화물</p>
-                  <p className={styles['nutrition-value']}>{currentMeal.carbs}g</p>
+              <div className={styles["nutrition-info"]}>
+                <div className={styles["nutrition-item"]}>
+                  <p className={styles["nutrition-label"]}>탄수화물</p>
+                  <p className={styles["nutrition-value"]}>
+                    {currentMeal.carbs}g
+                  </p>
                 </div>
-                <div className={styles['nutrition-item']}>
-                  <p className={styles['nutrition-label']}>단백질</p>
-                  <p className={styles['nutrition-value']}>{currentMeal.protein}g</p>
+                <div className={styles["nutrition-item"]}>
+                  <p className={styles["nutrition-label"]}>단백질</p>
+                  <p className={styles["nutrition-value"]}>
+                    {currentMeal.protein}g
+                  </p>
                 </div>
-                <div className={styles['nutrition-item']}>
-                  <p className={styles['nutrition-label']}>지방</p>
-                  <p className={styles['nutrition-value']}>{currentMeal.fat}g</p>
+                <div className={styles["nutrition-item"]}>
+                  <p className={styles["nutrition-label"]}>지방</p>
+                  <p className={styles["nutrition-value"]}>
+                    {currentMeal.fat}g
+                  </p>
                 </div>
               </div>
             </div>
 
-            <div className={styles['meal-card']}>
-              <div className={styles['meal-card-header']}>
-                <h3 className={styles['meal-title']}>🌅 아침</h3>
-                <div className={styles['meal-calories-info']}>
-                  <p className={styles['meal-calories']}>
+            <div className={styles["meal-card"]}>
+              <div className={styles["meal-card-header"]}>
+                <h3 className={styles["meal-title"]}>🌅 아침</h3>
+                <div className={styles["meal-calories-info"]}>
+                  <p className={styles["meal-calories"]}>
                     {currentMeal.breakfast.calories}{" "}
-                    <span className={styles['kcal-unit']}>kcal</span>
+                    <span className={styles["kcal-unit"]}>kcal</span>
                   </p>
                 </div>
               </div>
-              <div className={styles['meal-nutrition-mini']}>
+              <div className={styles["meal-nutrition-mini"]}>
                 <span>탄 {currentMeal.breakfast.carbs}g</span>
                 <span>단 {currentMeal.breakfast.protein}g</span>
                 <span>지 {currentMeal.breakfast.fat}g</span>
               </div>
-              <div className={styles['meal-tags']}>
+              <div className={styles["meal-tags"]}>
                 {currentMeal.breakfast.meals.map((meal, index) => (
-                  <div key={index} className={styles['meal-tag']}>
-                    <span className={styles['meal-name']}>{meal.name}</span>
-                    <span className={styles['meal-cal']}>({meal.calories}kcal)</span>
+                  <div key={index} className={styles["meal-tag"]}>
+                    <span className={styles["meal-name"]}>{meal.name}</span>
+                    <span className={styles["meal-cal"]}>
+                      ({meal.calories}kcal)
+                    </span>
                     {currentMeal.breakfast.meals.length > 1 && (
                       <button
                         onClick={() => handleDeleteMeal("breakfast", index)}
-                        className={styles['meal-delete-btn']}
+                        className={styles["meal-delete-btn"]}
                       >
-                        <span className={styles['icon-small']}>✕</span>
+                        <span className={styles["icon-small"]}>✕</span>
                       </button>
                     )}
                   </div>
@@ -497,32 +525,34 @@ const MealRecommend = () => {
               </div>
             </div>
 
-            <div className={styles['meal-card']}>
-              <div className={styles['meal-card-header']}>
-                <h3 className={styles['meal-title']}>☀️ 점심</h3>
-                <div className={styles['meal-calories-info']}>
-                  <p className={styles['meal-calories']}>
+            <div className={styles["meal-card"]}>
+              <div className={styles["meal-card-header"]}>
+                <h3 className={styles["meal-title"]}>☀️ 점심</h3>
+                <div className={styles["meal-calories-info"]}>
+                  <p className={styles["meal-calories"]}>
                     {currentMeal.lunch.calories}{" "}
-                    <span className={styles['kcal-unit']}>kcal</span>
+                    <span className={styles["kcal-unit"]}>kcal</span>
                   </p>
                 </div>
               </div>
-              <div className={styles['meal-nutrition-mini']}>
+              <div className={styles["meal-nutrition-mini"]}>
                 <span>탄 {currentMeal.lunch.carbs}g</span>
                 <span>단 {currentMeal.lunch.protein}g</span>
                 <span>지 {currentMeal.lunch.fat}g</span>
               </div>
-              <div className={styles['meal-tags']}>
+              <div className={styles["meal-tags"]}>
                 {currentMeal.lunch.meals.map((meal, index) => (
-                  <div key={index} className={styles['meal-tag']}>
-                    <span className={styles['meal-name']}>{meal.name}</span>
-                    <span className={styles['meal-cal']}>({meal.calories}kcal)</span>
+                  <div key={index} className={styles["meal-tag"]}>
+                    <span className={styles["meal-name"]}>{meal.name}</span>
+                    <span className={styles["meal-cal"]}>
+                      ({meal.calories}kcal)
+                    </span>
                     {currentMeal.lunch.meals.length > 1 && (
                       <button
                         onClick={() => handleDeleteMeal("lunch", index)}
-                        className={styles['meal-delete-btn']}
+                        className={styles["meal-delete-btn"]}
                       >
-                        <span className={styles['icon-small']}>✕</span>
+                        <span className={styles["icon-small"]}>✕</span>
                       </button>
                     )}
                   </div>
@@ -530,32 +560,34 @@ const MealRecommend = () => {
               </div>
             </div>
 
-            <div className={styles['meal-card']}>
-              <div className={styles['meal-card-header']}>
-                <h3 className={styles['meal-title']}>🌙 저녁</h3>
-                <div className={styles['meal-calories-info']}>
-                  <p className={styles['meal-calories']}>
+            <div className={styles["meal-card"]}>
+              <div className={styles["meal-card-header"]}>
+                <h3 className={styles["meal-title"]}>🌙 저녁</h3>
+                <div className={styles["meal-calories-info"]}>
+                  <p className={styles["meal-calories"]}>
                     {currentMeal.dinner.calories}{" "}
-                    <span className={styles['kcal-unit']}>kcal</span>
+                    <span className={styles["kcal-unit"]}>kcal</span>
                   </p>
                 </div>
               </div>
-              <div className={styles['meal-nutrition-mini']}>
+              <div className={styles["meal-nutrition-mini"]}>
                 <span>탄 {currentMeal.dinner.carbs}g</span>
                 <span>단 {currentMeal.dinner.protein}g</span>
                 <span>지 {currentMeal.dinner.fat}g</span>
               </div>
-              <div className={styles['meal-tags']}>
+              <div className={styles["meal-tags"]}>
                 {currentMeal.dinner.meals.map((meal, index) => (
-                  <div key={index} className={styles['meal-tag']}>
-                    <span className={styles['meal-name']}>{meal.name}</span>
-                    <span className={styles['meal-cal']}>({meal.calories}kcal)</span>
+                  <div key={index} className={styles["meal-tag"]}>
+                    <span className={styles["meal-name"]}>{meal.name}</span>
+                    <span className={styles["meal-cal"]}>
+                      ({meal.calories}kcal)
+                    </span>
                     {currentMeal.dinner.meals.length > 1 && (
                       <button
                         onClick={() => handleDeleteMeal("dinner", index)}
-                        className={styles['meal-delete-btn']}
+                        className={styles["meal-delete-btn"]}
                       >
-                        <span className={styles['icon-small']}>✕</span>
+                        <span className={styles["icon-small"]}>✕</span>
                       </button>
                     )}
                   </div>
@@ -563,14 +595,17 @@ const MealRecommend = () => {
               </div>
             </div>
 
-            <div className={styles['action-buttons']}>
-              <button onClick={handleSaveMealPlan} className={`${styles['btn']} ${styles['btn-primary']}`}>
+            <div className={styles["action-buttons"]}>
+              <button
+                onClick={handleSaveMealPlan}
+                className={`${styles["btn"]} ${styles["btn-primary"]}`}
+              >
                 💾 식단 저장하기
               </button>
               <button
                 onClick={handleGetRecommendation}
                 disabled={loading}
-                className={`${styles['btn']} ${styles['btn-secondary']}`}
+                className={`${styles["btn"]} ${styles["btn-secondary"]}`}
               >
                 {loading ? "⏳ 로딩 중..." : "🔄 식단 다시 추천받기"}
               </button>
@@ -578,22 +613,22 @@ const MealRecommend = () => {
           </div>
         )}
 
-        <div className={styles['navigation']}>
+        <div className={styles["navigation"]}>
           <button
             onClick={() => setCurrentDay(Math.max(0, currentDay - 1))}
             disabled={currentDay === 0}
-            className={styles['nav-btn']}
+            className={styles["nav-btn"]}
           >
-            <span className={styles['icon']}>←</span>
+            <span className={styles["icon"]}>←</span>
           </button>
           <button
             onClick={() =>
               setCurrentDay(Math.min(weeklyMeals.length - 1, currentDay + 1))
             }
             disabled={currentDay === weeklyMeals.length - 1}
-            className={styles['nav-btn']}
+            className={styles["nav-btn"]}
           >
-            <span className={styles['icon']}>→</span>
+            <span className={styles["icon"]}>→</span>
           </button>
         </div>
       </div>
