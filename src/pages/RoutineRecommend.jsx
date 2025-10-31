@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import styles from "./RoutineRecommend.module.css";
+import RoutineRecommendModal from "../components/RoutineRecommendModal";
 
 const RoutineRecommend = () => {
   const [showWeakPanel, setShowWeakPanel] = useState(false);
@@ -11,6 +12,7 @@ const RoutineRecommend = () => {
   const [level, setLevel] = useState("");
   const [targetParts, setTargetParts] = useState([]);
   const [savedRoutines, setSavedRoutines] = useState([]);
+  const [showModal, setShowModal] = useState(false);
 
   // Prevent body scroll when panel is open
   useEffect(() => {
@@ -130,7 +132,7 @@ const RoutineRecommend = () => {
 
     localStorage.setItem("savedRoutines", JSON.stringify(updatedRoutines));
 
-    setSavedRoutines([...savedRoutines, savedRoutine]);
+    setSavedRoutines(updatedRoutines);
 
     alert("루틴이 저장되었습니다!");
   };
@@ -141,51 +143,79 @@ const RoutineRecommend = () => {
   };
 
   return (
-    <div className={styles['routine-recommend-container']}>
+    <div className={styles["routine-recommend-container"]}>
       {!showRoutine ? (
         <>
-          <div className={styles['main-content']}>
-            <h1 className={styles['title']}>
+          <div className={styles["main-content"]}>
+            <h1 className={styles["title"]}>
               안녕하세요 - 회원님!
               <br />
               최적화된 루틴을 추천해 드릴께요!
             </h1>
 
-            <div className={styles['button-group']}>
-              <button className={styles['action-button']} onClick={handleGetRoutine}>
+            <div className={styles["button-group"]}>
+              <button
+                className={styles["action-button"]}
+                onClick={handleGetRoutine}
+              >
                 추천 루틴 받기
               </button>
-              <button
-                className={styles['action-button']}
-                onClick={() => setShowWeakPanel(true)}
-              >
-                취약한 부분
-              </button>
-              <button
-                className={styles['action-button']}
-                onClick={() => setShowLevelPanel(true)}
-              >
-                운동 경력
-              </button>
-              <button
-                className={styles['action-button']}
-                onClick={() => setShowTargetPanel(true)}
-              >
-                보강하고 싶은 부위
-              </button>
+
+              <div>
+                <button
+                  className={styles["action-button"]}
+                  onClick={() => setShowWeakPanel(true)}
+                >
+                  취약한 부분
+                </button>
+                {weakParts.length > 0 && (
+                  <p className={styles["selected-info"]}>
+                    {weakParts.join(", ")}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <button
+                  className={styles["action-button"]}
+                  onClick={() => setShowLevelPanel(true)}
+                >
+                  운동 경력
+                </button>
+                {level && <p className={styles["selected-info"]}>{level}</p>}
+              </div>
+
+              <div>
+                <button
+                  className={styles["action-button"]}
+                  onClick={() => setShowTargetPanel(true)}
+                >
+                  보강하고 싶은 부위
+                </button>
+                {targetParts.length > 0 && (
+                  <p className={styles["selected-info"]}>
+                    {targetParts.join(", ")}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
           {savedRoutines.length > 0 && (
-            <div className={styles['saved-routines']}>
+            <div className={styles["saved-routines"]}>
               <h2>저장된 루틴</h2>
               {savedRoutines.map((routine) => (
-                <div key={routine.id} className={styles['saved-routine-item']}>
-                  <div className={styles['saved-routine-header']}>
+                <div
+                  key={routine.id}
+                  className={styles["saved-routine-item"]}
+                  onClick={() => setShowModal(true)}
+                  style={{ cursor: "pointer" }}
+                >
+                  <div className={styles["saved-routine-header"]}>
                     <span>{routine.date}</span>
-                    <span className={styles['badge']}>{routine.level}</span>
+                    <span className={styles["badge"]}>{routine.level}</span>
                   </div>
-                  <div className={styles['saved-routine-info']}>
+                  <div className={styles["saved-routine-info"]}>
                     {routine.targetParts.length > 0 && (
                       <span>집중: {routine.targetParts.join(", ")}</span>
                     )}
@@ -196,15 +226,17 @@ const RoutineRecommend = () => {
           )}
         </>
       ) : (
-        <div className={styles['routine-view']}>
-          <h2 className={styles['routine-title']}>10월 2주차 루틴</h2>
-          <p className={styles['routine-date']}>10/10 - 10/17</p>
+        <div className={styles["routine-view"]}>
+          <h2 className={styles["routine-title"]}>10월 2주차 루틴</h2>
+          <p className={styles["routine-date"]}>10/10 - 10/17</p>
 
-          <div className={styles['day-tabs']}>
+          <div className={styles["day-tabs"]}>
             {weekDays.map((day, index) => (
               <button
                 key={index}
-                className={`${styles['day-tab']} ${selectedDay === index  ? styles['active'] : ""}`}
+                className={`${styles["day-tab"]} ${
+                  selectedDay === index ? styles["active"] : ""
+                }`}
                 onClick={() => setSelectedDay(index)}
               >
                 {day}
@@ -212,16 +244,16 @@ const RoutineRecommend = () => {
             ))}
           </div>
 
-          <div className={styles['routine-info']}>
+          <div className={styles["routine-info"]}>
             <span>총 3세트</span>
             <span>⏱ 20분</span>
           </div>
 
-          <div className={styles['exercise-list']}>
+          <div className={styles["exercise-list"]}>
             {sampleRoutines[selectedDay].map((exercise, index) => (
-              <div key={index} className={styles['exercise-card']}>
-                <div className={styles['exercise-icon']}>{exercise.icon}</div>
-                <div className={styles['exercise-info']}>
+              <div key={index} className={styles["exercise-card"]}>
+                <div className={styles["exercise-icon"]}>{exercise.icon}</div>
+                <div className={styles["exercise-info"]}>
                   <h3>{exercise.name}</h3>
                   <p>{exercise.detail}</p>
                 </div>
@@ -229,12 +261,15 @@ const RoutineRecommend = () => {
             ))}
           </div>
 
-          <div className={styles['routine-buttons']}>
-            <button className={styles['save-routine-button']} onClick={handleSaveRoutine}>
+          <div className={styles["routine-buttons"]}>
+            <button
+              className={styles["save-routine-button"]}
+              onClick={handleSaveRoutine}
+            >
               루틴 저장하기
             </button>
             <button
-              className={styles['re-recommend-button']}
+              className={styles["re-recommend-button"]}
               onClick={handleRecommendAgain}
             >
               루틴 다시 추천받기
@@ -243,27 +278,34 @@ const RoutineRecommend = () => {
         </div>
       )}
 
+      {/* 모달 */}
+      <RoutineRecommendModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+      />
+
       {showWeakPanel && (
         <>
           <div
-            className={styles['panel-overlay']}
+            className={styles["panel-overlay"]}
             onClick={() => setShowWeakPanel(false)}
           ></div>
-          <div className={styles['bottom-panel']}>
-            <div className={styles['panel-handle']}></div>
-            <div className={styles['panel-header']}>
+          <div className={styles["bottom-panel"]}>
+            <div className={styles["panel-handle"]}></div>
+            <div className={styles["panel-header"]}>
               <h3>취약한 부분 선택</h3>
             </div>
-            <div className={styles['panel-body']}>
-              <p className={styles['panel-description']}>
+            <div className={styles["panel-body"]}>
+              <p className={styles["panel-description"]}>
                 과거 다치거나 불편한 몸 부위를 선택해주세요
               </p>
-              <div className={styles['option-grid']}>
+              <div className={styles["option-grid"]}>
                 {bodyParts.map((part) => (
                   <button
                     key={part}
-                    className={`${styles['option-button']} ${
-                      weakParts.includes(part) ? styles.selected : ""}`}
+                    className={`${styles["option-button"]} ${
+                      weakParts.includes(part) ? styles.selected : ""
+                    }`}
                     onClick={() => handleWeakPartToggle(part)}
                   >
                     {part}
@@ -271,7 +313,7 @@ const RoutineRecommend = () => {
                 ))}
               </div>
               <button
-                className={styles['confirm-button']}
+                className={styles["confirm-button"]}
                 onClick={() => setShowWeakPanel(false)}
               >
                 선택 완료
@@ -284,22 +326,25 @@ const RoutineRecommend = () => {
       {showLevelPanel && (
         <>
           <div
-            className={styles['panel-overlay']}
+            className={styles["panel-overlay"]}
             onClick={() => setShowLevelPanel(false)}
           ></div>
-          <div className={styles['bottom-panel']}>
-            <div className={styles['panel-handle']}></div>
-            <div className={styles['panel-header']}>
+          <div className={styles["bottom-panel"]}>
+            <div className={styles["panel-handle"]}></div>
+            <div className={styles["panel-header"]}>
               <h3>운동 경력 선택</h3>
             </div>
-            <div className={styles['panel-body']}>
-              <p className={styles['panel-description']}>현재 운동 수준을 선택해주세요</p>
-              <div className={styles['option-grid']}>
+            <div className={styles["panel-body"]}>
+              <p className={styles["panel-description"]}>
+                현재 운동 수준을 선택해주세요
+              </p>
+              <div className={styles["option-grid"]}>
                 {levels.map((lv) => (
                   <button
                     key={lv}
-                    className={`${styles['option-button']} ${
-                      level === lv ? styles.selected : ""}`}
+                    className={`${styles["option-button"]} ${
+                      level === lv ? styles.selected : ""
+                    }`}
                     onClick={() => setLevel(lv)}
                   >
                     {lv}
@@ -307,7 +352,7 @@ const RoutineRecommend = () => {
                 ))}
               </div>
               <button
-                className={styles['confirm-button']}
+                className={styles["confirm-button"]}
                 onClick={() => setShowLevelPanel(false)}
               >
                 선택 완료
@@ -317,28 +362,28 @@ const RoutineRecommend = () => {
         </>
       )}
 
-      {/* 보강하고 싶은 부위 패널 */}
       {showTargetPanel && (
         <>
           <div
-            className={styles['panel-overlay']}
+            className={styles["panel-overlay"]}
             onClick={() => setShowTargetPanel(false)}
           ></div>
-          <div className={styles['bottom-panel']}>
-            <div className={styles['panel-handle']}></div>
-            <div className={styles['panel-header']}>
+          <div className={styles["bottom-panel"]}>
+            <div className={styles["panel-handle"]}></div>
+            <div className={styles["panel-header"]}>
               <h3>보강하고 싶은 부위</h3>
             </div>
-            <div className={styles['panel-body']}>
-              <p className={styles['panel-description']}>
+            <div className={styles["panel-body"]}>
+              <p className={styles["panel-description"]}>
                 집중적으로 운동하고 싶은 부위를 선택해주세요
               </p>
-              <div className={styles['option-grid']}>
+              <div className={styles["option-grid"]}>
                 {targetAreas.map((area) => (
                   <button
                     key={area}
-                    className={`${styles['option-button']} ${
-                      targetParts.includes(area) ? styles.selected : ""}`}
+                    className={`${styles["option-button"]} ${
+                      targetParts.includes(area) ? styles.selected : ""
+                    }`}
                     onClick={() => handleTargetPartToggle(area)}
                   >
                     {area}
@@ -346,7 +391,7 @@ const RoutineRecommend = () => {
                 ))}
               </div>
               <button
-                className={styles['confirm-button']}
+                className={styles["confirm-button"]}
                 onClick={() => setShowTargetPanel(false)}
               >
                 선택 완료
