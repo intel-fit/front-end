@@ -9,7 +9,7 @@ import ProfileEditModal from "../components/ProfileEditModal";
 import RoutineRecommendModal from "../components/RoutineRecommendModal";
 import MealRecommendModal from "../components/MealRecommendModal";
 
-import "./MyPage.css";
+import styles from "./MyPage.module.css";
 import {
   IoPersonOutline,
   IoPencilOutline,
@@ -321,22 +321,22 @@ export default function MyPage() {
     }
   };
   return (
-    <div className="mypage">
+    <div className={styles['mypage']}>
       <Header title="마이페이지" />
 
-      <div className="mypage-content">
+      <div className={styles['mypage-content']}>
         {/* 사용자 프로필 섹션 */}
-        <div className="profile-section">
-          <div className="profile-info">
-            <div className="profile-avatar">
+        <div className={styles['profile-section']}>
+          <div className={styles['profile-info']}>
+            <div className={styles['profile-avatar']}>
               <IoPersonOutline />
             </div>
-            <div className="profile-details">
-              <div className="username">
+            <div className={styles['profile-details']}>
+              <div className={styles['username']}>
                 {profileData.name || "김민수"}님{" "}
-                <FaCrown className="crown-icon" />
+                <FaCrown className={styles['crown-icon']} />
               </div>
-              <div className="user-title">
+              <div className={styles['user-title']}>
                 {profileData.membershipType === "FREE"
                   ? "무료 회원"
                   : profileData.membershipType === "PREMIUM"
@@ -346,78 +346,78 @@ export default function MyPage() {
             </div>
           </div>
           <IoPencilOutline
-            className="edit-icon"
+            className={styles['edit-icon']}
             onClick={handleProfileEditClick}
           />
         </div>
 
         {/* 뱃지 섹션 */}
-        <div className="badges-section">
-          <div className="badges-header">
-            <span className="badges-title">
-              뱃지 <span className="badge-count">23</span>/80
+        <div className={styles['badges-section']}>
+          <div className={styles['badges-header']}>
+            <span className={styles['badges-title']}>
+              뱃지 <span className={styles['badge-count']}>23</span>/80
             </span>
-            <span className="view-details" onClick={handleViewAllClick}>
+            <span className={styles['view-details']} onClick={handleViewAllClick}>
               자세히 보기 <IoChevronForwardOutline />
             </span>
           </div>
-          <div className="badges-display">
+          <div className={styles['badges-display']}>
             <div
-              className="badge purple"
+              className={`${styles['badge']} ${styles['purple']}`}
               onClick={() => handleBadgeClick("purple")}
             >
               <FaMedal />
             </div>
             <div
-              className="badge blue"
+              className={`${styles['badge']} ${styles['blue']}`}
               onClick={() => handleBadgeClick("blue")}
             >
               <FaDumbbell />
             </div>
-            <div className="badge red" onClick={() => handleBadgeClick("red")}>
+            <div className={`${styles['badge']} ${styles['red']}`} onClick={() => handleBadgeClick("red")}>
               <FaFire />
             </div>
           </div>
         </div>
 
         {/* 구독/결제 섹션 */}
-        <div className="subscription-section">
-          <div className="section-title">구독/결제</div>
-          <div className="section-links">
-            <div className="link-item" onClick={handleMyPlanClick}>
+        <div className={styles['subscription-section']}>
+          <div className={styles['section-title']}>구독/결제</div>
+          <div className={styles['section-links']}>
+            <div className={styles['link-item']} onClick={handleMyPlanClick}>
               내 플랜 보기
             </div>
-            <div className="link-item" onClick={handlePaymentMethodClick}>
+            <div className={styles['link-item']} onClick={handlePaymentMethodClick}>
               결제 수단 관리
             </div>
           </div>
         </div>
 
         {/* 추천받은 내역보기 */}
-        <div className="recommend-section">
-          <div className="setion-title"> 추천 내역</div>
-          <div className="section-links">
+        <div className={styles['recommend-section']}>
+          <div className={styles['setion-title']}> 추천 내역</div>
+          <div className={styles['section-links']}>
             <div
-              className="link-item routine"
+              className={`${styles['link-item']} ${styles['routine']}`}
               onClick={handleRoutineRecommendClick}
             >
               운동 추천 내역
             </div>
-            <div className="link-item meal" onClick={handleMealRecommendClick}>
+            <div className={`${styles['link-item']} ${styles['meal']}`} onClick={handleMealRecommendClick}>
               식단 추천 내역
             </div>
           </div>
         </div>
 
         {/* 계정 관리 섹션 */}
-        <div className="account-section">
-          <div className="section-title">계정 관리</div>
-          <div className="section-links">
-            <div className="link-item logout-item" onClick={handleLogoutClick}>
+        <div className={styles['account-section']}>
+          <div className={styles['section-title']}>계정 관리</div>
+          <div className={styles['section-links']}>
+            <div className={`${styles['link-item']} ${styles['logout-item']}`} onClick={handleLogoutClick}>
               로그아웃
             </div>
             <div
-              className="link-item delete-account-item"
+              className={`${styles['link-item']} ${styles['delete-account-item']}`}
               onClick={handleDeleteAccountClick}
             >
               회원탈퇴

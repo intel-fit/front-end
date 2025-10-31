@@ -1,7 +1,7 @@
 import React from "react";
 import { IoClose } from "react-icons/io5";
 import InbodyManualForm from "./InbodyManualForm";
-import "./InBodyManualModal.css";
+import styles from "./InBodyManualModal.module.css";
 
 export default function InbodyManualModal({ isOpen, onClose, onSave }) {
   console.log("InBodyManualModal 렌더링됨, isOpen:", isOpen);
@@ -17,15 +17,15 @@ export default function InbodyManualModal({ isOpen, onClose, onSave }) {
   }
 
   return (
-    <div className="manual-modal-bg">
-      <div className="manual-modal">
-        <div className="manual-modal-header">
+    <div className={styles['manual-modal-bg']}>
+      <div className={styles['manual-modal']}>
+        <div className={styles['manual-modal-header']}>
           <h2>인바디 수기 입력</h2>
-          <button className="close-btn" onClick={onClose}>
+          <button className={styles['close-btn']} onClick={onClose}>
             <IoClose />
           </button>
         </div>
-        <div className="manual-modal-content">
+        <div className={styles['manual-modal-content']}>
           <InbodyManualForm onSubmit={handleSubmit} />
         </div>
       </div>

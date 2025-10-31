@@ -1,5 +1,5 @@
 import { IoClose, IoCheckmarkCircle, IoTrophy } from "react-icons/io5";
-import "./MyPlanModal.css";
+import styles from "./MyPlanModal.module.css";
 
 export default function MyPlanModal({ isOpen, onClose }) {
   if (!isOpen) return null;
@@ -59,47 +59,47 @@ export default function MyPlanModal({ isOpen, onClose }) {
   ];
 
   return (
-    <div className="my-plan-modal-overlay">
-      <div className="my-plan-modal-content">
-        <div className="my-plan-modal-header">
-          <h2 className="my-plan-modal-title">내 플랜</h2>
-          <button className="my-plan-modal-close" onClick={onClose}>
+    <div className={styles['my-plan-modal-overlay']}>
+      <div className={styles['my-plan-modal-content']}>
+        <div className={styles['my-plan-modal-header']}>
+          <h2 className={styles['my-plan-modal-title']}>내 플랜</h2>
+          <button className={styles['my-plan-modal-close']} onClick={onClose}>
             <IoClose />
           </button>
         </div>
 
-        <div className="my-plan-modal-body">
+        <div className={styles['my-plan-modal-body']}>
           {/* 현재 플랜 정보 */}
-          <div className="current-plan-section">
-            <div className="current-plan-badge">
+          <div className={styles['current-plan-section']}>
+            <div className={styles['current-plan-badge']}>
               <IoTrophy />
               <span>현재 플랜</span>
             </div>
-            <div className="current-plan-card">
-              <h3 className="plan-name">{currentPlan.name}</h3>
-              <div className="plan-price">
+            <div className={styles['current-plan-card']}>
+              <h3 className={styles['plan-name']}>{currentPlan.name}</h3>
+              <div className={styles['plan-price']}>
                 {currentPlan.price}
                 <span>/월</span>
               </div>
-              <div className="plan-dates">
-                <div className="date-item">
-                  <span className="date-label">시작일</span>
-                  <span className="date-value">
+              <div className={styles['plan-dates']}>
+                <div className={styles['date-item']}>
+                  <span className={styles['date-label']}>시작일</span>
+                  <span className={styles['date-value']}>
                     {new Date(currentPlan.startDate).toLocaleDateString(
                       "ko-KR"
                     )}
                   </span>
                 </div>
-                <div className="date-item">
-                  <span className="date-label">다음 결제일</span>
-                  <span className="date-value">
+                <div className={styles['date-item']}>
+                  <span className={styles['date-label']}>다음 결제일</span>
+                  <span className={styles['date-value']}>
                     {new Date(currentPlan.nextBillingDate).toLocaleDateString(
                       "ko-KR"
                     )}
                   </span>
                 </div>
               </div>
-              <div className="plan-features">
+              <div className={styles['plan-features']}>
                 <h4>포함된 기능</h4>
                 <ul>
                   {currentPlan.features.map((feature, index) => (
@@ -114,22 +114,22 @@ export default function MyPlanModal({ isOpen, onClose }) {
           </div>
 
           {/* 다른 플랜 옵션 */}
-          <div className="other-plans-section">
-            <h3 className="section-title">다른 플랜 보기</h3>
-            <div className="plans-list">
+          <div className={styles['other-plans-section']}>
+            <h3 className={styles['section-title']}>다른 플랜 보기</h3>
+            <div className={styles['plans-list']}>
               {plans.map((plan, index) => (
                 <div
                   key={index}
-                  className={`plan-card ${plan.isCurrent ? "current" : ""} ${
-                    plan.type
+                  className={`${styles['plan-card']} ${plan.isCurrent  ? styles['current'] : ""} ${
+                    styles[plan.type] || ''
                   }`}
                 >
                   {plan.isCurrent && (
-                    <div className="current-badge">현재 플랜</div>
+                    <div className={styles['current-badge']}>현재 플랜</div>
                   )}
-                  <h4 className="plan-card-name">{plan.name}</h4>
-                  <div className="plan-card-price">{plan.price}</div>
-                  <ul className="plan-card-features">
+                  <h4 className={styles['plan-card-name']}>{plan.name}</h4>
+                  <div className={styles['plan-card-price']}>{plan.price}</div>
+                  <ul className={styles['plan-card-features']}>
                     {plan.features.map((feature, idx) => (
                       <li key={idx}>
                         <IoCheckmarkCircle />
@@ -138,7 +138,7 @@ export default function MyPlanModal({ isOpen, onClose }) {
                     ))}
                   </ul>
                   {!plan.isCurrent && (
-                    <button className="select-plan-btn">
+                    <button className={styles['select-plan-btn']}>
                       {plan.type === "basic" ? "다운그레이드" : "업그레이드"}
                     </button>
                   )}
@@ -148,8 +148,8 @@ export default function MyPlanModal({ isOpen, onClose }) {
           </div>
 
           {/* 플랜 관리 */}
-          <div className="plan-actions">
-            <button className="cancel-plan-btn">플랜 해지하기</button>
+          <div className={styles['plan-actions']}>
+            <button className={styles['cancel-plan-btn']}>플랜 해지하기</button>
           </div>
         </div>
       </div>

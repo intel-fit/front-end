@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import './DietPage.css';
+import styles from "./DietPage.module.css";
 
 const DietPage = () => {
   const navigate = useNavigate();
@@ -51,64 +51,64 @@ const DietPage = () => {
   ];
 
   return (
-    <div className="diet-page">
+    <div className={styles['diet-page']}>
       {/* 날짜 선택 섹션 */}
-      <div className="date-selector">
+      <div className={styles['date-selector']}>
         {dates.map((date, index) => (
-          <div key={index} className={`date-item ${date.isActive ? 'active' : ''}`}>
-            <div className="date-number">{date.day}</div>
-            <div className="date-calories">388k</div>
-            <div className="date-percentage">97%</div>
+          <div key={index} className={`${styles['date-item']} ${date.isActive  ? styles['active'] : ''}`}>
+            <div className={styles['date-number']}>{date.day}</div>
+            <div className={styles['date-calories']}>388k</div>
+            <div className={styles['date-percentage']}>97%</div>
           </div>
         ))}
       </div>
 
       {/* 칼로리 섹션 */}
-      <div className="calorie-section">
-        <div className="calorie-header">
-          <div className="calorie-main">
-            <span className="calorie-number">{nutritionData.total}</span>
-            <span className="calorie-unit">/ {nutritionData.target}kcal</span>
+      <div className={styles['calorie-section']}>
+        <div className={styles['calorie-header']}>
+          <div className={styles['calorie-main']}>
+            <span className={styles['calorie-number']}>{nutritionData.total}</span>
+            <span className={styles['calorie-unit']}>/ {nutritionData.target}kcal</span>
           </div>
-          <div className="calorie-percentage">{nutritionData.percentage}%</div>
+          <div className={styles['calorie-percentage']}>{nutritionData.percentage}%</div>
         </div>
         
-        <div className="progress-bar-container">
-          <div className="progress-bar">
+        <div className={styles['progress-bar-container']}>
+          <div className={styles['progress-bar']}>
             <div 
-              className="progress-fill" 
+              className={styles['progress-fill']} 
               style={{ width: `${nutritionData.percentage}%` }}
             ></div>
           </div>
         </div>
         
-        <div className="nutrition-bars">
-          <div className="nutrition-item">
-            <span className="nutrition-label">탄수화물</span>
-            <span className="nutrition-value">{nutritionData.carbs.current} / {nutritionData.carbs.target}g</span>
-            <div className="nutrition-progress">
+        <div className={styles['nutrition-bars']}>
+          <div className={styles['nutrition-item']}>
+            <span className={styles['nutrition-label']}>탄수화물</span>
+            <span className={styles['nutrition-value']}>{nutritionData.carbs.current} / {nutritionData.carbs.target}g</span>
+            <div className={styles['nutrition-progress']}>
               <div 
-                className="nutrition-progress-fill" 
+                className={styles['nutrition-progress-fill']} 
                 style={{ width: `${(nutritionData.carbs.current / nutritionData.carbs.target) * 100}%` }}
               ></div>
             </div>
           </div>
-          <div className="nutrition-item">
-            <span className="nutrition-label">단백질</span>
-            <span className="nutrition-value">{nutritionData.protein.current} / {nutritionData.protein.target}g</span>
-            <div className="nutrition-progress">
+          <div className={styles['nutrition-item']}>
+            <span className={styles['nutrition-label']}>단백질</span>
+            <span className={styles['nutrition-value']}>{nutritionData.protein.current} / {nutritionData.protein.target}g</span>
+            <div className={styles['nutrition-progress']}>
               <div 
-                className="nutrition-progress-fill" 
+                className={styles['nutrition-progress-fill']} 
                 style={{ width: `${(nutritionData.protein.current / nutritionData.protein.target) * 100}%` }}
               ></div>
             </div>
           </div>
-          <div className="nutrition-item">
-            <span className="nutrition-label">지방</span>
-            <span className="nutrition-value">{nutritionData.fat.current} / {nutritionData.fat.target}g</span>
-            <div className="nutrition-progress">
+          <div className={styles['nutrition-item']}>
+            <span className={styles['nutrition-label']}>지방</span>
+            <span className={styles['nutrition-value']}>{nutritionData.fat.current} / {nutritionData.fat.target}g</span>
+            <div className={styles['nutrition-progress']}>
               <div 
-                className="nutrition-progress-fill" 
+                className={styles['nutrition-progress-fill']} 
                 style={{ width: `${(nutritionData.fat.current / nutritionData.fat.target) * 100}%` }}
               ></div>
             </div>
@@ -117,21 +117,21 @@ const DietPage = () => {
       </div>
 
       {/* 식사별 섹션 */}
-      <div className="meals-container">
+      <div className={styles['meals-container']}>
         {meals.map((meal, index) => (
-          <div key={index} className="meal-section">
-            <div className="meal-header">
-              <div className="meal-left">
-                <h3 className="meal-title">{meal.type}</h3>
-                <span className="meal-time">{meal.time}</span>
+          <div key={index} className={styles['meal-section']}>
+            <div className={styles['meal-header']}>
+              <div className={styles['meal-left']}>
+                <h3 className={styles['meal-title']}>{meal.type}</h3>
+                <span className={styles['meal-time']}>{meal.time}</span>
               </div>
-              <div className="meal-calories">{meal.calories} kcal</div>
+              <div className={styles['meal-calories']}>{meal.calories} kcal</div>
             </div>
-            <div className="food-tags">
+            <div className={styles['food-tags']}>
               {meal.foods.map((food, foodIndex) => (
                 <span
                   key={foodIndex}
-                  className="food-tag"
+                  className={styles['food-tag']}
                   style={{ backgroundColor: food.color }}
                 >
                   {food.name}
@@ -143,8 +143,8 @@ const DietPage = () => {
       </div>
 
       {/* 식단 추가하기 버튼 */}
-      <div className="add-meal-section">
-        <button className="add-meal-button" onClick={() => navigate('/add-meal')}>
+      <div className={styles['add-meal-section']}>
+        <button className={styles['add-meal-button']} onClick={() => navigate('/add-meal')}>
           식단 추가하기
         </button>
       </div>

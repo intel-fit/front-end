@@ -1,7 +1,7 @@
 import { useState } from "react";
 import LogItem from "./LogItem";
 import ExerciseModal from "./ExerciseModal";
-import "./LogSection.css";
+import styles from "./LogSection.module.css";
 
 export default function LogSection() {
   const [activities, setActivities] = useState([]);
@@ -75,9 +75,9 @@ export default function LogSection() {
   const hasItems = activities.length > 0;
 
   return (
-    <div className="log-section">
-      <h3 className="section-title">운동 기록하기</h3>
-      <div className={`log-timeline ${hasItems ? "has-items" : "empty"}`}>
+    <div className={styles['log-section']}>
+      <h3 className={styles['section-title']}>운동 기록하기</h3>
+      <div className={`${styles['log-timeline']} ${hasItems  ? styles['has-items'] : styles['empty']}`}>
         {activities.map((activity, index) => (
           <LogItem
             key={activity.id}
@@ -90,9 +90,9 @@ export default function LogSection() {
             onDelete={() => handleDeleteWorkout(activity.id)}
           />
         ))}
-        <div className="add-item">
-          <div className="timeline-dot"></div>
-          <button className="add-btn" onClick={handleAddWorkout}>
+        <div className={styles['add-item']}>
+          <div className={styles['timeline-dot']}></div>
+          <button className={styles['add-btn']} onClick={handleAddWorkout}>
             운동 추가하기
           </button>
         </div>

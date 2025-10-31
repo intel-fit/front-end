@@ -1,12 +1,12 @@
-import "./Stat.css";
+import styles from "./Stat.module.css";
 
 export default function Stat({ value, unit, percentage, date }) {
   return (
-    <div className="stat">
-      <div className="stat-date">{date}</div>
-      <div className="stat-value">{value}</div>
-      <div className="stat-unit">{unit}</div>
-      <div className="stat-percentage">{percentage}</div>
+    <div className={styles['stat']}>
+      <div className={styles['stat-date']}>{date}</div>
+      <div className={styles['stat-value']}>{value}</div>
+      <div className={styles['stat-unit']}>{unit}</div>
+      <div className={styles['stat-percentage']}>{percentage}</div>
     </div>
   );
 }

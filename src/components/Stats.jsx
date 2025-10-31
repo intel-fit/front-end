@@ -1,5 +1,5 @@
 import Stat from "./Stat";
-import "./Stats.css";
+import styles from "./Stats.module.css";
 
 export default function Stats() {
   const statsData = [
@@ -13,7 +13,7 @@ export default function Stats() {
   ];
 
   return (
-    <div className="stats">
+    <div className={styles['stats']}>
       {statsData.map((stat, index) => (
         <Stat
           key={index}

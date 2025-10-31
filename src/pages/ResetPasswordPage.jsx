@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import './ResetPasswordPage.css';
+import styles from "./ResetPasswordPage.module.css";
 
 const ResetPasswordPage = () => {
   const [step, setStep] = useState(1);
@@ -98,18 +98,18 @@ const ResetPasswordPage = () => {
 
   if (isSubmitted) {
     return (
-      <div className="reset-password-page">
-        <div className="reset-password-container">
-          <div className="logo">
+      <div className={styles['reset-password-page']}>
+        <div className={styles['reset-password-container']}>
+          <div className={styles['logo']}>
             <h1>INTEL FIT</h1>
           </div>
           
-          <div className="success-message">
+          <div className={styles['success-message']}>
             <h2>비밀번호 재설정</h2>
             <p>비밀번호가 변경되었습니다</p>
           </div>
           
-          <button onClick={handleBackToLogin} className="back-btn">
+          <button onClick={handleBackToLogin} className={styles['back-btn']}>
             로그인하러 가기
           </button>
         </div>
@@ -118,18 +118,18 @@ const ResetPasswordPage = () => {
   }
 
   return (
-    <div className="reset-password-page">
-      <div className="reset-password-container">
-        <div className="logo">
+    <div className={styles['reset-password-page']}>
+      <div className={styles['reset-password-container']}>
+        <div className={styles['logo']}>
           <h1>INTEL FIT</h1>
         </div>
         
-        <div className="form-container">
+        <div className={styles['form-container']}>
           <h2>비밀번호 재설정</h2>
           
           {step === 1 ? (
-            <form onSubmit={handleStep1Submit} className="reset-form">
-              <div className="input-group">
+            <form onSubmit={handleStep1Submit} className={styles['reset-form']}>
+              <div className={styles['input-group']}>
                 <input
                   type="email"
                   name="email"
@@ -138,10 +138,10 @@ const ResetPasswordPage = () => {
                   onChange={handleChange}
                   className={errors.email ? 'error' : ''}
                 />
-                {errors.email && <span className="error-message">{errors.email}</span>}
+                {errors.email && <span className={styles['error-message']}>{errors.email}</span>}
               </div>
               
-              <div className="input-group">
+              <div className={styles['input-group']}>
                 <input
                   type="text"
                   name="username"
@@ -150,16 +150,16 @@ const ResetPasswordPage = () => {
                   onChange={handleChange}
                   className={errors.username ? 'error' : ''}
                 />
-                {errors.username && <span className="error-message">{errors.username}</span>}
+                {errors.username && <span className={styles['error-message']}>{errors.username}</span>}
               </div>
               
-              <button type="submit" className="submit-btn">
+              <button type="submit" className={styles['submit-btn']}>
                 확인
               </button>
             </form>
           ) : (
-            <form onSubmit={handleStep2Submit} className="reset-form">
-              <div className="input-group">
+            <form onSubmit={handleStep2Submit} className={styles['reset-form']}>
+              <div className={styles['input-group']}>
                 <input
                   type="password"
                   name="currentPassword"
@@ -168,10 +168,10 @@ const ResetPasswordPage = () => {
                   onChange={handleChange}
                   className={errors.currentPassword ? 'error' : ''}
                 />
-                {errors.currentPassword && <span className="error-message">{errors.currentPassword}</span>}
+                {errors.currentPassword && <span className={styles['error-message']}>{errors.currentPassword}</span>}
               </div>
               
-              <div className="input-group">
+              <div className={styles['input-group']}>
                 <input
                   type="password"
                   name="newPassword"
@@ -180,10 +180,10 @@ const ResetPasswordPage = () => {
                   onChange={handleChange}
                   className={errors.newPassword ? 'error' : ''}
                 />
-                {errors.newPassword && <span className="error-message">{errors.newPassword}</span>}
+                {errors.newPassword && <span className={styles['error-message']}>{errors.newPassword}</span>}
               </div>
               
-              <div className="input-group">
+              <div className={styles['input-group']}>
                 <input
                   type="password"
                   name="confirmPassword"
@@ -192,16 +192,16 @@ const ResetPasswordPage = () => {
                   onChange={handleChange}
                   className={errors.confirmPassword ? 'error' : ''}
                 />
-                {errors.confirmPassword && <span className="error-message">{errors.confirmPassword}</span>}
+                {errors.confirmPassword && <span className={styles['error-message']}>{errors.confirmPassword}</span>}
               </div>
               
-              <button type="submit" className="submit-btn">
+              <button type="submit" className={styles['submit-btn']}>
                 확인
               </button>
             </form>
           )}
           
-          <button onClick={handleBackToLogin} className="cancel-btn">
+          <button onClick={handleBackToLogin} className={styles['cancel-btn']}>
             취소하기
           </button>
         </div>
