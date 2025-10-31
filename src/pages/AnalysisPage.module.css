@@ -126,8 +126,11 @@
 }
 
 .exercise-list {
-  display: flex;
-  flex-direction: column;
+  display: block;
+  height: 216px; /* 아이템 3개 높이(48 + 24) x 3 */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .exercise-item {

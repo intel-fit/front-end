@@ -83,6 +83,9 @@
   border-radius: 16px;
   padding: 16px;
   margin-bottom: 24px;
+  /* 화면 좌우 패딩(-20px)만큼 확장해 양 끝까지 */
+  margin-left: -24px; /* 달력 시각 폭보다 더 넓게 보정 */
+  margin-right: -24px;
 }
 
 .add-meal-page .goal-card-header {
@@ -224,7 +227,9 @@
   top: 24px;
 }
 .add-meal-page .exercise-add-card {
-  width: 100%;
+  /* 화면 좌우 패딩(-20px)만큼 확장해 양 끝까지 */
+  width: calc(100% + 48px); /* 달력과 시각적으로 동일 폭 맞춤 */
+  transform: translateX(-24px);
   background: #fff;
   color: #111;
   border: none;
