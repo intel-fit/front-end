@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import "./RoutineRecommendModal.css";
+import styles from "./RoutineRecommendModal.module.css";
 
 const RoutineRecommendModal = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
@@ -55,75 +55,75 @@ const RoutineRecommendModal = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="routine-history-modal-overlay" onClick={onClose}>
+    <div className={styles['routine-history-modal-overlay']} onClick={onClose}>
       <div
-        className="routine-history-modal"
+        className={styles['routine-history-modal']}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="routine-history-header">
+        <div className={styles['routine-history-header']}>
           <h2>{selectedRoutine ? "루틴 상세보기" : "운동 추천 내역"}</h2>
-          <button className="close-btn" onClick={onClose}>
+          <button className={styles['close-btn']} onClick={onClose}>
             ✕
           </button>
         </div>
 
-        <div className="routine-history-content">
+        <div className={styles['routine-history-content']}>
           {!selectedRoutine ? (
             // 루틴 목록 표시
             <>
               {savedRoutines.length === 0 ? (
-                <div className="empty-state">
+                <div className={styles['empty-state']}>
                   <p>저장된 운동 루틴이 없습니다.</p>
-                  <p className="empty-subtitle">
+                  <p className={styles['empty-subtitle']}>
                     운동 추천을 받고 루틴을 저장해보세요!
                   </p>
                   <button
-                    className="go-to-recommend-btn"
+                    className={styles['go-to-recommend-btn']}
                     onClick={handleGoToRecommend}
                   >
                     추천받으러 가기 →
                   </button>
                 </div>
               ) : (
-                <div className="routine-list">
+                <div className={styles['routine-list']}>
                   {savedRoutines.map((routine) => (
                     <div
                       key={routine.id}
-                      className="routine-card"
+                      className={styles['routine-card']}
                       onClick={() => handleRoutineClick(routine)}
                     >
-                      <div className="routine-card-header">
-                        <div className="routine-date">
-                          <span className="date-icon">📅</span>
+                      <div className={styles['routine-card-header']}>
+                        <div className={styles['routine-date']}>
+                          <span className={styles['date-icon']}>📅</span>
                           {routine.date}
                         </div>
                         <button
-                          className="delete-btn"
+                          className={styles['delete-btn']}
                           onClick={(e) => handleDelete(routine.id, e)}
                         >
                           🗑️
                         </button>
                       </div>
-                      <div className="routine-card-body">
+                      <div className={styles['routine-card-body']}>
                         {routine.level && (
-                          <span className="routine-badge level-badge">
+                          <span className={`${styles['routine-badge']} ${styles['level-badge']}`}>
                             {routine.level}
                           </span>
                         )}
                         {routine.targetParts &&
                           routine.targetParts.length > 0 && (
-                            <span className="routine-badge target-badge">
+                            <span className={`${styles['routine-badge']} ${styles['target-badge']}`}>
                               집중: {routine.targetParts.join(", ")}
                             </span>
                           )}
                         {routine.weakParts && routine.weakParts.length > 0 && (
-                          <span className="routine-badge weak-badge">
+                          <span className={`${styles['routine-badge']} ${styles['weak-badge']}`}>
                             주의: {routine.weakParts.join(", ")}
                           </span>
                         )}
                       </div>
-                      <div className="routine-card-footer">
-                        <span className="view-detail">자세히 보기 →</span>
+                      <div className={styles['routine-card-footer']}>
+                        <span className={styles['view-detail']}>자세히 보기 →</span>
                       </div>
                     </div>
                   ))}
@@ -132,35 +132,34 @@ const RoutineRecommendModal = ({ isOpen, onClose }) => {
             </>
           ) : (
             // 선택된 루틴 상세 표시
-            <div className="routine-detail">
-              <button className="back-btn" onClick={handleBack}>
+            <div className={styles['routine-detail']}>
+              <button className={styles['back-btn']} onClick={handleBack}>
                 ← 목록으로
               </button>
 
-              <div className="routine-detail-info">
-                <div className="detail-date">{selectedRoutine.date}</div>
-                <div className="detail-badges">
+              <div className={styles['routine-detail-info']}>
+                <div className={styles['detail-date']}>{selectedRoutine.date}</div>
+                <div className={styles['detail-badges']}>
                   {selectedRoutine.level && (
-                    <span className="detail-badge">
+                    <span className={styles['detail-badge']}>
                       {selectedRoutine.level}
                     </span>
                   )}
                   {selectedRoutine.targetParts &&
                     selectedRoutine.targetParts.length > 0 && (
-                      <span className="detail-badge">
+                      <span className={styles['detail-badge']}>
                         집중: {selectedRoutine.targetParts.join(", ")}
                       </span>
                     )}
                 </div>
               </div>
 
-              <div className="day-tabs">
+              <div className={styles['day-tabs']}>
                 {weekDays.map((day, index) => (
                   <button
                     key={index}
-                    className={`day-tab ${
-                      selectedDay === index ? "active" : ""
-                    }`}
+                    className={`${styles['day-tab']} ${
+                      selectedDay === index ? styles.active : ""}`}
                     onClick={() => setSelectedDay(index)}
                   >
                     {day}
@@ -168,12 +167,12 @@ const RoutineRecommendModal = ({ isOpen, onClose }) => {
                 ))}
               </div>
 
-              <div className="exercise-list">
+              <div className={styles['exercise-list']}>
                 {selectedRoutine.routine[selectedDay]?.map(
                   (exercise, index) => (
-                    <div key={index} className="exercise-item">
-                      <div className="exercise-icon">{exercise.icon}</div>
-                      <div className="exercise-info">
+                    <div key={index} className={styles['exercise-item']}>
+                      <div className={styles['exercise-icon']}>{exercise.icon}</div>
+                      <div className={styles['exercise-info']}>
                         <h4>{exercise.name}</h4>
                         <p>{exercise.detail}</p>
                       </div>

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import "./LoginPage.css";
+import styles from "./LoginPage.module.css";
 
 const LoginPage = () => {
   const [formData, setFormData] = useState({
@@ -57,59 +57,59 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="login-page">
-      <div className="login-container">
-        <div className="logo">
+    <div className={styles['login-page']}>
+      <div className={styles['login-container']}>
+        <div className={styles.logo}>
           <h1>INTEL FIT</h1>
         </div>
 
-        <form onSubmit={handleSubmit} className="login-form">
-          <div className="input-group">
+        <form onSubmit={handleSubmit} className={styles['login-form']}>
+          <div className={styles['input-group']}>
             <input
               type="text"
               name="username"
               placeholder="아이디"
               value={formData.username}
               onChange={handleChange}
-              className={errors.username ? "error" : ""}
+              className={errors.username ? styles.error : ""}
             />
             {errors.username && (
-              <span className="error-message">{errors.username}</span>
+              <span className={styles['error-message']}>{errors.username}</span>
             )}
           </div>
 
-          <div className="input-group">
+          <div className={styles['input-group']}>
             <input
               type="password"
               name="password"
               placeholder="비밀번호"
               value={formData.password}
               onChange={handleChange}
-              className={errors.password ? "error" : ""}
+              className={errors.password ? styles.error : ""}
             />
             {errors.password && (
-              <span className="error-message">{errors.password}</span>
+              <span className={styles['error-message']}>{errors.password}</span>
             )}
           </div>
 
-          <button type="submit" className="login-btn">
+          <button type="submit" className={styles['login-btn']}>
             로그인
           </button>
         </form>
 
-        <div className="login-links">
-          <Link to="/find-id" className="link">
+        <div className={styles['login-links']}>
+          <Link to="/find-id" className={styles.link}>
             아이디 찾기
           </Link>
-          <Link to="/reset-password" className="link">
+          <Link to="/reset-password" className={styles.link}>
             비밀번호 재설정
           </Link>
-          <Link to="/signup" className="link">
+          <Link to="/signup" className={styles.link}>
             회원가입
           </Link>
         </div>
 
-        <button onClick={handleKakaoLogin} className="kakao-login-btn">
+        <button onClick={handleKakaoLogin} className={styles['kakao-login-btn']}>
           <span>카카오로 계속하기</span>
         </button>
       </div>

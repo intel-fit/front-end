@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { IoArrowBack, IoCheckmark } from "react-icons/io5";
-import "./GoalPage.css";
+import styles from "./GoalPage.module.css";
 
 export default function GoalPage() {
   const navigate = useNavigate();
@@ -43,37 +43,37 @@ export default function GoalPage() {
   };
 
   return (
-    <div className="goal-page">
-      <div className="goal-header">
+    <div className={styles['goal-page']}>
+      <div className={styles['goal-header']}>
         <h1>운동 목표 설정</h1>
-        <button className="save-btn" onClick={handleSave}>
+        <button className={styles['save-btn']} onClick={handleSave}>
           <IoCheckmark />
         </button>
       </div>
 
-      <div className="goal-content">
-        <div className="goal-section">
+      <div className={styles['goal-content']}>
+        <div className={styles['goal-section']}>
           <h3>주간 운동 횟수</h3>
-          <div className="frequency-control">
-            <span className="frequency-value">주 {goals.frequency}회</span>
-            <div className="adjust-buttons">
+          <div className={styles['frequency-control']}>
+            <span className={styles['frequency-value']}>주 {goals.frequency}회</span>
+            <div className={styles['adjust-buttons']}>
               <button
-                className="adjust-btn"
+                className={styles['adjust-btn']}
                 onClick={() => adjustFrequency(-1)}
               >
                 -
               </button>
-              <button className="adjust-btn" onClick={() => adjustFrequency(1)}>
+              <button className={styles['adjust-btn']} onClick={() => adjustFrequency(1)}>
                 +
               </button>
             </div>
           </div>
         </div>
 
-        <div className="goal-section">
+        <div className={styles['goal-section']}>
           <h3>1회 운동 시간</h3>
           <div
-            className="time-field"
+            className={styles['time-field']}
             onClick={() => setIsEditingDuration(true)}
           >
             {isEditingDuration ? (
@@ -87,7 +87,7 @@ export default function GoalPage() {
                 onKeyPress={(e) =>
                   e.key === "Enter" && setIsEditingDuration(false)
                 }
-                className="edit-input"
+                className={styles['edit-input']}
                 autoFocus
               />
             ) : (
@@ -96,23 +96,23 @@ export default function GoalPage() {
           </div>
         </div>
 
-        <div className="goal-section">
+        <div className={styles['goal-section']}>
           <h3>운동 종류</h3>
-          <div className="type-options">
+          <div className={styles['type-options']}>
             <button
-              className={`type-btn ${goals.type === "전체" ? "active" : ""}`}
+              className={`${styles['type-btn']} ${goals.type === "전체"  ? styles['active'] : ""}`}
               onClick={() => setGoals({ ...goals, type: "전체" })}
             >
               전체
             </button>
             <button
-              className={`type-btn ${goals.type === "유산소" ? "active" : ""}`}
+              className={`${styles['type-btn']} ${goals.type === "유산소"  ? styles['active'] : ""}`}
               onClick={() => setGoals({ ...goals, type: "유산소" })}
             >
               유산소
             </button>
             <button
-              className={`type-btn ${goals.type === "무산소" ? "active" : ""}`}
+              className={`${styles['type-btn']} ${goals.type === "무산소"  ? styles['active'] : ""}`}
               onClick={() => setGoals({ ...goals, type: "무산소" })}
             >
               무산소
@@ -120,10 +120,10 @@ export default function GoalPage() {
           </div>
         </div>
 
-        <div className="goal-section">
+        <div className={styles['goal-section']}>
           <h3>주간 칼로리 소모 목표</h3>
           <div
-            className="calorie-field"
+            className={styles['calorie-field']}
             onClick={() => setIsEditingCalories(true)}
           >
             {isEditingCalories ? (
@@ -140,7 +140,7 @@ export default function GoalPage() {
                 onKeyPress={(e) =>
                   e.key === "Enter" && setIsEditingCalories(false)
                 }
-                className="edit-input"
+                className={styles['edit-input']}
                 autoFocus
               />
             ) : (

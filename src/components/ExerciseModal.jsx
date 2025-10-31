@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { IoClose, IoSearch, IoAdd, IoCheckmark } from "react-icons/io5";
-import "./ExerciseModal.css";
+import styles from "./ExerciseModal.module.css";
 
 export default function ExerciseModal({
   isOpen,
@@ -125,22 +125,22 @@ export default function ExerciseModal({
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay">
-      <div className="phone-wrapper">
-        <div className="modal-content">
+    <div className={styles['modal-overlay']}>
+      <div className={styles['phone-wrapper']}>
+        <div className={styles['modal-content']}>
           {currentMode === "add" ? (
             // 종목 추가 모달
-            <div className="add-exercise-modal">
-              <div className="modal-header">
+            <div className={styles['add-exercise-modal']}>
+              <div className={styles['modal-header']}>
                 <h2>종목 추가</h2>
-                <button className="close-btn" onClick={onClose}>
+                <button className={styles['close-btn']} onClick={onClose}>
                   <IoClose />
                 </button>
               </div>
 
-              <div className="search-container">
-                <div className="search-bar">
-                  <IoSearch className="search-icon" />
+              <div className={styles['search-container']}>
+                <div className={styles['search-bar']}>
+                  <IoSearch className={styles['search-icon']} />
                   <input
                     type="text"
                     placeholder="종목 이름을 검색하세요."
@@ -150,12 +150,12 @@ export default function ExerciseModal({
                 </div>
               </div>
 
-              <div className="filter-buttons">
+              <div className={styles['filter-buttons']}>
                 {categories.map((category) => (
                   <button
                     key={category}
-                    className={`filter-btn ${
-                      selectedCategory === category ? "active" : ""
+                    className={`${styles['filter-btn']} ${
+                      selectedCategory === category ? styles.active : ""
                     }`}
                     onClick={() => setSelectedCategory(category)}
                   >
@@ -164,17 +164,17 @@ export default function ExerciseModal({
                 ))}
               </div>
 
-              <div className="exercise-list">
+              <div className={styles['exercise-list']}>
                 {filteredExercises.map((exercise, index) => (
                   <div
                     key={index}
-                    className="exercise-item"
+                    className={styles['exercise-item']}
                     onClick={() => handleExerciseSelect(exercise)}
                   >
-                    <div className="exercise-icon">🏋️</div>
-                    <div className="exercise-info">
-                      <div className="exercise-name">{exercise.name}</div>
-                      <div className="exercise-last-used">
+                    <div className={styles['exercise-icon']}>🏋️</div>
+                    <div className={styles['exercise-info']}>
+                      <div className={styles['exercise-name']}>{exercise.name}</div>
+                      <div className={styles['exercise-last-used']}>
                         {exercise.lastUsed}
                       </div>
                     </div>
@@ -184,26 +184,26 @@ export default function ExerciseModal({
             </div>
           ) : (
             // 운동 상세 모달
-            <div className="exercise-detail-modal">
-              <div className="modal-header">
+            <div className={styles['exercise-detail-modal']}>
+              <div className={styles['modal-header']}>
                 <h2>
                   {selectedExercise?.name || exerciseData?.name || "운동"}
                 </h2>
-                <button className="close-btn" onClick={onClose}>
+                <button className={styles['close-btn']} onClick={onClose}>
                   <IoClose />
                 </button>
               </div>
 
-              <div className="sets-container">
-                <div className="sets-header">
+              <div className={styles['sets-container']}>
+                <div className={styles['sets-header']}>
                   <button
-                    className="remove-set-btn"
+                    className={styles['remove-set-btn']}
                     onClick={() => handleRemoveSet(sets[sets.length - 1]?.id)}
                   >
                     -
                   </button>
                   <span>세트</span>
-                  <button className="add-set-btn" onClick={handleAddSet}>
+                  <button className={styles['add-set-btn']} onClick={handleAddSet}>
                     +
                   </button>
                   <span>추천 세트</span>
@@ -211,9 +211,9 @@ export default function ExerciseModal({
                 </div>
 
                 {sets.map((set) => (
-                  <div key={set.id} className="set-row">
-                    <div className="set-number">{set.id}</div>
-                    <div className="weight-input">
+                  <div key={set.id} className={styles['set-row']}>
+                    <div className={styles['set-number']}>{set.id}</div>
+                    <div className={styles['weight-input']}>
                       <input
                         type="number"
                         value={set.weight}
@@ -227,10 +227,10 @@ export default function ExerciseModal({
                       />
                       <span>kg</span>
                     </div>
-                    <div className="reps-display">{set.reps}회</div>
+                    <div className={styles['reps-display']}>{set.reps}회</div>
                     <button
-                      className={`complete-btn ${
-                        set.completed ? "completed" : ""
+                      className={`${styles['complete-btn']} ${
+                        set.completed ? styles.completed : ""
                       }`}
                       onClick={() => handleSetComplete(set.id)}
                     >
@@ -241,7 +241,7 @@ export default function ExerciseModal({
               </div>
 
               <button
-                className="save-exercise-btn"
+                className={styles['save-exercise-btn']}
                 onClick={() =>
                   onSave &&
                   onSave(sets, selectedExercise?.name || exerciseData?.name)

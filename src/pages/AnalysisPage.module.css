@@ -128,8 +128,6 @@
 .exercise-list {
   display: flex;
   flex-direction: column;
-  max-height: 216px; /* 아이템 3개 기준 높이 (min-height 48 + padding 24) * 3 */
-  overflow-y: auto;
 }
 
 .exercise-item {
@@ -138,6 +136,7 @@
   align-items: center;
   gap: 12px;
   padding: 12px 0;
+  border-bottom: 1px solid #444;
   min-height: 48px;
 }
 

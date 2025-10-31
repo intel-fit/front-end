@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { IoChevronForward, IoPencil } from "react-icons/io5";
-import "./ProfileEditModal.css";
+import styles from "./ProfileEditModal.module.css";
 
 export default function ProfileEditModal({ isOpen, onClose }) {
   const navigate = useNavigate();
@@ -150,16 +150,16 @@ export default function ProfileEditModal({ isOpen, onClose }) {
   };
 
   return (
-    <div className="profile-edit-modal-overlay">
-      <div className="profile-edit-modal-content">
+    <div className={styles['profile-edit-modal-overlay']}>
+      <div className={styles['profile-edit-modal-content']}>
         {/* 상단 네비게이션 */}
-        <div className="edit-nav">
-          <button className="nav-back-btn" onClick={onClose}>
+        <div className={styles['edit-nav']}>
+          <button className={styles['nav-back-btn']} onClick={onClose}>
             ←
           </button>
-          <h1 className="nav-title">정보 수정</h1>
+          <h1 className={styles['nav-title']}>정보 수정</h1>
           <button
-            className="nav-save-btn"
+            className={styles['nav-save-btn']}
             onClick={() => {
               handleSave();
               onClose();
@@ -170,104 +170,104 @@ export default function ProfileEditModal({ isOpen, onClose }) {
         </div>
 
         {/* 프로필 섹션 */}
-        <div className="profile-section">
-          <div className="profile-avatar">
-            <div className="avatar-placeholder"></div>
+        <div className={styles['profile-section']}>
+          <div className={styles['profile-avatar']}>
+            <div className={styles['avatar-placeholder']}></div>
           </div>
-          <div className="profile-info">
-            <span className="profile-name">김민수님</span>
-            <button className="profile-edit-btn">
+          <div className={styles['profile-info']}>
+            <span className={styles['profile-name']}>김민수님</span>
+            <button className={styles['profile-edit-btn']}>
               <IoPencil />
             </button>
           </div>
         </div>
 
         {/* 정보 목록 */}
-        <div className="info-list">
-          <div className="info-item">
-            <span className="info-label">이메일</span>
-            <span className="info-value">{profileData.email}</span>
+        <div className={styles['info-list']}>
+          <div className={styles['info-item']}>
+            <span className={styles['info-label']}>이메일</span>
+            <span className={styles['info-value']}>{profileData.email}</span>
           </div>
 
-          <div className="info-item">
-            <span className="info-label">아이디</span>
-            <span className="info-value">{profileData.userId}</span>
+          <div className={styles['info-item']}>
+            <span className={styles['info-label']}>아이디</span>
+            <span className={styles['info-value']}>{profileData.userId}</span>
           </div>
 
           <div
-            className="info-item clickable"
+            className={`${styles['info-item']} ${styles['clickable']}`}
             onClick={() => handleFieldClick("password")}
           >
-            <span className="info-label">비밀번호</span>
-            <div className="info-value-with-arrow">
-              <span className="info-value">재설정하기</span>
+            <span className={styles['info-label']}>비밀번호</span>
+            <div className={styles['info-value-with-arrow']}>
+              <span className={styles['info-value']}>재설정하기</span>
               <IoChevronForward />
             </div>
           </div>
 
           {editingField === "birthDate" ? (
-            <div className="info-item editing">
-              <span className="info-label">생년월일</span>
-              <div className="edit-controls">
+            <div className={`${styles['info-item']} ${styles['editing']}`}>
+              <span className={styles['info-label']}>생년월일</span>
+              <div className={styles['edit-controls']}>
                 <input
                   type="text"
                   value={tempValue}
                   onChange={handleInputChange}
                   placeholder="YYYY.MM.DD"
-                  className="edit-input"
+                  className={styles['edit-input']}
                 />
-                <button onClick={handleSave} className="save-edit-btn">
+                <button onClick={handleSave} className={styles['save-edit-btn']}>
                   ✓
                 </button>
               </div>
             </div>
           ) : (
             <div
-              className="info-item clickable"
+              className={`${styles['info-item']} ${styles['clickable']}`}
               onClick={() => handleFieldClick("birthDate")}
             >
-              <span className="info-label">생년월일</span>
-              <div className="info-value-with-arrow">
-                <span className="info-value">{profileData.birthDate}</span>
+              <span className={styles['info-label']}>생년월일</span>
+              <div className={styles['info-value-with-arrow']}>
+                <span className={styles['info-value']}>{profileData.birthDate}</span>
                 <IoChevronForward />
               </div>
             </div>
           )}
 
           {editingField === "gender" ? (
-            <div className="info-item editing">
-              <span className="info-label">성별</span>
-              <div className="edit-controls">
+            <div className={`${styles['info-item']} ${styles['editing']}`}>
+              <span className={styles['info-label']}>성별</span>
+              <div className={styles['edit-controls']}>
                 <select
                   value={tempValue}
                   onChange={handleInputChange}
-                  className="edit-select"
+                  className={styles['edit-select']}
                 >
                   <option value="남자">남자</option>
                   <option value="여자">여자</option>
                 </select>
-                <button onClick={handleSave} className="save-edit-btn">
+                <button onClick={handleSave} className={styles['save-edit-btn']}>
                   ✓
                 </button>
               </div>
             </div>
           ) : (
             <div
-              className="info-item clickable"
+              className={`${styles['info-item']} ${styles['clickable']}`}
               onClick={() => handleFieldClick("gender")}
             >
-              <span className="info-label">성별</span>
-              <div className="info-value-with-arrow">
-                <span className="info-value">{profileData.gender}</span>
+              <span className={styles['info-label']}>성별</span>
+              <div className={styles['info-value-with-arrow']}>
+                <span className={styles['info-value']}>{profileData.gender}</span>
                 <IoChevronForward />
               </div>
             </div>
           )}
 
           {editingField === "bodyInfo" ? (
-            <div className="info-item editing">
-              <span className="info-label">신체정보</span>
-              <div className="edit-controls body-info">
+            <div className={`${styles['info-item']} ${styles['editing']}`}>
+              <span className={styles['info-label']}>신체정보</span>
+              <div className={`${styles['edit-controls']} ${styles['body-info']}`}>
                 <input
                   type="number"
                   value={profileData.height}
@@ -278,7 +278,7 @@ export default function ProfileEditModal({ isOpen, onClose }) {
                     }))
                   }
                   placeholder="키"
-                  className="edit-input body-input"
+                  className={`${styles['edit-input']} ${styles['body-input']}`}
                 />
                 <span>cm</span>
                 <input
@@ -291,22 +291,22 @@ export default function ProfileEditModal({ isOpen, onClose }) {
                     }))
                   }
                   placeholder="몸무게"
-                  className="edit-input body-input"
+                  className={`${styles['edit-input']} ${styles['body-input']}`}
                 />
                 <span>kg</span>
-                <button onClick={handleSave} className="save-edit-btn">
+                <button onClick={handleSave} className={styles['save-edit-btn']}>
                   ✓
                 </button>
               </div>
             </div>
           ) : (
             <div
-              className="info-item clickable"
+              className={`${styles['info-item']} ${styles['clickable']}`}
               onClick={() => handleFieldClick("bodyInfo")}
             >
-              <span className="info-label">신체정보</span>
-              <div className="info-value-with-arrow">
-                <span className="info-value">
+              <span className={styles['info-label']}>신체정보</span>
+              <div className={styles['info-value-with-arrow']}>
+                <span className={styles['info-value']}>
                   {profileData.height}cm • {profileData.weight}kg
                 </span>
                 <IoChevronForward />
@@ -315,30 +315,30 @@ export default function ProfileEditModal({ isOpen, onClose }) {
           )}
 
           {editingField === "nicknamePublic" ? (
-            <div className="info-item editing">
-              <span className="info-label">별명 표시 공개</span>
-              <div className="edit-controls">
+            <div className={`${styles['info-item']} ${styles['editing']}`}>
+              <span className={styles['info-label']}>별명 표시 공개</span>
+              <div className={styles['edit-controls']}>
                 <select
                   value={tempValue}
                   onChange={handleInputChange}
-                  className="edit-select"
+                  className={styles['edit-select']}
                 >
                   <option value="true">네</option>
                   <option value="false">아니오</option>
                 </select>
-                <button onClick={handleSave} className="save-edit-btn">
+                <button onClick={handleSave} className={styles['save-edit-btn']}>
                   ✓
                 </button>
               </div>
             </div>
           ) : (
             <div
-              className="info-item clickable"
+              className={`${styles['info-item']} ${styles['clickable']}`}
               onClick={() => handleFieldClick("nicknamePublic")}
             >
-              <span className="info-label">별명 표시 공개</span>
-              <div className="info-value-with-arrow">
-                <span className="info-value">
+              <span className={styles['info-label']}>별명 표시 공개</span>
+              <div className={styles['info-value-with-arrow']}>
+                <span className={styles['info-value']}>
                   {profileData.nicknamePublic ? "네" : "아니오"}
                 </span>
                 <IoChevronForward />

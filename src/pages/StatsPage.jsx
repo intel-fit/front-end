@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import Header from "../components/Header";
 import Tabs from "../components/Tabs";
-import "./StatsPage.css";
+import styles from "./StatsPage.module.css";
 
 export default function StatsPage() {
   const [activeTab, setActiveTab] = useState(0);
@@ -45,7 +45,7 @@ export default function StatsPage() {
   // 탭 콘텐츠는 Tabs 컴포넌트에서 렌더링합니다.
 
   return (
-    <div className="stats-page">
+    <div className={styles['stats-page']}>
       <Header title="기록하기" />
       <Tabs
         activeTab={activeTab}

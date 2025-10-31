@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import './SignupPage.css';
+import styles from "./SignupPage.module.css";
 
 const SignupPage = () => {
   const [step, setStep] = useState(1);
@@ -170,25 +170,25 @@ const SignupPage = () => {
   };
 
   return (
-    <div className="signup-page">
-      <div className="signup-container">
-        <div className="logo">
+    <div className={styles['signup-page']}>
+      <div className={styles['signup-container']}>
+        <div className={styles['logo']}>
           <h1>INTEL FIT</h1>
         </div>
         
-        <div className="step-indicator">
-          <div className={`step ${step >= 1 ? 'active' : ''}`}>1</div>
-          <div className={`step ${step >= 2 ? 'active' : ''}`}>2</div>
-          <div className={`step ${step >= 3 ? 'active' : ''}`}>3</div>
+        <div className={styles['step-indicator']}>
+          <div className={`${styles.step} ${step >= 1 ? styles.active : ''}`}>1</div>
+          <div className={`${styles.step} ${step >= 2 ? styles.active : ''}`}>2</div>
+          <div className={`${styles.step} ${step >= 3 ? styles.active : ''}`}>3</div>
         </div>
 
-        <form onSubmit={handleSubmit} className="signup-form">
+        <form onSubmit={handleSubmit} className={styles['signup-form']}>
           {step === 1 && (
-            <div className="step-content">
+            <div className={styles['step-content']}>
               <h2>회원가입을 위해 정보를 입력해주세요</h2>
               
-              <div className="input-group">
-                <div className="input-with-button">
+              <div className={styles['input-group']}>
+                <div className={styles['input-with-button']}>
                   <input
                     type="text"
                     name="username"
@@ -197,14 +197,14 @@ const SignupPage = () => {
                     onChange={handleChange}
                     className={errors.username ? 'error' : ''}
                   />
-                  <button type="button" onClick={handleUsernameCheck} className="check-btn">
+                  <button type="button" onClick={handleUsernameCheck} className={styles['check-btn']}>
                     중복확인
                   </button>
                 </div>
-                {errors.username && <span className="error-message">{errors.username}</span>}
+                {errors.username && <span className={styles['error-message']}>{errors.username}</span>}
               </div>
               
-              <div className="input-group">
+              <div className={styles['input-group']}>
                 <input
                   type="password"
                   name="password"
@@ -213,10 +213,10 @@ const SignupPage = () => {
                   onChange={handleChange}
                   className={errors.password ? 'error' : ''}
                 />
-                {errors.password && <span className="error-message">{errors.password}</span>}
+                {errors.password && <span className={styles['error-message']}>{errors.password}</span>}
               </div>
               
-              <div className="input-group">
+              <div className={styles['input-group']}>
                 <input
                   type="password"
                   name="confirmPassword"
@@ -225,21 +225,21 @@ const SignupPage = () => {
                   onChange={handleChange}
                   className={errors.confirmPassword ? 'error' : ''}
                 />
-                {errors.confirmPassword && <span className="error-message">{errors.confirmPassword}</span>}
+                {errors.confirmPassword && <span className={styles['error-message']}>{errors.confirmPassword}</span>}
               </div>
               
-              <button type="button" onClick={handleNext} className="next-btn">
+              <button type="button" onClick={handleNext} className={styles['next-btn']}>
                 다음
               </button>
             </div>
           )}
 
           {step === 2 && (
-            <div className="step-content">
+            <div className={styles['step-content']}>
               <h2>회원가입을 위해 정보를 입력해주세요</h2>
               
-              <div className="input-group">
-                <div className="input-with-button">
+              <div className={styles['input-group']}>
+                <div className={styles['input-with-button']}>
                   <input
                     type="email"
                     name="email"
@@ -248,14 +248,14 @@ const SignupPage = () => {
                     onChange={handleChange}
                     className={errors.email ? 'error' : ''}
                   />
-                  <button type="button" onClick={handleEmailVerification} className="check-btn">
+                  <button type="button" onClick={handleEmailVerification} className={styles['check-btn']}>
                     본인인증
                   </button>
                 </div>
-                {errors.email && <span className="error-message">{errors.email}</span>}
+                {errors.email && <span className={styles['error-message']}>{errors.email}</span>}
               </div>
               
-              <div className="input-group">
+              <div className={styles['input-group']}>
                 <input
                   type="tel"
                   name="phone"
@@ -264,20 +264,20 @@ const SignupPage = () => {
                   onChange={handleChange}
                   className={errors.phone ? 'error' : ''}
                 />
-                {errors.phone && <span className="error-message">{errors.phone}</span>}
+                {errors.phone && <span className={styles['error-message']}>{errors.phone}</span>}
               </div>
               
-              <button type="button" onClick={handleNext} className="next-btn">
+              <button type="button" onClick={handleNext} className={styles['next-btn']}>
                 다음
               </button>
             </div>
           )}
 
           {step === 3 && (
-            <div className="step-content">
+            <div className={styles['step-content']}>
               <h2>추가 정보를 입력해주세요</h2>
               
-              <div className="input-group">
+              <div className={styles['input-group']}>
                 <input
                   type="text"
                   name="name"
@@ -286,15 +286,15 @@ const SignupPage = () => {
                   onChange={handleChange}
                   className={errors.name ? 'error' : ''}
                 />
-                {errors.name && <span className="error-message">{errors.name}</span>}
+                {errors.name && <span className={styles['error-message']}>{errors.name}</span>}
               </div>
               
-              <div className="birth-group">
+              <div className={styles['birth-group']}>
                 <select
                   name="birthYear"
                   value={formData.birthYear}
                   onChange={handleChange}
-                  className="birth-select"
+                  className={styles['birth-select']}
                 >
                   <option value="">년</option>
                   {generateYearOptions().map(year => (
@@ -306,7 +306,7 @@ const SignupPage = () => {
                   name="birthMonth"
                   value={formData.birthMonth}
                   onChange={handleChange}
-                  className="birth-select"
+                  className={styles['birth-select']}
                 >
                   <option value="">월</option>
                   {generateMonthOptions().map(month => (
@@ -318,7 +318,7 @@ const SignupPage = () => {
                   name="birthDay"
                   value={formData.birthDay}
                   onChange={handleChange}
-                  className="birth-select"
+                  className={styles['birth-select']}
                 >
                   <option value="">일</option>
                   {generateDayOptions().map(day => (
@@ -326,16 +326,16 @@ const SignupPage = () => {
                   ))}
                 </select>
               </div>
-              {errors.birth && <span className="error-message">{errors.birth}</span>}
+              {errors.birth && <span className={styles['error-message']}>{errors.birth}</span>}
               
-              <button type="submit" className="submit-btn">
+              <button type="submit" className={styles['submit-btn']}>
                 확인
               </button>
             </div>
           )}
         </form>
         
-        <button onClick={handleCancel} className="cancel-btn">
+        <button onClick={handleCancel} className={styles['cancel-btn']}>
           취소하기
         </button>
       </div>

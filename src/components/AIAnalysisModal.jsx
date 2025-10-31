@@ -5,7 +5,7 @@ import {
   IoCheckmarkCircle,
   IoAlertCircle,
 } from "react-icons/io5";
-import "./AIAnalysisModal.css";
+import styles from "./AIAnalysisModal.module.css";
 
 export default function AIAnalysisModal({ isOpen, onClose }) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -59,76 +59,76 @@ export default function AIAnalysisModal({ isOpen, onClose }) {
   };
 
   return (
-    <div className="ai-analysis-modal-overlay">
-      <div className="ai-analysis-modal-content">
-        <div className="ai-analysis-modal-header">
-          <h2 className="ai-analysis-modal-title">AI 분석</h2>
-          <button className="ai-analysis-modal-close" onClick={handleClose}>
+    <div className={styles['ai-analysis-modal-overlay']}>
+      <div className={styles['ai-analysis-modal-content']}>
+        <div className={styles['ai-analysis-modal-header']}>
+          <h2 className={styles['ai-analysis-modal-title']}>AI 분석</h2>
+          <button className={styles['ai-analysis-modal-close']} onClick={handleClose}>
             <IoClose />
           </button>
         </div>
 
-        <div className="ai-analysis-modal-body">
+        <div className={styles['ai-analysis-modal-body']}>
           {!showResult ? (
-            <div className="analysis-start">
-              <div className="analysis-icon">🤖</div>
+            <div className={styles['analysis-start']}>
+              <div className={styles['analysis-icon']}>🤖</div>
               <h3>AI 기반 InBody 분석</h3>
-              <p className="analysis-description">
+              <p className={styles['analysis-description']}>
                 최근 InBody 검사 결과를 AI가 분석하여
                 <br />
                 맞춤형 피드백을 제공합니다
               </p>
 
               {isAnalyzing ? (
-                <div className="analyzing">
-                  <div className="analyzing-spinner"></div>
-                  <p className="analyzing-text">분석 중...</p>
+                <div className={styles['analyzing']}>
+                  <div className={styles['analyzing-spinner']}></div>
+                  <p className={styles['analyzing-text']}>분석 중...</p>
                 </div>
               ) : (
-                <button className="start-analysis-btn" onClick={handleAnalyze}>
+                <button className={styles['start-analysis-btn']} onClick={handleAnalyze}>
                   분석 시작하기
                 </button>
               )}
             </div>
           ) : (
-            <div className="analysis-result">
-              <div className="result-score">
-                <div className="score-circle">
-                  <div className="score-value">{analysisResult.score}</div>
-                  <div className="score-label">점</div>
+            <div className={styles['analysis-result']}>
+              <div className={styles['result-score']}>
+                <div className={styles['score-circle']}>
+                  <div className={styles['score-value']}>{analysisResult.score}</div>
+                  <div className={styles['score-label']}>점</div>
                 </div>
-                <p className="score-status">전반적으로 좋은 상태입니다</p>
+                <p className={styles['score-status']}>전반적으로 좋은 상태입니다</p>
               </div>
 
-              <div className="insights-section">
-                <h4 className="section-title">분석 결과</h4>
-                <div className="insights-list">
+              <div className={styles['insights-section']}>
+                <h4 className={styles['section-title']}>분석 결과</h4>
+                <div className={styles['insights-list']}>
                   {analysisResult.insights.map((insight, index) => (
-                    <div key={index} className="insight-item">
-                      <div className="insight-header">
-                        <span className="insight-category">
+                    <div key={index} className={styles['insight-item']}>
+                      <div className={styles['insight-header']}>
+                        <span className={styles['insight-category']}>
                           {insight.category}
                         </span>
                         {insight.status === "excellent" && (
-                          <IoCheckmarkCircle className="status-icon excellent" />
+                          <IoCheckmarkCircle className={`${styles['status-icon']} ${styles['excellent']}`} />
                         )}
                         {insight.status === "good" && (
-                          <IoTrendingUp className="status-icon good" />
+                          <IoTrendingUp className={`${styles['status-icon']} ${styles['good']}`} />
                         )}
                         {insight.status === "warning" && (
-                          <IoAlertCircle className="status-icon warning" />
+                          <IoAlertCircle className={`${styles['status-icon']} ${styles['warning']}`} />
                         )}
                       </div>
-                      <p className="insight-message">{insight.message}</p>
-                      <p className="insight-detail">{insight.detail}</p>
+                      <p className={styles['insight-message']}>{insight.message}</p>
+                      <p className={styles['insight-detail']}>{insight.detail}</p>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="recommendations-section">
-                <h4 className="section-title">AI 추천 사항</h4>
-                <ul className="recommendations-list">
+              <div className={styles['recommendations-section']}>
+                <h4 className={styles['section-title']}>AI 추천 사항</h4>
+                <ul className={styles['recommendations-list']}>
                   {analysisResult.recommendations.map((rec, index) => (
                     <li key={index}>{rec}</li>
                   ))}

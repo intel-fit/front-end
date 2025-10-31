@@ -1,5 +1,5 @@
 import { IoClose } from "react-icons/io5";
-import "./BadgeModal.css";
+import styles from "./BadgeModal.module.css";
 
 export default function BadgeModal({ isOpen, onClose, badge, onViewAll }) {
   if (!isOpen || !badge) return null;
@@ -28,33 +28,33 @@ export default function BadgeModal({ isOpen, onClose, badge, onViewAll }) {
   const info = badgeInfo[badge.type] || badgeInfo.purple;
 
   return (
-    <div className="badge-modal-overlay">
-      <div className="badge-modal-content">
-        <div className="badge-modal-header">
-          <h2 className="badge-modal-title">뱃지</h2>
-          <button className="badge-modal-close" onClick={onClose}>
+    <div className={styles['badge-modal-overlay']}>
+      <div className={styles['badge-modal-content']}>
+        <div className={styles['badge-modal-header']}>
+          <h2 className={styles['badge-modal-title']}>뱃지</h2>
+          <button className={styles['badge-modal-close']} onClick={onClose}>
             <IoClose />
           </button>
         </div>
 
-        <div className="badge-modal-body">
-          <div className="badge-display-large">
+        <div className={styles['badge-modal-body']}>
+          <div className={styles['badge-display-large']}>
             <div
-              className="badge-large"
+              className={styles['badge-large']}
               style={{ backgroundColor: info.color }}
             >
               {info.icon}
             </div>
           </div>
 
-          <div className="badge-info">
-            <h3 className="badge-title">{info.title}</h3>
-            <p className="badge-description">{info.description}</p>
+          <div className={styles['badge-info']}>
+            <h3 className={styles['badge-title']}>{info.title}</h3>
+            <p className={styles['badge-description']}>{info.description}</p>
           </div>
         </div>
 
-        <div className="badge-modal-footer">
-          <button className="badge-confirm-btn" onClick={onClose}>
+        <div className={styles['badge-modal-footer']}>
+          <button className={styles['badge-confirm-btn']} onClick={onClose}>
             확인
           </button>
         </div>

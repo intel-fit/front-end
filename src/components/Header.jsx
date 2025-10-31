@@ -1,11 +1,13 @@
 import Bell from "./Bell";
-import "./Header.css";
+import styles from "./Header.module.css";
 
 export default function Header({ title }) {
   return (
-    <header className="app-header">
-      <h1 className="title">{title}</h1>
-      <Bell />
+    <header className={styles["app-header"]}>
+      <h1 className={styles["title"]}>{title}</h1>
+      <div className={styles["bell-container"]}>
+        <Bell />
+      </div>
     </header>
   );
 }
