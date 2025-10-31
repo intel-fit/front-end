@@ -8,7 +8,6 @@
 .meal-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 15px 20px;
   background-color: #000;
   position: relative;
@@ -21,24 +20,16 @@
   font-size: 24px;
   cursor: pointer;
   padding: 8px;
-  transition: opacity 0.2s;
-}
-
-.back-btn:hover {
-  opacity: 0.7;
+  position: absolute;
+  left: 20px;
 }
 
 .page-title {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
   font-size: 18px;
   font-weight: bold;
   margin: 0;
-}
-
-.header-placeholder {
-  width: 40px;
+  text-align: center;
+  width: 100%;
 }
 
 .meal-name-section {
@@ -73,9 +64,14 @@
   height: 250px;
   background-color: #464646;
   border-radius: 16px;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.meal-image-placeholder::before {
+  content: "식단 이미지";
   color: #999;
   font-size: 16px;
 }
@@ -110,7 +106,7 @@
   font-weight: bold;
   margin: 0 0 15px 0;
   color: white;
-  padding-left: 10px;
+  padding-left: 5px;
   position: relative;
 }
 
@@ -143,11 +139,6 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  transition: background-color 0.2s;
-}
-
-.nutrition-item:hover {
-  background-color: #525252;
 }
 
 .nutrition-label {
