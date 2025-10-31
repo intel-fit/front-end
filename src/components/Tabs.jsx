@@ -1,8 +1,8 @@
 import styles from "./Tabs.module.css";
 import DietPage from "../pages/DietPage";
-import Stats from "./Stats";
 import GoalCard from "./GoalCard";
 import LogSection from "./LogSection";
+import WorkoutCalendar from "./WorkoutCalendar";
 // AI 추천 탭 제거
 
 export default function Tabs({ activeTab, onTabChange, goalData }) {
@@ -13,7 +13,7 @@ export default function Tabs({ activeTab, onTabChange, goalData }) {
       case 0:
         return (
           <>
-            <Stats />
+            <WorkoutCalendar />
             <GoalCard goalData={goalData} />
             <LogSection />
           </>
@@ -22,17 +22,19 @@ export default function Tabs({ activeTab, onTabChange, goalData }) {
         return <DietPage />;
       // AI 추천 탭 제거됨
       default:
-        return <div className={styles['tab-content']}>기본 페이지</div>;
+        return <div className={styles["tab-content"]}>기본 페이지</div>;
     }
   };
 
   return (
-    <div className={styles['tabs-container']}>
-      <div className={styles['tabs']}>
+    <div className={styles["tabs-container"]}>
+      <div className={styles["tabs"]}>
         {tabs.map((tab, index) => (
           <button
             key={index}
-            className={`${styles['tab']} ${activeTab === index  ? styles['active'] : ""}`}
+            className={`${styles["tab"]} ${
+              activeTab === index ? styles["active"] : ""
+            }`}
             onClick={() => onTabChange(index)}
           >
             {tab}

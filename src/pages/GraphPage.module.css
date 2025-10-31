@@ -152,35 +152,35 @@
   display: block;
 }
 
-.y-label {
+:global(.y-label) {
   font-size: 10px;
   fill: #bdbdbd;
 }
 
-.x-label {
+:global(.x-label) {
   font-size: 10px;
   fill: #bdbdbd;
 }
 
-.guide {
+:global(.guide) {
   stroke: #8f8f8f55;
   stroke-dasharray: 6 6;
 }
 
-.line {
+:global(.line) {
   fill: none;
   stroke: #ffffff;
   stroke-width: 2;
 }
 
-.dot {
+:global(.dot) {
   fill: #0e0e0e;
-  stroke: #d6ff4b;
+  stroke: #daff50; /* 유정님 하이라이트 색상과 통일 */
   stroke-width: 2;
 }
 
-.active-dot {
-  filter: drop-shadow(0 0 4px #d6ff4b);
+:global(.active-dot) {
+  filter: drop-shadow(0 0 4px #daff50);
 }
 
 .tooltip {
