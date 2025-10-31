@@ -159,7 +159,7 @@ const DietPage = () => {
 
       {/* 식단 추가하기 버튼 */}
       <div className={styles['add-meal-section']}>
-        <button className={styles['add-meal-button']} onClick={() => navigate('/add-meal')}>
+        <button className={styles['add-meal-button']} onClick={() => navigate('/meal-add')}>
           식단 추가하기
         </button>
       </div>

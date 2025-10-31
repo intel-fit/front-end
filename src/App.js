@@ -16,7 +16,7 @@ import FindIdPage from "./pages/FindIdPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import Nav from "./components/Nav";
 import styles from "./App.module.css";
-import AddMealPage from "./pages/AddMealPage";
+import DietPage from "./pages/DietPage";
 import MealAddPage from "./pages/MealAddPage";
 import ExerciseDetail from "./pages/ExerciseDetail";
 import MealDetail from "./pages/MealDetail";
@@ -52,6 +52,8 @@ export default function App() {
             <Route path="/find-id" element={<FindIdPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
 
+            <Route path="/meal-add" element={<MealAddPage />} />
+            
             <Route element={<Layout />}>
               <Route path="/home" element={<HomePage />} />
               <Route path="/mypage" element={<MyPage />} />
@@ -61,8 +63,7 @@ export default function App() {
               <Route path="/analysis" element={<AnalysisPage />} />
               <Route path="/inbody" element={<InBodyPage />} />
               <Route path="/graph" element={<GraphPage />} />
-              <Route path="/add-meal" element={<AddMealPage />} />
-              <Route path="/meal-add" element={<MealAddPage />} />
+              <Route path="/diet" element={<DietPage />} />
               <Route path="/exercise-detail" element={<ExerciseDetail />} />
               <Route path="/meal-detail" element={<MealDetail />} />
               <Route path="/meal-recommend" element={<MealRecommend />} />

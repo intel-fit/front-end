@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import styles from "./MealAddPage.module.css";
+import FoodAddOptionsModal from "./FoodAddOptionsPage";
 
 const MealAddPage = () => {
   const navigate = useNavigate();
@@ -8,6 +9,7 @@ const MealAddPage = () => {
   const [mealTime, setMealTime] = useState("today, 20:38");
   const [mealType, setMealType] = useState("저녁");
   const [photos, setPhotos] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [foods, setFoods] = useState([
     {
       id: 1,
@@ -53,8 +55,12 @@ const MealAddPage = () => {
   };
 
   const handleAddFood = () => {
-    // 음식 검색 페이지로 이동
-    navigate("/food-search");
+    // 모달 열기
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
   };
 
   return (
@@ -217,6 +223,9 @@ const MealAddPage = () => {
       <button className={styles["add-food-button"]} onClick={handleAddFood}>
         음식 추가하기
       </button>
+
+      {/* 음식 추가 옵션 모달 */}
+      <FoodAddOptionsModal isOpen={isModalOpen} onClose={handleCloseModal} />
     </div>
   );
 };
