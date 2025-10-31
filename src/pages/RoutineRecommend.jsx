@@ -24,6 +24,13 @@ const RoutineRecommend = () => {
     };
   }, [showWeakPanel, showLevelPanel, showTargetPanel]);
 
+  useEffect(() => {
+    const storedRoutines = JSON.parse(
+      localStorage.getItem("savedRoutines") || "[]"
+    );
+    setSavedRoutines(storedRoutines);
+  }, []);
+
   const weekDays = [
     "1일차",
     "2일차",
@@ -115,7 +122,16 @@ const RoutineRecommend = () => {
       weakParts: [...weakParts],
       targetParts: [...targetParts],
     };
+    const existingRoutines = JSON.parse(
+      localStorage.getItem("savedRoutines") || "[]"
+    );
+
+    const updatedRoutines = [...existingRoutines, savedRoutine];
+
+    localStorage.setItem("savedRoutines", JSON.stringify(updatedRoutines));
+
     setSavedRoutines([...savedRoutines, savedRoutine]);
+
     alert("루틴이 저장되었습니다!");
   };
 
@@ -130,9 +146,9 @@ const RoutineRecommend = () => {
         <>
           <div className="main-content">
             <h1 className="title">
-              회원님께만 추천하는
+              안녕하세요 - 회원님!
               <br />
-              루틴을 추천해드립니다
+              최적화된 루틴을 추천해 드릴께요!
             </h1>
 
             <div className="button-group">
@@ -227,7 +243,6 @@ const RoutineRecommend = () => {
         </div>
       )}
 
-      {/* 취약한 부분 패널 */}
       {showWeakPanel && (
         <>
           <div
@@ -267,7 +282,6 @@ const RoutineRecommend = () => {
         </>
       )}
 
-      {/* 운동 경력 패널 */}
       {showLevelPanel && (
         <>
           <div

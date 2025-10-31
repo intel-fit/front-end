@@ -6,6 +6,9 @@ import AIAnalysisModal from "../components/AIAnalysisModal";
 import MyPlanModal from "../components/MyPlanModal";
 import PaymentMethodModal from "../components/PaymentMethodModal";
 import ProfileEditModal from "../components/ProfileEditModal";
+import RoutineRecommendModal from "../components/RoutineRecommendModal";
+import MealRecommendModal from "../components/MealRecommendModal";
+
 import "./MyPage.css";
 import {
   IoPersonOutline,
@@ -23,7 +26,10 @@ export default function MyPage() {
   const [isPaymentMethodModalOpen, setIsPaymentMethodModalOpen] =
     useState(false);
   const [isProfileEditModalOpen, setIsProfileEditModalOpen] = useState(false);
-
+  const [isRoutineRecommendModalOpen, setIsRoutineRecommendModalOpen] =
+    useState(false);
+  const [isMealRecommendModalOpen, setIsMealRecommendModalOpen] =
+    useState(false);
   // 프로필 데이터 상태
   const [profileData, setProfileData] = useState({
     id: null,
@@ -169,6 +175,23 @@ export default function MyPage() {
     setIsProfileEditModalOpen(false);
   };
 
+  // 운동 추천 내역 핸들러
+  const handleRoutineRecommendClick = () => {
+    setIsRoutineRecommendModalOpen(true);
+  };
+
+  const handleRoutineRecommendModalClose = () => {
+    setIsRoutineRecommendModalOpen(false);
+  };
+
+  // 식단 추천 내역 핸들러
+  const handleMealRecommendClick = () => {
+    setIsMealRecommendModalOpen(true);
+  };
+
+  const handleMealRecommendModalClose = () => {
+    setIsMealRecommendModalOpen(false);
+  };
   // 로그아웃 핸들러
   const handleLogoutClick = () => {
     if (window.confirm("정말로 로그아웃하시겠습니까?")) {
@@ -370,6 +393,22 @@ export default function MyPage() {
           </div>
         </div>
 
+        {/* 추천받은 내역보기 */}
+        <div className="recommend-section">
+          <div className="setion-title"> 추천 내역</div>
+          <div className="section-links">
+            <div
+              className="link-item routine"
+              onClick={handleRoutineRecommendClick}
+            >
+              운동 추천 내역
+            </div>
+            <div className="link-item meal" onClick={handleMealRecommendClick}>
+              식단 추천 내역
+            </div>
+          </div>
+        </div>
+
         {/* 계정 관리 섹션 */}
         <div className="account-section">
           <div className="section-title">계정 관리</div>
@@ -423,6 +462,17 @@ export default function MyPage() {
       <ProfileEditModal
         isOpen={isProfileEditModalOpen}
         onClose={handleProfileEditModalClose}
+      />
+
+      {/* 운동 추천 내역 모달 */}
+      <RoutineRecommendModal
+        isOpen={isRoutineRecommendModalOpen}
+        onClose={handleRoutineRecommendModalClose}
+      />
+      {/* 식단 추천 내역 모달 */}
+      <MealRecommendModal
+        isOpen={isMealRecommendModalOpen}
+        onClose={handleMealRecommendModalClose}
       />
     </div>
   );

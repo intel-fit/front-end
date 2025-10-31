@@ -32,6 +32,12 @@
   color: white;
 }
 
+.title-sub {
+  display: block;
+  margin-top: 15px;
+  margin-left: 100px;
+}
+
 .button-group {
   width: 100%;
   display: flex;
