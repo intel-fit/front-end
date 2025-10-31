@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import "./ExerciseDetail.css";
+import styles from "./ExerciseDetail.module.css";
 
 const ExerciseDetail = () => {
   const navigate = useNavigate();
@@ -35,42 +35,42 @@ const ExerciseDetail = () => {
   };
 
   return (
-    <div className="exercise-detail-page">
-      <div className="exercise-header">
-        <button className="back-btn" onClick={() => navigate(-1)}>
+    <div className={styles['exercise-detail-page']}>
+      <div className={styles['exercise-header']}>
+        <button className={styles['back-btn']} onClick={() => navigate(-1)}>
           ←
         </button>
-        <h1 className="page-title">{exerciseData.day} 추천 운동</h1>
+        <h1 className={styles['page-title']}>{exerciseData.day} 추천 운동</h1>
       </div>
 
-      <div className="exercise-name-section">
-        <h2 className="exercise-name">{exerciseData.name}</h2>
+      <div className={styles['exercise-name-section']}>
+        <h2 className={styles['exercise-name']}>{exerciseData.name}</h2>
       </div>
 
-      <div className="exercise-image-container">
-        <div className="exercise-image-placeholder"></div>
+      <div className={styles['exercise-image-container']}>
+        <div className={styles['exercise-image-placeholder']}></div>
       </div>
 
-      <div className="sets-container">
+      <div className={styles['sets-container']}>
         {sets.map((set) => (
           <div
             key={set.id}
-            className={`set-item ${set.completed ? "completed" : ""}`}
+            className={`${styles['set-item']} ${set.completed  ? styles['completed'] : ""}`}
             onClick={() => handleSetComplete(set.id)}
           >
-            <span className="set-number">{set.id} Set</span>
-            <span className="set-weight">{set.weight}</span>
-            <span className="set-reps">{set.reps}</span>
-            {set.completed && <span className="check-icon">✓</span>}
+            <span className={styles['set-number']}>{set.id} Set</span>
+            <span className={styles['set-weight']}>{set.weight}</span>
+            <span className={styles['set-reps']}>{set.reps}</span>
+            {set.completed && <span className={styles['check-icon']}>✓</span>}
           </div>
         ))}
       </div>
 
-      <div className="action-buttons">
-        <button className="rest-timer-btn" onClick={handleRestTimer}>
+      <div className={styles['action-buttons']}>
+        <button className={styles['rest-timer-btn']} onClick={handleRestTimer}>
           휴식 타이머
         </button>
-        <button className="set-complete-btn" onClick={handleSetCompleteAll}>
+        <button className={styles['set-complete-btn']} onClick={handleSetCompleteAll}>
           세트 완료
         </button>
       </div>

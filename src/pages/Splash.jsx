@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import "./Splash.css";
+import styles from "./Splash.module.css";
 
 export default function Splash() {
   const nav = useNavigate();
@@ -11,11 +11,11 @@ export default function Splash() {
   }, [nav]);
 
   return (
-    <div className="splash-container">
-      <div className="splash-wrapper">
-        <div className="splash-content">
-          <h1 className="splash-logo">INTEL FIT</h1>
-          <div className="loading-dots">
+    <div className={styles['splash-container']}>
+      <div className={styles['splash-wrapper']}>
+        <div className={styles['splash-content']}>
+          <h1 className={styles['splash-logo']}>INTEL FIT</h1>
+          <div className={styles['loading-dots']}>
             <span></span>
             <span></span>
             <span></span>

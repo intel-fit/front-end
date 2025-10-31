@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import "./AddMealPage.css";
+import styles from "./AddMealPage.module.css";
 
 const AddMealPage = () => {
   const navigate = useNavigate();
@@ -54,11 +54,11 @@ const AddMealPage = () => {
   }, [workoutGoals, completedThisWeek]);
 
   const GoalCard = () => (
-    <div className="goal-card">
-      <div className="goal-card-header">
-        <div className="goal-title">운동 목표 설정</div>
+    <div className={styles['goal-card']}>
+      <div className={styles['goal-card-header']}>
+        <div className={styles['goal-title']}>운동 목표 설정</div>
         <button
-          className="goal-arrow"
+          className={styles['goal-arrow']}
           aria-label="open-goal"
           onClick={() => navigate("/goal")}
         >
@@ -73,10 +73,10 @@ const AddMealPage = () => {
           </svg>
         </button>
       </div>
-      <div className="goal-sub">{goalSubtitle}</div>
-      <div className="goal-progress">
+      <div className={styles['goal-sub']}>{goalSubtitle}</div>
+      <div className={styles['goal-progress']}>
         <div
-          className="goal-progress-fill"
+          className={styles['goal-progress-fill']}
           style={{ width: `${goalProgressPercent}%` }}
         />
       </div>
@@ -84,35 +84,35 @@ const AddMealPage = () => {
   );
 
   const ExerciseTimeline = () => (
-    <div className="exercise-timeline">
-      <div className="timeline-line" />
+    <div className={styles['exercise-timeline']}>
+      <div className={styles['timeline-line']} />
 
-      <div className="timeline-item completed">
-        <div className="dot" />
-        <div className="exercise-card muted">
-          <div className="exercise-left">
-            <div className="exercise-name">펙 덱 플라이</div>
-            <div className="exercise-meta">20kg 15회 3세트</div>
+      <div className={`${styles['timeline-item']} ${styles['completed']}`}>
+        <div className={styles['dot']} />
+        <div className={`${styles['exercise-card']} ${styles['muted']}`}>
+          <div className={styles['exercise-left']}>
+            <div className={styles['exercise-name']}>펙 덱 플라이</div>
+            <div className={styles['exercise-meta']}>20kg 15회 3세트</div>
           </div>
-          <div className="exercise-time">9:00 AM</div>
+          <div className={styles['exercise-time']}>9:00 AM</div>
         </div>
       </div>
 
-      <div className="timeline-item">
-        <div className="dot" />
-        <div className="exercise-card">
-          <div className="exercise-left">
-            <div className="exercise-name">리버스 펙 덱 플라이</div>
-            <div className="exercise-meta">20kg 15회 3세트</div>
+      <div className={styles['timeline-item']}>
+        <div className={styles['dot']} />
+        <div className={styles['exercise-card']}>
+          <div className={styles['exercise-left']}>
+            <div className={styles['exercise-name']}>리버스 펙 덱 플라이</div>
+            <div className={styles['exercise-meta']}>20kg 15회 3세트</div>
           </div>
-          <div className="exercise-time">9:04 AM</div>
+          <div className={styles['exercise-time']}>9:04 AM</div>
         </div>
       </div>
 
-      <div className="timeline-item last">
-        <div className="dot" />
+      <div className={`${styles['timeline-item']} ${styles['last']}`}>
+        <div className={styles['dot']} />
         <button
-          className="exercise-add-card"
+          className={styles['exercise-add-card']}
           onClick={() => navigate("/exercise-detail")}
         >
           운동 추가하기
@@ -122,42 +122,42 @@ const AddMealPage = () => {
   );
 
   return (
-    <div className="add-meal-page">
-      <div className="record-header">
-        <h1 className="record-title">기록하기</h1>
-        <button className="bell-btn" aria-label="알림">
+    <div className={styles['add-meal-page']}>
+      <div className={styles['record-header']}>
+        <h1 className={styles['record-title']}>기록하기</h1>
+        <button className={styles['bell-btn']} aria-label="알림">
           🔔
         </button>
       </div>
 
-      <div className="record-tabs">
+      <div className={styles['record-tabs']}>
         <button
-          className={`record-tab ${activeTab === "exercise" ? "active" : ""}`}
+          className={`${styles['record-tab']} ${activeTab === "exercise"  ? styles['active'] : ""}`}
           onClick={() => setActiveTab("exercise")}
         >
           운동기록
         </button>
         <button
-          className={`record-tab ${activeTab === "meal" ? "active" : ""}`}
+          className={`${styles['record-tab']} ${activeTab === "meal"  ? styles['active'] : ""}`}
           onClick={() => setActiveTab("meal")}
         >
           식단기록
         </button>
       </div>
 
-      <div className="mini-stats">
+      <div className={styles['mini-stats']}>
         {Array.from({ length: 8 }).map((_, idx) => (
-          <div key={idx} className="mini-stat">
-            <div className="ms-top">15</div>
-            <div className="ms-mid">388k</div>
-            <div className="ms-btm">97%</div>
+          <div key={idx} className={styles['mini-stat']}>
+            <div className={styles['ms-top']}>15</div>
+            <div className={styles['ms-mid']}>388k</div>
+            <div className={styles['ms-btm']}>97%</div>
           </div>
         ))}
       </div>
 
       <GoalCard />
 
-      <h2 className="section-title">운동 기록하기</h2>
+      <h2 className={styles['section-title']}>운동 기록하기</h2>
       <ExerciseTimeline />
     </div>
   );

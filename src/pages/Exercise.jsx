@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import "./Exercise.css";
+import styles from "./Exercise.module.css";
 import Header from "../components/Header";
 
 const Exercise = () => {

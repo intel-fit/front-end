@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import "./MealDetail.css";
+import styles from "./MealDetail.module.css";
 
 const MealDetail = () => {
   const navigate = useNavigate();
@@ -49,63 +49,63 @@ const MealDetail = () => {
   };
 
   return (
-    <div className="meal-detail-page">
+    <div className={styles['meal-detail-page']}>
       {/* 헤더 */}
-      <div className="meal-header">
-        <button className="back-btn" onClick={() => navigate(-1)}>
+      <div className={styles['meal-header']}>
+        <button className={styles['back-btn']} onClick={() => navigate(-1)}>
           ←
         </button>
-        <h1 className="page-title">{mealData.day} 추천 식단</h1>
+        <h1 className={styles['page-title']}>{mealData.day} 추천 식단</h1>
       </div>
 
       {/* 식단 이름 */}
-      <div className="meal-name-section">
-        <h2 className="meal-name">{mealData.name}</h2>
-        <span className="meal-type">{mealData.type}</span>
+      <div className={styles['meal-name-section']}>
+        <h2 className={styles['meal-name']}>{mealData.name}</h2>
+        <span className={styles['meal-type']}>{mealData.type}</span>
       </div>
 
       {/* 식단 이미지 */}
-      <div className="meal-image-container">
-        <div className="meal-image-placeholder"></div>
+      <div className={styles['meal-image-container']}>
+        <div className={styles['meal-image-placeholder']}></div>
       </div>
 
       {/* 기본 정보 */}
-      <div className="meal-info-container">
-        <div className="info-item">
-          <span className="info-label">칼로리</span>
-          <span className="info-value">{mealData.calories}</span>
+      <div className={styles['meal-info-container']}>
+        <div className={styles['info-item']}>
+          <span className={styles['info-label']}>칼로리</span>
+          <span className={styles['info-value']}>{mealData.calories}</span>
         </div>
-        <div className="info-item">
-          <span className="info-label">조리시간</span>
-          <span className="info-value">{mealData.prepTime}</span>
+        <div className={styles['info-item']}>
+          <span className={styles['info-label']}>조리시간</span>
+          <span className={styles['info-value']}>{mealData.prepTime}</span>
         </div>
-        <div className="info-item">
-          <span className="info-label">난이도</span>
-          <span className="info-value">{mealData.difficulty}</span>
+        <div className={styles['info-item']}>
+          <span className={styles['info-label']}>난이도</span>
+          <span className={styles['info-value']}>{mealData.difficulty}</span>
         </div>
       </div>
 
       {/* 영양성분 */}
-      <div className="nutrition-section">
-        <h3 className="section-title">영양성분</h3>
-        <div className="nutrition-grid">
-          <div className="nutrition-item">
-            <span className="nutrition-label">단백질</span>
-            <span className="nutrition-value">
+      <div className={styles['nutrition-section']}>
+        <h3 className={styles['section-title']}>영양성분</h3>
+        <div className={styles['nutrition-grid']}>
+          <div className={styles['nutrition-item']}>
+            <span className={styles['nutrition-label']}>단백질</span>
+            <span className={styles['nutrition-value']}>
               {mealData.nutrition.protein}
             </span>
           </div>
-          <div className="nutrition-item">
-            <span className="nutrition-label">탄수화물</span>
-            <span className="nutrition-value">{mealData.nutrition.carbs}</span>
+          <div className={styles['nutrition-item']}>
+            <span className={styles['nutrition-label']}>탄수화물</span>
+            <span className={styles['nutrition-value']}>{mealData.nutrition.carbs}</span>
           </div>
-          <div className="nutrition-item">
-            <span className="nutrition-label">지방</span>
-            <span className="nutrition-value">{mealData.nutrition.fat}</span>
+          <div className={styles['nutrition-item']}>
+            <span className={styles['nutrition-label']}>지방</span>
+            <span className={styles['nutrition-value']}>{mealData.nutrition.fat}</span>
           </div>
-          <div className="nutrition-item">
-            <span className="nutrition-label">식이섬유</span>
-            <span className="nutrition-value">{mealData.nutrition.fiber}</span>
+          <div className={styles['nutrition-item']}>
+            <span className={styles['nutrition-label']}>식이섬유</span>
+            <span className={styles['nutrition-value']}>{mealData.nutrition.fiber}</span>
           </div>
         </div>
       </div>

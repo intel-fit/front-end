@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import "./Nav.css";
+import styles from "./Nav.module.css";
 import {
   IoHomeOutline,
   IoAddCircleOutline,
@@ -38,16 +38,16 @@ export default function Nav() {
   ];
 
   return (
-    <nav className="nav">
+    <nav className={styles['nav']}>
       {navItems.map(({ name, icon: Icon, link, label }) => (
         <NavLink
           key={name}
           to={link}
           end
-          className={({ isActive }) => `item ${isActive ? "active" : ""}`}
+          className={({ isActive }) => `${styles.item} ${isActive ? styles.active : ""}`}
         >
           <Icon />
-          <span className="label">{label}</span>
+          <span className={styles['label']}>{label}</span>
         </NavLink>
       ))}
     </nav>

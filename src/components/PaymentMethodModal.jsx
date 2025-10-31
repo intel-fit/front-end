@@ -6,7 +6,7 @@ import {
   IoCheckmarkCircle,
   IoTrash,
 } from "react-icons/io5";
-import "./PaymentMethodModal.css";
+import styles from "./PaymentMethodModal.module.css";
 
 export default function PaymentMethodModal({ isOpen, onClose }) {
   const [showAddForm, setShowAddForm] = useState(false);
@@ -73,48 +73,48 @@ export default function PaymentMethodModal({ isOpen, onClose }) {
   };
 
   return (
-    <div className="payment-method-modal-overlay">
-      <div className="payment-method-modal-content">
-        <div className="payment-method-modal-header">
-          <h2 className="payment-method-modal-title">결제 수단 관리</h2>
-          <button className="payment-method-modal-close" onClick={onClose}>
+    <div className={styles['payment-method-modal-overlay']}>
+      <div className={styles['payment-method-modal-content']}>
+        <div className={styles['payment-method-modal-header']}>
+          <h2 className={styles['payment-method-modal-title']}>결제 수단 관리</h2>
+          <button className={styles['payment-method-modal-close']} onClick={onClose}>
             <IoClose />
           </button>
         </div>
 
-        <div className="payment-method-modal-body">
+        <div className={styles['payment-method-modal-body']}>
           {/* 등록된 결제 수단 목록 */}
-          <div className="payment-methods-section">
-            <h3 className="section-title">등록된 결제 수단</h3>
-            <div className="payment-methods-list">
+          <div className={styles['payment-methods-section']}>
+            <h3 className={styles['section-title']}>등록된 결제 수단</h3>
+            <div className={styles['payment-methods-list']}>
               {paymentMethods.length === 0 ? (
-                <div className="empty-state">
+                <div className={styles['empty-state']}>
                   <p>등록된 결제 수단이 없습니다</p>
                 </div>
               ) : (
                 paymentMethods.map((method) => (
-                  <div key={method.id} className="payment-method-item">
-                    <div className="payment-method-info">
-                      <IoCard className="card-icon" />
-                      <div className="card-details">
-                        <div className="card-name">
+                  <div key={method.id} className={styles['payment-method-item']}>
+                    <div className={styles['payment-method-info']}>
+                      <IoCard className={styles['card-icon']} />
+                      <div className={styles['card-details']}>
+                        <div className={styles['card-name']}>
                           {method.cardType}
                           {method.isDefault && (
-                            <span className="default-badge">기본</span>
+                            <span className={styles['default-badge']}>기본</span>
                           )}
                         </div>
-                        <div className="card-number">
+                        <div className={styles['card-number']}>
                           **** **** **** {method.lastFourDigits}
                         </div>
-                        <div className="card-expiry">
+                        <div className={styles['card-expiry']}>
                           유효기간: {method.expiryDate}
                         </div>
                       </div>
                     </div>
-                    <div className="payment-method-actions">
+                    <div className={styles['payment-method-actions']}>
                       {!method.isDefault && (
                         <button
-                          className="action-btn default-btn"
+                          className={`${styles['action-btn']} ${styles['default-btn']}`}
                           onClick={() => handleSetDefault(method.id)}
                         >
                           <IoCheckmarkCircle />
@@ -128,7 +128,7 @@ export default function PaymentMethodModal({ isOpen, onClose }) {
             </div>
 
             <button
-              className="add-payment-btn"
+              className={styles['add-payment-btn']}
               onClick={() => setShowAddForm(!showAddForm)}
             >
               <IoAddCircle />새 결제 수단 추가
@@ -137,10 +137,10 @@ export default function PaymentMethodModal({ isOpen, onClose }) {
 
           {/* 결제 수단 추가 폼 */}
           {showAddForm && (
-            <div className="add-payment-form">
-              <h3 className="form-title">카드 정보 입력</h3>
+            <div className={styles['add-payment-form']}>
+              <h3 className={styles['form-title']}>카드 정보 입력</h3>
 
-              <div className="form-group">
+              <div className={styles['form-group']}>
                 <label>카드 번호</label>
                 <input
                   type="text"
@@ -156,8 +156,8 @@ export default function PaymentMethodModal({ isOpen, onClose }) {
                 />
               </div>
 
-              <div className="form-row">
-                <div className="form-group">
+              <div className={styles['form-row']}>
+                <div className={styles['form-group']}>
                   <label>유효기간</label>
                   <input
                     type="text"
@@ -173,7 +173,7 @@ export default function PaymentMethodModal({ isOpen, onClose }) {
                   />
                 </div>
 
-                <div className="form-group">
+                <div className={styles['form-group']}>
                   <label>CVC</label>
                   <input
                     type="text"
@@ -190,7 +190,7 @@ export default function PaymentMethodModal({ isOpen, onClose }) {
                 </div>
               </div>
 
-              <div className="form-group">
+              <div className={styles['form-group']}>
                 <label>카드 소유자명</label>
                 <input
                   type="text"
@@ -202,14 +202,14 @@ export default function PaymentMethodModal({ isOpen, onClose }) {
                 />
               </div>
 
-              <div className="form-actions">
+              <div className={styles['form-actions']}>
                 <button
-                  className="cancel-btn"
+                  className={styles['cancel-btn']}
                   onClick={() => setShowAddForm(false)}
                 >
                   취소
                 </button>
-                <button className="submit-btn" onClick={handleAddCard}>
+                <button className={styles['submit-btn']} onClick={handleAddCard}>
                   추가하기
                 </button>
               </div>
@@ -217,7 +217,7 @@ export default function PaymentMethodModal({ isOpen, onClose }) {
           )}
 
           {/* 안내 사항 */}
-          <div className="payment-info">
+          <div className={styles['payment-info']}>
             <h4>💳 안전한 결제</h4>
             <ul>
               <li>모든 결제 정보는 암호화되어 안전하게 저장됩니다</li>

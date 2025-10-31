@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { IoChevronForward } from "react-icons/io5";
-import "./GoalCard.css";
+import styles from "./GoalCard.module.css";
 
 export default function GoalCard({ goalData }) {
   const navigate = useNavigate();
@@ -29,23 +29,23 @@ export default function GoalCard({ goalData }) {
   };
 
   return (
-    <div className="goal-card" onClick={handleClick}>
-      <div className="goal-content">
-        <h3 className="goal-title">운동 목표 설정</h3>
-        <p className="goal-description">{getGoalDescription()}</p>
+    <div className={styles['goal-card']} onClick={handleClick}>
+      <div className={styles['goal-content']}>
+        <h3 className={styles['goal-title']}>운동 목표 설정</h3>
+        <p className={styles['goal-description']}>{getGoalDescription()}</p>
         {goalData && (
-          <div className="progress-container">
-            <div className="progress-bar">
+          <div className={styles['progress-container']}>
+            <div className={styles['progress-bar']}>
               <div
-                className="progress-fill"
+                className={styles['progress-fill']}
                 style={{ width: `${getProgressPercentage()}%` }}
               ></div>
             </div>
-            <span className="progress-text">{getProgressPercentage()}%</span>
+            <span className={styles['progress-text']}>{getProgressPercentage()}%</span>
           </div>
         )}
       </div>
-      <IoChevronForward className="goal-arrow" />
+      <IoChevronForward className={styles['goal-arrow']} />
     </div>
   );
 }

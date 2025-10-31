@@ -1,5 +1,5 @@
 import { IoClose } from "react-icons/io5";
-import "./BadgeListModal.css";
+import styles from "./BadgeListModal.module.css";
 
 export default function BadgeListModal({ isOpen, onClose, onBadgeClick }) {
   if (!isOpen) return null;
@@ -65,46 +65,46 @@ export default function BadgeListModal({ isOpen, onClose, onBadgeClick }) {
   const unearnedBadges = allBadges.filter((badge) => !badge.earned);
 
   return (
-    <div className="badge-list-modal-overlay">
-      <div className="badge-list-modal-content">
-        <div className="badge-list-modal-header">
-          <h2 className="badge-list-modal-title">
+    <div className={styles['badge-list-modal-overlay']}>
+      <div className={styles['badge-list-modal-content']}>
+        <div className={styles['badge-list-modal-header']}>
+          <h2 className={styles['badge-list-modal-title']}>
             뱃지 {earnedBadges.length}/80
           </h2>
-          <button className="badge-list-modal-close" onClick={onClose}>
+          <button className={styles['badge-list-modal-close']} onClick={onClose}>
             <IoClose />
           </button>
         </div>
 
-        <div className="badge-list-modal-body">
-          <div className="badge-section">
-            <h3 className="badge-section-title">획득한 뱃지</h3>
-            <div className="badge-grid">
+        <div className={styles['badge-list-modal-body']}>
+          <div className={styles['badge-section']}>
+            <h3 className={styles['badge-section-title']}>획득한 뱃지</h3>
+            <div className={styles['badge-grid']}>
               {earnedBadges.map((badge) => (
                 <div
                   key={badge.id}
-                  className="badge-item earned"
+                  className={`${styles['badge-item']} ${styles['earned']}`}
                   onClick={() => onBadgeClick(badge)}
                 >
                   <div
-                    className="badge-small"
+                    className={styles['badge-small']}
                     style={{ backgroundColor: badge.color }}
                   >
                     {badge.icon}
                   </div>
-                  <span className="badge-item-title">{badge.title}</span>
+                  <span className={styles['badge-item-title']}>{badge.title}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="badge-section">
-            <h3 className="badge-section-title">획득 가능한 뱃지</h3>
-            <div className="badge-grid">
+          <div className={styles['badge-section']}>
+            <h3 className={styles['badge-section-title']}>획득 가능한 뱃지</h3>
+            <div className={styles['badge-grid']}>
               {unearnedBadges.map((badge) => (
-                <div key={badge.id} className="badge-item unearned">
-                  <div className="badge-small locked">{badge.icon}</div>
-                  <span className="badge-item-title">{badge.title}</span>
+                <div key={badge.id} className={`${styles['badge-item']} ${styles['unearned']}`}>
+                  <div className={`${styles['badge-small']} ${styles['locked']}`}>{badge.icon}</div>
+                  <span className={styles['badge-item-title']}>{badge.title}</span>
                 </div>
               ))}
             </div>
