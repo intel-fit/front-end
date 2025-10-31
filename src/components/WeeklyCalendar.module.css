@@ -1,0 +1,82 @@
+.weekly-calendar {
+  background-color: #393a38;
+  border-radius: 20px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.progress-grid {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.progress-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+}
+
+.progress-number {
+  font-family: "Inter", sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  color: #738700;
+  text-align: center;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.progress-number.today {
+  background-color: #e3ff7c;
+  color: #000000;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  line-height: 1;
+}
+
+.progress-calories {
+  font-family: "Inter", sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  color: #ffffff;
+  text-align: center;
+}
+
+.progress-percentage {
+  font-family: "Inter", sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  color: #ffffff;
+  text-align: center;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 480px) {
+  .progress-grid {
+    gap: 5px;
+  }
+
+  .progress-item {
+    gap: 3px;
+  }
+
+  .progress-number {
+    font-size: 14px;
+  }
+
+  .progress-calories,
+  .progress-percentage {
+    font-size: 10px;
+  }
+}
+
