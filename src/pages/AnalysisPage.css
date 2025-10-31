@@ -15,8 +15,8 @@
 
 /* 인사말 섹션 */
 .greeting-section {
-  margin-bottom: 32px;
-  margin-top: 20px;
+  margin-bottom: 24px;
+  margin-top: 6px; /* 상단 여백 축소로 더 위로 */
 }
 
 .greeting-name {

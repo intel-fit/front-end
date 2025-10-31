@@ -9,12 +9,12 @@
 
 .mypage-content {
   flex: 1;
-  padding: 0 20px;
+  padding: 8px 20px 0; /* 상단 여백 약간만 주어 요소를 위로 */
 }
 
 /* 프로필 섹션 */
 .profile-section {
-  margin-bottom: 24px;
+  margin: 8px 0 24px; /* 위쪽 간격 축소로 프로필을 위로 */
   display: flex;
   align-items: center;
   justify-content: space-between;

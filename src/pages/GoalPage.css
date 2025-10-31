@@ -22,7 +22,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: 26px 20px; /* 더 아래로 내림 */
   border-bottom: 1px solid #333;
 }
 
@@ -60,7 +60,8 @@
 }
 
 .goal-page .goal-content {
-  padding: 20px;
+  padding: 24px 20px 20px; /* 본문 시작을 조금 더 아래로 */
+  margin-top: 8px; /* 헤더 구분선과의 간격 추가 */
 }
 
 .goal-page .goal-section {
