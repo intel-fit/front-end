@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import styles from "./FoodSearchPage.module.css";
+import FoodDirectInputModal from "../components/FoodDirectInputModal";
 
 const FoodSearchPage = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
   
   // 더미 음식 데이터
   const [foods] = useState([
@@ -75,8 +77,17 @@ const FoodSearchPage = () => {
   };
 
   const handleDirectInput = () => {
-    // 직접 입력 페이지로 이동
-    navigate("/food-direct-input");
+    // 모달 열기
+    setIsModalOpen(true);
+  };
+
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+  };
+
+  const handleSaveFood = (foodData) => {
+    // 음식 데이터 저장 후 MealAddPage로 돌아가기
+    navigate("/meal-add", { state: { selectedFood: foodData } });
   };
 
   return (
@@ -237,6 +248,13 @@ const FoodSearchPage = () => {
             </div>
           ))}
       </div>
+
+      {/* 직접 음식 입력 모달 */}
+      <FoodDirectInputModal
+        isOpen={isModalOpen}
+        onClose={handleModalClose}
+        onSave={handleSaveFood}
+      />
     </div>
   );
 };
