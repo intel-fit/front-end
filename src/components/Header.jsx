@@ -3,7 +3,7 @@ import "./Header.css";
 
 export default function Header({ title }) {
   return (
-    <header className="header">
+    <header className="app-header">
       <h1 className="title">{title}</h1>
       <Bell />
     </header>

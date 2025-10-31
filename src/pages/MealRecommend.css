@@ -1,7 +1,7 @@
 .app-container {
   background-color: #111;
   color: white;
-  min-height: 180%;
+  min-height: 100vh;
   overflow-y: visible;
 }
 
@@ -136,7 +136,7 @@
   opacity: 0.7;
 }
 
-.header {
+.app-container .header {
   display: flex;
   align-items: center;
   justify-content: space-between;

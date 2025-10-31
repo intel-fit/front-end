@@ -9,7 +9,7 @@
   height: 130%;
 }
 
-.header {
+.routine-recommend-container .header {
   padding: 10px 20px;
   display: flex;
   justify-content: space-between;
