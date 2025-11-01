@@ -17,14 +17,55 @@ React Native + Expo 기반의 헬스케어 모바일 애플리케이션
 # 의존성 설치
 npm install
 
-# 앱 실행 (iOS)
+# 앱 실행 (iOS 시뮬레이터)
 npm run ios
 
-# 앱 실행 (Android)
+# 앱 실행 (Android 에뮬레이터)
 npm run android
 
 # Metro Bundler만 실행
 npm start
+```
+
+### 📱 Expo Go로 실행하기 (실제 디바이스)
+
+Expo Go 앱을 사용하면 실제 스마트폰에서 바로 앱을 테스트할 수 있습니다.
+
+1. **Expo Go 앱 설치**
+   - [iOS App Store](https://apps.apple.com/app/expo-go/id982107779) 또는 [Google Play Store](https://play.google.com/store/apps/details?id=host.exp.exponent)에서 Expo Go 앱 다운로드
+
+2. **개발 서버 실행**
+   ```bash
+   npm start
+   ```
+   
+   또는
+   ```bash
+   expo start
+   ```
+
+3. **QR 코드 스캔**
+   - Metro Bundler가 실행되면 터미널에 QR 코드가 표시됩니다
+   - iOS: 카메라 앱으로 QR 코드 스캔 → Expo Go로 열기
+   - Android: Expo Go 앱에서 "Scan QR code" 버튼으로 스캔
+
+4. **연결**
+   - 같은 Wi-Fi 네트워크에 연결되어 있어야 합니다
+   - 또는 `npm start -- --tunnel` 옵션을 사용하면 인터넷으로 연결 가능 (느릴 수 있음)
+
+**빠른 명령어:**
+```bash
+# 일반 실행
+npm start
+
+# Tunnel 모드 (다른 네트워크에서도 연결 가능)
+npm start -- --tunnel
+
+# LAN 모드 (같은 네트워크)
+npm start -- --lan
+
+# Localhost 모드 (같은 컴퓨터)
+npm start -- --localhost
 ```
 
 ## 📦 주요 기술 스택
