@@ -1,5 +1,7 @@
 # 개발 가이드
 
+이 문서는 Intelfit Mobile 프로젝트의 상세한 개발 가이드를 제공합니다.
+
 ## 📁 프로젝트 구조 상세
 
 ```
@@ -79,8 +81,6 @@ src/
 │   ├── colors.ts           # 색상 정의
 │   └── styles.ts           # 공통 스타일
 │
-├── utils/                  # 유틸리티 함수 (예정)
-├── hooks/                  # 커스텀 훅 (예정)
 └── assets/                 # 이미지 등 리소스
     └── images/
         └── chatbot.png
@@ -124,10 +124,13 @@ const styles = StyleSheet.create({
 });
 ```
 
-### 공통 스타일
+### SafeAreaView 사용
 
 ```typescript
-import {commonStyles} from '../theme/styles';
+import {SafeAreaView} from 'react-native-safe-area-context';
+
+// 탭 화면에서는 상단만 safe area 적용
+<SafeAreaView style={styles.container} edges={['top']}>
 ```
 
 ## 📝 타입 사용법
