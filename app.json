@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "Intelfit",
+    "slug": "intelfit-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#6C5CE7"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.intelfit.mobile"
+    },
+    "android": {
+      "package": "com.intelfit.mobile"
+    }
+  }
+}
+
