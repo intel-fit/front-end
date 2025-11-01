@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {colors} from '../theme/colors';
+import {colors} from '../../theme/colors';
+import {ROUTES} from '../../constants/routes';
 
 const HomeScreen = ({navigation}: any) => {
   const handleCalendarClick = () => {
@@ -15,7 +16,7 @@ const HomeScreen = ({navigation}: any) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>홈</Text>
       </View>
@@ -28,6 +29,25 @@ const HomeScreen = ({navigation}: any) => {
               <Text style={styles.profilePlaceholder}>👤</Text>
             </View>
             <Text style={styles.greetingText}>님 어서오세요😊</Text>
+          </View>
+        </View>
+
+        {/* 맞춤형 추천 섹션 */}
+        <View style={styles.recommendationCard}>
+          <Text style={styles.recommendationCardTitle}>
+            회원님만을 위한 맞춤형 식단/루틴을{'\n'}받아보세요!
+          </Text>
+          <View style={styles.recommendationButtons}>
+            <TouchableOpacity
+              style={styles.recommendationButton}
+              onPress={() => navigation.navigate(ROUTES.MEAL_RECOMMEND)}>
+              <Text style={styles.recommendationButtonText}>식단 추천 받기</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.recommendationButton}
+              onPress={() => navigation.navigate(ROUTES.ROUTINE_RECOMMEND_NEW)}>
+              <Text style={styles.recommendationButtonText}>운동 추천 받기</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -131,11 +151,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: colors.text,
+    textAlign: 'center',
   },
   divider: {
     height: 1,
@@ -278,6 +301,36 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#e3ff7c',
     borderRadius: 10,
+  },
+  recommendationCard: {
+    backgroundColor: '#393a38',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+  },
+  recommendationCardTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginBottom: 20,
+    lineHeight: 24,
+  },
+  recommendationButtons: {
+    gap: 10,
+  },
+  recommendationButton: {
+    backgroundColor: '#e3ff7c',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 40,
+  },
+  recommendationButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#000000',
   },
   dietRecommendationSection: {
     backgroundColor: colors.cardBackground,

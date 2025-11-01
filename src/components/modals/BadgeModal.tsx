@@ -1,7 +1,7 @@
 import React from 'react';
 import {View, Text, Modal, TouchableOpacity, StyleSheet} from 'react-native';
 import {Ionicons as Icon} from '@expo/vector-icons';
-import {colors} from '../theme/colors';
+import {colors} from '../../theme/colors';
 
 interface Badge {
   type: string;

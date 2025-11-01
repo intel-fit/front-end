@@ -16,7 +16,7 @@ import {
 import {Picker} from '@react-native-picker/picker';
 import {Ionicons as Icon} from '@expo/vector-icons';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
-import {colors} from '../theme/colors';
+import {colors} from '../../theme/colors';
 
 interface ProfileEditModalProps {
   isOpen: boolean;

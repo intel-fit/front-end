@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import { Ionicons as Icon } from '@expo/vector-icons';
-import {colors} from '../theme/colors';
+import {colors} from '../../theme/colors';
 
 interface Message {
   type: 'user' | 'bot';
@@ -111,7 +111,7 @@ const ChatbotScreen = ({navigation}: any) => {
   const isInTab = navigation?.getState?.()?.type === 'tab';
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {!isInTab && (
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -221,6 +221,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    position: 'relative',
   },
   backIcon: {
     fontSize: 24,
@@ -231,6 +232,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: colors.text,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
   },
   keyboardView: {
     flex: 1,

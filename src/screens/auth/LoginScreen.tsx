@@ -9,7 +9,7 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import {colors} from '../theme/colors';
+import {colors} from '../../theme/colors';
 
 const LoginScreen = ({navigation}: any) => {
   const [formData, setFormData] = useState({

@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {Ionicons as Icon} from '@expo/vector-icons';
-import {colors} from '../theme/colors';
+import {colors} from '../../theme/colors';
 
 interface InBodyPhotoModalProps {
   isOpen: boolean;

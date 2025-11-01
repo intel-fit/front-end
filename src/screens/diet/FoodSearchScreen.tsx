@@ -9,8 +9,8 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import { Ionicons as Icon } from '@expo/vector-icons';
-import {colors} from '../theme/colors';
-import FoodDirectInputModal from '../components/FoodDirectInputModal';
+import {colors} from '../../theme/colors';
+import FoodDirectInputModal from '../../components/modals/FoodDirectInputModal';
 
 interface Food {
   id: number;

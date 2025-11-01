@@ -96,6 +96,11 @@ const MealRecommendHistoryScreen = ({navigation}: any) => {
             </View>
           ) : (
             <View style={styles.list}>
+              <TouchableOpacity
+                style={styles.newRecommendBtn}
+                onPress={() => navigation.navigate('MealRecommend')}>
+                <Text style={styles.newRecommendBtnText}>새 식단 추천받기</Text>
+              </TouchableOpacity>
               {savedMeals.map(meal => (
                 <TouchableOpacity
                   key={meal.id}
@@ -374,6 +379,19 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: 16,
+  },
+  newRecommendBtn: {
+    backgroundColor: '#e3ff7c',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  newRecommendBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111111',
   },
   card: {
     backgroundColor: '#222222',

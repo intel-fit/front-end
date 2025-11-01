@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import { Ionicons as Icon } from '@expo/vector-icons';
-import InBodyManualForm from '../components/InBodyManualForm';
+import InBodyManualForm from '../../components/common/InBodyManualForm';
 
 const InBodyManualScreen = ({navigation, route}: any) => {
   const handleSubmit = (data: any) => {

@@ -10,7 +10,7 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Svg, {Path, Circle, Line, Text as SvgText, G} from 'react-native-svg';
 import {Ionicons as Icon} from '@expo/vector-icons';
-import InbodyDateNavigator from '../components/InbodyDateNavigator';
+import InbodyDateNavigator from '../../components/common/InbodyDateNavigator';
 
 const InBodyScreen = ({navigation}: any) => {
   const [activeTab, setActiveTab] = useState<'info' | 'graph'>('info');

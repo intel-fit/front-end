@@ -96,6 +96,11 @@ const RoutineRecommendScreen = ({navigation}: any) => {
             </View>
           ) : (
             <View style={styles.list}>
+              <TouchableOpacity
+                style={styles.newRecommendBtn}
+                onPress={() => navigation.navigate('RoutineRecommendNew')}>
+                <Text style={styles.newRecommendBtnText}>새 운동 추천받기</Text>
+              </TouchableOpacity>
               {savedRoutines.map(routine => (
                 <TouchableOpacity
                   key={routine.id}
@@ -275,6 +280,19 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: 16,
+  },
+  newRecommendBtn: {
+    backgroundColor: '#e3ff7c',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  newRecommendBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111111',
   },
   card: {
     backgroundColor: '#222222',

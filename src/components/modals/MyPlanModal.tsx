@@ -8,7 +8,7 @@ import {
   ScrollView,
 } from 'react-native';
 import {Ionicons as Icon} from '@expo/vector-icons';
-import {colors} from '../theme/colors';
+import {colors} from '../../theme/colors';
 
 interface MyPlanModalProps {
   isOpen: boolean;
