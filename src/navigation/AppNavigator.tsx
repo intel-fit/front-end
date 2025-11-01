@@ -87,9 +87,6 @@ function MainTabs() {
           backgroundColor: TAB_BAR_THEME.backgroundColor,
           borderTopColor: TAB_BAR_THEME.borderTopColor,
         },
-        tabBarLabelStyle: {
-          color: TAB_BAR_THEME.labelColor,
-        },
       })}>
       <Tab.Screen name="Home" component={HomeScreen} options={{title: '홈'}} />
       <Tab.Screen name="Stats" component={StatsScreen} options={{title: '기록하기'}} />

@@ -8,7 +8,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons as Icon } from '@expo/vector-icons';
-import {colors} from '../theme/colors';
+import {colors} from '../../theme/colors';
 
 const DietScreen = ({navigation}: any) => {
   const [currentMonth, setCurrentMonth] = useState('10월');
@@ -58,23 +58,22 @@ const DietScreen = ({navigation}: any) => {
   
   return (
     <ContainerComponent style={styles.container}>
-      {/* 월 네비게이션 */}
-      <View style={styles.monthNavigation}>
-        <View style={styles.monthNavLeft}>
-          <TouchableOpacity style={styles.navBtn}>
-            <Icon name="chevron-back" size={18} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.monthText}>{currentMonth}</Text>
-          <TouchableOpacity style={styles.navBtn}>
-            <Icon name="chevron-forward" size={18} color={colors.text} />
+      <ScrollView style={styles.content}>
+        {/* 월 네비게이션 */}
+        <View style={styles.monthNavigation}>
+          <View style={styles.monthNavLeft}>
+            <TouchableOpacity style={styles.navBtn}>
+              <Icon name="chevron-back" size={18} color={colors.text} />
+            </TouchableOpacity>
+            <Text style={styles.monthText}>{currentMonth}</Text>
+            <TouchableOpacity style={styles.navBtn}>
+              <Icon name="chevron-forward" size={18} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity style={styles.menuBtn}>
+            <Icon name="menu" size={20} color={colors.text} />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.menuBtn}>
-          <Icon name="menu" size={20} color={colors.text} />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView style={styles.content}>
         {/* 7일 캘린더 */}
         <View style={styles.weekCalendar}>
           <View style={styles.calendarGrid}>
@@ -230,7 +229,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 0,
+    paddingBottom: 12,
+    paddingTop: 8,
   },
   monthNavLeft: {
     flexDirection: 'row',
@@ -250,13 +251,14 @@ const styles = StyleSheet.create({
   menuBtn: {
     backgroundColor: 'transparent',
     padding: 0,
-    marginRight: 10,
+    marginRight: 0,
   },
   content: {
     flex: 1,
     padding: 20,
   },
   weekCalendar: {
+    marginTop: 4,
     marginBottom: 20,
   },
   calendarGrid: {

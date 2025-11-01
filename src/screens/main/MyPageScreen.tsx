@@ -9,15 +9,15 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import { Ionicons as Icon } from '@expo/vector-icons';
-import {colors} from '../theme/colors';
-import BadgeModal from '../components/BadgeModal';
-import BadgeListModal from '../components/BadgeListModal';
-import AIAnalysisModal from '../components/AIAnalysisModal';
-import MyPlanModal from '../components/MyPlanModal';
-import PaymentMethodModal from '../components/PaymentMethodModal';
-import ProfileEditModal from '../components/ProfileEditModal';
-import RoutineRecommendModal from '../components/RoutineRecommendModal';
-import MealRecommendModal from '../components/MealRecommendModal';
+import {colors} from '../../theme/colors';
+import BadgeModal from '../../components/modals/BadgeModal';
+import BadgeListModal from '../../components/modals/BadgeListModal';
+import AIAnalysisModal from '../../components/modals/AIAnalysisModal';
+import MyPlanModal from '../../components/modals/MyPlanModal';
+import PaymentMethodModal from '../../components/modals/PaymentMethodModal';
+import ProfileEditModal from '../../components/modals/ProfileEditModal';
+import RoutineRecommendModal from '../../components/modals/RoutineRecommendModal';
+import MealRecommendModal from '../../components/modals/MealRecommendModal';
 
 const MyPageScreen = ({navigation}: any) => {
   const [profileData] = useState({
@@ -250,31 +250,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#333333',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#ffffff',
+    textAlign: 'center',
   },
   content: {
     flex: 1,
-    paddingTop: 8,
+    paddingTop: 16,
     paddingHorizontal: 20,
     paddingBottom: 100,
   },
   profileSection: {
-    marginTop: 8,
-    marginBottom: 24,
+    marginTop: 4,
+    marginBottom: 32,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 4,
   },
   profileInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
     flex: 1,
-    marginLeft: -16,
   },
   profileAvatar: {
     width: 60,
@@ -291,35 +294,37 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#ffffff',
-    marginBottom: 4,
+    marginBottom: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   userTitle: {
     fontSize: 14,
     color: '#999999',
+    lineHeight: 20,
   },
   section: {
-    paddingVertical: 20,
+    paddingVertical: 24,
     marginBottom: 0,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#ffffff',
+    marginBottom: 18,
   },
   sectionTitleOrange: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#ff6b35',
-    marginBottom: 16,
+    marginBottom: 18,
   },
   badgeCount: {
     color: '#4ade80',
@@ -353,19 +358,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#ef4444',
   },
   recommendSection: {
-    paddingVertical: 20,
+    paddingVertical: 24,
     marginBottom: 0,
   },
   sectionLinks: {
-    marginBottom: 16,
+    marginTop: 0,
   },
   linkItem: {
-    paddingVertical: 8,
-    marginBottom: 8,
+    paddingVertical: 14,
+    marginBottom: 2,
   },
   linkText: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#ffffff',
+    lineHeight: 22,
   },
   logoutText: {
     color: '#4ade80',

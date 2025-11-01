@@ -291,6 +291,13 @@ const MealRecommendScreen = () => {
   if (screen === 'welcome') {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Icon name="chevron-back" size={28} color="#ffffff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>식단 추천</Text>
+          <View style={{width: 28}} />
+        </View>
         <ScrollView style={styles.contentWrapper} contentContainerStyle={styles.contentContainer}>
           <View style={styles.welcomeHeader}>
             <Text style={styles.welcomeTitle}>안녕하세요 - 회원님!</Text>
@@ -334,27 +341,22 @@ const MealRecommendScreen = () => {
 
           {savedMeals.length > 0 && (
             <View style={styles.savedMealsSection}>
-              <Text style={styles.savedMealsTitle}>저장된 식단 📋</Text>
-              <View style={styles.savedMealsList}>
-                {savedMeals.map((savedMeal) => (
-                  <TouchableOpacity
-                    key={savedMeal.id}
-                    style={styles.savedMealItem}
-                    onPress={() => navigation.navigate('MealRecommendHistory' as never)}>
-                    <View style={styles.savedMealInfo}>
-                      <Text style={styles.savedMealDate}>{savedMeal.date}</Text>
-                      <Text style={styles.savedMealSummary}>
-                        {savedMeal.meals?.[0]?.totalCalories || 0}kcal · 7일 식단
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => handleDeleteSavedMeal(savedMeal.id)}
-                      style={styles.btnIconSmall}>
-                      <Text style={styles.iconTiny}>✕</Text>
-                    </TouchableOpacity>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <Text style={styles.savedMealsTitle}>저장된 식단</Text>
+              {savedMeals.map(meal => (
+                <TouchableOpacity
+                  key={meal.id}
+                  style={styles.savedMealItem}
+                  onPress={() => navigation.navigate('MealRecommendHistory' as never)}>
+                  <View style={styles.savedMealHeader}>
+                    <Text style={styles.savedMealDate}>{meal.date}</Text>
+                  </View>
+                  {meal.meals && meal.meals.length > 0 && (
+                    <Text style={styles.savedMealInfo}>
+                      {meal.meals[0]?.totalCalories || 0}kcal · 7일 식단
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              ))}
             </View>
           )}
         </ScrollView>
@@ -366,15 +368,11 @@ const MealRecommendScreen = () => {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => setScreen('welcome')}>
-            <Text style={styles.icon}>←</Text>
+          <TouchableOpacity onPress={() => setScreen('welcome')}>
+            <Icon name="chevron-back" size={28} color="#ffffff" />
           </TouchableOpacity>
-          <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle}>금지 식재료 관리</Text>
-          </View>
-          <View style={styles.iconPlaceholder} />
+          <Text style={styles.headerTitle}>금지 식재료 관리</Text>
+          <View style={{width: 28}} />
         </View>
 
         <ScrollView style={styles.excludedForm} contentContainerStyle={styles.excludedFormContent}>
@@ -423,21 +421,19 @@ const MealRecommendScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => setScreen('welcome')}>
+          <Icon name="chevron-back" size={28} color="#ffffff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>7일 식단표</Text>
+        <View style={{width: 28}} />
+      </View>
       <ScrollView style={styles.contentWrapper} showsVerticalScrollIndicator={false}>
-        <View style={styles.mealHeader}>
-          <View style={styles.header}>
-            <TouchableOpacity
-              style={styles.iconBtn}
-              onPress={() => setScreen('welcome')}>
-              <Text style={styles.icon}>←</Text>
-            </TouchableOpacity>
-            <View style={styles.headerTitleContainer}>
-              <Text style={styles.headerTitle}>7일 식단표</Text>
-            </View>
-            <View style={styles.iconPlaceholder} />
+        {currentMeal && (
+          <View style={styles.mealDateContainer}>
+            <Text style={styles.mealDate}>{currentMeal.fullDate}</Text>
           </View>
-          {currentMeal && <Text style={styles.mealDate}>{currentMeal.fullDate}</Text>}
-        </View>
+        )}
 
         <ScrollView
           horizontal
@@ -636,7 +632,7 @@ const MealRecommendScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111',
+    backgroundColor: '#111111',
   },
   contentWrapper: {
     flex: 1,
@@ -720,39 +716,36 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   savedMealsSection: {
+    width: '100%',
     marginTop: 30,
-    width: '90%',
-    alignSelf: 'center',
+    padding: 20,
   },
   savedMealsTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#ffffff',
-    marginBottom: 16,
-  },
-  savedMealsList: {
-    gap: 10,
+    marginBottom: 15,
   },
   savedMealItem: {
+    backgroundColor: '#222222',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  savedMealHeader: {
     flexDirection: 'row',
-    backgroundColor: '#464646',
-    borderRadius: 10,
-    padding: 12,
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  savedMealInfo: {
-    flex: 1,
+    marginBottom: 8,
   },
   savedMealDate: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     color: '#ffffff',
-    marginBottom: 4,
   },
-  savedMealSummary: {
+  savedMealInfo: {
     fontSize: 14,
-    color: '#9ca3af',
+    color: '#999999',
   },
   btnIconSmall: {
     backgroundColor: '#464646',
@@ -765,36 +758,23 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 16,
-    position: 'relative',
-  },
-  headerTitleContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
     alignItems: 'center',
-    justifyContent: 'center',
-    pointerEvents: 'none',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
   },
   headerTitle: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  iconBtn: {
-    backgroundColor: 'transparent',
-    padding: 8,
-  },
-  icon: {
     fontSize: 20,
+    fontWeight: '700',
     color: '#ffffff',
   },
-  iconPlaceholder: {
-    width: 40,
+  mealDateContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
+    alignItems: 'center',
   },
   excludedForm: {
     flex: 1,
@@ -875,16 +855,10 @@ const styles = StyleSheet.create({
     height: 56,
     marginTop: 20,
   },
-  mealHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 10,
-  },
   mealDate: {
     fontSize: 14,
-    color: '#ffffff',
+    color: '#999999',
     textAlign: 'center',
-    marginTop: 8,
   },
   dayTabs: {
     marginVertical: 10,

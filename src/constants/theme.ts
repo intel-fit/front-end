@@ -1,5 +1,5 @@
 export const TAB_BAR_THEME = {
-  activeTintColor: '#6C5CE7',
+  activeTintColor: '#e3ff7c',
   inactiveTintColor: '#999999',
   backgroundColor: '#1a1a1a',
   borderTopColor: '#333333',

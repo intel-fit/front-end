@@ -12,8 +12,8 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import {colors} from '../theme/colors';
-import FoodAddOptionsModal from '../components/FoodAddOptionsModal';
+import {colors} from '../../theme/colors';
+import FoodAddOptionsModal from '../../components/modals/FoodAddOptionsModal';
 
 interface Food {
   id: number;

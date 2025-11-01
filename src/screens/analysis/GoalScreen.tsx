@@ -10,7 +10,7 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons as Icon } from '@expo/vector-icons';
-import {colors} from '../theme/colors';
+import {colors} from '../../theme/colors';
 
 const GoalScreen = ({navigation}: any) => {
   const [goals, setGoals] = useState({

@@ -7,10 +7,10 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {colors} from '../theme/colors';
+import {colors} from '../../theme/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import ExerciseScreen from './ExerciseScreen';
-import DietScreen from './DietScreen';
+import ExerciseScreen from '../exercise/ExerciseScreen';
+import DietScreen from '../diet/DietScreen';
 
 const StatsScreen = ({navigation}: any) => {
   const [activeTab, setActiveTab] = useState(0);
@@ -45,7 +45,7 @@ const StatsScreen = ({navigation}: any) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>기록하기</Text>
       </View>
@@ -86,11 +86,14 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: colors.text,
+    textAlign: 'center',
   },
   tabsContainer: {
     flexDirection: 'row',

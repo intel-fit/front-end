@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {Ionicons as Icon} from '@expo/vector-icons';
-import {colors} from '../theme/colors';
+import {colors} from '../../theme/colors';
 
 interface MealRecommendModalProps {
   isOpen: boolean;

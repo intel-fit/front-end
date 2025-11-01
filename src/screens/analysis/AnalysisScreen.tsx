@@ -8,8 +8,8 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import { Ionicons as Icon } from '@expo/vector-icons';
-import {colors} from '../theme/colors';
-import InBodyPhotoModal from '../components/InBodyPhotoModal';
+import {colors} from '../../theme/colors';
+import InBodyPhotoModal from '../../components/modals/InBodyPhotoModal';
 
 const AnalysisScreen = ({navigation}: any) => {
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
