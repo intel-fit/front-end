@@ -155,19 +155,19 @@ const ExerciseScreen = ({navigation}: any) => {
         {/* 7일 캘린더 위젯 */}
         <View style={styles.weekCalendar}>
           <View style={styles.calendarGrid}>
-            {[1, 2, 3, 4, 5, 6, 7].map((day, index) => (
+            {[11, 12, 13, 14, 15, 16, 17].map((day, index) => (
               <View key={day} style={styles.calendarItem}>
                 <View
                   style={[
                     styles.calendarNumber,
-                    index === 3 && styles.calendarNumberToday,
+                    index === 4 && styles.calendarNumberToday,
                   ]}>
                   <Text
                     style={[
                       styles.calendarNumberText,
-                      index === 3 && styles.calendarNumberTodayText,
+                      index === 4 && styles.calendarNumberTodayText,
                     ]}>
-                    15
+                    {day}
                   </Text>
                 </View>
                 <Text style={styles.calendarCalories}>388k</Text>
@@ -208,17 +208,6 @@ const ExerciseScreen = ({navigation}: any) => {
           <View style={styles.logTimeline}>
             {activities.map((activity, index) => (
               <View key={activity.id} style={styles.logItem}>
-                <View style={styles.timelineLine}>
-                  <View
-                    style={[
-                      styles.timelineDot,
-                      activity.isCompleted && styles.timelineDotCompleted,
-                    ]}
-                  />
-                  {index !== activities.length - 1 && (
-                    <View style={styles.timelineConnector} />
-                  )}
-                </View>
                 <TouchableOpacity
                   style={styles.logCard}
                   onPress={() => handleExerciseClick(activity)}
@@ -232,7 +221,6 @@ const ExerciseScreen = ({navigation}: any) => {
               </View>
             ))}
             <View style={styles.addItem}>
-              <View style={styles.timelineDotAdd} />
               <TouchableOpacity style={styles.addBtn} onPress={handleAddWorkout}>
                 <Text style={styles.addBtnText}>운동 추가하기</Text>
               </TouchableOpacity>
@@ -302,31 +290,34 @@ const styles = StyleSheet.create({
   calendarItem: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    justifyContent: 'flex-start',
+    gap: 6,
+    minHeight: 79,
   },
   calendarNumber: {
-    height: 19,
+    minHeight: 30,
+    minWidth: 30,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 4,
   },
   calendarNumberToday: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#e3ff7c',
   },
   calendarNumberText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#738700',
-    lineHeight: 19.36,
+    color: '#e3ff7c',
+    lineHeight: 19,
+    textAlign: 'center',
   },
   calendarNumberTodayText: {
-    color: '#000000',
+    color: '#e3ff7c',
     fontSize: 16,
     fontWeight: '700',
-    lineHeight: 1,
+    lineHeight: 19,
   },
   calendarCalories: {
     fontSize: 12,
@@ -470,18 +461,18 @@ const styles = StyleSheet.create({
   },
   addBtn: {
     flex: 1,
-    backgroundColor: colors.cardBackground,
+    backgroundColor: colors.white,
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: colors.primary,
+    borderColor: colors.white,
     borderStyle: 'dashed',
   },
   addBtnText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.primary,
+    color: colors.black,
   },
 });
 

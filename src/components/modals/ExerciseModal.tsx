@@ -189,7 +189,8 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                style={styles.filterContainer}>
+                style={styles.filterContainer}
+                contentContainerStyle={styles.filterContent}>
                 {categories.map(category => (
                   <TouchableOpacity
                     key={category}
@@ -362,16 +363,24 @@ const styles = StyleSheet.create({
   },
   filterContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 8,
+    paddingTop: 0,
+  },
+  filterContent: {
+    paddingVertical: 0,
+    alignItems: 'flex-start',
   },
   filterBtn: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 2,
     borderRadius: 20,
     backgroundColor: '#2a2a2a',
     borderWidth: 1,
     borderColor: '#404040',
     marginRight: 8,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   filterBtnActive: {
     backgroundColor: '#404040',

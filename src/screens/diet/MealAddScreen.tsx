@@ -223,11 +223,13 @@ const MealAddScreen = ({navigation}: any) => {
         </View>
 
         {/* 음식 추가하기 버튼 */}
-        <TouchableOpacity
-          style={styles.addFoodButton}
-          onPress={handleAddFood}>
-          <Text style={styles.addFoodButtonText}>음식 추가하기</Text>
-        </TouchableOpacity>
+        <View style={styles.addFoodButtonContainer}>
+          <TouchableOpacity
+            style={styles.addFoodButton}
+            onPress={handleAddFood}>
+            <Text style={styles.addFoodButtonText}>음식 추가하기</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       <FoodAddOptionsModal
@@ -418,9 +420,11 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: '#ffffff',
   },
+  addFoodButtonContainer: {
+    paddingHorizontal: 20,
+  },
   addFoodButton: {
     width: '100%',
-    marginHorizontal: 20,
     backgroundColor: '#e3ff7c',
     paddingVertical: 18,
     borderRadius: 10,
