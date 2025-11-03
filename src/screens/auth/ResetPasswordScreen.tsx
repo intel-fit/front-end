@@ -10,7 +10,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import {authAPI} from '../../services/api';
+import {authAPI} from '../../services';
 
 const ResetPasswordScreen = ({navigation}: any) => {
   const [step, setStep] = useState(1);

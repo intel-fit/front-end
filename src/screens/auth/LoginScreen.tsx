@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import {colors} from '../../theme/colors';
-import {authAPI} from '../../services/api';
+import {authAPI} from '../../services';
 
 const LoginScreen = ({navigation}: any) => {
   const [formData, setFormData] = useState({
