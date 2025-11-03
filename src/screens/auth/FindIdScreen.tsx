@@ -8,14 +8,17 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
+import {authAPI} from '../../services/api';
 
 const FindIdScreen = ({navigation}: any) => {
   const [email, setEmail] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!email.trim()) {
       setError('이메일을 입력해주세요');
       return;
@@ -26,9 +29,19 @@ const FindIdScreen = ({navigation}: any) => {
       return;
     }
 
-    console.log('아이디 찾기:', email);
-    setIsSubmitted(true);
+    setLoading(true);
     setError('');
+    try {
+      const response = await authAPI.findUserId(email);
+      
+      if (response.success) {
+        setIsSubmitted(true);
+      }
+    } catch (error: any) {
+      setError(error.message || '아이디 찾기에 실패했습니다');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (isSubmitted) {
@@ -91,8 +104,15 @@ const FindIdScreen = ({navigation}: any) => {
                 {error && <Text style={styles.errorMessage}>{error}</Text>}
               </View>
 
-              <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-                <Text style={styles.submitBtnText}>확인</Text>
+              <TouchableOpacity 
+                style={[styles.submitBtn, loading && styles.submitBtnDisabled]} 
+                onPress={handleSubmit}
+                disabled={loading}>
+                {loading ? (
+                  <ActivityIndicator color="#000000" />
+                ) : (
+                  <Text style={styles.submitBtnText}>확인</Text>
+                )}
               </TouchableOpacity>
             </View>
 
@@ -186,6 +206,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  submitBtnDisabled: {
+    opacity: 0.6,
+  },
   submitBtnText: {
     color: '#000000',
     fontSize: 16,
@@ -201,19 +224,23 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   successMessage: {
+    alignItems: 'center',
     textAlign: 'center',
     marginBottom: 16,
+    width: '100%',
   },
   successTitle: {
     color: '#ffffff',
     fontWeight: '700',
     fontSize: 18,
     marginBottom: 20,
+    textAlign: 'center',
   },
   successText: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '400',
+    textAlign: 'center',
   },
   backBtn: {
     width: '100%',

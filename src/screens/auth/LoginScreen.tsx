@@ -8,8 +8,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import {colors} from '../../theme/colors';
+import {authAPI} from '../../services/api';
 
 const LoginScreen = ({navigation}: any) => {
   const [formData, setFormData] = useState({
@@ -17,6 +20,7 @@ const LoginScreen = ({navigation}: any) => {
     password: '',
   });
   const [errors, setErrors] = useState<{username?: string; password?: string}>({});
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (name: string, value: string) => {
     setFormData(prev => ({
@@ -46,10 +50,24 @@ const LoginScreen = ({navigation}: any) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
-    if (validateForm()) {
-      console.log('로그인 시도:', formData);
-      navigation.replace('Main');
+  const handleSubmit = async () => {
+    if (!validateForm()) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await authAPI.login(formData.username, formData.password);
+      
+      if (response.success && response.accessToken) {
+        navigation.replace('Main');
+      } else {
+        Alert.alert('로그인 실패', response.message || '로그인에 실패했습니다');
+      }
+    } catch (error: any) {
+      Alert.alert('로그인 실패', error.message || '로그인에 실패했습니다');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -96,8 +114,15 @@ const LoginScreen = ({navigation}: any) => {
               )}
             </View>
 
-            <TouchableOpacity style={styles.loginBtn} onPress={handleSubmit}>
-              <Text style={styles.loginBtnText}>로그인</Text>
+            <TouchableOpacity 
+              style={[styles.loginBtn, loading && styles.loginBtnDisabled]} 
+              onPress={handleSubmit}
+              disabled={loading}>
+              {loading ? (
+                <ActivityIndicator color={colors.text} />
+              ) : (
+                <Text style={styles.loginBtnText}>로그인</Text>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -133,8 +158,9 @@ const styles = StyleSheet.create({
   },
   loginContainer: {
     flex: 1,
-    width: 402,
+    width: '100%',
     paddingTop: 120,
+    paddingHorizontal: 20,
     alignItems: 'center',
   },
   logoContainer: {
@@ -149,7 +175,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   form: {
-    width: 360,
+    width: '100%',
+    maxWidth: 360,
     marginBottom: 30,
     gap: 20,
   },
@@ -184,6 +211,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     opacity: 0.6,
   },
+  loginBtnDisabled: {
+    opacity: 0.4,
+  },
   loginBtnText: {
     color: colors.text,
     fontSize: 18,
@@ -193,7 +223,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 24,
-    width: 360,
+    width: '100%',
+    maxWidth: 360,
     marginBottom: 30,
   },
   linkText: {
@@ -202,7 +233,8 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   kakaoBtn: {
-    width: 360,
+    width: '100%',
+    maxWidth: 360,
     height: 50,
     backgroundColor: '#ffe617',
     borderRadius: 20,

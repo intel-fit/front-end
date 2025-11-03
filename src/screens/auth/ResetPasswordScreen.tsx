@@ -8,14 +8,17 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
+import {authAPI} from '../../services/api';
 
 const ResetPasswordScreen = ({navigation}: any) => {
   const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     username: '',
-    currentPassword: '',
+    tempPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
@@ -38,10 +41,6 @@ const ResetPasswordScreen = ({navigation}: any) => {
       newErrors.email = '올바른 이메일 형식이 아닙니다';
     }
 
-    if (!formData.username.trim()) {
-      newErrors.username = '아이디를 입력해주세요';
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -49,15 +48,17 @@ const ResetPasswordScreen = ({navigation}: any) => {
   const validateStep2 = () => {
     const newErrors: any = {};
 
-    if (!formData.currentPassword.trim()) {
-      newErrors.currentPassword = '현재 비밀번호를 입력해주세요';
+    if (!formData.tempPassword.trim()) {
+      newErrors.tempPassword = '임시 비밀번호를 입력해주세요';
+    } else if (!/^[A-Z]{6}$/.test(formData.tempPassword)) {
+      newErrors.tempPassword = '임시 비밀번호는 6자리 대문자 영문입니다';
     }
 
     if (!formData.newPassword.trim()) {
       newErrors.newPassword = '새 비밀번호를 입력해주세요';
     } else if (formData.newPassword.length < 8) {
       newErrors.newPassword = '비밀번호는 8자 이상이어야 합니다';
-    } else if (!/(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*])/.test(formData.newPassword)) {
+    } else if (!/(?=.*[a-zA-Z])(?=.*\d)(?=.*[@$!%*?&])/.test(formData.newPassword)) {
       newErrors.newPassword = '숫자, 문자, 특수문자를 포함해야 합니다';
     }
 
@@ -71,17 +72,57 @@ const ResetPasswordScreen = ({navigation}: any) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleStep1Submit = () => {
-    if (validateStep1()) {
-      console.log('비밀번호 재설정 요청:', formData);
-      setStep(2);
+  const handleStep1Submit = async () => {
+    if (!validateStep1()) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await authAPI.resetPassword(formData.email);
+      
+      if (response.success) {
+        Alert.alert('임시 비밀번호 발송', '이메일로 임시 비밀번호가 발송되었습니다', [
+          {
+            text: '확인',
+            onPress: () => setStep(2),
+          },
+        ]);
+      }
+    } catch (error: any) {
+      Alert.alert('오류', error.message || '임시 비밀번호 발송에 실패했습니다');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleStep2Submit = () => {
-    if (validateStep2()) {
-      console.log('비밀번호 재설정 완료:', formData);
-      setIsSubmitted(true);
+  const handleStep2Submit = async () => {
+    if (!validateStep2()) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await authAPI.changePassword(
+        formData.tempPassword,
+        formData.newPassword,
+        formData.confirmPassword
+      );
+      
+      if (response.success) {
+        setIsSubmitted(true);
+      }
+    } catch (error: any) {
+      const errorMessage = error.message || '비밀번호 변경에 실패했습니다';
+      // 임시 비밀번호 관련 에러인 경우 tempPassword 필드에 에러 표시
+      if (errorMessage.includes('임시 비밀번호') || error.status === 400 || error.status === 404) {
+        setErrors((prev: any) => ({...prev, tempPassword: errorMessage}));
+      } else {
+        // 기타 에러는 newPassword 필드에 표시
+        setErrors((prev: any) => ({...prev, newPassword: errorMessage}));
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -143,23 +184,15 @@ const ResetPasswordScreen = ({navigation}: any) => {
                   )}
                 </View>
 
-                <View style={styles.inputGroup}>
-                  <TextInput
-                    style={[styles.input, errors.username && styles.inputError]}
-                    placeholder="아이디를 입력해주세요"
-                    value={formData.username}
-                    onChangeText={text => handleChange('username', text)}
-                    placeholderTextColor="rgba(255, 255, 255, 0.7)"
-                  />
-                  {errors.username && (
-                    <Text style={styles.errorMessage}>{errors.username}</Text>
-                  )}
-                </View>
-
                 <TouchableOpacity
-                  style={styles.submitBtn}
-                  onPress={handleStep1Submit}>
-                  <Text style={styles.submitBtnText}>확인</Text>
+                  style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
+                  onPress={handleStep1Submit}
+                  disabled={loading}>
+                  {loading ? (
+                    <ActivityIndicator color="#000000" />
+                  ) : (
+                    <Text style={styles.submitBtnText}>확인</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             ) : (
@@ -168,17 +201,18 @@ const ResetPasswordScreen = ({navigation}: any) => {
                   <TextInput
                     style={[
                       styles.input,
-                      errors.currentPassword && styles.inputError,
+                      errors.tempPassword && styles.inputError,
                     ]}
-                    placeholder="현재 비밀번호"
-                    value={formData.currentPassword}
-                    onChangeText={text => handleChange('currentPassword', text)}
-                    secureTextEntry
+                    placeholder="임시 비밀번호 (6자리 대문자)"
+                    value={formData.tempPassword}
+                    onChangeText={text => handleChange('tempPassword', text.toUpperCase())}
+                    autoCapitalize="characters"
+                    maxLength={6}
                     placeholderTextColor="rgba(255, 255, 255, 0.7)"
                   />
-                  {errors.currentPassword && (
+                  {errors.tempPassword && (
                     <Text style={styles.errorMessage}>
-                      {errors.currentPassword}
+                      {errors.tempPassword}
                     </Text>
                   )}
                 </View>
@@ -220,9 +254,14 @@ const ResetPasswordScreen = ({navigation}: any) => {
                 </View>
 
                 <TouchableOpacity
-                  style={styles.submitBtn}
-                  onPress={handleStep2Submit}>
-                  <Text style={styles.submitBtnText}>확인</Text>
+                  style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
+                  onPress={handleStep2Submit}
+                  disabled={loading}>
+                  {loading ? (
+                    <ActivityIndicator color="#000000" />
+                  ) : (
+                    <Text style={styles.submitBtnText}>확인</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             )}
@@ -319,6 +358,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  submitBtnDisabled: {
+    opacity: 0.6,
+  },
   submitBtnText: {
     color: '#000000',
     fontSize: 16,
@@ -334,18 +376,22 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   successMessage: {
+    alignItems: 'center',
     textAlign: 'center',
+    width: '100%',
   },
   successTitle: {
     color: '#ffffff',
     fontWeight: '700',
     fontSize: 18,
     marginBottom: 20,
+    textAlign: 'center',
   },
   successText: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '400',
+    textAlign: 'center',
   },
   backBtn: {
     width: '100%',
