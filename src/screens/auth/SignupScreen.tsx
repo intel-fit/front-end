@@ -13,7 +13,7 @@ import {
   Modal,
 } from 'react-native';
 import {Picker} from '@react-native-picker/picker';
-import {authAPI} from '../../services/api';
+import {authAPI} from '../../services';
 
 const SignupScreen = ({navigation}: any) => {
   const [step, setStep] = useState(1);
