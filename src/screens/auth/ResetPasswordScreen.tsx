@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import {authAPI} from '../../services/api';
@@ -114,7 +113,14 @@ const ResetPasswordScreen = ({navigation}: any) => {
         setIsSubmitted(true);
       }
     } catch (error: any) {
-      Alert.alert('오류', error.message || '비밀번호 변경에 실패했습니다');
+      const errorMessage = error.message || '비밀번호 변경에 실패했습니다';
+      // 임시 비밀번호 관련 에러인 경우 tempPassword 필드에 에러 표시
+      if (errorMessage.includes('임시 비밀번호') || error.status === 400 || error.status === 404) {
+        setErrors((prev: any) => ({...prev, tempPassword: errorMessage}));
+      } else {
+        // 기타 에러는 newPassword 필드에 표시
+        setErrors((prev: any) => ({...prev, newPassword: errorMessage}));
+      }
     } finally {
       setLoading(false);
     }
@@ -370,18 +376,22 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   successMessage: {
+    alignItems: 'center',
     textAlign: 'center',
+    width: '100%',
   },
   successTitle: {
     color: '#ffffff',
     fontWeight: '700',
     fontSize: 18,
     marginBottom: 20,
+    textAlign: 'center',
   },
   successText: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '400',
+    textAlign: 'center',
   },
   backBtn: {
     width: '100%',

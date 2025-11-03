@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import {authAPI} from '../../services/api';
@@ -37,13 +36,9 @@ const FindIdScreen = ({navigation}: any) => {
       
       if (response.success) {
         setIsSubmitted(true);
-        if (response.maskedUserId) {
-          Alert.alert('아이디 찾기', `아이디: ${response.maskedUserId}\n\n이메일로 전체 아이디가 발송되었습니다`);
-        }
       }
     } catch (error: any) {
       setError(error.message || '아이디 찾기에 실패했습니다');
-      Alert.alert('오류', error.message || '아이디 찾기에 실패했습니다');
     } finally {
       setLoading(false);
     }
@@ -229,19 +224,23 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   successMessage: {
+    alignItems: 'center',
     textAlign: 'center',
     marginBottom: 16,
+    width: '100%',
   },
   successTitle: {
     color: '#ffffff',
     fontWeight: '700',
     fontSize: 18,
     marginBottom: 20,
+    textAlign: 'center',
   },
   successText: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '400',
+    textAlign: 'center',
   },
   backBtn: {
     width: '100%',
