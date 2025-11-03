@@ -62,10 +62,20 @@ const LoginScreen = ({navigation}: any) => {
       if (response.success && response.accessToken) {
         navigation.replace('Main');
       } else {
-        Alert.alert('로그인 실패', response.message || '로그인에 실패했습니다');
+        const errorMessage = response.message || '로그인에 실패했습니다';
+        if (Platform.OS === 'web') {
+          window.alert(`로그인 실패\n${errorMessage}`);
+        } else {
+          Alert.alert('로그인 실패', errorMessage);
+        }
       }
     } catch (error: any) {
-      Alert.alert('로그인 실패', error.message || '로그인에 실패했습니다');
+      const errorMessage = error.message || '로그인에 실패했습니다';
+      if (Platform.OS === 'web') {
+        window.alert(`로그인 실패\n${errorMessage}`);
+      } else {
+        Alert.alert('로그인 실패', errorMessage);
+      }
     } finally {
       setLoading(false);
     }
