@@ -8,14 +8,18 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
+import {authAPI} from '../../services/api';
 
 const FindIdScreen = ({navigation}: any) => {
   const [email, setEmail] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!email.trim()) {
       setError('이메일을 입력해주세요');
       return;
@@ -26,9 +30,23 @@ const FindIdScreen = ({navigation}: any) => {
       return;
     }
 
-    console.log('아이디 찾기:', email);
-    setIsSubmitted(true);
+    setLoading(true);
     setError('');
+    try {
+      const response = await authAPI.findUserId(email);
+      
+      if (response.success) {
+        setIsSubmitted(true);
+        if (response.maskedUserId) {
+          Alert.alert('아이디 찾기', `아이디: ${response.maskedUserId}\n\n이메일로 전체 아이디가 발송되었습니다`);
+        }
+      }
+    } catch (error: any) {
+      setError(error.message || '아이디 찾기에 실패했습니다');
+      Alert.alert('오류', error.message || '아이디 찾기에 실패했습니다');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (isSubmitted) {
@@ -91,8 +109,15 @@ const FindIdScreen = ({navigation}: any) => {
                 {error && <Text style={styles.errorMessage}>{error}</Text>}
               </View>
 
-              <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-                <Text style={styles.submitBtnText}>확인</Text>
+              <TouchableOpacity 
+                style={[styles.submitBtn, loading && styles.submitBtnDisabled]} 
+                onPress={handleSubmit}
+                disabled={loading}>
+                {loading ? (
+                  <ActivityIndicator color="#000000" />
+                ) : (
+                  <Text style={styles.submitBtnText}>확인</Text>
+                )}
               </TouchableOpacity>
             </View>
 
@@ -185,6 +210,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  submitBtnDisabled: {
+    opacity: 0.6,
   },
   submitBtnText: {
     color: '#000000',
