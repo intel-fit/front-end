@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import {authAPI} from '../../services';
 
@@ -82,15 +83,32 @@ const ResetPasswordScreen = ({navigation}: any) => {
       const response = await authAPI.resetPassword(formData.email);
       
       if (response.success) {
-        Alert.alert('임시 비밀번호 발송', '이메일로 임시 비밀번호가 발송되었습니다', [
-          {
-            text: '확인',
-            onPress: () => setStep(2),
-          },
-        ]);
+        if (Platform.OS === 'web') {
+          window.alert('임시 비밀번호 발송\n이메일로 임시 비밀번호가 발송되었습니다');
+          setStep(2);
+        } else {
+          Alert.alert('임시 비밀번호 발송', '이메일로 임시 비밀번호가 발송되었습니다', [
+            {
+              text: '확인',
+              onPress: () => setStep(2),
+            },
+          ]);
+        }
+      } else {
+        const errorMessage = response.message || '임시 비밀번호 발송에 실패했습니다';
+        if (Platform.OS === 'web') {
+          window.alert(`오류\n${errorMessage}`);
+        } else {
+          Alert.alert('오류', errorMessage);
+        }
       }
     } catch (error: any) {
-      Alert.alert('오류', error.message || '임시 비밀번호 발송에 실패했습니다');
+      const errorMessage = error.message || '임시 비밀번호 발송에 실패했습니다';
+      if (Platform.OS === 'web') {
+        window.alert(`오류\n${errorMessage}`);
+      } else {
+        Alert.alert('오류', errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -111,6 +129,15 @@ const ResetPasswordScreen = ({navigation}: any) => {
       
       if (response.success) {
         setIsSubmitted(true);
+      } else {
+        const errorMessage = response.message || '비밀번호 변경에 실패했습니다';
+        // 임시 비밀번호 관련 에러인 경우 tempPassword 필드에 에러 표시
+        if (errorMessage.includes('임시 비밀번호')) {
+          setErrors((prev: any) => ({...prev, tempPassword: errorMessage}));
+        } else {
+          // 기타 에러는 newPassword 필드에 표시
+          setErrors((prev: any) => ({...prev, newPassword: errorMessage}));
+        }
       }
     } catch (error: any) {
       const errorMessage = error.message || '비밀번호 변경에 실패했습니다';
