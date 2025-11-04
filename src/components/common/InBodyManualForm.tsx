@@ -7,12 +7,14 @@ import {
   StyleSheet,
   ScrollView,
 } from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 interface InBodyManualFormProps {
   onSubmit: (data: any) => void;
 }
 
 const InBodyManualForm: React.FC<InBodyManualFormProps> = ({onSubmit}) => {
+  const insets = useSafeAreaInsets();
   const [v, setV] = useState({
     date: new Date().toISOString().slice(0, 10),
     gender: 'female',
@@ -87,8 +89,15 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({onSubmit}) => {
     </View>
   );
 
+  const inputHeight = 40; // 입력창 높이 (paddingVertical 8px * 2 + 텍스트 높이 ~24px)
+  const bottomPadding = Math.max(50, insets.bottom + inputHeight + 20);
+
   return (
-    <ScrollView style={formStyles.wrap} showsVerticalScrollIndicator={false}>
+    <ScrollView 
+      style={formStyles.wrap} 
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={[formStyles.scrollContent, {paddingBottom: bottomPadding}]}
+    >
       {/* 기본 정보 */}
       <View style={formStyles.sec}>
         <Field label="검사일">
@@ -328,6 +337,9 @@ const formStyles = StyleSheet.create({
     maxWidth: '100%',
     backgroundColor: '#1b1b1b',
     padding: 16,
+  },
+  scrollContent: {
+    paddingBottom: 60,
   },
   h3: {
     marginVertical: 6,
