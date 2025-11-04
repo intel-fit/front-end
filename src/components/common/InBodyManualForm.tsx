@@ -90,7 +90,7 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({onSubmit}) => {
   );
 
   const inputHeight = 40; // 입력창 높이 (paddingVertical 8px * 2 + 텍스트 높이 ~24px)
-  const bottomPadding = Math.max(100, insets.bottom + inputHeight + 40);
+  const bottomPadding = Math.max(50, insets.bottom + inputHeight + 20);
 
   return (
     <ScrollView 
