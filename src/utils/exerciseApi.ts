@@ -101,3 +101,29 @@ export const fetchExercises = async (params: ExerciseApiParams = {}): Promise<Ex
   }
 };
 
+// 단일 운동 상세 조회
+export const fetchExerciseDetail = async (externalId: string): Promise<any> => {
+  try {
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const url = `${EXERCISE_API_URL}/${encodeURIComponent(externalId)}`;
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token || ''}`,
+        Accept: 'application/json',
+      },
+    });
+    return response.data;
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      console.error('운동 상세 API 에러:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+    } else {
+      console.error('운동 상세 예외:', error);
+    }
+    throw error;
+  }
+};
+
