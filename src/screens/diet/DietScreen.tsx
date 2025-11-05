@@ -11,7 +11,8 @@ import { Ionicons as Icon } from '@expo/vector-icons';
 import {colors} from '../../theme/colors';
 
 const DietScreen = ({navigation}: any) => {
-  const [currentMonth, setCurrentMonth] = useState('10월');
+  const [monthBase, setMonthBase] = useState(new Date());
+  const [showMonthView, setShowMonthView] = useState(false);
 
   const nutritionData = {
     total: 384,
@@ -62,30 +63,110 @@ const DietScreen = ({navigation}: any) => {
         {/* 월 네비게이션 */}
         <View style={styles.monthNavigation}>
           <View style={styles.monthNavLeft}>
-            <TouchableOpacity style={styles.navBtn}>
+            <TouchableOpacity
+              style={styles.navBtn}
+              onPress={() =>
+                setMonthBase(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))
+              }
+            >
               <Icon name="chevron-back" size={18} color={colors.text} />
             </TouchableOpacity>
-            <Text style={styles.monthText}>{currentMonth}</Text>
-            <TouchableOpacity style={styles.navBtn}>
+            <Text style={styles.monthText}>{`${monthBase.getMonth() + 1}월`}</Text>
+            <TouchableOpacity
+              style={styles.navBtn}
+              onPress={() =>
+                setMonthBase(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))
+              }
+            >
               <Icon name="chevron-forward" size={18} color={colors.text} />
             </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.menuBtn}>
+          <TouchableOpacity
+            style={styles.menuBtn}
+            onPress={() => {
+              setShowMonthView(prev => {
+                const next = !prev;
+                if (!next) setMonthBase(new Date());
+                return next;
+              });
+            }}
+          >
             <Icon name="menu" size={20} color={colors.text} />
           </TouchableOpacity>
         </View>
-        {/* 7일 캘린더 */}
-        <View style={styles.weekCalendar}>
-          <View style={styles.calendarGrid}>
-            {[1, 2, 3, 4, 5, 6, 7].map(day => (
-              <View key={day} style={styles.calendarItem}>
-                <Text style={styles.calendarNumber}>15</Text>
-                <Text style={styles.calendarCalories}>388k</Text>
-                <Text style={styles.calendarPercentage}>97%</Text>
-              </View>
-            ))}
+
+        {/* 확장 달력 (운동 기록하기와 동일 구조/스타일) */}
+        {showMonthView && (
+          <View style={styles.monthGridContainer}>
+            {(() => {
+              const today = new Date();
+              const getStartOfWeek = (d: Date) => {
+                const n = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                const diff = n.getDay();
+                n.setDate(n.getDate() - diff);
+                return n;
+              };
+              const firstOfMonth = new Date(monthBase.getFullYear(), monthBase.getMonth(), 1);
+              const gridStart = getStartOfWeek(firstOfMonth);
+              const nextMonth = new Date(monthBase.getFullYear(), monthBase.getMonth() + 1, 1);
+              const daysInMonth = Math.round((nextMonth.getTime() - firstOfMonth.getTime()) / (1000*60*60*24));
+              const offset = firstOfMonth.getDay();
+              const totalCells = Math.ceil((offset + daysInMonth) / 7) * 7; // 21/28/35/42
+              const days = Array.from({length: totalCells}).map((_, i) => {
+                const d = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate()+i);
+                const isToday = d.toDateString() === today.toDateString();
+                const isCurrentMonth = d.getMonth() === monthBase.getMonth();
+                return { key: d.toISOString().slice(0,10), d, isToday, isCurrentMonth };
+              });
+              return (
+                <View style={styles.monthGrid}>
+                  {days.map(({key, d, isToday, isCurrentMonth}) => (
+                    <View key={key} style={styles.monthCell}>
+                      <View style={[styles.monthDateBadge, isToday && styles.monthDateBadgeToday]}>
+                        <Text style={[styles.monthDateText, isToday && styles.monthDateTextToday, !isCurrentMonth && styles.monthDateTextMuted]}>
+                          {d.getDate()}
+                        </Text>
+                      </View>
+                      <Text style={[styles.calendarCalories, !isCurrentMonth && styles.monthMuted]}>388k</Text>
+                      <Text style={[styles.calendarPercentage, !isCurrentMonth && styles.monthMuted]}>97%</Text>
+                    </View>
+                  ))}
+                </View>
+              );
+            })()}
           </View>
-        </View>
+        )}
+
+        {/* 7일 캘린더 (접힘 상태에서 이번 주 표시) */}
+        {!showMonthView && (
+          <View style={styles.weekCalendar}>
+            <View style={styles.calendarGrid}>
+              {(() => {
+                const today = new Date();
+                const getStartOfWeek = (d: Date) => {
+                  const n = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                  const diff = n.getDay();
+                  n.setDate(n.getDate() - diff);
+                  return n;
+                };
+                const startThis = getStartOfWeek(today);
+                return Array.from({length:7}).map((_, i) => {
+                  const d = new Date(startThis.getFullYear(), startThis.getMonth(), startThis.getDate()+i);
+                  const isToday = d.toDateString() === today.toDateString();
+                  return (
+                    <View key={startThis.toISOString()+i} style={styles.calendarItem}>
+                      <View style={[styles.calendarNumber, isToday && styles.calendarNumberToday]}>
+                        <Text style={[styles.calendarNumberText, isToday && styles.calendarNumberTodayText]}>{d.getDate()}</Text>
+                      </View>
+                      <Text style={styles.calendarCalories}>388k</Text>
+                      <Text style={styles.calendarPercentage}>97%</Text>
+                    </View>
+                  );
+                });
+              })()}
+            </View>
+          </View>
+        )}
 
         {/* 칼로리 섹션 */}
         <View style={styles.calorieSection}>
@@ -258,28 +339,91 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   weekCalendar: {
-    marginTop: 4,
-    marginBottom: 20,
+    marginTop: 1,
+    marginBottom: 6,
   },
   calendarGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 0,
     height: 79,
+    marginVertical: 6,
+  },
+  monthGridContainer: {
+    marginTop: 6,
+    marginBottom: 6,
+    paddingHorizontal: 4,
+  },
+  monthGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  monthCell: {
+    width: `${100 / 7}%`,
+    paddingVertical: 6,
+    alignItems: 'center',
+  },
+  monthDateBadge: {
+    minWidth: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  monthDateBadgeToday: {
+    backgroundColor: '#e3ff7c',
+  },
+  monthDateText: {
+    color: '#e3ff7c',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 19,
+    textAlign: 'center',
+  },
+  monthDateTextToday: {
+    color: '#000',
+  },
+  monthDateTextMuted: {
+    color: '#777777',
+  },
+  monthMuted: {
+    color: '#777777',
   },
   calendarItem: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    justifyContent: 'flex-start',
+    gap: 6,
+    minHeight: 79,
   },
   calendarNumber: {
+    minHeight: 30,
+    minWidth: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  calendarNumberText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#738700',
+    color: '#e3ff7c',
+    lineHeight: 19,
     textAlign: 'center',
-    height: 19,
-    lineHeight: 19.36,
+  },
+  calendarNumberToday: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#e3ff7c',
+  },
+  calendarNumberTodayText: {
+    color: '#000000',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 19,
+  },
+  calendarMutedText: {
+    color: '#777777',
   },
   calendarCalories: {
     fontSize: 12,

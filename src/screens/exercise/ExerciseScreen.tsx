@@ -37,7 +37,7 @@ interface Activity {
 }
 
 const ExerciseScreen = ({ navigation }: any) => {
-  const [currentMonth, setCurrentMonth] = useState("10월");
+  const [monthBase, setMonthBase] = useState(new Date());
   const [activities, setActivities] = useState<Activity[]>([]);
   const [goalData, setGoalData] = useState<WorkoutGoals>({
     frequency: 3,
@@ -47,6 +47,7 @@ const ExerciseScreen = ({ navigation }: any) => {
   });
   const [completedThisWeek, setCompletedThisWeek] = useState(0);
   const [weeklyCalories, setWeeklyCalories] = useState(0);
+  const [showMonthView, setShowMonthView] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
   const [selectedExercise, setSelectedExercise] = useState<Activity | null>(
@@ -301,44 +302,191 @@ const ExerciseScreen = ({ navigation }: any) => {
         {/* 월 네비게이션 */}
         <View style={styles.monthNavigation}>
           <View style={styles.monthNavLeft}>
-            <TouchableOpacity style={styles.navBtn}>
+            <TouchableOpacity
+              style={styles.navBtn}
+              onPress={() =>
+                setMonthBase(
+                  (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)
+                )
+              }
+            >
               <Icon name="chevron-back" size={18} color={colors.text} />
             </TouchableOpacity>
-            <Text style={styles.monthText}>{currentMonth}</Text>
-            <TouchableOpacity style={styles.navBtn}>
+            <Text style={styles.monthText}>{`${
+              monthBase.getMonth() + 1
+            }월`}</Text>
+            <TouchableOpacity
+              style={styles.navBtn}
+              onPress={() =>
+                setMonthBase(
+                  (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)
+                )
+              }
+            >
               <Icon name="chevron-forward" size={18} color={colors.text} />
             </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.menuBtn}>
+          <TouchableOpacity
+            style={styles.menuBtn}
+            onPress={() => {
+              setShowMonthView((prev) => {
+                const next = !prev;
+                if (!next) {
+                  // 접히는 순간 달을 현재 달로 복귀
+                  setMonthBase(new Date());
+                }
+                return next;
+              });
+            }}
+          >
             <Icon name="menu" size={20} color={colors.text} />
           </TouchableOpacity>
         </View>
-        {/* 7일 캘린더 위젯 */}
-        <View style={styles.weekCalendar}>
-          <View style={styles.calendarGrid}>
-            {[11, 12, 13, 14, 15, 16, 17].map((day, index) => (
-              <View key={day} style={styles.calendarItem}>
-                <View
-                  style={[
-                    styles.calendarNumber,
-                    index === 4 && styles.calendarNumberToday,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.calendarNumberText,
-                      index === 4 && styles.calendarNumberTodayText,
-                    ]}
-                  >
-                    {day}
-                  </Text>
+        {/* 확장 달력: 기본 달력 3줄(기준 달 1일이 포함된 주부터 표시, 넘어가는 날짜는 회색) */}
+        {showMonthView && (
+          <View style={styles.monthGridContainer}>
+            {(() => {
+              const today = new Date();
+              const getStartOfWeek = (d: Date) => {
+                const n = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                const diff = n.getDay(); // Sun=0
+                n.setDate(n.getDate() - diff);
+                return n;
+              };
+              const firstOfMonth = new Date(
+                monthBase.getFullYear(),
+                monthBase.getMonth(),
+                1
+              );
+              const gridStart = getStartOfWeek(firstOfMonth);
+              // 필요한 주 수(3~6주) 계산
+              const nextMonth = new Date(
+                monthBase.getFullYear(),
+                monthBase.getMonth() + 1,
+                1
+              );
+              const daysInMonth = Math.round(
+                (nextMonth.getTime() - firstOfMonth.getTime()) /
+                  (1000 * 60 * 60 * 24)
+              );
+              const offset = firstOfMonth.getDay();
+              const totalCells = Math.ceil((offset + daysInMonth) / 7) * 7; // 21/28/35/42
+              const days = Array.from({ length: totalCells }).map((_, i) => {
+                const d = new Date(
+                  gridStart.getFullYear(),
+                  gridStart.getMonth(),
+                  gridStart.getDate() + i
+                );
+                const isToday = d.toDateString() === today.toDateString();
+                const isCurrentMonth = d.getMonth() === monthBase.getMonth();
+                return {
+                  key: d.toISOString().slice(0, 10),
+                  d,
+                  isToday,
+                  isCurrentMonth,
+                };
+              });
+              return (
+                <View style={styles.monthGrid}>
+                  {days.map(({ key, d, isToday, isCurrentMonth }) => (
+                    <View key={key} style={styles.monthCell}>
+                      <View
+                        style={[
+                          styles.monthDateBadge,
+                          isToday && styles.monthDateBadgeToday,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.monthDateText,
+                            isToday && styles.monthDateTextToday,
+                            !isCurrentMonth && styles.monthDateTextMuted,
+                          ]}
+                        >
+                          {d.getDate()}
+                        </Text>
+                      </View>
+                      <Text
+                        style={[
+                          styles.calendarCalories,
+                          !isCurrentMonth && styles.monthMuted,
+                        ]}
+                      >
+                        388k
+                      </Text>
+                      <Text
+                        style={[
+                          styles.calendarPercentage,
+                          !isCurrentMonth && styles.monthMuted,
+                        ]}
+                      >
+                        97%
+                      </Text>
+                    </View>
+                  ))}
                 </View>
-                <Text style={styles.calendarCalories}>388k</Text>
-                <Text style={styles.calendarPercentage}>97%</Text>
-              </View>
-            ))}
+              );
+            })()}
           </View>
-        </View>
+        )}
+
+        {/* 7일 캘린더 위젯 (확장 모드가 아닐 때만 표시) */}
+        {!showMonthView && (
+          <View style={styles.weekCalendar}>
+            <View style={styles.calendarGrid}>
+              {(() => {
+                const today = new Date();
+                const getStartOfWeek = (d: Date) => {
+                  const n = new Date(
+                    d.getFullYear(),
+                    d.getMonth(),
+                    d.getDate()
+                  );
+                  const diff = n.getDay();
+                  n.setDate(n.getDate() - diff);
+                  return n;
+                };
+                // 접힘 상태에서는 항상 '이번 주'가 보이도록 today 기준
+                const startThis = getStartOfWeek(today);
+                return Array.from({ length: 7 }).map((_, index) => {
+                  const d = new Date(
+                    startThis.getFullYear(),
+                    startThis.getMonth(),
+                    startThis.getDate() + index
+                  );
+                  const label = String(d.getDate());
+                  const isToday = d.toDateString() === today.toDateString();
+                  return (
+                    <View
+                      key={startThis.toISOString() + "-w-" + index}
+                      style={styles.calendarItem}
+                    >
+                      <View
+                        style={[
+                          styles.calendarNumber,
+                          isToday && styles.calendarNumberToday,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.calendarNumberText,
+                            isToday && styles.calendarNumberTodayText,
+                          ]}
+                        >
+                          {label}
+                        </Text>
+                      </View>
+                      <Text style={styles.calendarCalories}>388k</Text>
+                      <Text style={styles.calendarPercentage}>97%</Text>
+                    </View>
+                  );
+                });
+              })()}
+            </View>
+          </View>
+        )}
+
+        {/* 확장 달력: 기존 주 아래는 제거(요청대로 하단은 이번주, 상단 두 줄만 표시) */}
 
         {/* 목표 카드 */}
         <TouchableOpacity
@@ -470,14 +618,55 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   weekCalendar: {
-    marginTop: 4,
-    marginBottom: 20,
+    marginTop: 1,
+    marginBottom: 6,
   },
   calendarGrid: {
     flexDirection: "row",
     justifyContent: "space-between",
     gap: 0,
     height: 79,
+    marginVertical: 6,
+  },
+  monthGridContainer: {
+    marginTop: 6,
+    marginBottom: 6,
+    paddingHorizontal: 4,
+  },
+  monthGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  monthCell: {
+    width: `${100 / 7}%`,
+    paddingVertical: 6,
+    alignItems: "center",
+  },
+  monthDateBadge: {
+    minWidth: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  monthDateBadgeToday: {
+    backgroundColor: "#e3ff7c",
+  },
+  monthDateText: {
+    color: "#e3ff7c", // 주간 위젯과 동일한 색감
+    fontSize: 16,
+    fontWeight: "700",
+    lineHeight: 19,
+    textAlign: "center",
+  },
+  monthDateTextToday: {
+    color: "#000",
+  },
+  monthDateTextMuted: {
+    color: "#777777",
+  },
+  monthMuted: {
+    color: "#777777",
   },
   calendarItem: {
     flex: 1,
@@ -497,6 +686,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
+    backgroundColor: "#e3ff7c",
   },
   calendarNumberText: {
     fontSize: 16,
@@ -506,7 +696,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   calendarNumberTodayText: {
-    color: "#e3ff7c",
+    color: "#000000",
     fontSize: 16,
     fontWeight: "700",
     lineHeight: 19,
