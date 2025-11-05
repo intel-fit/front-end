@@ -1,6 +1,6 @@
 # Intelfit
 
-React Native + Expo 기반의 헬스케어 애플리케이션 (모바일 & 웹 지원)
+인바디 기반 ai 펄스널 트레이너 
 
 ## 🚀 빠른 시작
 
