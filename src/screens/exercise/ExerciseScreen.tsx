@@ -210,11 +210,18 @@ const ExerciseScreen = ({navigation}: any) => {
             {activities.map((activity, index) => (
               <View key={activity.id} style={styles.logItem}>
                 <TouchableOpacity
-                  style={styles.logCard}
+                  style={[
+                    styles.logCard,
+                    activity.isCompleted
+                      ? styles.logCardCompleted
+                      : styles.logCardPending,
+                  ]}
                   onPress={() => handleExerciseClick(activity)}
                   onLongPress={() => handleDeleteWorkout(activity.id)}>
                   <View style={styles.logCardContent}>
-                    <Text style={styles.logName}>{activity.name}</Text>
+                    <Text style={[styles.logName, !activity.isCompleted && styles.logNamePending]}>
+                      {activity.name}
+                    </Text>
                     <Text style={styles.logDetails}>{activity.details}</Text>
                   </View>
                   <Text style={styles.logTime}>{activity.time}</Text>
@@ -425,12 +432,17 @@ const styles = StyleSheet.create({
   },
   logCard: {
     flex: 1,
-    backgroundColor: colors.cardBackground,
     borderRadius: 12,
     padding: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  logCardPending: {
+    backgroundColor: colors.white,
+  },
+  logCardCompleted: {
+    backgroundColor: colors.cardBackground,
   },
   logCardContent: {
     flex: 1,
@@ -440,6 +452,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
     marginBottom: 4,
+  },
+  logNamePending: {
+    color: colors.black,
   },
   logDetails: {
     fontSize: 14,

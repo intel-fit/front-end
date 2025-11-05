@@ -11,7 +11,10 @@ import {
 } from "react-native";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
-import { fetchExercises as fetchExerciseApi } from "../../utils/exerciseApi";
+import {
+  fetchExercises as fetchExerciseApi,
+  fetchExerciseDetail,
+} from "../../utils/exerciseApi";
 
 interface Set {
   id: number;
@@ -46,6 +49,10 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
     { id: 2, weight: 20, reps: 12, completed: false },
     { id: 3, weight: 20, reps: 12, completed: false },
   ]);
+  const [showInstructions, setShowInstructions] = useState<boolean>(false);
+  const [instructionLoading, setInstructionLoading] = useState<boolean>(false);
+  const [instructionText, setInstructionText] = useState<string>("");
+  const [instructionImageUrl, setInstructionImageUrl] = useState<string>("");
 
   useEffect(() => {
     if (isOpen) {
@@ -322,12 +329,37 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   const handleExerciseSelect = (exercise: any) => {
     setSelectedExercise(exercise);
     setCurrentMode("detail");
+    setShowInstructions(false);
     setSets([
       { id: 1, weight: 20, reps: 15, completed: false },
       { id: 2, weight: 20, reps: 12, completed: false },
       { id: 3, weight: 20, reps: 12, completed: false },
     ]);
+    // 상세 정보 미리 로드 시도 (설명 표시를 위한 사전 로딩)
+    if (exercise?.externalId) {
+      setInstructionLoading(true);
+      setInstructionText("");
+      fetchExerciseDetail(exercise.externalId)
+        .then((data: any) => {
+          const desc =
+            data?.description ||
+            data?.instructions ||
+            data?.howTo ||
+            data?.guide ||
+            data?.tip ||
+            "";
+          if (typeof desc === "string") setInstructionText(desc);
+          if (data?.imageUrl) setInstructionImageUrl(data.imageUrl);
+        })
+        .catch(() => {})
+        .finally(() => setInstructionLoading(false));
+    } else {
+      setInstructionText("");
+      setInstructionImageUrl("");
+    }
   };
+
+  // (임시 테스트 버튼 제거됨)
 
   const handleSave = () => {
     // detail 모드에서만 저장 가능 (운동이 선택된 상태)
@@ -335,9 +367,13 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
       return;
     }
     if (onSave && (selectedExercise || exerciseData)) {
-      onSave(sets, selectedExercise?.name || exerciseData?.name || "운동");
+      const fullName = getExerciseDisplayName(
+        selectedExercise || exerciseData || { name: "운동" }
+      );
+      onSave(sets, fullName);
     }
     onClose();
+    setShowInstructions(false);
   };
 
   return (
@@ -477,66 +513,170 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
           ) : (
             <View style={styles.exerciseDetailModal}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>
-                  {selectedExercise?.name || exerciseData?.name || "운동"}
-                </Text>
-                <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                  <Icon name="close" size={12} color="#ffffff" />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.setsContainer}>
-                <View style={styles.setsHeader}>
-                  <TouchableOpacity
-                    onPress={() =>
-                      handleRemoveSet(sets[sets.length - 1]?.id || 1)
-                    }
-                    style={styles.setControlBtn}
+                <View style={styles.modalTitleContainer}>
+                  <Text
+                    style={styles.modalTitle}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
                   >
-                    <Text style={styles.setControlText}>-</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.setsHeaderText}>세트</Text>
-                  <TouchableOpacity
-                    onPress={handleAddSet}
-                    style={styles.setControlBtn}
-                  >
-                    <Text style={styles.setControlText}>+</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.setsHeaderText}>추천 세트</Text>
-                  <View style={{ width: 40 }} />
+                    {getExerciseDisplayName(
+                      selectedExercise || exerciseData || { name: "운동" }
+                    )}
+                  </Text>
                 </View>
+                <View style={styles.headerRightRow}>
+                  <TouchableOpacity
+                    style={styles.methodBtn}
+                    onPress={() => {
+                      const next = !showInstructions;
+                      setShowInstructions(next);
+                      if (
+                        next &&
+                        !instructionText &&
+                        selectedExercise?.externalId
+                      ) {
+                        setInstructionLoading(true);
+                        fetchExerciseDetail(selectedExercise.externalId)
+                          .then((data: any) => {
+                            const desc =
+                              data?.description ||
+                              data?.instructions ||
+                              data?.howTo ||
+                              data?.guide ||
+                              data?.tip ||
+                              "";
+                            if (typeof desc === "string")
+                              setInstructionText(desc);
+                            if (data?.imageUrl)
+                              setInstructionImageUrl(data.imageUrl);
+                          })
+                          .catch(() => {})
+                          .finally(() => setInstructionLoading(false));
+                      }
+                    }}
+                  >
+                    <Text style={styles.methodBtnText}>운동 방법</Text>
+                  </TouchableOpacity>
 
-                {sets.map((set) => (
-                  <View key={set.id} style={styles.setRow}>
-                    <Text style={styles.setNumber}>{set.id}</Text>
-                    <View style={styles.weightInput}>
-                      <TextInput
-                        style={styles.weightInputText}
-                        value={set.weight.toString()}
-                        onChangeText={(text) =>
-                          handleSetChange(set.id, "weight", parseInt(text) || 0)
-                        }
-                        keyboardType="numeric"
-                      />
-                      <Text style={styles.unitText}>kg</Text>
-                    </View>
-                    <Text style={styles.repsDisplay}>{set.reps}회</Text>
-                    <TouchableOpacity
-                      style={[
-                        styles.completeBtn,
-                        set.completed && styles.completeBtnCompleted,
-                      ]}
-                      onPress={() => handleSetComplete(set.id)}
-                    >
-                      <Icon
-                        name="checkmark"
-                        size={16}
-                        color={set.completed ? "#000000" : "#666666"}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                ))}
+                  <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                    <Icon name="close" size={12} color="#ffffff" />
+                  </TouchableOpacity>
+                </View>
               </View>
+
+              <ScrollView
+                style={styles.detailScroll}
+                contentContainerStyle={{ paddingBottom: 140 }}
+                keyboardShouldPersistTaps="handled"
+              >
+                {showInstructions && (
+                  <View style={styles.instructionBox}>
+                    <Text style={styles.instructionTitle}>운동 방법</Text>
+                    {instructionLoading ? (
+                      <Text style={styles.instructionText}>불러오는 중...</Text>
+                    ) : (
+                      <>
+                        {!!instructionImageUrl && (
+                          <Image
+                            source={{ uri: instructionImageUrl }}
+                            style={{
+                              width: "100%",
+                              height: 160,
+                              borderRadius: 8,
+                              marginBottom: 8,
+                            }}
+                            resizeMode="cover"
+                          />
+                        )}
+                        <Text style={styles.instructionText}>
+                          {instructionText || "설명이 없습니다."}
+                        </Text>
+                      </>
+                    )}
+                  </View>
+                )}
+
+                <View style={styles.setsContainer}>
+                  <View style={styles.setsHeader}>
+                    {/* 세트 번호 열과 정렬 맞추기용 여백 */}
+                    <View style={{ width: 40 }} />
+
+                    {/* 무게 입력 열 상단: -, 세트, + 를 가운데 정렬 */}
+                    <View style={styles.setsHeaderWeightCol}>
+                      <View style={styles.setsHeaderControls}>
+                        <TouchableOpacity
+                          onPress={() =>
+                            handleRemoveSet(sets[sets.length - 1]?.id || 1)
+                          }
+                          style={styles.setControlBtn}
+                        >
+                          <Text style={styles.setControlText}>-</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.setsHeaderText}>세트</Text>
+                        <TouchableOpacity
+                          onPress={handleAddSet}
+                          style={styles.setControlBtn}
+                        >
+                          <Text style={styles.setControlText}>+</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* 횟수 입력 열 상단: 추천 세트를 가운데 배치 */}
+                    <View style={styles.setsHeaderRepsCol}>
+                      <Text style={styles.setsHeaderText}>추천 세트</Text>
+                    </View>
+
+                    {/* 완료 버튼 열 폭만큼의 여백 */}
+                    <View style={{ width: 32 }} />
+                  </View>
+
+                  {sets.map((set) => (
+                    <View key={set.id} style={styles.setRow}>
+                      <Text style={styles.setNumber}>{set.id}</Text>
+                      <View style={styles.weightInput}>
+                        <TextInput
+                          style={styles.weightInputText}
+                          value={set.weight.toString()}
+                          onChangeText={(text) =>
+                            handleSetChange(
+                              set.id,
+                              "weight",
+                              parseInt(text) || 0
+                            )
+                          }
+                          keyboardType="numeric"
+                        />
+                        <Text style={styles.unitText}>kg</Text>
+                      </View>
+                      <View style={styles.repsInput}>
+                        <TextInput
+                          style={styles.repsInputText}
+                          value={set.reps.toString()}
+                          onChangeText={(text) =>
+                            handleSetChange(set.id, "reps", parseInt(text) || 0)
+                          }
+                          keyboardType="numeric"
+                        />
+                        <Text style={styles.unitText}>회</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[
+                          styles.completeBtn,
+                          set.completed && styles.completeBtnCompleted,
+                        ]}
+                        onPress={() => handleSetComplete(set.id)}
+                      >
+                        <Icon
+                          name="checkmark"
+                          size={16}
+                          color={set.completed ? "#000000" : "#666666"}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
 
               <TouchableOpacity
                 style={styles.saveExerciseBtn}
@@ -562,8 +702,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#2a2a2a",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: "74%",
-    minHeight: "50%",
+    height: "70%", // 고정 비율 높이 상향
+    minHeight: 0,
+    overflow: "hidden",
   },
   addExerciseModal: {
     flex: 1,
@@ -572,6 +713,7 @@ const styles = StyleSheet.create({
   exerciseDetailModal: {
     flex: 1,
     maxHeight: "100%",
+    paddingBottom: 100, // 하단 저장 버튼 공간 확보
   },
   modalHeader: {
     flexDirection: "row",
@@ -581,16 +723,61 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#404040",
   },
+  headerRightRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   modalTitle: {
     fontSize: 18,
     fontWeight: "600",
     color: "#ffffff",
+  },
+  modalTitleContainer: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 8,
   },
   closeBtn: {
     width: 24,
     height: 24,
     justifyContent: "center",
     alignItems: "center",
+  },
+  methodBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: "#404040",
+    borderRadius: 6,
+  },
+  methodBtnText: {
+    color: "#e3ff7c",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  instructionBox: {
+    marginHorizontal: 20,
+    marginTop: 12,
+    backgroundColor: "#333333",
+    borderRadius: 10,
+    padding: 12,
+  },
+  instructionTitle: {
+    fontSize: 13,
+    color: "#ffffff",
+    fontWeight: "600",
+    marginBottom: 6,
+  },
+  instructionText: {
+    fontSize: 12,
+    color: "#cccccc",
+    lineHeight: 17,
+  },
+  instructionScroll: {
+    maxHeight: 260,
+  },
+  detailScroll: {
+    flex: 1,
   },
   searchContainer: {
     padding: 20,
@@ -599,7 +786,7 @@ const styles = StyleSheet.create({
   filterWrapper: {
     height: 28,
     marginTop: 8,
-    marginBottom: 0,
+    marginBottom: 10,
     paddingTop: 0,
     paddingBottom: 0,
   },
@@ -717,7 +904,8 @@ const styles = StyleSheet.create({
   },
   setsContainer: {
     padding: 20,
-    maxHeight: "48%",
+    flex: 1,
+    minHeight: 0,
   },
   setsHeader: {
     flexDirection: "row",
@@ -727,6 +915,22 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#333333",
     marginBottom: 8,
+    gap: 12,
+    paddingLeft: 12,
+  },
+  setsHeaderWeightCol: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  setsHeaderRepsCol: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  setsHeaderControls: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   setControlBtn: {
@@ -770,12 +974,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
+  inputCompleted: {
+    backgroundColor: "#ffffff",
+  },
   weightInputText: {
     flex: 1,
     color: "#ffffff",
     fontSize: 14,
     textAlign: "right",
     minWidth: 60,
+  },
+  inputTextCompleted: {
+    color: "#000000",
   },
   unitText: {
     fontSize: 12,
@@ -787,6 +997,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#ffffff",
     textAlign: "center",
+  },
+  repsInput: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#404040",
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  repsInputText: {
+    flex: 1,
+    color: "#ffffff",
+    fontSize: 14,
+    textAlign: "right",
+    minWidth: 40,
   },
   completeBtn: {
     width: 32,
@@ -801,7 +1027,10 @@ const styles = StyleSheet.create({
   },
   saveExerciseBtn: {
     backgroundColor: "#e3ff7c",
-    margin: 20,
+    position: "absolute",
+    left: 20,
+    right: 20,
+    bottom: 20,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: "center",
