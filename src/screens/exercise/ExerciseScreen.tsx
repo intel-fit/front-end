@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
+import { useFocusEffect } from "@react-navigation/native";
 // import { fetchUserWorkouts } from '../../utils/exerciseApi'; // 임시 테스트 제거
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import ExerciseModal from "../../components/modals/ExerciseModal";
@@ -45,6 +46,7 @@ const ExerciseScreen = ({ navigation }: any) => {
     calories: 1500,
   });
   const [completedThisWeek, setCompletedThisWeek] = useState(0);
+  const [weeklyCalories, setWeeklyCalories] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
   const [selectedExercise, setSelectedExercise] = useState<Activity | null>(
@@ -69,15 +71,57 @@ const ExerciseScreen = ({ navigation }: any) => {
       console.log("Failed to load goal data", error);
     }
   };
+  // 주간 칼로리 합계 로드 (이번 주)
+  const loadWeeklyCalories = async () => {
+    try {
+      const res = await fetch("http://43.200.40.140/api/daily-progress/week", {
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const data = await res.json();
+      const sum = Array.isArray(data)
+        ? data.reduce(
+            (s: number, d: any) => s + Number(d?.totalCalorie || 0),
+            0
+          )
+        : 0;
+      setWeeklyCalories(sum);
+    } catch (e) {
+      setWeeklyCalories(0);
+    }
+  };
+
+  // 화면 포커스 시 목표/진행 재로딩 (다른 화면에서 저장 후 복귀 시 반영)
+  useFocusEffect(
+    React.useCallback(() => {
+      loadGoalData();
+      loadWeeklyCalories();
+    }, [])
+  );
+
+  // 완료 횟수 저장 helper
+  const setCompletedCountPersist = async (count: number) => {
+    try {
+      setCompletedThisWeek(count);
+      await AsyncStorage.setItem("workoutCompletedThisWeek", String(count));
+    } catch {}
+  };
 
   // 서버 목록 섹션 제거됨
 
   const getProgressPercentage = () => {
-    const target = Math.max(1, goalData.frequency || 1);
-    return Math.min(
-      100,
-      Math.max(0, Math.round((completedThisWeek / target) * 100))
+    // 횟수 기준 진행률
+    const countTarget = Math.max(1, goalData.frequency || 1);
+    const countRate = Math.min(1, Math.max(0, completedThisWeek / countTarget));
+    // 칼로리 기준 진행률
+    const calorieTarget = Math.max(1, Number(goalData.calories) || 1);
+    const calorieRate = Math.min(
+      1,
+      Math.max(0, weeklyCalories / calorieTarget)
     );
+    // 두 기준의 평균으로 주간 진행률 산출
+    const avgRate = (countRate + calorieRate) / 2;
+    return Math.round(avgRate * 100);
   };
 
   const handleAddWorkout = () => {
@@ -169,6 +213,14 @@ const ExerciseScreen = ({ navigation }: any) => {
         sessionPayload.sessionId;
       // POST 성공 시 활동 항목에 sessionId 저장 및 세트 내역 보존
       if (modalMode === "edit" && selectedExercise) {
+        // 이전 완료 상태와 비교하여 카운트 조정
+        const prev = activities.find((a) => a.id === selectedExercise.id);
+        const prevCompleted = !!prev?.isCompleted;
+        const nextCompleted = allSetsCompleted;
+        if (prevCompleted !== nextCompleted) {
+          const delta = nextCompleted ? 1 : -1;
+          setCompletedCountPersist(Math.max(0, completedThisWeek + delta));
+        }
         setActivities(
           activities.map((activity) =>
             activity.id === selectedExercise.id
@@ -176,8 +228,7 @@ const ExerciseScreen = ({ navigation }: any) => {
                   ...activity,
                   name: exerciseName,
                   details,
-                  // 현재 세트 상태 기준으로 완료 여부 반영
-                  isCompleted: allSetsCompleted,
+                  isCompleted: nextCompleted,
                   sessionId: serverSessionId,
                   sets,
                 }
@@ -199,6 +250,9 @@ const ExerciseScreen = ({ navigation }: any) => {
           sets,
         };
         setActivities([...activities, newWorkout]);
+        if (allSetsCompleted) {
+          setCompletedCountPersist(completedThisWeek + 1);
+        }
       }
     } catch (e: any) {
       console.error("[WORKOUT][POST][FAIL]", e);
@@ -225,6 +279,10 @@ const ExerciseScreen = ({ navigation }: any) => {
           } catch (e) {
             console.error("[WORKOUT][DELETE][FAIL]", e);
           } finally {
+            const target = activities.find((a) => a.id === workoutId);
+            if (target?.isCompleted) {
+              setCompletedCountPersist(Math.max(0, completedThisWeek - 1));
+            }
             setActivities(
               activities.filter((activity) => activity.id !== workoutId)
             );
