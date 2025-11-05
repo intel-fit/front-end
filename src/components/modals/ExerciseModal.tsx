@@ -92,14 +92,18 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
 
   // UI 카테고리 → API bodyPart 매핑 (서버가 다른 값을 사용할 수 있음)
   // 여러 후보 값을 시도하도록 수정
+  // 서버 실제 값 기준으로 보정된 매핑
   const categoryToBodyPart: Record<string, string[]> = {
     전체: [""],
-    가슴: ["가슴", "chest"],
-    등: ["등", "back"],
-    하체: ["하체", "다리", "legs", "lower", "lower body", "하체운동"],
-    어깨: ["어깨", "shoulder", "shoulders"],
-    팔: ["팔", "arm", "arms", "팔꿈치"],
-    코어: ["코어", "core", "복근", "abs", "abdomen", "복부"],
+    가슴: ["가슴"],
+    등: ["등"],
+    // 하체 관련: 서버는 "허벅지", "종아리", "허리" 등 세분화되어 있음
+    하체: ["허벅지", "종아리", "허리", "하체"],
+    어깨: ["어깨"],
+    // 팔 관련: 서버는 "상완이두근", "팔 아래" 등으로 제공됨
+    팔: ["상완이두근", "팔 아래", "팔"],
+    // 코어 관련: 서버는 "허리"로 제공됨
+    코어: ["허리", "코어"],
   };
 
   // API 운동 목록 상태
@@ -370,7 +374,17 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
       const fullName = getExerciseDisplayName(
         selectedExercise || exerciseData || { name: "운동" }
       );
-      onSave(sets, fullName);
+      // 메타데이터 전달: externalId, category/bodyPart 등
+      const meta = {
+        externalId: selectedExercise?.externalId || exerciseData?.externalId,
+        category:
+          selectedExercise?.bodyPart ||
+          selectedExercise?.targetMuscle ||
+          bodyPartParam ||
+          "",
+      };
+      // @ts-ignore - onSave 시그니처 확장 (호출 측에서 수용)
+      onSave(sets, fullName, meta);
     }
     onClose();
     setShowInstructions(false);

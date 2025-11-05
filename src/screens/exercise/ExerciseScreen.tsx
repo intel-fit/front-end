@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,11 +7,16 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-} from 'react-native';
-import { Ionicons as Icon } from '@expo/vector-icons';
-import {colors} from '../../theme/colors';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import ExerciseModal from '../../components/modals/ExerciseModal';
+} from "react-native";
+import { Ionicons as Icon } from "@expo/vector-icons";
+import { colors } from "../../theme/colors";
+// import { fetchUserWorkouts } from '../../utils/exerciseApi'; // 임시 테스트 제거
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import ExerciseModal from "../../components/modals/ExerciseModal";
+import {
+  deleteWorkoutSession,
+  postWorkoutSession,
+} from "../../utils/exerciseApi";
 
 interface WorkoutGoals {
   frequency: number;
@@ -26,21 +31,25 @@ interface Activity {
   details: string;
   time: string;
   isCompleted: boolean;
+  sessionId?: string; // 서버 저장된 세션과 연동용
+  sets?: any[]; // 세트 내역 보존
 }
 
-const ExerciseScreen = ({navigation}: any) => {
-  const [currentMonth, setCurrentMonth] = useState('10월');
+const ExerciseScreen = ({ navigation }: any) => {
+  const [currentMonth, setCurrentMonth] = useState("10월");
   const [activities, setActivities] = useState<Activity[]>([]);
   const [goalData, setGoalData] = useState<WorkoutGoals>({
     frequency: 3,
-    duration: '30분 이상',
-    type: '유산소',
+    duration: "30분 이상",
+    type: "유산소",
     calories: 1500,
   });
   const [completedThisWeek, setCompletedThisWeek] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
-  const [selectedExercise, setSelectedExercise] = useState<Activity | null>(null);
+  const [modalMode, setModalMode] = useState<"add" | "edit">("add");
+  const [selectedExercise, setSelectedExercise] = useState<Activity | null>(
+    null
+  );
 
   React.useEffect(() => {
     loadGoalData();
@@ -48,32 +57,62 @@ const ExerciseScreen = ({navigation}: any) => {
 
   const loadGoalData = async () => {
     try {
-      const saved = await AsyncStorage.getItem('workoutGoals');
+      const saved = await AsyncStorage.getItem("workoutGoals");
       if (saved) {
         setGoalData(JSON.parse(saved));
       }
-      const completed = await AsyncStorage.getItem('workoutCompletedThisWeek');
+      const completed = await AsyncStorage.getItem("workoutCompletedThisWeek");
       if (completed) {
         setCompletedThisWeek(parseInt(completed, 10));
       }
     } catch (error) {
-      console.log('Failed to load goal data', error);
+      console.log("Failed to load goal data", error);
     }
   };
 
+  // 서버 목록 섹션 제거됨
+
   const getProgressPercentage = () => {
     const target = Math.max(1, goalData.frequency || 1);
-    return Math.min(100, Math.max(0, Math.round((completedThisWeek / target) * 100)));
+    return Math.min(
+      100,
+      Math.max(0, Math.round((completedThisWeek / target) * 100))
+    );
   };
 
   const handleAddWorkout = () => {
-    setModalMode('add');
+    setModalMode("add");
     setSelectedExercise(null);
     setIsModalOpen(true);
   };
 
+  // 운동 기록 영속화: 페이지 전환해도 유지되도록 저장/복원
+  const ACTIVITIES_KEY = "user_activities_v1";
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(ACTIVITIES_KEY);
+        if (saved) {
+          const parsed: Activity[] = JSON.parse(saved);
+          if (Array.isArray(parsed)) setActivities(parsed);
+        }
+      } catch {}
+    })();
+  }, []);
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        await AsyncStorage.setItem(ACTIVITIES_KEY, JSON.stringify(activities));
+      } catch {}
+    })();
+  }, [activities]);
+
+  // (임시 API 테스트 버튼 제거)
+
   const handleExerciseClick = (exercise: Activity) => {
-    setModalMode('edit');
+    setModalMode("edit");
     setSelectedExercise(exercise);
     setIsModalOpen(true);
   };
@@ -83,58 +122,121 @@ const ExerciseScreen = ({navigation}: any) => {
     setSelectedExercise(null);
   };
 
-  const handleExerciseSave = (sets: any[], exerciseName: string) => {
+  const handleExerciseSave = async (
+    sets: any[],
+    exerciseName: string,
+    meta?: { externalId?: string; category?: string }
+  ) => {
     const allSetsCompleted = sets.every((set: any) => set.completed);
-    const details = `${sets[0]?.weight || 20}kg ${sets[0]?.reps || 12}회 ${sets.length}세트`;
+    const details = `${sets[0]?.weight || 20}kg ${sets[0]?.reps || 12}회 ${
+      sets.length
+    }세트`;
 
-    if (modalMode === 'edit' && selectedExercise) {
-      setActivities(
-        activities.map((activity) => {
-          if (activity.id === selectedExercise.id) {
-            return {
-              ...activity,
-              name: exerciseName,
-              details,
-              isCompleted: allSetsCompleted,
-            };
-          }
-          return activity;
-        }),
+    // 로그: 서버에 보낼 가상의 페이로드(세션 단위)
+    const localIso = new Date();
+    const workoutDate = `${localIso.getFullYear()}-${String(
+      localIso.getMonth() + 1
+    ).padStart(2, "0")}-${String(localIso.getDate()).padStart(2, "0")}T${String(
+      localIso.getHours()
+    ).padStart(2, "0")}:${String(localIso.getMinutes()).padStart(
+      2,
+      "0"
+    )}:${String(localIso.getSeconds()).padStart(2, "0")}`;
+    const sessionPayload = {
+      sessionId: `S-${Date.now()}`,
+      exerciseName,
+      category: meta?.category || "기타",
+      workoutDate,
+      userId: 1, // TODO: 실제 로그인 사용자 id로 교체
+      exerciseId: meta?.externalId,
+      sets: sets.map((s: any, idx: number) => ({
+        setNumber: idx + 1,
+        weight: Number(s.weight) || 0,
+        reps: Number(s.reps) || 0,
+      })),
+    };
+    console.log("[WORKOUT][LOCAL_SAVE]", sessionPayload);
+    console.log(
+      "[WORKOUT] To record via API: POST http://43.200.40.140/api/workouts { ...payload above... }"
+    );
+
+    // 실제 저장 API 호출
+    try {
+      const res = await postWorkoutSession(sessionPayload as any);
+      console.log("[WORKOUT][POST][OK]", res);
+      const serverSessionId =
+        (res && (res.sessionId || res.data?.sessionId)) ||
+        sessionPayload.sessionId;
+      // POST 성공 시 활동 항목에 sessionId 저장 및 세트 내역 보존
+      if (modalMode === "edit" && selectedExercise) {
+        setActivities(
+          activities.map((activity) =>
+            activity.id === selectedExercise.id
+              ? {
+                  ...activity,
+                  name: exerciseName,
+                  details,
+                  // 현재 세트 상태 기준으로 완료 여부 반영
+                  isCompleted: allSetsCompleted,
+                  sessionId: serverSessionId,
+                  sets,
+                }
+              : activity
+          )
+        );
+      } else {
+        const newWorkout: Activity = {
+          id: Date.now(),
+          name: exerciseName,
+          details,
+          time: new Date().toLocaleTimeString("ko-KR", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true,
+          }),
+          isCompleted: allSetsCompleted,
+          sessionId: serverSessionId,
+          sets,
+        };
+        setActivities([...activities, newWorkout]);
+      }
+    } catch (e: any) {
+      console.error("[WORKOUT][POST][FAIL]", e);
+      Alert.alert(
+        "운동 기록 저장 실패",
+        e?.response?.data?.message || e?.message || "알 수 없는 오류"
       );
-    } else {
-      const newWorkout: Activity = {
-        id: Date.now(),
-        name: exerciseName,
-        details,
-        time: new Date().toLocaleTimeString('ko-KR', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true,
-        }),
-        isCompleted: allSetsCompleted,
-      };
-      setActivities([...activities, newWorkout]);
     }
     handleModalClose();
   };
 
-  const handleDeleteWorkout = (workoutId: number) => {
-    Alert.alert('운동 삭제', '이 운동을 삭제하시겠습니까?', [
-      {text: '취소', style: 'cancel'},
+  const handleDeleteWorkout = (workoutId: number, sessionId?: string) => {
+    Alert.alert("운동 삭제", "이 운동을 삭제하시겠습니까?", [
+      { text: "취소", style: "cancel" },
       {
-        text: '삭제',
-        style: 'destructive',
-        onPress: () => {
-          setActivities(activities.filter(activity => activity.id !== workoutId));
+        text: "삭제",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            if (sessionId) {
+              const res = await deleteWorkoutSession(sessionId);
+              console.log("[WORKOUT][DELETE][OK]", res);
+            }
+          } catch (e) {
+            console.error("[WORKOUT][DELETE][FAIL]", e);
+          } finally {
+            setActivities(
+              activities.filter((activity) => activity.id !== workoutId)
+            );
+          }
         },
       },
     ]);
   };
 
-
   // StatsScreen 내부에서 사용될 때는 SafeAreaView 제거
   const ContainerComponent = View;
-  
+
   return (
     <ContainerComponent style={styles.container}>
       <ScrollView style={styles.content}>
@@ -162,12 +264,14 @@ const ExerciseScreen = ({navigation}: any) => {
                   style={[
                     styles.calendarNumber,
                     index === 4 && styles.calendarNumberToday,
-                  ]}>
+                  ]}
+                >
                   <Text
                     style={[
                       styles.calendarNumberText,
                       index === 4 && styles.calendarNumberTodayText,
-                    ]}>
+                    ]}
+                  >
                     {day}
                   </Text>
                 </View>
@@ -181,11 +285,12 @@ const ExerciseScreen = ({navigation}: any) => {
         {/* 목표 카드 */}
         <TouchableOpacity
           style={styles.goalCard}
-          onPress={() => navigation.navigate('Goal')}>
+          onPress={() => navigation.navigate("Goal")}
+        >
           <View style={styles.goalContent}>
             <Text style={styles.goalTitle}>운동 목표 설정</Text>
             <Text style={styles.goalDescription}>
-              주 {goalData.frequency}회, {goalData.duration}, {goalData.type},{' '}
+              주 {goalData.frequency}회, {goalData.duration}, {goalData.type},{" "}
               {goalData.calories}kcal
             </Text>
             <View style={styles.progressContainer}>
@@ -193,11 +298,13 @@ const ExerciseScreen = ({navigation}: any) => {
                 <View
                   style={[
                     styles.progressFill,
-                    {width: `${getProgressPercentage()}%`},
+                    { width: `${getProgressPercentage()}%` },
                   ]}
                 />
               </View>
-              <Text style={styles.progressText}>{getProgressPercentage()}%</Text>
+              <Text style={styles.progressText}>
+                {getProgressPercentage()}%
+              </Text>
             </View>
           </View>
           <Icon name="chevron-forward" size={18} color={colors.text} />
@@ -206,6 +313,7 @@ const ExerciseScreen = ({navigation}: any) => {
         {/* 운동 기록 섹션 */}
         <View style={styles.logSection}>
           <Text style={styles.sectionTitle}>운동 기록하기</Text>
+
           <View style={styles.logTimeline}>
             {activities.map((activity, index) => (
               <View key={activity.id} style={styles.logItem}>
@@ -217,24 +325,42 @@ const ExerciseScreen = ({navigation}: any) => {
                       : styles.logCardPending,
                   ]}
                   onPress={() => handleExerciseClick(activity)}
-                  onLongPress={() => handleDeleteWorkout(activity.id)}>
+                >
                   <View style={styles.logCardContent}>
-                    <Text style={[styles.logName, !activity.isCompleted && styles.logNamePending]}>
+                    <Text
+                      style={[
+                        styles.logName,
+                        !activity.isCompleted && styles.logNamePending,
+                      ]}
+                    >
                       {activity.name}
                     </Text>
                     <Text style={styles.logDetails}>{activity.details}</Text>
                   </View>
                   <Text style={styles.logTime}>{activity.time}</Text>
+                  <TouchableOpacity
+                    style={styles.deleteBtn}
+                    onPress={() =>
+                      handleDeleteWorkout(activity.id, activity.sessionId)
+                    }
+                  >
+                    <Icon name="trash" size={18} color={colors.textLight} />
+                  </TouchableOpacity>
                 </TouchableOpacity>
               </View>
             ))}
             <View style={styles.addItem}>
-              <TouchableOpacity style={styles.addBtn} onPress={handleAddWorkout}>
+              <TouchableOpacity
+                style={styles.addBtn}
+                onPress={handleAddWorkout}
+              >
                 <Text style={styles.addBtnText}>운동 추가하기</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
+
+        {/* 서버 기록 섹션 제거됨 */}
       </ScrollView>
 
       <ExerciseModal
@@ -254,30 +380,30 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   monthNavigation: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 0,
     paddingBottom: 12,
     paddingTop: 8,
   },
   monthNavLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 2,
   },
   navBtn: {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     padding: 0,
   },
   monthText: {
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: "800",
     color: colors.text,
     lineHeight: 22,
   },
   menuBtn: {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     padding: 0,
     marginRight: 0,
   },
@@ -290,23 +416,23 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   calendarGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     gap: 0,
     height: 79,
   },
   calendarItem: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
+    alignItems: "center",
+    justifyContent: "flex-start",
     gap: 6,
     minHeight: 79,
   },
   calendarNumber: {
     minHeight: 30,
     minWidth: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 4,
   },
   calendarNumberToday: {
@@ -316,40 +442,40 @@ const styles = StyleSheet.create({
   },
   calendarNumberText: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#e3ff7c',
+    fontWeight: "700",
+    color: "#e3ff7c",
     lineHeight: 19,
-    textAlign: 'center',
+    textAlign: "center",
   },
   calendarNumberTodayText: {
-    color: '#e3ff7c',
+    color: "#e3ff7c",
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
     lineHeight: 19,
   },
   calendarCalories: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.text,
-    textAlign: 'center',
+    textAlign: "center",
     height: 15,
     lineHeight: 14.52,
   },
   calendarPercentage: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.text,
-    textAlign: 'center',
+    textAlign: "center",
     height: 15,
     lineHeight: 14.52,
   },
   goalCard: {
-    backgroundColor: '#3a3a3a',
+    backgroundColor: "#3a3a3a",
     borderRadius: 20,
     paddingVertical: 16,
     paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginHorizontal: 20,
     marginTop: 10,
     marginBottom: 16,
@@ -359,59 +485,61 @@ const styles = StyleSheet.create({
   },
   goalTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#ffffff',
+    fontWeight: "600",
+    color: "#ffffff",
     marginBottom: 8,
   },
   goalDescription: {
     fontSize: 12,
-    color: '#ccc',
+    color: "#ccc",
     lineHeight: 16.8, // line-height: 1.4 (12 * 1.4)
   },
   progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginTop: 8,
-    width: '100%',
+    width: "100%",
   },
   progressBar: {
     flex: 1,
     height: 16,
-    backgroundColor: '#cfcfcf',
+    backgroundColor: "#cfcfcf",
     borderRadius: 999,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   progressFill: {
-    height: '100%',
-    backgroundColor: '#d6ff4b',
+    height: "100%",
+    backgroundColor: "#d6ff4b",
     borderRadius: 999,
   },
   progressText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#e3ff7c',
+    fontWeight: "600",
+    color: "#e3ff7c",
     minWidth: 30,
-    textAlign: 'right',
+    textAlign: "right",
   },
   logSection: {
     marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
     color: colors.text,
     marginBottom: 16,
   },
+  // 서버 기록 섹션 스타일 제거됨
+  // (임시 API 테스트 버튼 스타일 제거)
   logTimeline: {
     paddingLeft: 8,
   },
   logItem: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginBottom: 16,
   },
   timelineLine: {
-    alignItems: 'center',
+    alignItems: "center",
     marginRight: 12,
   },
   timelineDot: {
@@ -434,9 +562,13 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 12,
     padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  deleteBtn: {
+    marginLeft: 12,
+    padding: 6,
   },
   logCardPending: {
     backgroundColor: colors.white,
@@ -449,7 +581,7 @@ const styles = StyleSheet.create({
   },
   logName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     color: colors.text,
     marginBottom: 4,
   },
@@ -465,8 +597,8 @@ const styles = StyleSheet.create({
     color: colors.textLight,
   },
   addItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   timelineDotAdd: {
     width: 12,
@@ -480,17 +612,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: 12,
     padding: 16,
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 2,
     borderColor: colors.white,
-    borderStyle: 'dashed',
+    borderStyle: "dashed",
   },
   addBtnText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     color: colors.black,
   },
 });
 
 export default ExerciseScreen;
-
