@@ -40,6 +40,9 @@ export const request = async <T = any>(
 
   try {
     // 서버에 요청 전송
+    console.log('API 요청:', `${API_BASE_URL}${endpoint}`);
+    console.log('요청 옵션:', {method: options.method || 'GET', headers});
+    
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers,
@@ -87,7 +90,19 @@ export const request = async <T = any>(
       message: error.message,
       status: error.status,
       data: error.data,
+      stack: error.stack,
     });
+    
+    // Network request failed 에러 처리
+    if (error.message === 'Network request failed' || error.message?.includes('Network')) {
+      console.error('네트워크 연결 실패:', {
+        url: `${API_BASE_URL}${endpoint}`,
+        message: '서버에 연결할 수 없습니다. 인터넷 연결을 확인해주세요.',
+      });
+      const networkError = new Error('네트워크 연결에 실패했습니다. 인터넷 연결을 확인해주세요.');
+      networkError.status = 0;
+      throw networkError;
+    }
     
     // 이미 Error 객체면 그대로 전달
     if (error instanceof Error) {

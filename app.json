@@ -13,7 +13,8 @@
       "bundleIdentifier": "com.intelfit.mobile"
     },
     "android": {
-      "package": "com.intelfit.mobile"
+      "package": "com.intelfit.mobile",
+      "usesCleartextTraffic": true
     }
   }
 }
