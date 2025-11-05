@@ -109,6 +109,16 @@ export const testExerciseApi = async () => {
     });
 
     console.log("🎯 테스트 성공! 결과:", JSON.stringify(result, null, 2));
+
+    // 유저 운동 기록 조회 테스트
+    const workoutsUrl = `http://43.200.40.140/api/workouts/1`;
+    const res2 = await axios.get(workoutsUrl, {
+      headers: {
+        Authorization: `Bearer ${manualToken || ""}`,
+        Accept: "application/json",
+      },
+    });
+    console.log("🎯 유저 운동 기록:", JSON.stringify(res2.data, null, 2));
     return result;
   } catch (error) {
     console.error("💥 테스트 실패:", error);
