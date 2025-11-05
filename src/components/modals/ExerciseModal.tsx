@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TextInput,
   ScrollView,
+  Image,
 } from "react-native";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
@@ -431,7 +432,23 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
                       onPress={() => handleExerciseSelect(ex)}
                     >
                       <View style={styles.exerciseIcon}>
-                        <Text style={{ fontSize: 16 }}>🏋️</Text>
+                        {ex.imageUrl || ex.image || ex.imgUrl || ex.photoUrl ? (
+                          <Image
+                            source={{
+                              uri:
+                                ex.imageUrl ||
+                                ex.image ||
+                                ex.imgUrl ||
+                                ex.photoUrl,
+                            }}
+                            style={styles.exerciseImage}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={styles.exerciseImagePlaceholder}>
+                            <Icon name="barbell" size={16} color="#666666" />
+                          </View>
+                        )}
                       </View>
                       <View style={styles.exerciseInfo}>
                         <Text
@@ -661,11 +678,25 @@ const styles = StyleSheet.create({
     borderBottomColor: "#333333",
   },
   exerciseIcon: {
-    width: 24,
-    height: 24,
+    width: 48,
+    height: 48,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "#2a2a2a",
+  },
+  exerciseImage: {
+    width: "100%",
+    height: "100%",
+  },
+  exerciseImagePlaceholder: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#2a2a2a",
   },
   exerciseInfo: {
     flex: 1,

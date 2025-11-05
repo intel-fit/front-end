@@ -36,6 +36,9 @@ const FindIdScreen = ({navigation}: any) => {
       
       if (response.success) {
         setIsSubmitted(true);
+      } else {
+        const errorMessage = response.message || '아이디 찾기에 실패했습니다';
+        setError(errorMessage);
       }
     } catch (error: any) {
       setError(error.message || '아이디 찾기에 실패했습니다');

@@ -62,18 +62,20 @@ const LoginScreen = ({navigation}: any) => {
       if (response.success && response.accessToken) {
         navigation.replace('Main');
       } else {
-        Alert.alert('로그인 실패', response.message || '로그인에 실패했습니다');
+        const errorMessage = response.message || '로그인에 실패했습니다';
+        if (Platform.OS === 'web') {
+          window.alert(`로그인 실패\n${errorMessage}`);
+        } else {
+          Alert.alert('로그인 실패', errorMessage);
+        }
       }
     } catch (error: any) {
-      console.error('로그인 에러 상세:', error);
-      let errorMessage = error.message || '로그인에 실패했습니다';
-      
-      // 네트워크 에러인 경우
-      if (error.message?.includes('Network') || error.message?.includes('네트워크')) {
-        errorMessage = '네트워크 연결에 실패했습니다.\n인터넷 연결을 확인해주세요.';
+      const errorMessage = error.message || '로그인에 실패했습니다';
+      if (Platform.OS === 'web') {
+        window.alert(`로그인 실패\n${errorMessage}`);
+      } else {
+        Alert.alert('로그인 실패', errorMessage);
       }
-      
-      Alert.alert('로그인 실패', errorMessage);
     } finally {
       setLoading(false);
     }
