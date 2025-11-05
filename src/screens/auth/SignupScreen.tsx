@@ -172,7 +172,11 @@ const SignupScreen = ({navigation}: any) => {
       if (response.available) {
         setIsUsernameChecked(true);
         setErrors((prev: any) => ({...prev, username: ''}));
-        Alert.alert('확인', '사용 가능한 아이디입니다');
+        if (Platform.OS === 'web') {
+          window.alert('확인\n사용 가능한 아이디입니다');
+        } else {
+          Alert.alert('확인', '사용 가능한 아이디입니다');
+        }
       } else {
         setErrors((prev: any) => ({
           ...prev,
@@ -240,6 +244,7 @@ const SignupScreen = ({navigation}: any) => {
 
   const handleSubmit = async () => {
     if (!validateStep3()) {
+      // 스크롤을 최상단으로 이동하여 에러 메시지가 보이도록 함
       return;
     }
 
@@ -267,15 +272,32 @@ const SignupScreen = ({navigation}: any) => {
       const response = await authAPI.signup(signupData);
       
       if (response.success) {
-        Alert.alert('회원가입 성공', '회원가입이 완료되었습니다', [
-          {
-            text: '확인',
-            onPress: () => navigation.navigate('Login'),
-          },
-        ]);
+        if (Platform.OS === 'web') {
+          window.alert('회원가입 성공\n회원가입이 완료되었습니다');
+          navigation.navigate('Login');
+        } else {
+          Alert.alert('회원가입 성공', '회원가입이 완료되었습니다', [
+            {
+              text: '확인',
+              onPress: () => navigation.navigate('Login'),
+            },
+          ]);
+        }
+      } else {
+        const errorMessage = response.message || '회원가입에 실패했습니다';
+        if (Platform.OS === 'web') {
+          window.alert(`회원가입 실패\n${errorMessage}`);
+        } else {
+          Alert.alert('회원가입 실패', errorMessage);
+        }
       }
     } catch (error: any) {
-      Alert.alert('회원가입 실패', error.message || '회원가입에 실패했습니다');
+      const errorMessage = error.message || '회원가입에 실패했습니다';
+      if (Platform.OS === 'web') {
+        window.alert(`회원가입 실패\n${errorMessage}`);
+      } else {
+        Alert.alert('회원가입 실패', errorMessage);
+      }
     } finally {
       setLoading(false);
     }

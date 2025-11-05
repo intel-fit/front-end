@@ -1,6 +1,6 @@
-# Intelfit Mobile
+# Intelfit
 
-React Native + Expo 기반의 헬스케어 모바일 애플리케이션
+React Native + Expo 기반의 헬스케어 애플리케이션 (모바일 & 웹 지원)
 
 ## 🚀 빠른 시작
 
@@ -24,6 +24,9 @@ npm run ios
 
 # Android 에뮬레이터에서 실행
 npm run android
+
+# 웹 브라우저에서 실행
+npm run web
 ```
 
 ### 📱 Expo Go로 실행하기 (실제 디바이스)
@@ -54,6 +57,7 @@ npm run android
 ## 📦 기술 스택
 
 - **프레임워크**: React Native + Expo SDK 54
+- **웹 지원**: React Native Web
 - **네비게이션**: React Navigation v6
 - **언어**: TypeScript
 - **상태 관리**: React Hooks
@@ -84,9 +88,15 @@ src/
 └── theme/           # 테마 설정
 ```
 
+## 🌐 플랫폼 지원
+
+- ✅ **iOS** - iOS 시뮬레이터 및 실제 디바이스
+- ✅ **Android** - Android 에뮬레이터 및 실제 디바이스
+- ✅ **Web** - 웹 브라우저 (Chrome, Safari, Firefox 등)
+
 ## 🎯 주요 기능
 
-- ✅ 사용자 인증 (로그인, 회원가입, 아이디/비밀번호 찾기)
+- ✅ 사용자 인증 (로그인, 회원가입, 아이디/비밀번호 찾기) - **웹 지원**
 - ✅ 홈 화면 및 마이페이지
 - ✅ 식단 관리 (추가, 검색, 추천, 내역)
 - ✅ 운동 관리 (기록, 루틴 추천, 내역)
