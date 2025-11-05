@@ -7,9 +7,11 @@ import {
   StyleSheet,
   TextInput,
   ScrollView,
+  Image,
 } from "react-native";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
+import { fetchExercises as fetchExerciseApi } from "../../utils/exerciseApi";
 
 interface Set {
   id: number;
@@ -81,22 +83,205 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
 
   const categories = ["전체", "가슴", "등", "하체", "어깨", "팔", "코어"];
 
-  const exercises = [
-    { name: "스텝밀 (천국의계단)", category: "하체", lastUsed: "2시간 전" },
-    { name: "리버스 펙 덱 플라이", category: "가슴", lastUsed: "4일 전" },
-    { name: "시티드 로우 머신", category: "등", lastUsed: "4일 전" },
-    { name: "풀다운 머신", category: "등", lastUsed: "4일 전" },
-    { name: "펙 덱 플라이", category: "가슴", lastUsed: "4일 전" },
-  ];
+  // UI 카테고리 → API bodyPart 매핑 (서버가 다른 값을 사용할 수 있음)
+  // 여러 후보 값을 시도하도록 수정
+  const categoryToBodyPart: Record<string, string[]> = {
+    전체: [""],
+    가슴: ["가슴", "chest"],
+    등: ["등", "back"],
+    하체: ["하체", "다리", "legs", "lower", "lower body", "하체운동"],
+    어깨: ["어깨", "shoulder", "shoulders"],
+    팔: ["팔", "arm", "arms", "팔꿈치"],
+    코어: ["코어", "core", "복근", "abs", "abdomen", "복부"],
+  };
 
-  const filteredExercises = exercises.filter((exercise) => {
-    const matchesSearch = exercise.name
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
-    const matchesCategory =
-      selectedCategory === "전체" || exercise.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+  // API 운동 목록 상태
+  const [apiExercises, setApiExercises] = useState<any[]>([]);
+  const [loadingList, setLoadingList] = useState<boolean>(false);
+  const [availableBodyParts, setAvailableBodyParts] = useState<string[]>([]);
+
+  // 서버 인코딩 문제(UTF-8이 Latin-1로 깨진 경우) 복구 시도
+  const normalizeEncoding = (text: string) => {
+    if (!text) return text;
+
+    const candidates: string[] = [text];
+    try {
+      // latin1 -> utf8 복구
+      // eslint-disable-next-line no-undef
+      candidates.push(decodeURIComponent(escape(text)));
+    } catch {}
+    try {
+      // 반대 방향도 시도 (이미 두 번 깨진 경우 대비)
+      // eslint-disable-next-line no-undef
+      candidates.push(unescape(encodeURIComponent(text)));
+    } catch {}
+
+    // 한글 글자 수가 가장 많은 후보를 선택
+    const scoreHangul = (s: string) => (s.match(/[가-힣]/g) || []).length;
+    let best = candidates[0];
+    let bestScore = scoreHangul(best);
+    for (const c of candidates.slice(1)) {
+      const sc = scoreHangul(c);
+      if (sc > bestScore) {
+        best = c;
+        bestScore = sc;
+      }
+    }
+    return best;
+  };
+
+  // 표시용 한국어 이름 우선 선택
+  const getExerciseDisplayName = (ex: any) => {
+    const raw =
+      ex?.koreanName ||
+      ex?.korName ||
+      ex?.nameKo ||
+      ex?.koName ||
+      ex?.name ||
+      "";
+    return normalizeEncoding(raw);
+  };
+
+  // 실제 API bodyPart 값과 UI 카테고리 매핑 (자동 감지)
+  const [bodyPartMapping, setBodyPartMapping] = useState<
+    Record<string, string>
+  >({
+    전체: "",
+    가슴: "가슴",
+    등: "등",
+    하체: "하체",
+    어깨: "어깨",
+    팔: "팔",
+    코어: "코어",
   });
+
+  // 전체 목록에서 실제 bodyPart 값들 수집 및 자동 매핑
+  useEffect(() => {
+    if (!isOpen) return;
+    const collectAndMapBodyParts = async () => {
+      try {
+        const res = await fetchExerciseApi({
+          page: 0,
+          size: 200, // 더 많은 데이터로 정확한 매핑
+        });
+        if (res?.content && Array.isArray(res.content)) {
+          const bodyPartsSet = new Set<string>();
+          const bodyPartCounts: Record<string, number> = {};
+
+          res.content.forEach((ex: any) => {
+            if (ex.bodyPart) {
+              const bp = normalizeEncoding(ex.bodyPart);
+              bodyPartsSet.add(bp);
+              bodyPartCounts[bp] = (bodyPartCounts[bp] || 0) + 1;
+            }
+          });
+
+          const allBodyParts = Array.from(bodyPartsSet).sort();
+          setAvailableBodyParts(allBodyParts);
+          console.log("📋 API에서 사용하는 실제 bodyPart 값들:", allBodyParts);
+          console.log("📊 각 bodyPart별 운동 개수:", bodyPartCounts);
+
+          // UI 카테고리와 매칭되는 bodyPart 찾기
+          const newMapping: Record<string, string> = { 전체: "" };
+
+          categories.forEach((category) => {
+            if (category === "전체") return;
+
+            // 정확한 매칭 시도
+            if (allBodyParts.includes(category)) {
+              newMapping[category] = category;
+            } else {
+              // 부분 매칭 시도
+              const candidates = categoryToBodyPart[category] || [];
+              for (const candidate of candidates) {
+                if (allBodyParts.includes(candidate)) {
+                  newMapping[category] = candidate;
+                  console.log(`✅ ${category} → ${candidate} 매핑 완료`);
+                  break;
+                }
+              }
+              // 매칭 실패 시 첫 번째 후보 사용
+              if (!newMapping[category]) {
+                newMapping[category] = candidates[0] || category;
+                console.warn(
+                  `⚠️ ${category} 매핑 실패, 기본값 사용: ${newMapping[category]}`
+                );
+              }
+            }
+          });
+
+          setBodyPartMapping(newMapping);
+          console.log("🗺️ 최종 bodyPart 매핑:", newMapping);
+        }
+      } catch (e) {
+        console.error("bodyPart 수집 실패:", e);
+      }
+    };
+    collectAndMapBodyParts();
+  }, [isOpen]);
+
+  const bodyPartParam = bodyPartMapping[selectedCategory] || "";
+
+  // API 호출: 카테고리/검색 변화 시
+  useEffect(() => {
+    if (!isOpen) return;
+    const controller = new AbortController();
+    const run = async () => {
+      setLoadingList(true);
+      const apiBodyPart = bodyPartParam || undefined;
+      console.log(
+        "🔍 API 호출 - 부위:",
+        selectedCategory,
+        "→ bodyPart:",
+        apiBodyPart || "(전체)"
+      );
+      try {
+        const res = await fetchExerciseApi({
+          bodyPart: apiBodyPart,
+          keyword: searchTerm || undefined,
+          page: 0,
+          size: 30,
+        });
+        console.log("✅ 운동 목록 불러오기 성공:", {
+          totalElements: res?.totalElements || 0,
+          contentLength: res?.content?.length || 0,
+          empty: res?.empty,
+          firstItem: res?.content?.[0]
+            ? {
+                name: res.content[0].name,
+                bodyPart: res.content[0].bodyPart,
+              }
+            : null,
+        });
+        // 빈 결과일 때 실제 bodyPart 값 확인 (하체, 팔, 코어)
+        if (
+          ["하체", "팔", "코어"].includes(selectedCategory) &&
+          res?.content?.length === 0
+        ) {
+          console.warn(
+            `⚠️ ${selectedCategory} 결과가 비어있습니다.`,
+            `사용된 bodyPart: "${apiBodyPart}"`,
+            `서버에서 사용하는 bodyPart 값들:`,
+            availableBodyParts.sort()
+          );
+        }
+        setApiExercises(Array.isArray(res?.content) ? res.content : []);
+      } catch (e: any) {
+        console.error("❌ 운동 목록 불러오기 실패:", {
+          message: e?.message,
+          status: e?.response?.status,
+          data: e?.response?.data,
+          selectedCategory,
+          apiBodyPart,
+        });
+        setApiExercises([]);
+      } finally {
+        setLoadingList(false);
+      }
+    };
+    run();
+    return () => controller.abort();
+  }, [isOpen, selectedCategory, searchTerm, bodyPartParam, availableBodyParts]);
 
   const handleSetChange = (setId: number, field: string, value: number) => {
     setSets((prev) =>
@@ -225,23 +410,68 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
                 contentInsetAdjustmentBehavior="never"
                 automaticallyAdjustContentInsets={false}
               >
-                {filteredExercises.map((exercise, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.exerciseItem}
-                    onPress={() => handleExerciseSelect(exercise)}
-                  >
-                    <View style={styles.exerciseIcon}>
-                      <Text style={{ fontSize: 16 }}>🏋️</Text>
-                    </View>
-                    <View style={styles.exerciseInfo}>
-                      <Text style={styles.exerciseName}>{exercise.name}</Text>
-                      <Text style={styles.exerciseLastUsed}>
-                        {exercise.lastUsed}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
+                {loadingList && (
+                  <View style={{ paddingVertical: 16 }}>
+                    <Text style={{ color: "#aaa", textAlign: "center" }}>
+                      불러오는 중...
+                    </Text>
+                  </View>
+                )}
+                {!loadingList && apiExercises.length === 0 && (
+                  <View style={{ paddingVertical: 16 }}>
+                    <Text style={{ color: "#888", textAlign: "center" }}>
+                      운동이 없습니다
+                    </Text>
+                  </View>
+                )}
+                {!loadingList &&
+                  apiExercises.map((ex: any, index: number) => (
+                    <TouchableOpacity
+                      key={ex.externalId || `${ex.name}-${index}`}
+                      style={styles.exerciseItem}
+                      onPress={() => handleExerciseSelect(ex)}
+                    >
+                      <View style={styles.exerciseIcon}>
+                        {ex.imageUrl || ex.image || ex.imgUrl || ex.photoUrl ? (
+                          <Image
+                            source={{
+                              uri:
+                                ex.imageUrl ||
+                                ex.image ||
+                                ex.imgUrl ||
+                                ex.photoUrl,
+                            }}
+                            style={styles.exerciseImage}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={styles.exerciseImagePlaceholder}>
+                            <Icon name="barbell" size={16} color="#666666" />
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.exerciseInfo}>
+                        <Text
+                          style={styles.exerciseName}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                          allowFontScaling={false}
+                        >
+                          {getExerciseDisplayName(ex)}
+                        </Text>
+                        <Text
+                          style={styles.exerciseLastUsed}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                          allowFontScaling={false}
+                        >
+                          {normalizeEncoding(
+                            (ex.targetMuscle || ex.bodyPart || "").toString()
+                          )}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
               </ScrollView>
             </View>
           ) : (
@@ -448,24 +678,41 @@ const styles = StyleSheet.create({
     borderBottomColor: "#333333",
   },
   exerciseIcon: {
-    width: 24,
-    height: 24,
+    width: 48,
+    height: 48,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "#2a2a2a",
+  },
+  exerciseImage: {
+    width: "100%",
+    height: "100%",
+  },
+  exerciseImagePlaceholder: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#2a2a2a",
   },
   exerciseInfo: {
     flex: 1,
     marginLeft: 14,
+    minWidth: 0,
   },
   exerciseName: {
     fontSize: 14,
+    lineHeight: 18,
     fontWeight: "500",
     color: "#ffffff",
     marginBottom: 4,
   },
   exerciseLastUsed: {
     fontSize: 12,
+    lineHeight: 16,
     color: "#666666",
   },
   setsContainer: {

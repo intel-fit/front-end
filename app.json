@@ -4,7 +4,6 @@
     "slug": "intelfit-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
     "splash": {
       "backgroundColor": "#6C5CE7"
     },
@@ -13,8 +12,8 @@
       "bundleIdentifier": "com.intelfit.mobile"
     },
     "android": {
-      "package": "com.intelfit.mobile"
+      "package": "com.intelfit.mobile",
+      "usesCleartextTraffic": true
     }
   }
 }
-

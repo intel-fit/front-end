@@ -131,6 +131,7 @@ const ExerciseScreen = ({navigation}: any) => {
     ]);
   };
 
+
   // StatsScreen 내부에서 사용될 때는 SafeAreaView 제거
   const ContainerComponent = View;
   

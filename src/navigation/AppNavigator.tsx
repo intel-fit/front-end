@@ -56,7 +56,7 @@ function MainTabs() {
     <Tab.Navigator
       screenOptions={({route}) => ({
         tabBarIcon: ({focused, color, size}) => {
-          let iconName: string;
+          let iconName: any;
 
           switch (route.name) {
             case 'Home':
@@ -78,7 +78,7 @@ function MainTabs() {
               iconName = ICONS.HOME.inactive;
           }
 
-          return <Icon name={iconName} size={size} color={color} />;
+          return <Icon name={iconName as any} size={size} color={color} />;
         },
         tabBarActiveTintColor: TAB_BAR_THEME.activeTintColor,
         tabBarInactiveTintColor: TAB_BAR_THEME.inactiveTintColor,

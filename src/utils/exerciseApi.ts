@@ -1,0 +1,103 @@
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ACCESS_TOKEN_KEY } from '../services/apiConfig';
+
+interface ExerciseApiParams {
+  bodyPart?: string;
+  keyword?: string;
+  page?: number;
+  size?: number;
+  sort?: string;
+}
+
+// Swagger 응답 타입 정의
+interface Exercise {
+  externalId?: string;
+  name: string;
+  bodyPart: string;
+  targetMuscle?: string;
+  [key: string]: any;
+}
+
+interface ExerciseApiResponse {
+  totalPages: number;
+  totalElements: number;
+  pageable: {
+    pageNumber: number;
+    paged: boolean;
+    pageSize: number;
+    unpaged: boolean;
+    offset: number;
+    sort: Array<{
+      direction: string;
+      nullHandling: string;
+      ascending: boolean;
+      property: string;
+      ignoreCase: boolean;
+    }>;
+  };
+  first: boolean;
+  last: boolean;
+  numberOfElements: number;
+  size: number;
+  content: Exercise[];
+  number: number;
+  sort: Array<{
+    direction: string;
+    nullHandling: string;
+    ascending: boolean;
+    property: string;
+    ignoreCase: boolean;
+  }>;
+  empty: boolean;
+}
+
+const EXERCISE_API_URL = 'http://43.200.40.140/api/exercise-db';
+
+export const fetchExercises = async (params: ExerciseApiParams = {}): Promise<ExerciseApiResponse> => {
+  try {
+    // React Native에서는 AsyncStorage 사용
+    // 통일된 키 사용 (apiConfig.ACCESS_TOKEN_KEY = 'access_token')
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    
+    // 쿼리 구성 (Swagger 명세에 따라)
+    const queryParams = new URLSearchParams();
+    if (params.bodyPart) queryParams.append('bodyPart', params.bodyPart);
+    if (params.keyword) queryParams.append('keyword', params.keyword);
+    // pageable 파라미터
+    if (params.page !== undefined) queryParams.append('page', params.page.toString());
+    if (params.size !== undefined) queryParams.append('size', params.size.toString());
+    if (params.sort) {
+      // sort는 배열 형태로 전달될 수 있음 (예: "name,asc")
+      queryParams.append('sort', params.sort);
+    }
+
+    const url = `${EXERCISE_API_URL}?${queryParams.toString()}`;
+
+    console.log('API 요청 URL:', url);
+    console.log('토큰:', token ? '있음' : '없음');
+
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token || ''}`,
+        Accept: 'application/json',
+      },
+    });
+
+    console.log('API 응답 성공:', response.data);
+    return response.data;
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      console.error('API 요청 에러:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+      });
+    } else {
+      console.error('예상치 못한 에러:', error);
+    }
+    throw error;
+  }
+};
+

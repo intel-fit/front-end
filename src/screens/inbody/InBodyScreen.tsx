@@ -788,7 +788,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 8,
     top: "50%",
-    transform: [{ translateY: -8 }],
+    transform: [{ translateY: -10 }],
     fontSize: 12.8,
     color: "#ffffff",
     fontWeight: "500",
