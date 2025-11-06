@@ -1,4 +1,4 @@
-import React, {useMemo, useState} from 'react';
+import React, { useMemo, useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,349 +6,482 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-} from 'react-native';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
+  Keyboard,
+  Platform,
+  InputAccessoryView,
+} from "react-native";
 
 interface InBodyManualFormProps {
   onSubmit: (data: any) => void;
+  defaultValues?: Partial<{
+    date: string;
+    gender: string;
+    age: string;
+    height: string;
+    weight: string;
+    smm: string;
+    bfm: string;
+    pbf: string;
+    score: string;
+    vfa: string;
+    bmr: string;
+    rArm: string;
+    lArm: string;
+    trunk: string;
+    rLeg: string;
+    lLeg: string;
+    ecw: string;
+    wtCtrl: string;
+    fatCtrl: string;
+    musCtrl: string;
+  }>;
 }
 
-const InBodyManualForm: React.FC<InBodyManualFormProps> = ({onSubmit}) => {
-  const insets = useSafeAreaInsets();
+// iOS 숫자패드 상단에 표시될 액세서리 뷰의 고유 ID
+const ACCESSORY_ID = "doneAccessory";
+
+const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
+  onSubmit,
+  defaultValues,
+}) => {
+  const scrollViewRef = useRef<ScrollView>(null);
+  const ageInputRef = useRef<TextInput>(null);
+  const ageTextRef = useRef<string>("");
+
   const [v, setV] = useState({
     date: new Date().toISOString().slice(0, 10),
-    gender: 'female',
-    age: '',
-    height: '',
-    weight: '',
-    smm: '',
-    bfm: '',
-    pbf: '',
-    score: '',
-    vfa: '',
-    bmr: '',
-    rArm: '',
-    lArm: '',
-    trunk: '',
-    rLeg: '',
-    lLeg: '',
-    ecw: '',
-    wtCtrl: '',
-    fatCtrl: '',
-    musCtrl: '',
+    gender: "female",
+    age: "",
+    height: "",
+    weight: "",
+    smm: "",
+    bfm: "",
+    pbf: "",
+    score: "",
+    vfa: "",
+    bmr: "",
+    rArm: "",
+    lArm: "",
+    trunk: "",
+    rLeg: "",
+    lLeg: "",
+    ecw: "",
+    wtCtrl: "",
+    fatCtrl: "",
+    musCtrl: "",
   });
+
+  // apply defaults on mount/update
+  React.useEffect(() => {
+    if (defaultValues && typeof defaultValues === "object") {
+      setV((s) => ({ ...s, ...(defaultValues as any) }));
+      if (typeof defaultValues.age === "string") {
+        ageTextRef.current = defaultValues.age;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(defaultValues ?? {})]);
+
+  const handle = useCallback((k: string, value: string) => {
+    setV((s) => ({ ...s, [k]: value }));
+  }, []);
 
   const bmi = useMemo(() => {
     const h = parseFloat(v.height);
     const w = parseFloat(v.weight);
-    if (!h || !w) return '';
+    if (!h || !w) return "";
     const m = h / 100;
     return (w / (m * m)).toFixed(1);
   }, [v.height, v.weight]);
 
-  const handle = (k: string) => (value: string) => {
-    setV(s => ({...s, [k]: value}));
-  };
-
   const handleSubmit = () => {
-    const payload = {...v, bmi};
+    const payload = {
+      ...v,
+      age: ageTextRef.current,
+      bmi,
+    };
     onSubmit?.(payload);
   };
 
-  const Field: React.FC<{label: string; children: React.ReactNode}> = ({
-    label,
-    children,
-  }) => (
-    <View style={formStyles.field}>
-      <Text style={formStyles.lab}>{label}</Text>
-      {children}
-    </View>
-  );
+  const fixedBottomPadding = 200;
 
-  const Unit: React.FC<{children: React.ReactNode}> = ({children}) => (
-    <View style={formStyles.unitBox}>{children}</View>
-  );
-
-  const Small: React.FC<{
-    label: string;
-    v: string;
-    onChange: (value: string) => void;
-  }> = ({label, v, onChange}) => (
-    <View style={formStyles.smallField}>
-      <Text style={formStyles.smallLab}>{label}</Text>
-      <View style={formStyles.unitBox}>
-        <TextInput
-          style={formStyles.inpRight}
-          value={v}
-          onChangeText={onChange}
-          keyboardType="decimal-pad"
-          placeholderTextColor="#666"
-        />
-        <Text style={formStyles.unit}>kg</Text>
-      </View>
-    </View>
-  );
-
-  const inputHeight = 40; // 입력창 높이 (paddingVertical 8px * 2 + 텍스트 높이 ~24px)
-  const bottomPadding = Math.max(50, insets.bottom + inputHeight + 20);
+  // iOS 숫자패드 상단의 '완료' 버튼을 포함하는 InputAccessoryView
+  const DoneBar =
+    Platform.OS === "ios" ? (
+      <InputAccessoryView nativeID={ACCESSORY_ID}>
+        <View style={styles.bar}>
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity onPress={() => Keyboard.dismiss()}>
+            <Text style={styles.barBtn}>완료</Text>
+          </TouchableOpacity>
+        </View>
+      </InputAccessoryView>
+    ) : null;
 
   return (
-    <ScrollView 
-      style={formStyles.wrap} 
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={[formStyles.scrollContent, {paddingBottom: bottomPadding}]}
-    >
-      {/* 기본 정보 */}
-      <View style={formStyles.sec}>
-        <Field label="검사일">
-          <TextInput
-            style={formStyles.inp}
-            value={v.date}
-            onChangeText={handle('date')}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor="#666"
-          />
-        </Field>
-        <Field label="성별">
-          <View style={formStyles.row}>
-            <TouchableOpacity
-              style={formStyles.radioButton}
-              onPress={() => setV(s => ({...s, gender: 'male'}))}>
-              <View
-                style={[
-                  formStyles.radioCircle,
-                  v.gender === 'male' && formStyles.radioSelected,
-                ]}
-              />
-              <Text style={formStyles.radioText}>남성</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={formStyles.radioButton}
-              onPress={() => setV(s => ({...s, gender: 'female'}))}>
-              <View
-                style={[
-                  formStyles.radioCircle,
-                  v.gender === 'female' && formStyles.radioSelected,
-                ]}
-              />
-              <Text style={formStyles.radioText}>여성</Text>
-            </TouchableOpacity>
+    <>
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.wrap}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: fixedBottomPadding }}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* 기본 정보 */}
+        <View style={styles.sec}>
+          {/* 검사일 - 텍스트 입력이므로 blurOnSubmit=true(기본값)를 유지하는 것이 일반적 */}
+          <View style={styles.field}>
+            <Text style={styles.lab}>검사일</Text>
+            <TextInput
+              style={styles.inp}
+              value={v.date}
+              onChangeText={(t) => handle("date", t)}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#666"
+              blurOnSubmit={true} // 일반 텍스트는 엔터 시 키보드 닫기
+              inputAccessoryViewID={ACCESSORY_ID}
+            />
           </View>
-        </Field>
-        <Field label="나이">
-          <Unit>
-            <TextInput
-              style={formStyles.inpRight}
-              value={v.age}
-              onChangeText={handle('age')}
-              keyboardType="number-pad"
-              placeholderTextColor="#666"
-            />
-            <Text style={formStyles.unit}>세</Text>
-          </Unit>
-        </Field>
-        <Field label="신장">
-          <Unit>
-            <TextInput
-              style={formStyles.inpRight}
-              value={v.height}
-              onChangeText={handle('height')}
-              keyboardType="decimal-pad"
-              placeholderTextColor="#666"
-            />
-            <Text style={formStyles.unit}>cm</Text>
-          </Unit>
-        </Field>
-      </View>
 
-      {/* 핵심 수치 */}
-      <View style={formStyles.sec}>
-        <Field label="체중">
-          <Unit>
-            <TextInput
-              style={formStyles.inpRight}
-              value={v.weight}
-              onChangeText={handle('weight')}
-              keyboardType="decimal-pad"
-              placeholderTextColor="#666"
-            />
-            <Text style={formStyles.unit}>kg</Text>
-          </Unit>
-        </Field>
-        <Field label="골격근량(SMM)">
-          <Unit>
-            <TextInput
-              style={formStyles.inpRight}
-              value={v.smm}
-              onChangeText={handle('smm')}
-              keyboardType="decimal-pad"
-              placeholderTextColor="#666"
-            />
-            <Text style={formStyles.unit}>kg</Text>
-          </Unit>
-        </Field>
-        <Field label="체지방량(BFM)">
-          <Unit>
-            <TextInput
-              style={formStyles.inpRight}
-              value={v.bfm}
-              onChangeText={handle('bfm')}
-              keyboardType="decimal-pad"
-              placeholderTextColor="#666"
-            />
-            <Text style={formStyles.unit}>kg</Text>
-          </Unit>
-        </Field>
-        <Field label="체지방률(PBF)">
-          <Unit>
-            <TextInput
-              style={formStyles.inpRight}
-              value={v.pbf}
-              onChangeText={handle('pbf')}
-              keyboardType="decimal-pad"
-              placeholderTextColor="#666"
-            />
-            <Text style={formStyles.unit}>%</Text>
-          </Unit>
-        </Field>
-        <Field label="BMI">
-          <Unit>
-            <TextInput
-              style={[formStyles.inpRight, formStyles.inpReadOnly]}
-              value={bmi}
-              editable={false}
-              placeholderTextColor="#666"
-            />
-            <Text style={formStyles.unit}>kg/m²</Text>
-          </Unit>
-        </Field>
-      </View>
+          {/* 성별 */}
+          <View style={styles.field}>
+            <Text style={styles.lab}>성별</Text>
+            <View style={styles.row}>
+              <TouchableOpacity
+                style={styles.radioButton}
+                onPress={() => setV((s) => ({ ...s, gender: "male" }))}
+              >
+                <View
+                  style={[
+                    styles.radioCircle,
+                    v.gender === "male" && styles.radioSelected,
+                  ]}
+                />
+                <Text style={styles.radioText}>남성</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.radioButton}
+                onPress={() => setV((s) => ({ ...s, gender: "female" }))}
+              >
+                <View
+                  style={[
+                    styles.radioCircle,
+                    v.gender === "female" && styles.radioSelected,
+                  ]}
+                />
+                <Text style={styles.radioText}>여성</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
-      {/* 점수/내장지방/BMR */}
-      <View style={formStyles.sec}>
-        <Field label="인바디 점수">
-          <TextInput
-            style={formStyles.inp}
-            value={v.score}
-            onChangeText={handle('score')}
-            keyboardType="decimal-pad"
-            placeholderTextColor="#666"
-          />
-        </Field>
-        <Field label="내장지방면적(VFA)">
-          <Unit>
-            <TextInput
-              style={formStyles.inpRight}
-              value={v.vfa}
-              onChangeText={handle('vfa')}
-              keyboardType="decimal-pad"
-              placeholderTextColor="#666"
-            />
-            <Text style={formStyles.unit}>cm²</Text>
-          </Unit>
-        </Field>
-        <Field label="BMR">
-          <Unit>
-            <TextInput
-              style={formStyles.inpRight}
-              value={v.bmr}
-              onChangeText={handle('bmr')}
-              keyboardType="decimal-pad"
-              placeholderTextColor="#666"
-            />
-            <Text style={formStyles.unit}>kcal</Text>
-          </Unit>
-        </Field>
-      </View>
-
-      {/* 부위별 근육량 */}
-      <View style={formStyles.sec}>
-        <Text style={formStyles.h3}>부위별 근육량 (kg)</Text>
-        <View style={formStyles.grid}>
-          <Small label="오른팔" v={v.rArm} onChange={handle('rArm')} />
-          <Small label="왼팔" v={v.lArm} onChange={handle('lArm')} />
-          <Small label="몸통" v={v.trunk} onChange={handle('trunk')} />
-          <Small label="오른다리" v={v.rLeg} onChange={handle('rLeg')} />
-          <Small label="왼다리" v={v.lLeg} onChange={handle('lLeg')} />
-        </View>
-      </View>
-
-      {/* 수분비/체중조절 */}
-      <View style={formStyles.sec}>
-        <Field label="세포외수분비(ECW/TBW)">
-          <TextInput
-            style={formStyles.inp}
-            value={v.ecw}
-            onChangeText={handle('ecw')}
-            keyboardType="decimal-pad"
-            placeholderTextColor="#666"
-          />
-        </Field>
-        <View style={formStyles.grid2}>
-          <Field label="체중조절(±kg)">
-            <Unit>
+          {/* 나이 (비제어) */}
+          <View style={styles.field}>
+            <Text style={styles.lab}>나이</Text>
+            <View style={styles.unitBox}>
               <TextInput
-                style={formStyles.inpRight}
+                ref={ageInputRef}
+                style={styles.inpRight}
+                defaultValue={v.age}
+                onChangeText={(text) => {
+                  ageTextRef.current = text;
+                }}
+                keyboardType="number-pad"
+                // ✅ 수정: InputAccessoryView 표시를 위해 필수
+                blurOnSubmit={false}
+                // ❌ 키보드 닫힘을 방해하던 onBlur 로직 제거
+                onSubmitEditing={() => Keyboard.dismiss()}
+                inputAccessoryViewID={ACCESSORY_ID}
+              />
+              <Text style={styles.unit}>세</Text>
+            </View>
+          </View>
+
+          {/* 신장 */}
+          <View style={styles.field}>
+            <Text style={styles.lab}>신장</Text>
+            <View style={styles.unitBox}>
+              <TextInput
+                style={styles.inpRight}
+                value={v.height}
+                onChangeText={(t) => handle("height", t)}
+                keyboardType="decimal-pad"
+                placeholderTextColor="#666"
+                // ✅ 수정: InputAccessoryView 표시를 위해 필수
+                blurOnSubmit={false}
+                inputAccessoryViewID={ACCESSORY_ID}
+              />
+              <Text style={styles.unit}>cm</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* 핵심 수치 */}
+        <View style={styles.sec}>
+          {/* 체중 */}
+          <View style={styles.field}>
+            <Text style={styles.lab}>체중</Text>
+            <View style={styles.unitBox}>
+              <TextInput
+                style={styles.inpRight}
+                value={v.weight}
+                onChangeText={(t) => handle("weight", t)}
+                keyboardType="decimal-pad"
+                placeholderTextColor="#666"
+                // ✅ 수정
+                blurOnSubmit={false}
+                inputAccessoryViewID={ACCESSORY_ID}
+              />
+              <Text style={styles.unit}>kg</Text>
+            </View>
+          </View>
+
+          {/* 골격근량 */}
+          <View style={styles.field}>
+            <Text style={styles.lab}>골격근량(SMM)</Text>
+            <View style={styles.unitBox}>
+              <TextInput
+                style={styles.inpRight}
+                value={v.smm}
+                onChangeText={(t) => handle("smm", t)}
+                keyboardType="decimal-pad"
+                placeholderTextColor="#666"
+                // ✅ 수정
+                blurOnSubmit={false}
+                inputAccessoryViewID={ACCESSORY_ID}
+              />
+              <Text style={styles.unit}>kg</Text>
+            </View>
+          </View>
+
+          {/* 체지방량 */}
+          <View style={styles.field}>
+            <Text style={styles.lab}>체지방량(BFM)</Text>
+            <View style={styles.unitBox}>
+              <TextInput
+                style={styles.inpRight}
+                value={v.bfm}
+                onChangeText={(t) => handle("bfm", t)}
+                keyboardType="decimal-pad"
+                placeholderTextColor="#666"
+                // ✅ 수정
+                blurOnSubmit={false}
+                inputAccessoryViewID={ACCESSORY_ID}
+              />
+              <Text style={styles.unit}>kg</Text>
+            </View>
+          </View>
+
+          {/* 체지방률 */}
+          <View style={styles.field}>
+            <Text style={styles.lab}>체지방률(PBF)</Text>
+            <View style={styles.unitBox}>
+              <TextInput
+                style={styles.inpRight}
+                value={v.pbf}
+                onChangeText={(t) => handle("pbf", t)}
+                keyboardType="decimal-pad"
+                placeholderTextColor="#666"
+                // ✅ 수정
+                blurOnSubmit={false}
+                inputAccessoryViewID={ACCESSORY_ID}
+              />
+              <Text style={styles.unit}>%</Text>
+            </View>
+          </View>
+
+          {/* BMI (읽기전용) */}
+          <View style={styles.field}>
+            <Text style={styles.lab}>BMI</Text>
+            <View style={styles.unitBox}>
+              <TextInput
+                style={[styles.inpRight, styles.inpReadOnly]}
+                value={bmi}
+                editable={false}
+                // ✅ 읽기 전용이라도 accessory view ID 지정
+                inputAccessoryViewID={ACCESSORY_ID}
+              />
+              <Text style={styles.unit}>kg/m²</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* 점수/내장지방/BMR */}
+        <View style={styles.sec}>
+          <View style={styles.field}>
+            <Text style={styles.lab}>인바디 점수</Text>
+            <TextInput
+              style={styles.inp}
+              value={v.score}
+              onChangeText={(t) => handle("score", t)}
+              keyboardType="decimal-pad"
+              placeholderTextColor="#666"
+              // ✅ 수정
+              blurOnSubmit={false}
+              inputAccessoryViewID={ACCESSORY_ID}
+            />
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.lab}>내장지방면적(VFA)</Text>
+            <View style={styles.unitBox}>
+              <TextInput
+                style={styles.inpRight}
+                value={v.vfa}
+                onChangeText={(t) => handle("vfa", t)}
+                keyboardType="decimal-pad"
+                placeholderTextColor="#666"
+                // ✅ 수정
+                blurOnSubmit={false}
+                inputAccessoryViewID={ACCESSORY_ID}
+              />
+              <Text style={styles.unit}>cm²</Text>
+            </View>
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.lab}>BMR</Text>
+            <View style={styles.unitBox}>
+              <TextInput
+                style={styles.inpRight}
+                value={v.bmr}
+                onChangeText={(t) => handle("bmr", t)}
+                keyboardType="decimal-pad"
+                placeholderTextColor="#666"
+                // ✅ 수정
+                blurOnSubmit={false}
+                inputAccessoryViewID={ACCESSORY_ID}
+              />
+              <Text style={styles.unit}>kcal</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* 부위별 근육량 */}
+        <View style={styles.sec}>
+          <Text style={styles.h3}>부위별 근육량 (kg)</Text>
+
+          {[
+            { key: "rArm", label: "오른팔" },
+            { key: "lArm", label: "왼팔" },
+            { key: "trunk", label: "몸통" },
+            { key: "rLeg", label: "오른다리" },
+            { key: "lLeg", label: "왼다리" },
+          ].map(({ key, label }) => (
+            <View style={styles.field} key={key}>
+              <Text style={styles.smallLab}>{label}</Text>
+              <View style={styles.unitBox}>
+                <TextInput
+                  style={styles.inpRight}
+                  value={(v as any)[key]}
+                  onChangeText={(t) => handle(key, t)}
+                  keyboardType="decimal-pad"
+                  placeholderTextColor="#666"
+                  // ✅ 수정
+                  blurOnSubmit={false}
+                  inputAccessoryViewID={ACCESSORY_ID}
+                />
+                <Text style={styles.unit}>kg</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* 수분비/체중조절 */}
+        <View style={styles.sec}>
+          <View style={styles.field}>
+            <Text style={styles.lab}>세포외수분비(ECW/TBW)</Text>
+            <TextInput
+              style={styles.inp}
+              value={v.ecw}
+              onChangeText={(t) => handle("ecw", t)}
+              keyboardType="decimal-pad"
+              placeholderTextColor="#666"
+              // ✅ 수정
+              blurOnSubmit={false}
+              inputAccessoryViewID={ACCESSORY_ID}
+            />
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.lab}>체중조절(±kg)</Text>
+            <View style={styles.unitBox}>
+              <TextInput
+                style={styles.inpRight}
                 value={v.wtCtrl}
-                onChangeText={handle('wtCtrl')}
+                onChangeText={(t) => handle("wtCtrl", t)}
                 keyboardType="decimal-pad"
                 placeholderTextColor="#666"
+                // ✅ 수정
+                blurOnSubmit={false}
+                inputAccessoryViewID={ACCESSORY_ID}
               />
-              <Text style={formStyles.unit}>kg</Text>
-            </Unit>
-          </Field>
-          <Field label="지방조절(kg)">
-            <Unit>
-              <TextInput
-                style={formStyles.inpRight}
-                value={v.fatCtrl}
-                onChangeText={handle('fatCtrl')}
-                keyboardType="decimal-pad"
-                placeholderTextColor="#666"
-              />
-              <Text style={formStyles.unit}>kg</Text>
-            </Unit>
-          </Field>
-          <Field label="근육조절(kg)">
-            <Unit>
-              <TextInput
-                style={formStyles.inpRight}
-                value={v.musCtrl}
-                onChangeText={handle('musCtrl')}
-                keyboardType="decimal-pad"
-                placeholderTextColor="#666"
-              />
-              <Text style={formStyles.unit}>kg</Text>
-            </Unit>
-          </Field>
-        </View>
-      </View>
+              <Text style={styles.unit}>kg</Text>
+            </View>
+          </View>
 
-      <TouchableOpacity style={formStyles.submit} onPress={handleSubmit}>
-        <Text style={formStyles.submitText}>저장</Text>
-      </TouchableOpacity>
-    </ScrollView>
+          <View style={styles.field}>
+            <Text style={styles.lab}>지방조절(kg)</Text>
+            <View style={styles.unitBox}>
+              <TextInput
+                style={styles.inpRight}
+                value={v.fatCtrl}
+                onChangeText={(t) => handle("fatCtrl", t)}
+                keyboardType="decimal-pad"
+                placeholderTextColor="#666"
+                // ✅ 수정
+                blurOnSubmit={false}
+                inputAccessoryViewID={ACCESSORY_ID}
+              />
+              <Text style={styles.unit}>kg</Text>
+            </View>
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.lab}>근육조절(kg)</Text>
+            <View style={styles.unitBox}>
+              <TextInput
+                style={styles.inpRight}
+                value={v.musCtrl}
+                onChangeText={(t) => handle("musCtrl", t)}
+                keyboardType="decimal-pad"
+                placeholderTextColor="#666"
+                // ✅ 수정
+                blurOnSubmit={false}
+                inputAccessoryViewID={ACCESSORY_ID}
+              />
+              <Text style={styles.unit}>kg</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* 저장 버튼 */}
+        <TouchableOpacity style={styles.submit} onPress={handleSubmit}>
+          <Text style={styles.submitText}>저장</Text>
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* ✅ InputAccessoryView는 ScrollView 밖에 렌더링되어야 합니다. */}
+      {DoneBar}
+    </>
   );
 };
 
-const formStyles = StyleSheet.create({
+// ... (스타일 코드는 변경 없음)
+const styles = StyleSheet.create({
   wrap: {
-    width: '100%',
-    maxWidth: '100%',
-    backgroundColor: '#1b1b1b',
+    width: "100%",
+    maxWidth: "100%",
+    backgroundColor: "#1b1b1b",
     padding: 16,
-  },
-  scrollContent: {
-    paddingBottom: 60,
   },
   h3: {
     marginVertical: 6,
     fontSize: 13,
-    color: '#c9c9c9',
+    color: "#c9c9c9",
   },
   sec: {
     borderTopWidth: 1,
-    borderTopColor: '#2a2a2a',
+    borderTopColor: "#2a2a2a",
     paddingTop: 8,
     marginTop: 8,
   },
@@ -357,18 +490,23 @@ const formStyles = StyleSheet.create({
   },
   lab: {
     fontSize: 11,
-    color: '#bdbdbd',
+    color: "#bdbdbd",
+    marginBottom: 4,
+  },
+  smallLab: {
+    fontSize: 11,
+    color: "#bdbdbd",
     marginBottom: 4,
   },
   inp: {
-    width: '100%',
+    width: "100%",
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#343434',
-    backgroundColor: '#242424',
-    color: '#ffffff',
+    borderColor: "#343434",
+    backgroundColor: "#242424",
+    color: "#ffffff",
     fontSize: 14,
   },
   inpRight: {
@@ -377,37 +515,39 @@ const formStyles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#343434',
-    backgroundColor: '#242424',
-    color: '#ffffff',
+    borderColor: "#343434",
+    backgroundColor: "#242424",
+    color: "#ffffff",
     fontSize: 14,
+    textAlign: "right", // 숫자가 오른쪽으로 정렬되도록 추가
   },
   inpReadOnly: {
-    backgroundColor: '#2b2b2b',
+    backgroundColor: "#2b2b2b",
+    textAlign: "right", // 읽기 전용도 정렬
   },
   unitBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   unit: {
     paddingVertical: 4,
     paddingHorizontal: 6,
     borderRadius: 6,
-    backgroundColor: '#2b2b2b',
-    color: '#d5d5d5',
+    backgroundColor: "#2b2b2b",
+    color: "#d5d5d5",
     fontSize: 11,
     borderWidth: 1,
-    borderColor: '#353535',
+    borderColor: "#353535",
   },
   row: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 16,
     marginTop: 4,
   },
   radioButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
   },
   radioCircle: {
@@ -415,44 +555,44 @@ const formStyles = StyleSheet.create({
     height: 16,
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: '#666',
+    borderColor: "#666",
   },
   radioSelected: {
-    backgroundColor: '#d6ff4b',
-    borderColor: '#d6ff4b',
+    backgroundColor: "#d6ff4b",
+    borderColor: "#d6ff4b",
   },
   radioText: {
     fontSize: 13,
-    color: '#ffffff',
-  },
-  grid: {
-    gap: 8,
-  },
-  smallField: {
-    marginBottom: 8,
-  },
-  smallLab: {
-    fontSize: 11,
-    color: '#bdbdbd',
-    marginBottom: 4,
-  },
-  grid2: {
-    gap: 8,
-    marginTop: 4,
+    color: "#ffffff",
   },
   submit: {
     marginTop: 16,
-    width: '100%',
+    width: "100%",
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 10,
-    backgroundColor: '#d6ff4b',
-    alignItems: 'center',
+    backgroundColor: "#d6ff4b",
+    alignItems: "center",
   },
   submitText: {
-    color: '#111111',
-    fontWeight: '700',
+    color: "#111111",
+    fontWeight: "700",
     fontSize: 14,
+  },
+  // iOS 숫자패드 상단 액세서리 바
+  bar: {
+    backgroundColor: "#1f1f1f",
+    borderTopWidth: 1,
+    borderTopColor: "#333",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  barBtn: {
+    color: "#d6ff4b",
+    fontWeight: "700",
+    fontSize: 16,
   },
 });
 
