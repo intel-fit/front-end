@@ -47,6 +47,42 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
   const scrollViewRef = useRef<ScrollView>(null);
   const ageInputRef = useRef<TextInput>(null);
   const ageTextRef = useRef<string>("");
+  const inputRefs = useRef<{ [key: string]: TextInput | null }>({});
+
+  // 날짜를 YYYY-MM-DD 형식으로 자동 포맷팅
+  const formatDate = (text: string): string => {
+    // 숫자만 추출
+    const numbers = text.replace(/[^0-9]/g, "");
+
+    // 길이에 따라 자동으로 하이픈 추가
+    if (numbers.length <= 4) {
+      return numbers;
+    } else if (numbers.length <= 6) {
+      return `${numbers.slice(0, 4)}-${numbers.slice(4)}`;
+    } else {
+      return `${numbers.slice(0, 4)}-${numbers.slice(4, 6)}-${numbers.slice(
+        6,
+        8
+      )}`;
+    }
+  };
+
+  // 키보드가 올라올 때 입력 필드가 보이도록 스크롤
+  const handleInputFocus = (key: string) => {
+    setTimeout(() => {
+      inputRefs.current[key]?.measureLayout(
+        scrollViewRef.current?.getInnerViewNode?.() ||
+          (scrollViewRef.current as any),
+        (x, y, width, height) => {
+          scrollViewRef.current?.scrollTo({
+            y: y - 100, // 입력 필드 위에 100px 여백
+            animated: true,
+          });
+        },
+        () => {}
+      );
+    }, 100);
+  };
 
   const [v, setV] = useState({
     date: new Date().toISOString().slice(0, 10),
@@ -55,6 +91,7 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
     height: "",
     weight: "",
     smm: "",
+    muscleMass: "", // muscleMass 필드 추가
     bfm: "",
     pbf: "",
     score: "",
@@ -103,7 +140,7 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
     onSubmit?.(payload);
   };
 
-  const fixedBottomPadding = 200;
+  const fixedBottomPadding = 400; // 키보드 가림 방지를 위해 증가
 
   // iOS 숫자패드 상단의 '완료' 버튼을 포함하는 InputAccessoryView
   const DoneBar =
@@ -129,16 +166,21 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
       >
         {/* 기본 정보 */}
         <View style={styles.sec}>
-          {/* 검사일 - 텍스트 입력이므로 blurOnSubmit=true(기본값)를 유지하는 것이 일반적 */}
+          {/* 검사일 - YYYY-MM-DD 형식으로 자동 포맷팅 */}
           <View style={styles.field}>
             <Text style={styles.lab}>검사일</Text>
             <TextInput
               style={styles.inp}
               value={v.date}
-              onChangeText={(t) => handle("date", t)}
+              onChangeText={(t) => {
+                const formatted = formatDate(t);
+                handle("date", formatted);
+              }}
               placeholder="YYYY-MM-DD"
               placeholderTextColor="#666"
-              blurOnSubmit={true} // 일반 텍스트는 엔터 시 키보드 닫기
+              keyboardType="number-pad"
+              maxLength={10} // YYYY-MM-DD = 10자
+              blurOnSubmit={true}
               inputAccessoryViewID={ACCESSORY_ID}
             />
           </View>
@@ -253,6 +295,24 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
             </View>
           </View>
 
+          {/* 근육량(Muscle Mass) */}
+          <View style={styles.field}>
+            <Text style={styles.lab}>근육량(Muscle Mass)</Text>
+            <View style={styles.unitBox}>
+              <TextInput
+                style={styles.inpRight}
+                value={v.muscleMass}
+                onChangeText={(t) => handle("muscleMass", t)}
+                keyboardType="decimal-pad"
+                placeholderTextColor="#666"
+                placeholder="골격근량과 동일 또는 다를 수 있음"
+                blurOnSubmit={false}
+                inputAccessoryViewID={ACCESSORY_ID}
+              />
+              <Text style={styles.unit}>kg</Text>
+            </View>
+          </View>
+
           {/* 체지방량 */}
           <View style={styles.field}>
             <Text style={styles.lab}>체지방량(BFM)</Text>
@@ -281,6 +341,7 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
                 onChangeText={(t) => handle("pbf", t)}
                 keyboardType="decimal-pad"
                 placeholderTextColor="#666"
+                placeholder="예: 0.23 (또는 23)"
                 // ✅ 수정
                 blurOnSubmit={false}
                 inputAccessoryViewID={ACCESSORY_ID}
@@ -322,19 +383,20 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.lab}>내장지방면적(VFA)</Text>
+            <Text style={styles.lab}>내장지방 레벨</Text>
             <View style={styles.unitBox}>
               <TextInput
                 style={styles.inpRight}
                 value={v.vfa}
                 onChangeText={(t) => handle("vfa", t)}
-                keyboardType="decimal-pad"
+                keyboardType="number-pad"
                 placeholderTextColor="#666"
+                placeholder="예: 6"
                 // ✅ 수정
                 blurOnSubmit={false}
                 inputAccessoryViewID={ACCESSORY_ID}
               />
-              <Text style={styles.unit}>cm²</Text>
+              {/* 단위 없음: 레벨(정수) */}
             </View>
           </View>
 
@@ -406,14 +468,22 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
             <Text style={styles.lab}>체중조절(±kg)</Text>
             <View style={styles.unitBox}>
               <TextInput
+                ref={(ref) => {
+                  inputRefs.current["wtCtrl"] = ref;
+                }}
                 style={styles.inpRight}
                 value={v.wtCtrl}
-                onChangeText={(t) => handle("wtCtrl", t)}
-                keyboardType="decimal-pad"
+                onChangeText={(t) => {
+                  // ± 기호와 숫자만 허용
+                  const filtered = t.replace(/[^+\-0-9.]/g, "");
+                  handle("wtCtrl", filtered);
+                }}
+                keyboardType="default"
                 placeholderTextColor="#666"
-                // ✅ 수정
                 blurOnSubmit={false}
                 inputAccessoryViewID={ACCESSORY_ID}
+                placeholder="예: +2.5 또는 -3.0"
+                onFocus={() => handleInputFocus("wtCtrl")}
               />
               <Text style={styles.unit}>kg</Text>
             </View>
@@ -423,14 +493,22 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
             <Text style={styles.lab}>지방조절(kg)</Text>
             <View style={styles.unitBox}>
               <TextInput
+                ref={(ref) => {
+                  inputRefs.current["fatCtrl"] = ref;
+                }}
                 style={styles.inpRight}
                 value={v.fatCtrl}
-                onChangeText={(t) => handle("fatCtrl", t)}
-                keyboardType="decimal-pad"
+                onChangeText={(t) => {
+                  // ± 기호와 숫자만 허용
+                  const filtered = t.replace(/[^+\-0-9.]/g, "");
+                  handle("fatCtrl", filtered);
+                }}
+                keyboardType="default"
                 placeholderTextColor="#666"
-                // ✅ 수정
                 blurOnSubmit={false}
                 inputAccessoryViewID={ACCESSORY_ID}
+                placeholder="예: +1.5 또는 -2.0"
+                onFocus={() => handleInputFocus("fatCtrl")}
               />
               <Text style={styles.unit}>kg</Text>
             </View>
@@ -440,14 +518,22 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
             <Text style={styles.lab}>근육조절(kg)</Text>
             <View style={styles.unitBox}>
               <TextInput
+                ref={(ref) => {
+                  inputRefs.current["musCtrl"] = ref;
+                }}
                 style={styles.inpRight}
                 value={v.musCtrl}
-                onChangeText={(t) => handle("musCtrl", t)}
-                keyboardType="decimal-pad"
+                onChangeText={(t) => {
+                  // ± 기호와 숫자만 허용
+                  const filtered = t.replace(/[^+\-0-9.]/g, "");
+                  handle("musCtrl", filtered);
+                }}
+                keyboardType="default"
                 placeholderTextColor="#666"
-                // ✅ 수정
                 blurOnSubmit={false}
                 inputAccessoryViewID={ACCESSORY_ID}
+                placeholder="예: +0.5 또는 -1.0"
+                onFocus={() => handleInputFocus("musCtrl")}
               />
               <Text style={styles.unit}>kg</Text>
             </View>
@@ -508,6 +594,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#242424",
     color: "#ffffff",
     fontSize: 14,
+    textAlign: "right",
   },
   inpRight: {
     flex: 1,
