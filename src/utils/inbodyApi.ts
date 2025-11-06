@@ -180,3 +180,59 @@ export const patchInBody = async (
     throw error;
   }
 };
+
+/**
+ * 특정 날짜의 인바디 기록 조회
+ * @param date 날짜 (YYYY-MM-DD 또는 YYYY.MM.DD 형식)
+ */
+export const getInBodyByDate = async (date: string): Promise<any> => {
+  const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+
+  // 여러 날짜 형식 시도
+  const dateFormats = [
+    date.replace(/\./g, "-"), // 점을 하이픈으로: YYYY-MM-DD
+    date.replace(/-/g, "."), // 하이픈을 점으로: YYYY.MM.DD
+    date, // 원본 형식
+  ];
+
+  for (const formattedDate of dateFormats) {
+    try {
+      const url = `${INBODY_API_URL}?date=${encodeURIComponent(formattedDate)}`;
+      console.log("[INBODY][GET BY DATE] API 요청 URL:", url);
+
+      const response = await axios.get(url, {
+        headers: {
+          Authorization: `Bearer ${token || ""}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+      });
+
+      console.log("[INBODY][GET BY DATE] API 응답 성공:", response.data);
+      return response.data;
+    } catch (error: any) {
+      // 마지막 시도가 아니면 계속 진행
+      if (dateFormats.indexOf(formattedDate) < dateFormats.length - 1) {
+        console.warn(
+          `[INBODY][GET BY DATE] 날짜 형식 ${formattedDate} 실패, 다음 형식 시도...`
+        );
+        continue;
+      }
+
+      // 모든 형식 실패 시 에러 로그
+      if (axios.isAxiosError(error)) {
+        console.error("[INBODY][GET BY DATE] API 에러:", {
+          message: error.message,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+        });
+      } else {
+        console.error("[INBODY][GET BY DATE] 예상치 못한 에러:", error);
+      }
+      throw error;
+    }
+  }
+
+  throw new Error("모든 날짜 형식 시도 실패");
+};

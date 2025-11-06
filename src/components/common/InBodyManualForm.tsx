@@ -69,19 +69,13 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
 
   // 키보드가 올라올 때 입력 필드가 보이도록 스크롤
   const handleInputFocus = (key: string) => {
+    // measureLayout 대신 간단한 스크롤 사용
     setTimeout(() => {
-      inputRefs.current[key]?.measureLayout(
-        scrollViewRef.current?.getInnerViewNode?.() ||
-          (scrollViewRef.current as any),
-        (x, y, width, height) => {
-          scrollViewRef.current?.scrollTo({
-            y: y - 100, // 입력 필드 위에 100px 여백
-            animated: true,
-          });
-        },
-        () => {}
-      );
-    }, 100);
+      if (inputRefs.current[key]) {
+        // 입력 필드가 하단에 있을 가능성이 높으므로 하단으로 스크롤
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }
+    }, 300);
   };
 
   const [v, setV] = useState({

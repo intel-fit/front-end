@@ -93,8 +93,10 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
       console.log("인바디 수기 입력 저장:", data);
 
       // 폼 데이터를 API 요청 형식으로 변환
-      const measurementDate =
-        data.date || new Date().toISOString().slice(0, 10); // POST는 YYYY-MM-DD 사용
+      // 테스트 결과 하이픈 형식(YYYY-MM-DD)이 성공하므로 기본값으로 사용
+      const measurementDateRaw =
+        data.date || new Date().toISOString().slice(0, 10);
+      const measurementDate = measurementDateRaw; // 하이픈 형식 그대로 사용 (YYYY-MM-DD)
 
       // 숫자 파싱 헬퍼 함수 (NaN, Infinity 체크, 소수점 정밀도 조정)
       const parseNumber = (value: string | undefined): number | undefined => {
@@ -116,13 +118,21 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
         return +num.toFixed(2);
       };
       // muscleMass가 입력되지 않으면 skeletalMuscleMass와 동일한 값으로 설정
+      const smmValue = parseNumber(data.smm);
       const muscleMassValue =
-        parseNumber(data.muscleMass) ?? parseNumber(data.smm);
+        parseNumber(data.muscleMass) ?? smmValue;
+      
+      console.log("[INBODY] 파싱된 값:", {
+        smm: smmValue,
+        muscleMass: parseNumber(data.muscleMass),
+        muscleMassValue: muscleMassValue,
+      });
+      
       const payload: InBodyPayload = {
         measurementDate,
         weight: parseNumber(data.weight),
-        muscleMass: muscleMassValue,
-        skeletalMuscleMass: parseNumber(data.smm),
+        muscleMass: muscleMassValue, // smmValue와 동일하게 설정됨
+        skeletalMuscleMass: smmValue,
         bodyFatMass: parseNumber(data.bfm),
         bodyFatPercentage: normalizePercent(parseNumber(data.pbf)),
         leftArmMuscle: parseNumber(data.lArm),
@@ -136,9 +146,14 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
       };
 
       // undefined 필드 제거 (서버에 불필요한 필드 전송 방지)
-      const cleanPayload = Object.fromEntries(
+      let cleanPayload = Object.fromEntries(
         Object.entries(payload).filter(([_, value]) => value !== undefined)
       ) as InBodyPayload;
+
+      // muscleMass가 없으면 skeletalMuscleMass와 동일한 값으로 설정 (cleanPayload 생성 전에 처리)
+      if (cleanPayload.skeletalMuscleMass && !cleanPayload.muscleMass) {
+        cleanPayload.muscleMass = cleanPayload.skeletalMuscleMass;
+      }
 
       // 에러 처리에서 사용할 수 있도록 변수 저장
       finalPayload = cleanPayload;
@@ -155,9 +170,35 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
         return;
       }
 
+      // muscleMass도 필수 필드로 검증 (skeletalMuscleMass가 있으면 muscleMass도 있어야 함)
+      if (!cleanPayload.muscleMass) {
+        cleanPayload.muscleMass = cleanPayload.skeletalMuscleMass;
+      }
+
       // 검사일이 없으면 오늘 날짜로 자동 설정
       if (!cleanPayload.measurementDate) {
         cleanPayload.measurementDate = new Date().toISOString().slice(0, 10);
+      }
+
+      // 날짜 검증: 미래 날짜는 허용하지 않음 (서버가 거부할 수 있음)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const inputDate = new Date(cleanPayload.measurementDate);
+      if (isNaN(inputDate.getTime())) {
+        Alert.alert(
+          "입력 오류",
+          "올바른 날짜 형식(YYYY-MM-DD)을 입력해주세요."
+        );
+        setLoading(false);
+        return;
+      }
+      if (inputDate > today) {
+        Alert.alert(
+          "입력 오류",
+          "미래 날짜는 입력할 수 없습니다.\n\n오늘 날짜 또는 과거 날짜를 입력해주세요."
+        );
+        setLoading(false);
+        return;
       }
 
       // 값 범위 검증
@@ -170,12 +211,6 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
           setLoading(false);
           return;
         }
-      }
-
-      // muscleMass와 skeletalMuscleMass가 모두 있으면 muscleMass를 totalBodyWater로 사용
-      // 없으면 skeletalMuscleMass 값을 muscleMass로도 설정
-      if (cleanPayload.skeletalMuscleMass && !cleanPayload.muscleMass) {
-        cleanPayload.muscleMass = cleanPayload.skeletalMuscleMass;
       }
 
       // 클라이언트 측 검증: 분절 근육 합계 확인 (경고만 표시, 저장은 진행)
@@ -241,6 +276,12 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
         }
       }
 
+      // muscleMass 최종 확인 및 설정 (API 호출 직전)
+      if (cleanPayload.skeletalMuscleMass && !cleanPayload.muscleMass) {
+        cleanPayload.muscleMass = cleanPayload.skeletalMuscleMass;
+        console.log("[INBODY] muscleMass 자동 설정:", cleanPayload.muscleMass);
+      }
+
       console.log(
         "[INBODY] 최종 페이로드:",
         JSON.stringify(cleanPayload, null, 2)
@@ -255,19 +296,27 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
 
       let response: any;
       try {
+        // API 호출 직전 최종 확인
+        const finalPayloadForApi = { ...cleanPayload };
+        if (finalPayloadForApi.skeletalMuscleMass && !finalPayloadForApi.muscleMass) {
+          finalPayloadForApi.muscleMass = finalPayloadForApi.skeletalMuscleMass;
+        }
+        console.log("[INBODY] API 전송 페이로드:", JSON.stringify(finalPayloadForApi, null, 2));
+        
         response = inBodyId
-          ? await patchInBody(inBodyId, cleanPayload)
-          : await postInBody(cleanPayload);
+          ? await patchInBody(inBodyId, finalPayloadForApi)
+          : await postInBody(finalPayloadForApi);
       } catch (e: any) {
-        // 400이면 서버 스펙 불일치 가능성 → 대체 포맷으로 1~2회 재시도
+        // 400 또는 500이면 서버 스펙 불일치 가능성 → 대체 포맷으로 재시도
         const is400 = e?.response?.status === 400;
-        if (!is400) throw e;
+        const is500 = e?.response?.status === 500;
+        if (!is400 && !is500) throw e;
 
-        // 대안 1: 날짜를 점(.) 포맷으로, muscleMass와 skeletalMuscleMass 동시 전송
+        // 대안 1: 날짜를 점(.) 포맷으로 변경 시도
         const alt1: InBodyPayload = removeUndefined({
           measurementDate: (
             cleanPayload.measurementDate || measurementDate
-          ).replace(/-/g, "."),
+          ).replace(/-/g, "."), // 하이픈을 점으로 변환
           weight: cleanPayload.weight,
           muscleMass:
             cleanPayload.muscleMass ?? cleanPayload.skeletalMuscleMass,
