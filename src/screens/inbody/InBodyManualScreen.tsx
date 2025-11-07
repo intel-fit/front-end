@@ -17,44 +17,401 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
   const inBodyId: number | string | undefined = route?.params?.inBodyId;
   const defaultValues = route?.params?.defaultValues;
 
+  // 검증 가이드 생성 함수
+  const getValidationGuide = (payload: InBodyPayload): string => {
+    const issues: string[] = [];
+
+    // 분절 근육 합계 검증
+    if (
+      payload.skeletalMuscleMass &&
+      (payload.leftArmMuscle ||
+        payload.rightArmMuscle ||
+        payload.trunkMuscle ||
+        payload.leftLegMuscle ||
+        payload.rightLegMuscle)
+    ) {
+      const segmentSum =
+        (payload.leftArmMuscle || 0) +
+        (payload.rightArmMuscle || 0) +
+        (payload.trunkMuscle || 0) +
+        (payload.leftLegMuscle || 0) +
+        (payload.rightLegMuscle || 0);
+      const smm = payload.skeletalMuscleMass;
+      const diff = Math.abs(segmentSum - smm);
+
+      if (diff > 2) {
+        issues.push(
+          `⚠ 분절 근육 합계(${segmentSum}kg) ≠ 골격근량(${smm}kg)\n  → 분절 근육 합계를 ${smm}kg로 맞춰주세요`
+        );
+      }
+    }
+
+    // 체지방량과 체지방률 일치 검증
+    if (payload.weight && payload.bodyFatMass && payload.bodyFatPercentage) {
+      const calculatedPBF = (payload.bodyFatMass / payload.weight) * 100;
+      const inputPBF = payload.bodyFatPercentage;
+      const diff = Math.abs(calculatedPBF - inputPBF);
+
+      if (diff > 5) {
+        issues.push(
+          `⚠ 체지방률 불일치: 계산값(${calculatedPBF.toFixed(
+            1
+          )}%) ≠ 입력값(${inputPBF}%)\n  → 체지방량을 ${(
+            (inputPBF / 100) *
+            payload.weight
+          ).toFixed(1)}kg로 수정하거나\n  → 체지방률을 ${calculatedPBF.toFixed(
+            1
+          )}%로 수정해주세요`
+        );
+      }
+    }
+
+    // 일반적인 입력 가이드 (항상 표시)
+    const generalGuide =
+      `\n\n📋 입력 가이드:\n` +
+      `• 날짜: YYYY-MM-DD 형식 (예: 2025-11-06)\n` +
+      `• 체중: 20~300kg 범위\n` +
+      `• 골격근량: 5~60kg 범위\n` +
+      `• 분절 근육 합계 = 골격근량이어야 함\n` +
+      `• 체지방률 = (체지방량 ÷ 체중) × 100\n` +
+      `• 체지방률: 0~100% 범위\n` +
+      `• 내장지방 레벨: 1~20 범위`;
+
+    if (issues.length > 0) {
+      return `\n\n❌ 발견된 문제:\n${issues.join("\n\n")}${generalGuide}`;
+    }
+
+    return generalGuide;
+  };
+
   const handleSubmit = async (data: any) => {
+    // 에러 처리에서 사용할 수 있도록 변수 선언
+    let finalPayload: InBodyPayload | undefined;
+
     try {
       setLoading(true);
       console.log("인바디 수기 입력 저장:", data);
 
       // 폼 데이터를 API 요청 형식으로 변환
-      const payload: InBodyPayload = {
-        measurementDate: data.date || new Date().toISOString().slice(0, 10),
-        weight: parseFloat(data.weight) || 0,
-        skeletalMuscleMass: parseFloat(data.smm) || 0,
-        bodyFatMass: parseFloat(data.bfm) || 0,
-        bodyFatPercentage: parseFloat(data.pbf) || 0,
-        leftArmMuscle: parseFloat(data.lArm) || undefined,
-        rightArmMuscle: parseFloat(data.rArm) || undefined,
-        trunkMuscle: parseFloat(data.trunk) || undefined,
-        leftLegMuscle: parseFloat(data.lLeg) || undefined,
-        rightLegMuscle: parseFloat(data.rLeg) || undefined,
-        bmi: parseFloat(data.bmi) || 0,
-        visceralFatLevel: parseFloat(data.vfa) || undefined,
-        basalMetabolicRate: parseFloat(data.bmr) || undefined,
+      // 테스트 결과 하이픈 형식(YYYY-MM-DD)이 성공하므로 기본값으로 사용
+      const measurementDateRaw =
+        data.date || new Date().toISOString().slice(0, 10);
+      const measurementDate = measurementDateRaw; // 하이픈 형식 그대로 사용 (YYYY-MM-DD)
+
+      // 숫자 파싱 헬퍼 함수 (NaN, Infinity 체크, 소수점 정밀도 조정)
+      const parseNumber = (value: string | undefined): number | undefined => {
+        if (!value || value.trim() === "") return undefined;
+        const num = parseFloat(value);
+        if (isNaN(num) || !isFinite(num)) return undefined;
+        // 소수점 2자리로 반올림하여 부동소수점 오차 제거
+        return Math.round(num * 100) / 100;
       };
 
-      // 필수 필드 검증
+      // API 스펙에 따르면 muscleMass와 skeletalMuscleMass를 동시에 전송해야 함
+      // bodyFatPercentage는 퍼센트 값(0~100)으로 전송
+      const normalizePercent = (
+        num: number | undefined
+      ): number | undefined => {
+        if (num === undefined) return undefined;
+        // 사용자가 0~1 소수로 입력한 경우(예: 0.23) → 퍼센트로 환산
+        if (num <= 1) return +(num * 100).toFixed(2);
+        return +num.toFixed(2);
+      };
+      // muscleMass가 입력되지 않으면 skeletalMuscleMass와 동일한 값으로 설정
+      const smmValue = parseNumber(data.smm);
+      const muscleMassValue =
+        parseNumber(data.muscleMass) ?? smmValue;
+      
+      console.log("[INBODY] 파싱된 값:", {
+        smm: smmValue,
+        muscleMass: parseNumber(data.muscleMass),
+        muscleMassValue: muscleMassValue,
+      });
+      
+      const payload: InBodyPayload = {
+        measurementDate,
+        weight: parseNumber(data.weight),
+        muscleMass: muscleMassValue, // smmValue와 동일하게 설정됨
+        skeletalMuscleMass: smmValue,
+        bodyFatMass: parseNumber(data.bfm),
+        bodyFatPercentage: normalizePercent(parseNumber(data.pbf)),
+        leftArmMuscle: parseNumber(data.lArm),
+        rightArmMuscle: parseNumber(data.rArm),
+        trunkMuscle: parseNumber(data.trunk),
+        leftLegMuscle: parseNumber(data.lLeg),
+        rightLegMuscle: parseNumber(data.rLeg),
+        // bmi: parseNumber(data.bmi), // BMI는 서버에서 계산하므로 제외
+        visceralFatLevel: parseNumber(data.vfa),
+        basalMetabolicRate: parseNumber(data.bmr),
+      };
+
+      // undefined 필드 제거 (서버에 불필요한 필드 전송 방지)
+      let cleanPayload = Object.fromEntries(
+        Object.entries(payload).filter(([_, value]) => value !== undefined)
+      ) as InBodyPayload;
+
+      // muscleMass가 없으면 skeletalMuscleMass와 동일한 값으로 설정 (cleanPayload 생성 전에 처리)
+      if (cleanPayload.skeletalMuscleMass && !cleanPayload.muscleMass) {
+        cleanPayload.muscleMass = cleanPayload.skeletalMuscleMass;
+      }
+
+      // 에러 처리에서 사용할 수 있도록 변수 저장
+      finalPayload = cleanPayload;
+
+      // 필수 필드 검증: 체중과 골격근량만 필수
       if (
-        !payload.measurementDate ||
-        !payload.weight ||
-        !payload.skeletalMuscleMass
+        !cleanPayload.weight ||
+        cleanPayload.weight <= 0 ||
+        !cleanPayload.skeletalMuscleMass ||
+        cleanPayload.skeletalMuscleMass <= 0
       ) {
-        Alert.alert(
-          "입력 오류",
-          "필수 항목(검사일, 체중, 골격근량)을 입력해주세요."
-        );
+        Alert.alert("입력 오류", "필수 항목(체중, 골격근량)을 입력해주세요.");
+        setLoading(false);
         return;
       }
 
-      const response = inBodyId
-        ? await patchInBody(inBodyId, payload)
-        : await postInBody(payload);
+      // muscleMass도 필수 필드로 검증 (skeletalMuscleMass가 있으면 muscleMass도 있어야 함)
+      if (!cleanPayload.muscleMass) {
+        cleanPayload.muscleMass = cleanPayload.skeletalMuscleMass;
+      }
+
+      // 검사일이 없으면 오늘 날짜로 자동 설정
+      if (!cleanPayload.measurementDate) {
+        cleanPayload.measurementDate = new Date().toISOString().slice(0, 10);
+      }
+
+      // 날짜 검증: 미래 날짜는 허용하지 않음 (서버가 거부할 수 있음)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const inputDate = new Date(cleanPayload.measurementDate);
+      if (isNaN(inputDate.getTime())) {
+        Alert.alert(
+          "입력 오류",
+          "올바른 날짜 형식(YYYY-MM-DD)을 입력해주세요."
+        );
+        setLoading(false);
+        return;
+      }
+      if (inputDate > today) {
+        Alert.alert(
+          "입력 오류",
+          "미래 날짜는 입력할 수 없습니다.\n\n오늘 날짜 또는 과거 날짜를 입력해주세요."
+        );
+        setLoading(false);
+        return;
+      }
+
+      // 값 범위 검증
+      if (cleanPayload.bodyFatPercentage !== undefined) {
+        if (
+          cleanPayload.bodyFatPercentage < 0 ||
+          cleanPayload.bodyFatPercentage > 100
+        ) {
+          Alert.alert("입력 오류", "체지방률은 0-100 사이의 값이어야 합니다.");
+          setLoading(false);
+          return;
+        }
+      }
+
+      // 클라이언트 측 검증: 분절 근육 합계 확인 (경고만 표시, 저장은 진행)
+      if (
+        cleanPayload.skeletalMuscleMass &&
+        (cleanPayload.leftArmMuscle ||
+          cleanPayload.rightArmMuscle ||
+          cleanPayload.trunkMuscle ||
+          cleanPayload.leftLegMuscle ||
+          cleanPayload.rightLegMuscle)
+      ) {
+        const segmentSum =
+          (cleanPayload.leftArmMuscle || 0) +
+          (cleanPayload.rightArmMuscle || 0) +
+          (cleanPayload.trunkMuscle || 0) +
+          (cleanPayload.leftLegMuscle || 0) +
+          (cleanPayload.rightLegMuscle || 0);
+        const smm = cleanPayload.skeletalMuscleMass;
+        const diff = Math.abs(segmentSum - smm);
+
+        // 차이가 2kg 이상이면 경고만 표시 (저장은 진행)
+        if (diff > 2) {
+          console.warn(
+            `[검증 경고] 분절 근육 합계(${segmentSum}kg) ≠ 골격근량(${smm}kg), 차이: ${diff.toFixed(
+              1
+            )}kg`
+          );
+        }
+      }
+
+      // 클라이언트 측 검증: 체지방량과 체지방률 일치 확인 (경고만 표시, 저장은 진행)
+      if (
+        cleanPayload.weight &&
+        cleanPayload.bodyFatMass &&
+        cleanPayload.bodyFatPercentage
+      ) {
+        const calculatedPBF =
+          (cleanPayload.bodyFatMass / cleanPayload.weight) * 100;
+        const inputPBF = cleanPayload.bodyFatPercentage;
+        const diff = Math.abs(calculatedPBF - inputPBF);
+
+        // 차이가 5% 이상이면 경고만 표시 (저장은 진행)
+        if (diff > 5) {
+          console.warn(
+            `[검증 경고] 체지방률 불일치: 계산값(${calculatedPBF.toFixed(
+              1
+            )}%) ≠ 입력값(${inputPBF}%), 차이: ${diff.toFixed(1)}%`
+          );
+        }
+      }
+
+      if (cleanPayload.visceralFatLevel !== undefined) {
+        if (
+          cleanPayload.visceralFatLevel < 0 ||
+          cleanPayload.visceralFatLevel > 20
+        ) {
+          Alert.alert(
+            "입력 오류",
+            "내장지방 레벨은 0-20 사이의 값이어야 합니다."
+          );
+          setLoading(false);
+          return;
+        }
+      }
+
+      // muscleMass 최종 확인 및 설정 (API 호출 직전)
+      if (cleanPayload.skeletalMuscleMass && !cleanPayload.muscleMass) {
+        cleanPayload.muscleMass = cleanPayload.skeletalMuscleMass;
+        console.log("[INBODY] muscleMass 자동 설정:", cleanPayload.muscleMass);
+      }
+
+      console.log(
+        "[INBODY] 최종 페이로드:",
+        JSON.stringify(cleanPayload, null, 2)
+      );
+
+      // undefined 필드 제거 헬퍼
+      const removeUndefined = (obj: any): InBodyPayload => {
+        return Object.fromEntries(
+          Object.entries(obj).filter(([_, value]) => value !== undefined)
+        ) as InBodyPayload;
+      };
+
+      let response: any;
+      try {
+        // API 호출 직전 최종 확인
+        const finalPayloadForApi = { ...cleanPayload };
+        if (finalPayloadForApi.skeletalMuscleMass && !finalPayloadForApi.muscleMass) {
+          finalPayloadForApi.muscleMass = finalPayloadForApi.skeletalMuscleMass;
+        }
+        console.log("[INBODY] API 전송 페이로드:", JSON.stringify(finalPayloadForApi, null, 2));
+        
+        response = inBodyId
+          ? await patchInBody(inBodyId, finalPayloadForApi)
+          : await postInBody(finalPayloadForApi);
+      } catch (e: any) {
+        // 400 또는 500이면 서버 스펙 불일치 가능성 → 대체 포맷으로 재시도
+        const is400 = e?.response?.status === 400;
+        const is500 = e?.response?.status === 500;
+        if (!is400 && !is500) throw e;
+
+        // 대안 1: 날짜를 점(.) 포맷으로 변경 시도
+        const alt1: InBodyPayload = removeUndefined({
+          measurementDate: (
+            cleanPayload.measurementDate || measurementDate
+          ).replace(/-/g, "."), // 하이픈을 점으로 변환
+          weight: cleanPayload.weight,
+          muscleMass:
+            cleanPayload.muscleMass ?? cleanPayload.skeletalMuscleMass,
+          skeletalMuscleMass: cleanPayload.skeletalMuscleMass,
+          // 선택 필드는 입력된 경우에만 포함
+          bodyFatMass: cleanPayload.bodyFatMass,
+          bodyFatPercentage: cleanPayload.bodyFatPercentage, // 퍼센트 값(0~100) 그대로
+          leftArmMuscle: cleanPayload.leftArmMuscle,
+          rightArmMuscle: cleanPayload.rightArmMuscle,
+          trunkMuscle: cleanPayload.trunkMuscle,
+          leftLegMuscle: cleanPayload.leftLegMuscle,
+          rightLegMuscle: cleanPayload.rightLegMuscle,
+          visceralFatLevel: cleanPayload.visceralFatLevel,
+          basalMetabolicRate: cleanPayload.basalMetabolicRate,
+        });
+
+        try {
+          console.log(
+            "[INBODY] 대안1 페이로드:",
+            JSON.stringify(alt1, null, 2)
+          );
+          response = inBodyId
+            ? await patchInBody(inBodyId, alt1)
+            : await postInBody(alt1);
+          console.log("[INBODY] 대안1 페이로드 성공");
+        } catch (e2: any) {
+          // 대안 2: 날짜 하이픈(-) + muscleMass와 skeletalMuscleMass 동시 전송
+          try {
+            const alt2: InBodyPayload = removeUndefined({
+              measurementDate: cleanPayload.measurementDate || measurementDate, // 하이픈 유지
+              weight: cleanPayload.weight,
+              muscleMass:
+                cleanPayload.muscleMass ?? cleanPayload.skeletalMuscleMass,
+              skeletalMuscleMass: cleanPayload.skeletalMuscleMass,
+              // 선택 필드는 입력된 경우에만 포함
+              bodyFatMass: cleanPayload.bodyFatMass,
+              bodyFatPercentage: cleanPayload.bodyFatPercentage, // 퍼센트 값(0~100) 그대로
+              leftArmMuscle: cleanPayload.leftArmMuscle,
+              rightArmMuscle: cleanPayload.rightArmMuscle,
+              trunkMuscle: cleanPayload.trunkMuscle,
+              leftLegMuscle: cleanPayload.leftLegMuscle,
+              rightLegMuscle: cleanPayload.rightLegMuscle,
+              visceralFatLevel: cleanPayload.visceralFatLevel,
+              basalMetabolicRate: cleanPayload.basalMetabolicRate,
+            });
+
+            console.log(
+              "[INBODY] 대안2 페이로드:",
+              JSON.stringify(alt2, null, 2)
+            );
+            response = inBodyId
+              ? await patchInBody(inBodyId, alt2)
+              : await postInBody(alt2);
+            console.log("[INBODY] 대안2 페이로드 성공");
+          } catch (e3: any) {
+            // 대안 3: muscleMass만 전송 (skeletalMuscleMass 제외)
+            try {
+              const alt3: InBodyPayload = removeUndefined({
+                measurementDate:
+                  cleanPayload.measurementDate || measurementDate,
+                weight: cleanPayload.weight,
+                muscleMass:
+                  cleanPayload.muscleMass ?? cleanPayload.skeletalMuscleMass,
+                // skeletalMuscleMass 제외
+              });
+              console.log(
+                "[INBODY] 대안3 페이로드 (muscleMass만):",
+                JSON.stringify(alt3, null, 2)
+              );
+              response = inBodyId
+                ? await patchInBody(inBodyId, alt3)
+                : await postInBody(alt3);
+              console.log("[INBODY] 대안3 페이로드 성공");
+            } catch (e4: any) {
+              // 대안 4: skeletalMuscleMass만 전송 (muscleMass 제외)
+              const alt4: InBodyPayload = removeUndefined({
+                measurementDate:
+                  cleanPayload.measurementDate || measurementDate,
+                weight: cleanPayload.weight,
+                skeletalMuscleMass:
+                  cleanPayload.skeletalMuscleMass ?? cleanPayload.muscleMass,
+                // muscleMass 제외
+              });
+              console.log(
+                "[INBODY] 대안4 페이로드 (skeletalMuscleMass만):",
+                JSON.stringify(alt4, null, 2)
+              );
+              response = inBodyId
+                ? await patchInBody(inBodyId, alt4)
+                : await postInBody(alt4);
+              console.log("[INBODY] 대안4 페이로드 성공");
+            }
+          }
+        }
+      }
 
       if (response.success) {
         const inBodyId = response.inBody?.id ?? "N/A";
@@ -82,20 +439,166 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
       }
     } catch (error: any) {
       console.error("인바디 저장 에러:", error);
-      let errorMessage = "인바디 정보 저장에 실패했습니다.";
+      console.error("인바디 저장 에러 상세:", {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        config: error.config,
+      });
 
-      if (error.response?.status === 409) {
-        errorMessage = "해당 날짜에 이미 인바디 기록이 존재합니다.";
-      } else if (error.response?.status === 400) {
-        errorMessage = "입력한 데이터가 올바르지 않습니다.";
-      } else if (error.response?.status === 401) {
-        errorMessage = "인증이 필요합니다. 다시 로그인해주세요.";
-      } else if (error.message?.includes("Network")) {
-        errorMessage =
-          "네트워크 연결에 실패했습니다. 인터넷 연결을 확인해주세요.";
+      let errorMessage = "";
+      let errorTitle = "저장 실패";
+      let errorType = ""; // "입력 오류" 또는 "서버 오류" 또는 "네트워크 오류"
+
+      // 클라이언트 측 검증 결과
+      let clientValidation = "";
+      if (finalPayload) {
+        const issues: string[] = [];
+
+        // 분절 근육 합계 검증
+        if (
+          finalPayload.skeletalMuscleMass &&
+          (finalPayload.leftArmMuscle ||
+            finalPayload.rightArmMuscle ||
+            finalPayload.trunkMuscle ||
+            finalPayload.leftLegMuscle ||
+            finalPayload.rightLegMuscle)
+        ) {
+          const segmentSum =
+            (finalPayload.leftArmMuscle || 0) +
+            (finalPayload.rightArmMuscle || 0) +
+            (finalPayload.trunkMuscle || 0) +
+            (finalPayload.leftLegMuscle || 0) +
+            (finalPayload.rightLegMuscle || 0);
+          const smm = finalPayload.skeletalMuscleMass;
+          const diff = Math.abs(segmentSum - smm);
+
+          if (diff > 2) {
+            issues.push(
+              `❌ 분절 근육 합계(${segmentSum}kg) ≠ 골격근량(${smm}kg), 차이: ${diff.toFixed(
+                1
+              )}kg`
+            );
+          } else {
+            issues.push(
+              `✓ 분절 근육 합계(${segmentSum}kg) = 골격근량(${smm}kg)`
+            );
+          }
+        }
+
+        // 체지방량과 체지방률 일치 검증
+        if (
+          finalPayload.weight &&
+          finalPayload.bodyFatMass &&
+          finalPayload.bodyFatPercentage
+        ) {
+          const calculatedPBF =
+            (finalPayload.bodyFatMass / finalPayload.weight) * 100;
+          const inputPBF = finalPayload.bodyFatPercentage;
+          const diff = Math.abs(calculatedPBF - inputPBF);
+
+          if (diff > 5) {
+            issues.push(
+              `❌ 체지방률 불일치: 계산값(${calculatedPBF.toFixed(
+                1
+              )}%) ≠ 입력값(${inputPBF}%), 차이: ${diff.toFixed(1)}%`
+            );
+          } else {
+            issues.push(
+              `✓ 체지방률 일치: 계산값(${calculatedPBF.toFixed(
+                1
+              )}%) ≈ 입력값(${inputPBF}%)`
+            );
+          }
+        }
+
+        if (issues.length > 0) {
+          clientValidation = `\n\n🔍 클라이언트 검증 결과:\n${issues.join(
+            "\n"
+          )}`;
+        }
       }
 
-      Alert.alert("저장 실패", errorMessage);
+      if (error.response?.status === 409) {
+        errorType = "입력 오류";
+        errorTitle = "중복 오류";
+        errorMessage =
+          "해당 날짜에 이미 인바디 기록이 존재합니다.\n\n다른 날짜를 선택하거나 기존 기록을 수정해주세요.";
+      } else if (error.response?.status === 400) {
+        errorType = "입력 오류";
+        errorTitle = "입력 오류";
+        const serverData = error.response?.data;
+        const serverMessage =
+          serverData?.message || "입력한 데이터가 올바르지 않습니다.";
+
+        // 서버에서 상세 에러 정보를 제공하는 경우
+        if (serverData?.errors) {
+          // 필드별 에러 메시지가 있는 경우
+          const fieldErrors = Object.entries(serverData.errors)
+            .map(([field, message]) => `  • ${field}: ${message}`)
+            .join("\n");
+          errorMessage = `${serverMessage}\n\n서버 검증 실패 필드:\n${fieldErrors}`;
+        } else if (serverData?.field) {
+          // 특정 필드가 문제인 경우
+          errorMessage = `${serverMessage}\n\n문제 필드: ${serverData.field}`;
+        } else {
+          // 전송한 페이로드 정보와 검증 가이드 포함
+          try {
+            const payloadInfo = finalPayload
+              ? `\n\n📤 전송한 값:\n${Object.entries(finalPayload)
+                  .map(([key, value]) => `  ${key}: ${value}`)
+                  .join("\n")}`
+              : "";
+
+            // 검증 가이드 추가
+            const validationGuide = finalPayload
+              ? getValidationGuide(finalPayload)
+              : "";
+
+            // 서버 응답의 상세 정보
+            const serverDetails = serverData?.code
+              ? `\n\n서버 에러 코드: ${serverData.code}`
+              : "";
+
+            // 클라이언트 검증 통과했는데도 서버가 거부하는 경우
+            const analysis =
+              clientValidation.includes("✓") && !clientValidation.includes("❌")
+                ? `\n\n⚠ 분석: 클라이언트 검증은 통과했지만 서버가 거부했습니다.\n이는 서버 측 검증 규칙이 더 엄격하거나 다른 필드에 문제가 있을 수 있습니다.`
+                : "";
+
+            errorMessage = `${serverMessage}${serverDetails}${analysis}\n\n원인: 서버가 입력값을 거부했습니다.${clientValidation}${payloadInfo}${validationGuide}`;
+          } catch (e) {
+            // payloadInfo 생성 실패 시 기본 메시지만 표시
+            errorMessage = `${serverMessage}${clientValidation}`;
+          }
+        }
+      } else if (error.response?.status === 401) {
+        errorType = "인증 오류";
+        errorTitle = "인증 오류";
+        errorMessage = "인증이 필요합니다.\n\n다시 로그인해주세요.";
+      } else if (error.response?.status === 500) {
+        errorType = "서버 오류";
+        errorTitle = "서버 오류";
+        const serverMessage =
+          error.response?.data?.message || "서버 내부 오류가 발생했습니다.";
+        errorMessage = `${serverMessage}\n\n원인: 서버 측 문제입니다.\n\n관리자에게 문의해주세요.\n\n에러 코드: COMMON_002${clientValidation}`;
+      } else if (error.message?.includes("Network") || !error.response) {
+        errorType = "네트워크 오류";
+        errorTitle = "네트워크 오류";
+        errorMessage =
+          "네트워크 연결에 실패했습니다.\n\n원인: 인터넷 연결 문제 또는 서버 접속 불가\n\n인터넷 연결을 확인해주세요.";
+      } else {
+        errorType = "알 수 없는 오류";
+        errorMessage = `알 수 없는 오류가 발생했습니다.\n\n상태 코드: ${
+          error.response?.status || "N/A"
+        }\n에러 메시지: ${error.message}${clientValidation}`;
+      }
+
+      // 최종 에러 메시지에 타입 표시
+      const finalMessage = `[${errorType}]\n\n${errorMessage}`;
+
+      Alert.alert(errorTitle, finalMessage);
     } finally {
       setLoading(false);
     }
