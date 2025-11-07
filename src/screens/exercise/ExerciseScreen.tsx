@@ -17,8 +17,11 @@ import InBodyCalendarModal from "../../components/common/InBodyCalendarModal";
 import {
   deleteWorkoutSession,
   postWorkoutSession,
+  fetchWeeklyProgress,
+  fetchMonthlyProgress,
 } from "../../utils/exerciseApi";
 import { useDate } from "../../contexts/DateContext";
+import type { DailyProgressWeekItem } from "../../types";
 
 interface WorkoutGoals {
   frequency: number;
@@ -62,6 +65,8 @@ const ExerciseScreen = ({ navigation }: any) => {
   });
   const [completedThisWeek, setCompletedThisWeek] = useState(0);
   const [weeklyCalories, setWeeklyCalories] = useState(0);
+  const [weeklyProgress, setWeeklyProgress] = useState<DailyProgressWeekItem[]>([]);
+  const [monthlyProgress, setMonthlyProgress] = useState<DailyProgressWeekItem[]>([]);
   const [showMonthView, setShowMonthView] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
@@ -90,22 +95,54 @@ const ExerciseScreen = ({ navigation }: any) => {
   // 주간 칼로리 합계 로드 (이번 주)
   const loadWeeklyCalories = async () => {
     try {
-      const res = await fetch("http://43.200.40.140/api/daily-progress/week", {
-        headers: { Accept: "application/json" },
-      });
-      if (!res.ok) throw new Error(String(res.status));
-      const data = await res.json();
+      const data = await fetchWeeklyProgress();
+      setWeeklyProgress(Array.isArray(data) ? data : []);
       const sum = Array.isArray(data)
         ? data.reduce(
-            (s: number, d: any) => s + Number(d?.totalCalorie || 0),
+            (s: number, d) => s + Number(d?.totalCalorie || 0),
             0
           )
         : 0;
       setWeeklyCalories(sum);
     } catch (e) {
+      console.error('주간 칼로리 로드 실패:', e);
       setWeeklyCalories(0);
+      setWeeklyProgress([]);
     }
   };
+
+  // 날짜를 yyyy-MM-dd 형식으로 변환
+  const formatDateToString = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // 특정 날짜의 진행률 데이터 가져오기
+  const getDayProgress = (date: Date): DailyProgressWeekItem | undefined => {
+    const dateStr = formatDateToString(date);
+    // 먼저 월별 데이터에서 찾고, 없으면 주간 데이터에서 찾기
+    return monthlyProgress.find(item => item.date === dateStr) 
+      || weeklyProgress.find(item => item.date === dateStr);
+  };
+
+  // 월별 데이터 로드
+  const loadMonthlyProgress = async (year: number, month: number) => {
+    try {
+      const yearMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
+      const data = await fetchMonthlyProgress(yearMonth);
+      setMonthlyProgress(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error('월별 진행률 로드 실패:', e);
+      setMonthlyProgress([]);
+    }
+  };
+
+  // monthBase가 변경될 때 월별 데이터 로드
+  React.useEffect(() => {
+    loadMonthlyProgress(monthBase.getFullYear(), monthBase.getMonth());
+  }, [monthBase]);
 
   // 화면 포커스 시 목표/진행 재로딩 (다른 화면에서 저장 후 복귀 시 반영)
   useFocusEffect(
@@ -459,22 +496,31 @@ const ExerciseScreen = ({ navigation }: any) => {
                             {d.getDate()}
                           </Text>
                         </View>
-                        <Text
-                          style={[
-                            styles.calendarCalories,
-                            !isCurrentMonth && styles.monthMuted,
-                          ]}
-                        >
-                          388k
-                        </Text>
-                        <Text
-                          style={[
-                            styles.calendarPercentage,
-                            !isCurrentMonth && styles.monthMuted,
-                          ]}
-                        >
-                          97%
-                        </Text>
+                        {(() => {
+                          const dayProgress = getDayProgress(d);
+                          const calories = dayProgress?.totalCalorie || 0;
+                          const rate = dayProgress?.exerciseRate || 0;
+                          return (
+                            <>
+                              <Text
+                                style={[
+                                  styles.calendarCalories,
+                                  !isCurrentMonth && styles.monthMuted,
+                                ]}
+                              >
+                                {calories > 0 ? `${Math.round(calories)}k` : ''}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.calendarPercentage,
+                                  !isCurrentMonth && styles.monthMuted,
+                                ]}
+                              >
+                                {rate > 0 ? `${Math.round(rate)}%` : ''}
+                              </Text>
+                            </>
+                          );
+                        })()}
                       </TouchableOpacity>
                     );
                   })}
@@ -535,8 +581,21 @@ const ExerciseScreen = ({ navigation }: any) => {
                           {label}
                         </Text>
                       </View>
-                      <Text style={styles.calendarCalories}>388k</Text>
-                      <Text style={styles.calendarPercentage}>97%</Text>
+                      {(() => {
+                        const dayProgress = getDayProgress(d);
+                        const calories = dayProgress?.totalCalorie || 0;
+                        const rate = dayProgress?.exerciseRate || 0;
+                        return (
+                          <>
+                            <Text style={styles.calendarCalories}>
+                              {calories > 0 ? `${Math.round(calories)}k` : ''}
+                            </Text>
+                            <Text style={styles.calendarPercentage}>
+                              {rate > 0 ? `${Math.round(rate)}%` : ''}
+                            </Text>
+                          </>
+                        );
+                      })()}
                     </TouchableOpacity>
                   );
                 });

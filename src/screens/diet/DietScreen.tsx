@@ -12,7 +12,8 @@ import { Ionicons as Icon } from '@expo/vector-icons';
 import {colors} from '../../theme/colors';
 import {useDate} from '../../contexts/DateContext';
 import {mealAPI} from '../../services';
-import type {DailyMealsResponse, DailyMeal} from '../../types';
+import {fetchWeeklyProgress, fetchMonthlyProgress} from '../../utils/exerciseApi';
+import type {DailyMealsResponse, DailyMeal, DailyProgressWeekItem} from '../../types';
 
 const DietScreen = ({navigation}: any) => {
   // 달력 관련 상태
@@ -23,6 +24,8 @@ const DietScreen = ({navigation}: any) => {
   // 영양소 데이터 (칼로리, 탄수화물, 단백질, 지방)
   const [dailyMealsData, setDailyMealsData] = useState<DailyMealsResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [weeklyProgress, setWeeklyProgress] = useState<DailyProgressWeekItem[]>([]);
+  const [monthlyProgress, setMonthlyProgress] = useState<DailyProgressWeekItem[]>([]);
 
   // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
   const formatDateToString = (date: Date): string => {
@@ -53,6 +56,47 @@ const DietScreen = ({navigation}: any) => {
     const dateToFetch = selectedDate || new Date();
     fetchDailyMeals(dateToFetch);
   }, [selectedDate]);
+
+  // 주간 데이터 로드
+  const loadWeeklyProgress = async () => {
+    try {
+      const data = await fetchWeeklyProgress();
+      setWeeklyProgress(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error('주간 식단 진행률 로드 실패:', e);
+      setWeeklyProgress([]);
+    }
+  };
+
+  // 월별 데이터 로드
+  const loadMonthlyProgress = async (year: number, month: number) => {
+    try {
+      const yearMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
+      const data = await fetchMonthlyProgress(yearMonth);
+      setMonthlyProgress(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error('월별 식단 진행률 로드 실패:', e);
+      setMonthlyProgress([]);
+    }
+  };
+
+  // 특정 날짜의 진행률 데이터 가져오기
+  const getDayProgress = (date: Date): DailyProgressWeekItem | undefined => {
+    const dateStr = formatDateToString(date);
+    // 먼저 월별 데이터에서 찾고, 없으면 주간 데이터에서 찾기
+    return monthlyProgress.find(item => item.date === dateStr) 
+      || weeklyProgress.find(item => item.date === dateStr);
+  };
+
+  // 화면 포커스 시 주간 데이터 로드
+  useEffect(() => {
+    loadWeeklyProgress();
+  }, []);
+
+  // monthBase가 변경될 때 월별 데이터 로드
+  useEffect(() => {
+    loadMonthlyProgress(monthBase.getFullYear(), monthBase.getMonth());
+  }, [monthBase]);
 
   // API 데이터를 UI 형식으로 변환
   const nutritionData = dailyMealsData ? {
@@ -209,10 +253,31 @@ const DietScreen = ({navigation}: any) => {
                             {d.getDate()}
                           </Text>
                         </View>
-                        {/* 해당 날짜의 칼로리 표시 */}
-                        <Text style={[styles.calendarCalories, !isCurrentMonth && styles.monthMuted]}>388k</Text>
-                        {/* 해당 날짜의 목표 달성률 표시 */}
-                        <Text style={[styles.calendarPercentage, !isCurrentMonth && styles.monthMuted]}>97%</Text>
+                        {(() => {
+                          const dayProgress = getDayProgress(d);
+                          const calories = dayProgress?.totalCalorie || 0;
+                          const rate = dayProgress?.exerciseRate || 0;
+                          return (
+                            <>
+                              <Text
+                                style={[
+                                  styles.calendarCalories,
+                                  !isCurrentMonth && styles.monthMuted,
+                                ]}
+                              >
+                                {calories > 0 ? `${Math.round(calories)}k` : ''}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.calendarPercentage,
+                                  !isCurrentMonth && styles.monthMuted,
+                                ]}
+                              >
+                                {rate > 0 ? `${Math.round(rate)}%` : ''}
+                              </Text>
+                            </>
+                          );
+                        })()}
                       </TouchableOpacity>
                     );
                   })}
@@ -258,10 +323,21 @@ const DietScreen = ({navigation}: any) => {
                           {d.getDate()}
                         </Text>
                       </View>
-                      {/* 해당 날짜의 칼로리 표시 */}
-                      <Text style={styles.calendarCalories}>388k</Text>
-                      {/* 해당 날짜의 목표 달성률 표시 */}
-                      <Text style={styles.calendarPercentage}>97%</Text>
+                      {(() => {
+                        const dayProgress = getDayProgress(d);
+                        const calories = dayProgress?.totalCalorie || 0;
+                        const rate = dayProgress?.exerciseRate || 0;
+                        return (
+                          <>
+                            <Text style={styles.calendarCalories}>
+                              {calories > 0 ? `${Math.round(calories)}k` : ''}
+                            </Text>
+                            <Text style={styles.calendarPercentage}>
+                              {rate > 0 ? `${Math.round(rate)}%` : ''}
+                            </Text>
+                          </>
+                        );
+                      })()}
                     </TouchableOpacity>
                   );
                 });

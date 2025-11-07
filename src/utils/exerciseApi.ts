@@ -1,6 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ACCESS_TOKEN_KEY } from '../services/apiConfig';
+import type { DailyProgressWeekItem } from '../types';
 
 interface ExerciseApiParams {
   bodyPart?: string;
@@ -219,6 +220,58 @@ export const deleteWorkoutSession = async (sessionId: string): Promise<any> => {
       });
     } else {
       console.error('운동 기록 세션 삭제 예외:', error);
+    }
+    throw error;
+  }
+};
+
+// 이번 주(일~토) 운동 달성률 및 칼로리 목록 조회
+export const fetchWeeklyProgress = async (): Promise<DailyProgressWeekItem[]> => {
+  try {
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const url = 'http://43.200.40.140/api/daily-progress/week';
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token || ''}`,
+        Accept: 'application/json',
+      },
+    });
+    return (response.data as DailyProgressWeekItem[]) || [];
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      console.error('주간 진행률 조회 에러:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+    } else {
+      console.error('주간 진행률 조회 예외:', error);
+    }
+    throw error;
+  }
+};
+
+// 월별 운동 달성률 및 칼로리 목록 조회
+export const fetchMonthlyProgress = async (yearMonth: string): Promise<DailyProgressWeekItem[]> => {
+  try {
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const url = `http://43.200.40.140/api/daily-progress/month?yearMonth=${encodeURIComponent(yearMonth)}`;
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token || ''}`,
+        Accept: 'application/json',
+      },
+    });
+    return (response.data as DailyProgressWeekItem[]) || [];
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      console.error('월별 진행률 조회 에러:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+    } else {
+      console.error('월별 진행률 조회 예외:', error);
     }
     throw error;
   }
