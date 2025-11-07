@@ -7,6 +7,7 @@ import {Ionicons as Icon} from '@expo/vector-icons';
 import {RootStackParamList, MainTabParamList} from './types';
 import {ROUTES} from '../constants/routes';
 import {TAB_BAR_THEME, ICONS} from '../constants/theme';
+import {DateProvider} from '../contexts/DateContext';
 
 // Auth Screens
 import SplashScreen from '../screens/auth/SplashScreen';
@@ -99,12 +100,13 @@ function MainTabs() {
 
 export default function AppNavigator() {
   return (
-    <NavigationContainer>
-      <Stack.Navigator
-        initialRouteName={ROUTES.SPLASH}
-        screenOptions={{
-          headerShown: false,
-        }}>
+    <DateProvider>
+      <NavigationContainer>
+        <Stack.Navigator
+          initialRouteName={ROUTES.SPLASH}
+          screenOptions={{
+            headerShown: false,
+          }}>
         {/* Auth Stack */}
         <Stack.Screen name={ROUTES.SPLASH} component={SplashScreen} />
         <Stack.Screen name={ROUTES.LOGIN} component={LoginScreen} />
@@ -148,8 +150,9 @@ export default function AppNavigator() {
 
         {/* Chatbot Stack */}
         <Stack.Screen name={ROUTES.CHATBOT} component={ChatbotScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>
+        </Stack.Navigator>
+      </NavigationContainer>
+    </DateProvider>
   );
 }
 
