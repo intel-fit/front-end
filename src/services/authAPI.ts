@@ -7,6 +7,26 @@ import {
 } from "./apiConfig";
 
 /**
+ * JWT 토큰에서 페이로드 추출
+ */
+const decodeJWT = (token: string): any => {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    console.error('[AUTH] JWT 디코딩 실패:', error);
+    return null;
+  }
+};
+
+/**
  * 인증 관련 API 함수들
  * 회원가입, 로그인, 비밀번호 찾기 등
  */
@@ -127,6 +147,15 @@ export const authAPI = {
       // 응답 받은 토큰을 AsyncStorage에 저장 (다음 요청부터 자동 사용)
       if (response.accessToken) {
         await AsyncStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken);
+        
+        // JWT에서 userPk 추출하여 저장
+        const payload = decodeJWT(response.accessToken);
+        if (payload && payload.userPk) {
+          await AsyncStorage.setItem('userId', String(payload.userPk));
+          console.log('[AUTH] userId 저장 완료:', payload.userPk);
+        } else {
+          console.warn('[AUTH] JWT에서 userPk를 찾을 수 없습니다');
+        }
       }
       if (response.refreshToken) {
         await AsyncStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken);
@@ -246,9 +275,10 @@ export const authAPI = {
       }
     }
 
-    // 로컬 저장소에서 토큰 삭제
+    // 로컬 저장소에서 토큰 및 userId 삭제
     await AsyncStorage.removeItem(ACCESS_TOKEN_KEY);
     await AsyncStorage.removeItem(REFRESH_TOKEN_KEY);
+    await AsyncStorage.removeItem('userId');
   },
 
   /**
@@ -284,6 +314,13 @@ export const authAPI = {
     // 새로 받은 accessToken 저장
     if (response.accessToken) {
       await AsyncStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken);
+      
+      // JWT에서 userPk 추출하여 저장
+      const payload = decodeJWT(response.accessToken);
+      if (payload && payload.userPk) {
+        await AsyncStorage.setItem('userId', String(payload.userPk));
+        console.log('[AUTH] userId 재저장 완료 (토큰 갱신):', payload.userPk);
+      }
     }
 
     return response;

@@ -14,7 +14,7 @@ interface InBodyCalendarModalProps {
   onClose: () => void;
   onSelectDate: (date: Date) => void;
   selectedDate: Date;
-  inBodyDates: string[]; // 인바디 입력된 날짜 목록 (YYYY-MM-DD 형식)
+  inBodyDates?: string[]; // 인바디 입력된 날짜 목록 (YYYY-MM-DD 형식), 빈 배열이면 모든 날짜 선택 가능
 }
 
 const InBodyCalendarModal: React.FC<InBodyCalendarModalProps> = ({
@@ -22,15 +22,20 @@ const InBodyCalendarModal: React.FC<InBodyCalendarModalProps> = ({
   onClose,
   onSelectDate,
   selectedDate,
-  inBodyDates = [],
+  inBodyDates = [], // 기본값: 빈 배열 (모든 날짜 선택 가능)
 }) => {
+  // 유효한 날짜인지 확인
+  const validSelectedDate = selectedDate && !isNaN(selectedDate.getTime()) 
+    ? selectedDate 
+    : new Date();
+    
   const [currentMonth, setCurrentMonth] = useState(
-    new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)
+    new Date(validSelectedDate.getFullYear(), validSelectedDate.getMonth(), 1)
   );
 
   // 인바디 입력된 날짜를 Set으로 변환 (빠른 검색을 위해)
   const inBodyDatesSet = useMemo(() => {
-    return new Set(inBodyDates);
+    return new Set(inBodyDates || []);
   }, [inBodyDates]);
 
   // 달력 데이터 생성
@@ -172,28 +177,31 @@ const InBodyCalendarModal: React.FC<InBodyCalendarModalProps> = ({
               }
 
               const dateKey = formatDateKey(date);
-              const isSelected = isSameDay(date, selectedDate);
+              const isSelected = isSameDay(date, validSelectedDate);
               const isInBodyDate = hasInBodyData(date);
               const isTodayDate = isToday(date);
 
+              // 날짜 목록이 비어있으면 모든 날짜 선택 가능 (수기 입력 모드)
+              const isSelectable = inBodyDates.length === 0 || isInBodyDate;
+              
               return (
                 <TouchableOpacity
                   key={index}
                   style={styles.dayCell}
                   onPress={() => {
-                    if (isInBodyDate) {
+                    if (isSelectable) {
                       handleDateSelect(date);
                     }
                   }}
-                  disabled={!isInBodyDate}
-                  activeOpacity={isInBodyDate ? 0.7 : 1}
+                  disabled={!isSelectable}
+                  activeOpacity={isSelectable ? 0.7 : 1}
                 >
                   <View
                     style={[
                       styles.dayContent,
                       isSelected && styles.selectedDay,
                       isTodayDate && !isSelected && styles.todayDay,
-                      !isInBodyDate && styles.disabledDay,
+                      !isSelectable && styles.disabledDay,
                     ]}
                   >
                     {isInBodyDate && (
@@ -206,7 +214,7 @@ const InBodyCalendarModal: React.FC<InBodyCalendarModalProps> = ({
                         isTodayDate && !isSelected && styles.todayDayText,
                         date.getMonth() !== currentMonth.getMonth() &&
                           styles.otherMonthText,
-                        !isInBodyDate && styles.disabledDayText,
+                        !isSelectable && styles.disabledDayText,
                       ]}
                     >
                       {date.getDate()}

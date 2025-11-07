@@ -131,7 +131,7 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
       const payload: InBodyPayload = {
         measurementDate,
         weight: parseNumber(data.weight),
-        muscleMass: muscleMassValue, // smmValue와 동일하게 설정됨
+        muscleMass: muscleMassValue,
         skeletalMuscleMass: smmValue,
         bodyFatMass: parseNumber(data.bfm),
         bodyFatPercentage: normalizePercent(parseNumber(data.pbf)),
@@ -140,7 +140,16 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
         trunkMuscle: parseNumber(data.trunk),
         leftLegMuscle: parseNumber(data.lLeg),
         rightLegMuscle: parseNumber(data.rLeg),
-        // bmi: parseNumber(data.bmi), // BMI는 서버에서 계산하므로 제외
+        leftArmFat: parseNumber(data.lArmFat),
+        rightArmFat: parseNumber(data.rArmFat),
+        trunkFat: parseNumber(data.trunkFat),
+        leftLegFat: parseNumber(data.lLegFat),
+        rightLegFat: parseNumber(data.rLegFat),
+        totalBodyWater: parseNumber(data.tbw),
+        protein: parseNumber(data.protein),
+        mineral: parseNumber(data.mineral),
+        bodyFatPercentageStandard: parseNumber(data.pbfStd),
+        obesityDegree: parseNumber(data.obesityDegree),
         visceralFatLevel: parseNumber(data.vfa),
         basalMetabolicRate: parseNumber(data.bmr),
       };
@@ -314,23 +323,11 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
 
         // 대안 1: 날짜를 점(.) 포맷으로 변경 시도
         const alt1: InBodyPayload = removeUndefined({
+          ...cleanPayload,
           measurementDate: (
             cleanPayload.measurementDate || measurementDate
-          ).replace(/-/g, "."), // 하이픈을 점으로 변환
-          weight: cleanPayload.weight,
-          muscleMass:
-            cleanPayload.muscleMass ?? cleanPayload.skeletalMuscleMass,
-          skeletalMuscleMass: cleanPayload.skeletalMuscleMass,
-          // 선택 필드는 입력된 경우에만 포함
-          bodyFatMass: cleanPayload.bodyFatMass,
-          bodyFatPercentage: cleanPayload.bodyFatPercentage, // 퍼센트 값(0~100) 그대로
-          leftArmMuscle: cleanPayload.leftArmMuscle,
-          rightArmMuscle: cleanPayload.rightArmMuscle,
-          trunkMuscle: cleanPayload.trunkMuscle,
-          leftLegMuscle: cleanPayload.leftLegMuscle,
-          rightLegMuscle: cleanPayload.rightLegMuscle,
-          visceralFatLevel: cleanPayload.visceralFatLevel,
-          basalMetabolicRate: cleanPayload.basalMetabolicRate,
+          ).replace(/-/g, "."),
+          muscleMass: cleanPayload.muscleMass ?? cleanPayload.skeletalMuscleMass,
         });
 
         try {
@@ -343,24 +340,11 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
             : await postInBody(alt1);
           console.log("[INBODY] 대안1 페이로드 성공");
         } catch (e2: any) {
-          // 대안 2: 날짜 하이픈(-) + muscleMass와 skeletalMuscleMass 동시 전송
+          // 대안 2: 날짜 하이픈(-) + 모든 필드 포함
           try {
             const alt2: InBodyPayload = removeUndefined({
-              measurementDate: cleanPayload.measurementDate || measurementDate, // 하이픈 유지
-              weight: cleanPayload.weight,
-              muscleMass:
-                cleanPayload.muscleMass ?? cleanPayload.skeletalMuscleMass,
-              skeletalMuscleMass: cleanPayload.skeletalMuscleMass,
-              // 선택 필드는 입력된 경우에만 포함
-              bodyFatMass: cleanPayload.bodyFatMass,
-              bodyFatPercentage: cleanPayload.bodyFatPercentage, // 퍼센트 값(0~100) 그대로
-              leftArmMuscle: cleanPayload.leftArmMuscle,
-              rightArmMuscle: cleanPayload.rightArmMuscle,
-              trunkMuscle: cleanPayload.trunkMuscle,
-              leftLegMuscle: cleanPayload.leftLegMuscle,
-              rightLegMuscle: cleanPayload.rightLegMuscle,
-              visceralFatLevel: cleanPayload.visceralFatLevel,
-              basalMetabolicRate: cleanPayload.basalMetabolicRate,
+              ...cleanPayload,
+              muscleMass: cleanPayload.muscleMass ?? cleanPayload.skeletalMuscleMass,
             });
 
             console.log(

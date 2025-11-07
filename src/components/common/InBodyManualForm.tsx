@@ -10,6 +10,8 @@ import {
   Platform,
   InputAccessoryView,
 } from "react-native";
+import { Ionicons as Icon } from "@expo/vector-icons";
+import InBodyCalendarModal from "./InBodyCalendarModal";
 
 interface InBodyManualFormProps {
   onSubmit: (data: any) => void;
@@ -20,6 +22,7 @@ interface InBodyManualFormProps {
     height: string;
     weight: string;
     smm: string;
+    muscleMass: string;
     bfm: string;
     pbf: string;
     score: string;
@@ -30,6 +33,16 @@ interface InBodyManualFormProps {
     trunk: string;
     rLeg: string;
     lLeg: string;
+    rArmFat: string;
+    lArmFat: string;
+    trunkFat: string;
+    rLegFat: string;
+    lLegFat: string;
+    tbw: string;
+    protein: string;
+    mineral: string;
+    pbfStd: string;
+    obesityDegree: string;
     ecw: string;
     wtCtrl: string;
     fatCtrl: string;
@@ -85,7 +98,7 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
     height: "",
     weight: "",
     smm: "",
-    muscleMass: "", // muscleMass 필드 추가
+    muscleMass: "",
     bfm: "",
     pbf: "",
     score: "",
@@ -96,11 +109,23 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
     trunk: "",
     rLeg: "",
     lLeg: "",
+    rArmFat: "",
+    lArmFat: "",
+    trunkFat: "",
+    rLegFat: "",
+    lLegFat: "",
+    tbw: "",
+    protein: "",
+    mineral: "",
+    pbfStd: "",
+    obesityDegree: "",
     ecw: "",
     wtCtrl: "",
     fatCtrl: "",
     musCtrl: "",
   });
+
+  const [calendarVisible, setCalendarVisible] = useState(false);
 
   // apply defaults on mount/update
   React.useEffect(() => {
@@ -116,6 +141,13 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
   const handle = useCallback((k: string, value: string) => {
     setV((s) => ({ ...s, [k]: value }));
   }, []);
+
+  // 달력에서 날짜 선택 핸들러
+  const handleDateSelect = (selectedDate: Date) => {
+    const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+    handle("date", dateStr);
+    setCalendarVisible(false);
+  };
 
   const bmi = useMemo(() => {
     const h = parseFloat(v.height);
@@ -160,23 +192,18 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
       >
         {/* 기본 정보 */}
         <View style={styles.sec}>
-          {/* 검사일 - YYYY-MM-DD 형식으로 자동 포맷팅 */}
+          {/* 검사일 - 달력 선택 */}
           <View style={styles.field}>
             <Text style={styles.lab}>검사일</Text>
-            <TextInput
-              style={styles.inp}
-              value={v.date}
-              onChangeText={(t) => {
-                const formatted = formatDate(t);
-                handle("date", formatted);
-              }}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#666"
-              keyboardType="number-pad"
-              maxLength={10} // YYYY-MM-DD = 10자
-              blurOnSubmit={true}
-              inputAccessoryViewID={ACCESSORY_ID}
-            />
+            <TouchableOpacity
+              style={styles.datePickerButton}
+              onPress={() => setCalendarVisible(true)}
+            >
+              <Text style={styles.datePickerText}>
+                {v.date ? v.date.replace(/-/g, ".") : "날짜 선택"}
+              </Text>
+              <Icon name="calendar-outline" size={20} color="#d6ff4b" />
+            </TouchableOpacity>
           </View>
 
           {/* 성별 */}
@@ -432,7 +459,6 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
                   onChangeText={(t) => handle(key, t)}
                   keyboardType="decimal-pad"
                   placeholderTextColor="#666"
-                  // ✅ 수정
                   blurOnSubmit={false}
                   inputAccessoryViewID={ACCESSORY_ID}
                 />
@@ -440,6 +466,125 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
               </View>
             </View>
           ))}
+        </View>
+
+        {/* 부위별 체지방 */}
+        <View style={styles.sec}>
+          <Text style={styles.h3}>부위별 체지방 (kg)</Text>
+
+          {[
+            { key: "rArmFat", label: "오른팔 체지방" },
+            { key: "lArmFat", label: "왼팔 체지방" },
+            { key: "trunkFat", label: "몸통 체지방" },
+            { key: "rLegFat", label: "오른다리 체지방" },
+            { key: "lLegFat", label: "왼다리 체지방" },
+          ].map(({ key, label }) => (
+            <View style={styles.field} key={key}>
+              <Text style={styles.smallLab}>{label}</Text>
+              <View style={styles.unitBox}>
+                <TextInput
+                  style={styles.inpRight}
+                  value={(v as any)[key]}
+                  onChangeText={(t) => handle(key, t)}
+                  keyboardType="decimal-pad"
+                  placeholderTextColor="#666"
+                  blurOnSubmit={false}
+                  inputAccessoryViewID={ACCESSORY_ID}
+                />
+                <Text style={styles.unit}>kg</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* 체성분 분석 */}
+        <View style={styles.sec}>
+          <Text style={styles.h3}>체성분 분석</Text>
+
+          <View style={styles.field}>
+            <Text style={styles.lab}>체수분(Total Body Water)</Text>
+            <View style={styles.unitBox}>
+              <TextInput
+                style={styles.inpRight}
+                value={v.tbw}
+                onChangeText={(t) => handle("tbw", t)}
+                keyboardType="decimal-pad"
+                placeholderTextColor="#666"
+                blurOnSubmit={false}
+                inputAccessoryViewID={ACCESSORY_ID}
+              />
+              <Text style={styles.unit}>L</Text>
+            </View>
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.lab}>단백질(Protein)</Text>
+            <View style={styles.unitBox}>
+              <TextInput
+                style={styles.inpRight}
+                value={v.protein}
+                onChangeText={(t) => handle("protein", t)}
+                keyboardType="decimal-pad"
+                placeholderTextColor="#666"
+                blurOnSubmit={false}
+                inputAccessoryViewID={ACCESSORY_ID}
+              />
+              <Text style={styles.unit}>kg</Text>
+            </View>
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.lab}>무기질(Mineral)</Text>
+            <View style={styles.unitBox}>
+              <TextInput
+                style={styles.inpRight}
+                value={v.mineral}
+                onChangeText={(t) => handle("mineral", t)}
+                keyboardType="decimal-pad"
+                placeholderTextColor="#666"
+                blurOnSubmit={false}
+                inputAccessoryViewID={ACCESSORY_ID}
+              />
+              <Text style={styles.unit}>kg</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* 비만 분석 */}
+        <View style={styles.sec}>
+          <Text style={styles.h3}>비만 분석</Text>
+
+          <View style={styles.field}>
+            <Text style={styles.lab}>체지방률 표준(%)</Text>
+            <View style={styles.unitBox}>
+              <TextInput
+                style={styles.inpRight}
+                value={v.pbfStd}
+                onChangeText={(t) => handle("pbfStd", t)}
+                keyboardType="decimal-pad"
+                placeholderTextColor="#666"
+                blurOnSubmit={false}
+                inputAccessoryViewID={ACCESSORY_ID}
+              />
+              <Text style={styles.unit}>%</Text>
+            </View>
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.lab}>비만도(%)</Text>
+            <View style={styles.unitBox}>
+              <TextInput
+                style={styles.inpRight}
+                value={v.obesityDegree}
+                onChangeText={(t) => handle("obesityDegree", t)}
+                keyboardType="decimal-pad"
+                placeholderTextColor="#666"
+                blurOnSubmit={false}
+                inputAccessoryViewID={ACCESSORY_ID}
+              />
+              <Text style={styles.unit}>%</Text>
+            </View>
+          </View>
         </View>
 
         {/* 수분비/체중조절 */}
@@ -542,6 +687,15 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
 
       {/* ✅ InputAccessoryView는 ScrollView 밖에 렌더링되어야 합니다. */}
       {DoneBar}
+      
+      {/* 날짜 선택 달력 모달 */}
+      <InBodyCalendarModal
+        visible={calendarVisible}
+        onClose={() => setCalendarVisible(false)}
+        onSelectDate={handleDateSelect}
+        selectedDate={v.date ? new Date(v.date) : new Date()}
+        inBodyDates={[]} // 수기 입력에서는 모든 날짜 선택 가능
+      />
     </>
   );
 };
@@ -589,6 +743,23 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 14,
     textAlign: "right",
+  },
+  datePickerButton: {
+    width: "100%",
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#343434",
+    backgroundColor: "#242424",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  datePickerText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "500",
   },
   inpRight: {
     flex: 1,
