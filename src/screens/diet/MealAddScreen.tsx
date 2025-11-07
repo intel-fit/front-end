@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,20 @@ import {
   ScrollView,
   Image,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
+
+
 import {SafeAreaView} from 'react-native-safe-area-context';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import {colors} from '../../theme/colors';
 import FoodAddOptionsModal from '../../components/modals/FoodAddOptionsModal';
+import {mealAPI} from '../../services';
+import {useDate} from '../../contexts/DateContext';
+import type {AddMealRequest, AddMealFoodRequest} from '../../types';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Platform } from 'react-native';
 
 interface Food {
   id: number;
@@ -25,32 +33,151 @@ interface Food {
   weight: number;
 }
 
-const MealAddScreen = ({navigation}: any) => {
+const MealAddScreen = ({navigation, route}: any) => {
+  const {selectedDate} = useDate();
   const [mealName, setMealName] = useState('');
-  const [mealTime] = useState('today, 20:38');
-  const [mealType] = useState('저녁');
+  const [mealType, setMealType] = useState<'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK'>('DINNER');
   const [photos, setPhotos] = useState<string[]>([]);
   const [isFoodOptionsModalOpen, setIsFoodOptionsModalOpen] = useState(false);
-  const [foods, setFoods] = useState<Food[]>([
-    {
-      id: 1,
-      name: '엽기 떡복이',
-      calories: 3289,
-      carbs: 198,
-      protein: 132,
-      fat: 149,
-      weight: 81,
-    },
-    {
-      id: 2,
-      name: '엽기 떡복이',
-      calories: 3289,
-      carbs: 198,
-      protein: 132,
-      fat: 149,
-      weight: 81,
-    },
-  ]);
+  const [foods, setFoods] = useState<Food[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [selectedDateTime, setSelectedDateTime] = useState(new Date());
+  const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date');
+
+  // 날짜 선택 핸들러
+const onChangeDate = (event: any, date?: Date) => {
+  if (Platform.OS === 'android') {
+    setShowDatePicker(false);
+    // 취소한 경우
+    if (event.type === 'dismissed') {
+      return;
+    }
+  }
+  if (date) {
+    setSelectedDateTime(prev => {
+      const newDate = new Date(date);
+      newDate.setHours(prev.getHours());
+      newDate.setMinutes(prev.getMinutes());
+      return newDate;
+    });
+    // Android에서는 날짜 선택 후 시간 선택기 표시
+    if (Platform.OS === 'android' && event.type !== 'dismissed') {
+      setTimeout(() => setShowTimePicker(true), 100);
+    }
+  }
+  // iOS에서는 날짜 선택 후 시간 선택기로 이동
+  if (Platform.OS === 'ios') {
+    if (event.type === 'set') {
+      setShowDatePicker(false);
+      setShowTimePicker(true);
+    } else if (event.type === 'dismissed') {
+      setShowDatePicker(false);
+    }
+  }
+};
+
+// 시간 선택 핸들러
+const onChangeTime = (event: any, time?: Date) => {
+  if (Platform.OS === 'android') {
+    setShowTimePicker(false);
+    // 취소한 경우
+    if (event.type === 'dismissed') {
+      return;
+    }
+  }
+  if (time && event.type !== 'dismissed') {
+    setSelectedDateTime(prev => {
+      const newDate = new Date(prev);
+      newDate.setHours(time.getHours());
+      newDate.setMinutes(time.getMinutes());
+      return newDate;
+    });
+  }
+  // iOS 처리
+  if (Platform.OS === 'ios') {
+    if (event.type === 'set' || event.type === 'dismissed') {
+      setShowTimePicker(false);
+    }
+  }
+};
+
+  // 날짜/시간 선택 버튼 핸들러
+  const handleDateTimePress = () => {
+    if (Platform.OS === 'ios') {
+      // iOS는 날짜부터 시작
+      setShowDatePicker(true);
+    } else {
+      // Android는 날짜부터 시작
+      setShowDatePicker(true);
+    }
+  };
+
+  // route에서 전달받은 음식 추가
+  useEffect(() => {
+    if (route?.params?.selectedFood) {
+      const newFood = route.params.selectedFood;
+      setFoods(prev => [...prev, newFood]);
+      // route params 초기화
+      navigation.setParams({selectedFood: undefined});
+    }
+  }, [route?.params?.selectedFood]);
+
+  // 날짜 형식 변환 (Date -> yyyy-MM-dd)
+  const formatDateToString = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // 한글 mealType을 영어로 변환
+  const getMealTypeName = (type: string): string => {
+    const typeMap: Record<string, string> = {
+      '아침': 'BREAKFAST',
+      '점심': 'LUNCH',
+      '저녁': 'DINNER',
+      '야식': 'SNACK',
+    };
+    return typeMap[type] || 'DINNER';
+  };
+
+  // mealType 한글 표시
+  const getMealTypeDisplay = (type: string): string => {
+    const typeMap: Record<string, string> = {
+      'BREAKFAST': '아침',
+      'LUNCH': '점심',
+      'DINNER': '저녁',
+      'SNACK': '야식',
+    };
+    return typeMap[type] || '저녁';
+  };
+
+  // 선택된 날짜/시간 표시 포맷
+  const formatSelectedDateTime = (): string => {
+    const now = new Date();
+    const selected = selectedDateTime;
+    
+    // 오늘인지 확인
+    const isToday = 
+      selected.getFullYear() === now.getFullYear() &&
+      selected.getMonth() === now.getMonth() &&
+      selected.getDate() === now.getDate();
+    
+    const hours = selected.getHours();
+    const minutes = String(selected.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'pm' : 'am';
+    const displayHours = hours % 12 || 12;
+    
+    if (isToday) {
+      return `today, ${displayHours}:${minutes} ${ampm}`;
+    } else {
+      const month = selected.getMonth() + 1;
+      const day = selected.getDate();
+      return `${month}/${day}, ${displayHours}:${minutes} ${ampm}`;
+    }
+  };
 
   const totalCalories = foods.reduce((sum, food) => sum + food.calories, 0);
   const targetCalories = 1157;
@@ -98,9 +225,65 @@ const MealAddScreen = ({navigation}: any) => {
     ]);
   };
 
-  const handleSave = () => {
-    console.log('식단 저장:', {mealName, mealTime, mealType, photos, foods});
-    navigation.goBack();
+  // Food를 API 형식으로 변환
+  const convertFoodToAPIFormat = (food: Food): AddMealFoodRequest => {
+    return {
+      foodName: food.name,
+      servingSize: food.weight || 100, // weight를 servingSize로 사용
+      calories: food.calories,
+      carbs: food.carbs,
+      protein: food.protein,
+      fat: food.fat,
+      sodium: 0, // 기본값
+      cholesterol: 0, // 기본값
+      sugar: 0, // 기본값
+      fiber: 0, // 기본값
+      imageUrl: photos[0] || undefined, // 첫 번째 사진 URL
+      aiConfidenceScore: undefined,
+    };
+  };
+
+  const handleSave = async () => {
+    if (foods.length === 0) {
+      Alert.alert('알림', '음식을 추가해주세요.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const dateToUse = selectedDateTime; // selectedDate 대신 selectedDateTime 사용
+      const mealData: AddMealRequest = {
+        mealDate: formatDateToString(dateToUse),
+        mealType: mealType,
+        foods: foods.map(convertFoodToAPIFormat),
+        memo: mealName || undefined,
+      };
+
+      await mealAPI.addMeal(mealData);
+      Alert.alert('성공', '식사가 추가되었습니다.', [
+        {
+          text: '확인',
+          onPress: () => {
+            navigation.goBack();
+          },
+        },
+      ]);
+    } catch (error: any) {
+      console.error('식사 추가 실패:', error);
+      let errorMessage = '식사를 추가하는데 실패했습니다.';
+      
+      if (error.status === 409) {
+        errorMessage = '해당 날짜/타입의 식사가 이미 존재합니다.';
+      } else if (error.status === 400) {
+        errorMessage = '잘못된 요청 데이터입니다.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert('오류', errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAddFood = () => {
@@ -115,6 +298,37 @@ const MealAddScreen = ({navigation}: any) => {
     navigation.navigate('FoodSearch');
   };
 
+  // 식사 타입 선택 핸들러
+  const handleMealTypePress = () => {
+    Alert.alert(
+      '식사 타입 선택',
+      '식사 타입을 선택해주세요.',
+      [
+        {
+          text: '아침',
+          onPress: () => setMealType('BREAKFAST'),
+        },
+        {
+          text: '점심',
+          onPress: () => setMealType('LUNCH'),
+        },
+        {
+          text: '저녁',
+          onPress: () => setMealType('DINNER'),
+        },
+        {
+          text: '야식',
+          onPress: () => setMealType('SNACK'),
+        },
+        {
+          text: '취소',
+          style: 'cancel',
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* 헤더 */}
@@ -123,8 +337,15 @@ const MealAddScreen = ({navigation}: any) => {
           <Icon name="chevron-back" size={28} color="#ffffff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>식단 추가하기</Text>
-        <TouchableOpacity onPress={handleSave} style={styles.saveButton}>
-          <Icon name="checkmark" size={28} color="#ffffff" />
+        <TouchableOpacity 
+          onPress={handleSave} 
+          style={styles.saveButton}
+          disabled={loading}>
+          {loading ? (
+            <ActivityIndicator size="small" color="#ffffff" />
+          ) : (
+            <Icon name="checkmark" size={28} color="#ffffff" />
+          )}
         </TouchableOpacity>
       </View>
 
@@ -142,12 +363,16 @@ const MealAddScreen = ({navigation}: any) => {
 
         {/* 날짜 및 식사 시간 */}
         <View style={styles.timeSection}>
-          <View style={styles.timeChip}>
-            <Text style={styles.chipText}>{mealTime}</Text>
-          </View>
-          <View style={styles.mealTypeChip}>
-            <Text style={styles.chipText}>{mealType}</Text>
-          </View>
+          <TouchableOpacity 
+            style={styles.timeChip}
+            onPress={handleDateTimePress}>
+            <Text style={styles.chipText}>{formatSelectedDateTime()}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.mealTypeChip}
+            onPress={handleMealTypePress}>
+            <Text style={styles.chipText}>{getMealTypeDisplay(mealType)}</Text>
+          </TouchableOpacity>
         </View>
 
         {/* 칼로리 요약 */}
@@ -238,6 +463,29 @@ const MealAddScreen = ({navigation}: any) => {
         onPhotoOption={handlePhotoOption}
         onSearchOption={handleSearchOption}
       />
+
+      {/* 날짜 선택기 */}
+      {showDatePicker && (
+        <DateTimePicker
+          value={selectedDateTime}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onChangeDate}
+          maximumDate={new Date()}
+          minimumDate={new Date(2020, 0, 1)}
+        />
+      )}
+
+      {/* 시간 선택기 */}
+      {showTimePicker && (
+        <DateTimePicker
+          value={selectedDateTime}
+          mode="time"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onChangeTime}
+          is24Hour={false}
+        />
+      )}
     </SafeAreaView>
   );
 };
