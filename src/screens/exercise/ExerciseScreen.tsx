@@ -18,6 +18,7 @@ import {
   deleteWorkoutSession,
   postWorkoutSession,
 } from "../../utils/exerciseApi";
+import { useDate } from "../../contexts/DateContext";
 
 interface WorkoutGoals {
   frequency: number;
@@ -48,6 +49,7 @@ const ExerciseScreen = ({ navigation }: any) => {
   const [completedThisWeek, setCompletedThisWeek] = useState(0);
   const [weeklyCalories, setWeeklyCalories] = useState(0);
   const [showMonthView, setShowMonthView] = useState(false);
+  const {selectedDate, setSelectedDate} = useDate(); // 선택된 날짜 (전역 상태)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
   const [selectedExercise, setSelectedExercise] = useState<Activity | null>(
@@ -302,29 +304,38 @@ const ExerciseScreen = ({ navigation }: any) => {
         {/* 월 네비게이션 */}
         <View style={styles.monthNavigation}>
           <View style={styles.monthNavLeft}>
-            <TouchableOpacity
-              style={styles.navBtn}
-              onPress={() =>
-                setMonthBase(
-                  (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)
-                )
-              }
-            >
-              <Icon name="chevron-back" size={18} color={colors.text} />
-            </TouchableOpacity>
-            <Text style={styles.monthText}>{`${
-              monthBase.getMonth() + 1
-            }월`}</Text>
-            <TouchableOpacity
-              style={styles.navBtn}
-              onPress={() =>
-                setMonthBase(
-                  (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)
-                )
-              }
-            >
-              <Icon name="chevron-forward" size={18} color={colors.text} />
-            </TouchableOpacity>
+            {showMonthView && (
+              <>
+                <TouchableOpacity
+                  style={styles.navBtn}
+                  onPress={() =>
+                    setMonthBase(
+                      (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)
+                    )
+                  }
+                >
+                  <Icon name="chevron-back" size={18} color={colors.text} />
+                </TouchableOpacity>
+                <Text style={styles.monthText}>{`${
+                  monthBase.getMonth() + 1
+                }월`}</Text>
+                <TouchableOpacity
+                  style={styles.navBtn}
+                  onPress={() =>
+                    setMonthBase(
+                      (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)
+                    )
+                  }
+                >
+                  <Icon name="chevron-forward" size={18} color={colors.text} />
+                </TouchableOpacity>
+              </>
+            )}
+            {!showMonthView && (
+              <Text style={styles.monthText}>{`${
+                monthBase.getMonth() + 1
+              }월`}</Text>
+            )}
           </View>
           <TouchableOpacity
             style={styles.menuBtn}
@@ -388,42 +399,54 @@ const ExerciseScreen = ({ navigation }: any) => {
               });
               return (
                 <View style={styles.monthGrid}>
-                  {days.map(({ key, d, isToday, isCurrentMonth }) => (
-                    <View key={key} style={styles.monthCell}>
-                      <View
-                        style={[
-                          styles.monthDateBadge,
-                          isToday && styles.monthDateBadgeToday,
-                        ]}
+                  {days.map(({ key, d, isToday, isCurrentMonth }) => {
+                    const isSelected = selectedDate && d.toDateString() === selectedDate.toDateString();
+                    return (
+                      <TouchableOpacity
+                        key={key}
+                        style={styles.monthCell}
+                        onPress={() => {
+                          setSelectedDate(d);
+                          setShowMonthView(false);
+                          setMonthBase(new Date(d.getFullYear(), d.getMonth(), 1));
+                        }}
+                        activeOpacity={0.7}
                       >
-                        <Text
+                        <View
                           style={[
-                            styles.monthDateText,
-                            isToday && styles.monthDateTextToday,
-                            !isCurrentMonth && styles.monthDateTextMuted,
+                            styles.monthDateBadge,
+                            isSelected && styles.monthDateBadgeToday,
                           ]}
                         >
-                          {d.getDate()}
+                          <Text
+                            style={[
+                              styles.monthDateText,
+                              isSelected && styles.monthDateTextToday,
+                              !isCurrentMonth && styles.monthDateTextMuted,
+                            ]}
+                          >
+                            {d.getDate()}
+                          </Text>
+                        </View>
+                        <Text
+                          style={[
+                            styles.calendarCalories,
+                            !isCurrentMonth && styles.monthMuted,
+                          ]}
+                        >
+                          388k
                         </Text>
-                      </View>
-                      <Text
-                        style={[
-                          styles.calendarCalories,
-                          !isCurrentMonth && styles.monthMuted,
-                        ]}
-                      >
-                        388k
-                      </Text>
-                      <Text
-                        style={[
-                          styles.calendarPercentage,
-                          !isCurrentMonth && styles.monthMuted,
-                        ]}
-                      >
-                        97%
-                      </Text>
-                    </View>
-                  ))}
+                        <Text
+                          style={[
+                            styles.calendarPercentage,
+                            !isCurrentMonth && styles.monthMuted,
+                          ]}
+                        >
+                          97%
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               );
             })()}
@@ -446,8 +469,8 @@ const ExerciseScreen = ({ navigation }: any) => {
                   n.setDate(n.getDate() - diff);
                   return n;
                 };
-                // 접힘 상태에서는 항상 '이번 주'가 보이도록 today 기준
-                const startThis = getStartOfWeek(today);
+                const dateToShow = selectedDate || today;
+                const startThis = getStartOfWeek(dateToShow);
                 return Array.from({ length: 7 }).map((_, index) => {
                   const d = new Date(
                     startThis.getFullYear(),
@@ -456,21 +479,24 @@ const ExerciseScreen = ({ navigation }: any) => {
                   );
                   const label = String(d.getDate());
                   const isToday = d.toDateString() === today.toDateString();
+                  const isSelected = selectedDate && d.toDateString() === selectedDate.toDateString();
                   return (
-                    <View
+                    <TouchableOpacity
                       key={startThis.toISOString() + "-w-" + index}
                       style={styles.calendarItem}
+                      onPress={() => setSelectedDate(d)}
+                      activeOpacity={0.7}
                     >
                       <View
                         style={[
                           styles.calendarNumber,
-                          isToday && styles.calendarNumberToday,
+                          isSelected && styles.calendarNumberToday,
                         ]}
                       >
                         <Text
                           style={[
                             styles.calendarNumberText,
-                            isToday && styles.calendarNumberTodayText,
+                            isSelected && styles.calendarNumberTodayText,
                           ]}
                         >
                           {label}
@@ -478,7 +504,7 @@ const ExerciseScreen = ({ navigation }: any) => {
                       </View>
                       <Text style={styles.calendarCalories}>388k</Text>
                       <Text style={styles.calendarPercentage}>97%</Text>
-                    </View>
+                    </TouchableOpacity>
                   );
                 });
               })()}
@@ -596,7 +622,7 @@ const styles = StyleSheet.create({
   monthNavLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
+    gap: 0,
   },
   navBtn: {
     backgroundColor: "transparent",

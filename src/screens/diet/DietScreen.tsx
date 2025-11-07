@@ -9,27 +9,32 @@ import {
 } from 'react-native';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import {colors} from '../../theme/colors';
+import {useDate} from '../../contexts/DateContext';
 
 const DietScreen = ({navigation}: any) => {
-  const [monthBase, setMonthBase] = useState(new Date());
-  const [showMonthView, setShowMonthView] = useState(false);
+  // 달력 관련 상태
+  const [monthBase, setMonthBase] = useState(new Date()); // 현재 표시 중인 월 기준 날짜
+  const [showMonthView, setShowMonthView] = useState(false); // 월간 달력 확장 여부
+  const {selectedDate, setSelectedDate} = useDate(); // 선택된 날짜 (전역 상태)
 
+  // 영양소 데이터 (칼로리, 탄수화물, 단백질, 지방)
   const nutritionData = {
-    total: 384,
-    target: 1157,
-    percentage: 30,
-    carbs: {current: 51, target: 198},
-    protein: {current: 15, target: 132},
-    fat: {current: 15, target: 49},
+    total: 384, // 현재 섭취한 총 칼로리
+    target: 1157, // 목표 칼로리
+    percentage: 30, // 목표 대비 달성률 (%)
+    carbs: {current: 51, target: 198}, // 탄수화물: 현재 / 목표 (g)
+    protein: {current: 15, target: 132}, // 단백질: 현재 / 목표 (g)
+    fat: {current: 15, target: 49}, // 지방: 현재 / 목표 (g)
   };
 
+  // 식사 목록 데이터 (아침, 점심, 저녁, 야식 등)
   const meals = [
     {
-      type: '아침',
-      time: '8:38 am',
-      calories: 52,
-      foods: [
-        {name: '요거트', color: '#e3ff7c'},
+      type: '아침', // 식사 종류
+      time: '8:38 am', // 식사 시간 또는 '추천 식단' 표시
+      calories: 52, // 해당 식사의 칼로리
+      foods: [ // 섭취한 음식 목록
+        {name: '요거트', color: '#e3ff7c'}, // 음식명과 태그 배경색
         {name: '바나나', color: '#e3ff7c'},
       ],
     },
@@ -63,23 +68,30 @@ const DietScreen = ({navigation}: any) => {
         {/* 월 네비게이션 */}
         <View style={styles.monthNavigation}>
           <View style={styles.monthNavLeft}>
-            <TouchableOpacity
-              style={styles.navBtn}
-              onPress={() =>
-                setMonthBase(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))
-              }
-            >
-              <Icon name="chevron-back" size={18} color={colors.text} />
-            </TouchableOpacity>
-            <Text style={styles.monthText}>{`${monthBase.getMonth() + 1}월`}</Text>
-            <TouchableOpacity
-              style={styles.navBtn}
-              onPress={() =>
-                setMonthBase(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))
-              }
-            >
-              <Icon name="chevron-forward" size={18} color={colors.text} />
-            </TouchableOpacity>
+            {showMonthView && (
+              <>
+                <TouchableOpacity
+                  style={styles.navBtn}
+                  onPress={() =>
+                    setMonthBase(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))
+                  }
+                >
+                  <Icon name="chevron-back" size={18} color={colors.text} />
+                </TouchableOpacity>
+                <Text style={styles.monthText}>{`${monthBase.getMonth() + 1}월`}</Text>
+                <TouchableOpacity
+                  style={styles.navBtn}
+                  onPress={() =>
+                    setMonthBase(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))
+                  }
+                >
+                  <Icon name="chevron-forward" size={18} color={colors.text} />
+                </TouchableOpacity>
+              </>
+            )}
+            {!showMonthView && (
+              <Text style={styles.monthText}>{`${monthBase.getMonth() + 1}월`}</Text>
+            )}
           </View>
           <TouchableOpacity
             style={styles.menuBtn}
@@ -120,17 +132,38 @@ const DietScreen = ({navigation}: any) => {
               });
               return (
                 <View style={styles.monthGrid}>
-                  {days.map(({key, d, isToday, isCurrentMonth}) => (
-                    <View key={key} style={styles.monthCell}>
-                      <View style={[styles.monthDateBadge, isToday && styles.monthDateBadgeToday]}>
-                        <Text style={[styles.monthDateText, isToday && styles.monthDateTextToday, !isCurrentMonth && styles.monthDateTextMuted]}>
-                          {d.getDate()}
-                        </Text>
-                      </View>
-                      <Text style={[styles.calendarCalories, !isCurrentMonth && styles.monthMuted]}>388k</Text>
-                      <Text style={[styles.calendarPercentage, !isCurrentMonth && styles.monthMuted]}>97%</Text>
-                    </View>
-                  ))}
+                  {days.map(({key, d, isToday, isCurrentMonth}) => {
+                    const isSelected = selectedDate && d.toDateString() === selectedDate.toDateString();
+                    return (
+                      <TouchableOpacity
+                        key={key}
+                        style={styles.monthCell}
+                        onPress={() => {
+                          setSelectedDate(d);
+                          setShowMonthView(false);
+                          setMonthBase(new Date(d.getFullYear(), d.getMonth(), 1));
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[
+                          styles.monthDateBadge,
+                          isSelected && styles.monthDateBadgeToday
+                        ]}>
+                          <Text style={[
+                            styles.monthDateText,
+                            isSelected && styles.monthDateTextToday,
+                            !isCurrentMonth && styles.monthDateTextMuted
+                          ]}>
+                            {d.getDate()}
+                          </Text>
+                        </View>
+                        {/* 해당 날짜의 칼로리 표시 */}
+                        <Text style={[styles.calendarCalories, !isCurrentMonth && styles.monthMuted]}>388k</Text>
+                        {/* 해당 날짜의 목표 달성률 표시 */}
+                        <Text style={[styles.calendarPercentage, !isCurrentMonth && styles.monthMuted]}>97%</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               );
             })()}
@@ -149,18 +182,35 @@ const DietScreen = ({navigation}: any) => {
                   n.setDate(n.getDate() - diff);
                   return n;
                 };
-                const startThis = getStartOfWeek(today);
+                const dateToShow = selectedDate || today;
+                const startThis = getStartOfWeek(dateToShow);
                 return Array.from({length:7}).map((_, i) => {
                   const d = new Date(startThis.getFullYear(), startThis.getMonth(), startThis.getDate()+i);
                   const isToday = d.toDateString() === today.toDateString();
+                  const isSelected = selectedDate && d.toDateString() === selectedDate.toDateString();
                   return (
-                    <View key={startThis.toISOString()+i} style={styles.calendarItem}>
-                      <View style={[styles.calendarNumber, isToday && styles.calendarNumberToday]}>
-                        <Text style={[styles.calendarNumberText, isToday && styles.calendarNumberTodayText]}>{d.getDate()}</Text>
+                    <TouchableOpacity
+                      key={startThis.toISOString()+i}
+                      style={styles.calendarItem}
+                      onPress={() => setSelectedDate(d)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[
+                        styles.calendarNumber,
+                        isSelected && styles.calendarNumberToday
+                      ]}>
+                        <Text style={[
+                          styles.calendarNumberText,
+                          isSelected && styles.calendarNumberTodayText
+                        ]}>
+                          {d.getDate()}
+                        </Text>
                       </View>
+                      {/* 해당 날짜의 칼로리 표시 */}
                       <Text style={styles.calendarCalories}>388k</Text>
+                      {/* 해당 날짜의 목표 달성률 표시 */}
                       <Text style={styles.calendarPercentage}>97%</Text>
-                    </View>
+                    </TouchableOpacity>
                   );
                 });
               })()}
@@ -168,8 +218,9 @@ const DietScreen = ({navigation}: any) => {
           </View>
         )}
 
-        {/* 칼로리 섹션 */}
+        {/* 칼로리 섹션: 총 칼로리, 목표 칼로리, 달성률 표시 */}
         <View style={styles.calorieSection}>
+          {/* 칼로리 헤더: 현재 칼로리 / 목표 칼로리, 달성률 */}
           <View style={styles.calorieHeader}>
             <View style={styles.calorieMain}>
               <Text style={styles.calorieNumber}>{nutritionData.total}</Text>
@@ -178,11 +229,13 @@ const DietScreen = ({navigation}: any) => {
                 / {nutritionData.target}kcal
               </Text>
             </View>
+            {/* 목표 대비 달성률 (%) */}
             <Text style={styles.caloriePercentage}>
               {nutritionData.percentage}%
             </Text>
           </View>
 
+          {/* 칼로리 진행 바: 목표 달성률을 시각적으로 표시 */}
           <View style={styles.progressBarContainer}>
             <View style={styles.progressBar}>
               <View
@@ -194,8 +247,9 @@ const DietScreen = ({navigation}: any) => {
             </View>
           </View>
 
+          {/* 영양소 바: 탄수화물, 단백질, 지방의 섭취량과 목표량 표시 */}
           <View style={styles.nutritionBars}>
-            {/* 탄수화물 */}
+            {/* 탄수화물 섭취량 및 진행 바 */}
             <View style={styles.nutritionItem}>
               <Text style={styles.nutritionLabel}>탄수화물</Text>
               <Text style={styles.nutritionValue}>
@@ -216,7 +270,7 @@ const DietScreen = ({navigation}: any) => {
                 />
               </View>
             </View>
-            {/* 단백질 */}
+            {/* 단백질 섭취량 및 진행 바 */}
             <View style={styles.nutritionItem}>
               <Text style={styles.nutritionLabel}>단백질</Text>
               <Text style={styles.nutritionValue}>
@@ -238,7 +292,7 @@ const DietScreen = ({navigation}: any) => {
                 />
               </View>
             </View>
-            {/* 지방 */}
+            {/* 지방 섭취량 및 진행 바 */}
             <View style={styles.nutritionItem}>
               <Text style={styles.nutritionLabel}>지방</Text>
               <Text style={styles.nutritionValue}>
@@ -261,17 +315,20 @@ const DietScreen = ({navigation}: any) => {
           </View>
         </View>
 
-        {/* 식사별 섹션 */}
+        {/* 식사별 섹션: 아침, 점심, 저녁, 야식 등 각 식사 정보 표시 */}
         <View style={styles.mealsContainer}>
           {meals.map((meal, index) => (
             <View key={index} style={styles.mealSection}>
+              {/* 식사 헤더: 식사 종류, 시간, 칼로리 */}
               <View style={styles.mealHeader}>
                 <View style={styles.mealLeft}>
                   <Text style={styles.mealTitle}>{meal.type}</Text>
                   <Text style={styles.mealTime}>{meal.time}</Text>
                 </View>
+                {/* 해당 식사의 총 칼로리 */}
                 <Text style={styles.mealCalories}>{meal.calories} kcal</Text>
               </View>
+              {/* 섭취한 음식 목록: 음식명을 태그 형태로 표시 */}
               <View style={styles.foodTags}>
                 {meal.foods.map((food, foodIndex) => (
                   <View
@@ -288,7 +345,7 @@ const DietScreen = ({navigation}: any) => {
           ))}
         </View>
 
-        {/* 식단 추가하기 버튼 */}
+        {/* 식단 추가하기 버튼: 새로운 식단을 추가하는 화면으로 이동 */}
         <View style={styles.addMealSection}>
           <TouchableOpacity
             style={styles.addMealButton}
@@ -317,7 +374,7 @@ const styles = StyleSheet.create({
   monthNavLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 0,
   },
   navBtn: {
     backgroundColor: 'transparent',
@@ -388,6 +445,14 @@ const styles = StyleSheet.create({
   },
   monthMuted: {
     color: '#777777',
+  },
+  monthDateBadgeSelected: {
+    backgroundColor: 'rgba(227, 255, 124, 0.5)', // 반투명한 선택 색상
+    borderWidth: 2,
+    borderColor: '#e3ff7c',
+  },
+  monthDateTextSelected: {
+    color: '#e3ff7c',
   },
   calendarItem: {
     flex: 1,
@@ -597,6 +662,13 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 16,
     fontWeight: '700',
+  },
+  calendarNumberSelected: {
+    borderWidth: 2,
+    borderColor: '#e3ff7c',
+  },
+  calendarNumberTextSelected: {
+    color: '#e3ff7c',
   },
 });
 
