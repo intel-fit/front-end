@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
 import { Ionicons as Icon } from '@expo/vector-icons';
 import {colors} from '../../theme/colors';
 import {useDate} from '../../contexts/DateContext';
+import {mealAPI} from '../../services';
+import type {DailyMealsResponse, DailyMeal} from '../../types';
 
 const DietScreen = ({navigation}: any) => {
   // 달력 관련 상태
@@ -18,46 +20,94 @@ const DietScreen = ({navigation}: any) => {
   const {selectedDate, setSelectedDate} = useDate(); // 선택된 날짜 (전역 상태)
 
   // 영양소 데이터 (칼로리, 탄수화물, 단백질, 지방)
-  const nutritionData = {
-    total: 384, // 현재 섭취한 총 칼로리
-    target: 1157, // 목표 칼로리
-    percentage: 30, // 목표 대비 달성률 (%)
-    carbs: {current: 51, target: 198}, // 탄수화물: 현재 / 목표 (g)
-    protein: {current: 15, target: 132}, // 단백질: 현재 / 목표 (g)
-    fat: {current: 15, target: 49}, // 지방: 현재 / 목표 (g)
+  const [dailyMealsData, setDailyMealsData] = useState<DailyMealsResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
+  const formatDateToString = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
-  // 식사 목록 데이터 (아침, 점심, 저녁, 야식 등)
-  const meals = [
-    {
-      type: '아침', // 식사 종류
-      time: '8:38 am', // 식사 시간 또는 '추천 식단' 표시
-      calories: 52, // 해당 식사의 칼로리
-      foods: [ // 섭취한 음식 목록
-        {name: '요거트', color: '#e3ff7c'}, // 음식명과 태그 배경색
-        {name: '바나나', color: '#e3ff7c'},
-      ],
+  // API 호출 함수
+  const fetchDailyMeals = async (date: Date) => {
+    setLoading(true);
+    try {
+      const dateString = formatDateToString(date);
+      const data = await mealAPI.getDailyMeals(dateString);
+      setDailyMealsData(data);
+    } catch (error: any) {
+      console.error('일별 식단 조회 실패:', error);
+      // 에러 발생 시 빈 데이터로 설정
+      setDailyMealsData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 선택된 날짜가 변경될 때마다 API 호출
+  useEffect(() => {
+    const dateToFetch = selectedDate || new Date();
+    fetchDailyMeals(dateToFetch);
+  }, [selectedDate]);
+
+  // API 데이터를 UI 형식으로 변환
+  const nutritionData = dailyMealsData ? {
+    total: dailyMealsData.dailyTotalCalories,
+    target: 1157, // 목표 칼로리 (나중에 API에서 받아올 수 있음)
+    percentage: Math.round((dailyMealsData.dailyTotalCalories / 1157) * 100),
+    carbs: {
+      current: dailyMealsData.dailyTotalCarbs,
+      target: 198
     },
-    {
-      type: '점심',
-      time: '추천 식단',
-      calories: 70,
-      foods: [
-        {name: '그릭 요거트', color: '#7e7e7b'},
-        {name: '에너지바', color: '#7e7e7b'},
-      ],
+    protein: {
+      current: dailyMealsData.dailyTotalProtein,
+      target: 132
     },
-    {
-      type: '야식',
-      time: '추천 식단',
-      calories: 239,
-      foods: [
-        {name: '닭가슴살 300g', color: '#7e7e7b'},
-        {name: '단백질 쉐이크', color: '#7e7e7b'},
-        {name: '구운 계란 2개', color: '#7e7e7b'},
-      ],
+    fat: {
+      current: dailyMealsData.dailyTotalFat,
+      target: 49
     },
-  ];
+  } : {
+    total: 0,
+    target: 1157,
+    percentage: 0,
+    carbs: {current: 0, target: 198},
+    protein: {current: 0, target: 132},
+    fat: {current: 0, target: 49},
+  };
+
+  // 식사 목록 변환
+  const meals = dailyMealsData?.meals.map((meal: DailyMeal) => {
+    // mealType을 한글 이름으로 변환
+    const mealTypeMap: Record<string, string> = {
+      'BREAKFAST': '아침',
+      'LUNCH': '점심',
+      'DINNER': '저녁',
+      'SNACK': '야식',
+    };
+
+    // 시간 포맷팅 (createdAt에서 시간 추출)
+    const mealTime = meal.createdAt 
+      ? new Date(meal.createdAt).toLocaleTimeString('ko-KR', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        })
+      : '추천 식단';
+
+    return {
+      type: mealTypeMap[meal.mealType] || meal.mealTypeName,
+      time: mealTime,
+      calories: meal.totalCalories,
+      foods: meal.foods.map(food => ({
+        name: food.foodName,
+        color: '#e3ff7c', // 기본 색상
+      })),
+    };
+  }) || [];
 
   // StatsScreen 내부에서 사용될 때는 SafeAreaView 제거
   const ContainerComponent = View;
