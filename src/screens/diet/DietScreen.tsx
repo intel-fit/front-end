@@ -13,7 +13,8 @@ import {colors} from '../../theme/colors';
 import {useDate} from '../../contexts/DateContext';
 import {mealAPI} from '../../services';
 import {fetchWeeklyProgress, fetchMonthlyProgress} from '../../utils/exerciseApi';
-import type {DailyMealsResponse, DailyMeal, DailyProgressWeekItem} from '../../types';
+import {useFocusEffect} from '@react-navigation/native';
+import type {DailyMealsResponse, DailyMeal, DailyProgressWeekItem, NutritionGoal} from '../../types';
 
 const DietScreen = ({navigation}: any) => {
   // 달력 관련 상태
@@ -26,6 +27,7 @@ const DietScreen = ({navigation}: any) => {
   const [loading, setLoading] = useState(false);
   const [weeklyProgress, setWeeklyProgress] = useState<DailyProgressWeekItem[]>([]);
   const [monthlyProgress, setMonthlyProgress] = useState<DailyProgressWeekItem[]>([]);
+  const [nutritionGoal, setNutritionGoal] = useState<NutritionGoal | null>(null);
 
   // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
   const formatDateToString = (date: Date): string => {
@@ -56,6 +58,14 @@ const DietScreen = ({navigation}: any) => {
     const dateToFetch = selectedDate || new Date();
     fetchDailyMeals(dateToFetch);
   }, [selectedDate]);
+
+  // 화면 포커스 시 데이터 새로고침 (식단 추가 후 돌아왔을 때)
+  useFocusEffect(
+    React.useCallback(() => {
+      const dateToFetch = selectedDate || new Date();
+      fetchDailyMeals(dateToFetch);
+    }, [selectedDate])
+  );
 
   // 주간 데이터 로드
   const loadWeeklyProgress = async () => {
@@ -88,9 +98,44 @@ const DietScreen = ({navigation}: any) => {
       || weeklyProgress.find(item => item.date === dateStr);
   };
 
-  // 화면 포커스 시 주간 데이터 로드
+  // 영양 목표 로드 (목표가 없으면 API에서 자동 생성)
+  const loadNutritionGoal = async () => {
+    try {
+      const data = await mealAPI.getNutritionGoal();
+      setNutritionGoal(data);
+    } catch (e: any) {
+      console.error('영양 목표 로드 실패:', e);
+      // 401 에러가 아닌 경우에만 기본값 설정 (인증 문제가 아닌 경우)
+      if (e?.status !== 401) {
+        // API에서 자동 생성되므로 잠시 후 재시도
+        setTimeout(async () => {
+          try {
+            const retryData = await mealAPI.getNutritionGoal();
+            setNutritionGoal(retryData);
+          } catch (retryError) {
+            console.error('영양 목표 재시도 실패:', retryError);
+            // 재시도 실패 시 0으로 설정
+            if (!nutritionGoal) {
+              setNutritionGoal({
+                id: 0,
+                targetCalories: 0,
+                targetCarbs: 0,
+                targetProtein: 0,
+                targetFat: 0,
+                goalType: 'AUTO',
+                goalTypeDescription: '자동 계산',
+              });
+            }
+          }
+        }, 500);
+      }
+    }
+  };
+
+  // 화면 포커스 시 주간 데이터 및 영양 목표 로드
   useEffect(() => {
     loadWeeklyProgress();
+    loadNutritionGoal();
   }, []);
 
   // monthBase가 변경될 때 월별 데이터 로드
@@ -98,30 +143,35 @@ const DietScreen = ({navigation}: any) => {
     loadMonthlyProgress(monthBase.getFullYear(), monthBase.getMonth());
   }, [monthBase]);
 
-  // API 데이터를 UI 형식으로 변환
+  // API 데이터를 UI 형식으로 변환 (목표가 없으면 0)
+  const targetCalories = nutritionGoal?.targetCalories || 0;
+  const targetCarbs = nutritionGoal?.targetCarbs || 0;
+  const targetProtein = nutritionGoal?.targetProtein || 0;
+  const targetFat = nutritionGoal?.targetFat || 0;
+
   const nutritionData = dailyMealsData ? {
     total: dailyMealsData.dailyTotalCalories,
-    target: 1157, // 목표 칼로리 (나중에 API에서 받아올 수 있음)
-    percentage: Math.round((dailyMealsData.dailyTotalCalories / 1157) * 100),
+    target: targetCalories,
+    percentage: targetCalories > 0 ? Math.round((dailyMealsData.dailyTotalCalories / targetCalories) * 100) : 0,
     carbs: {
       current: dailyMealsData.dailyTotalCarbs,
-      target: 198
+      target: targetCarbs
     },
     protein: {
       current: dailyMealsData.dailyTotalProtein,
-      target: 132
+      target: targetProtein
     },
     fat: {
       current: dailyMealsData.dailyTotalFat,
-      target: 49
+      target: targetFat
     },
   } : {
     total: 0,
-    target: 1157,
+    target: targetCalories,
     percentage: 0,
-    carbs: {current: 0, target: 198},
-    protein: {current: 0, target: 132},
-    fat: {current: 0, target: 49},
+    carbs: {current: 0, target: targetCarbs},
+    protein: {current: 0, target: targetProtein},
+    fat: {current: 0, target: targetFat},
   };
 
   // 식사 목록 변환
@@ -145,7 +195,7 @@ const DietScreen = ({navigation}: any) => {
       : '추천 식단';
 
     return {
-      type: mealTypeMap[meal.mealType] || meal.mealTypeName,
+      type: meal.memo || mealTypeMap[meal.mealType] || meal.mealTypeName,
       time: mealTime,
       calories: meal.totalCalories,
       foods: meal.foods.map(food => ({
@@ -379,19 +429,23 @@ const DietScreen = ({navigation}: any) => {
           <View style={styles.nutritionBars}>
             {/* 탄수화물 섭취량 및 진행 바 */}
             <View style={styles.nutritionItem}>
-              <Text style={styles.nutritionLabel}>탄수화물</Text>
-              <Text style={styles.nutritionValue}>
-                {nutritionData.carbs.current} / {nutritionData.carbs.target}g
-              </Text>
+              <View style={styles.nutritionRow}>
+                <Text style={styles.nutritionLabel}>탄수화물</Text>
+                <Text style={styles.nutritionValue}>
+                  {nutritionData.carbs.current} / {nutritionData.carbs.target}g
+                </Text>
+              </View>
               <View style={styles.nutritionProgress}>
                 <View
                   style={[
                     styles.nutritionProgressFill,
                     {
                       width: `${
-                        (nutritionData.carbs.current /
-                          nutritionData.carbs.target) *
-                        100
+                        nutritionData.carbs.target > 0
+                          ? (nutritionData.carbs.current /
+                              nutritionData.carbs.target) *
+                            100
+                          : 0
                       }%`,
                     },
                   ]}
@@ -400,20 +454,23 @@ const DietScreen = ({navigation}: any) => {
             </View>
             {/* 단백질 섭취량 및 진행 바 */}
             <View style={styles.nutritionItem}>
-              <Text style={styles.nutritionLabel}>단백질</Text>
-              <Text style={styles.nutritionValue}>
-                {nutritionData.protein.current} /{' '}
-                {nutritionData.protein.target}g
-              </Text>
+              <View style={styles.nutritionRow}>
+                <Text style={styles.nutritionLabel}>단백질</Text>
+                <Text style={styles.nutritionValue}>
+                  {nutritionData.protein.current} / {nutritionData.protein.target}g
+                </Text>
+              </View>
               <View style={styles.nutritionProgress}>
                 <View
                   style={[
                     styles.nutritionProgressFill,
                     {
                       width: `${
-                        (nutritionData.protein.current /
-                          nutritionData.protein.target) *
-                        100
+                        nutritionData.protein.target > 0
+                          ? (nutritionData.protein.current /
+                              nutritionData.protein.target) *
+                            100
+                          : 0
                       }%`,
                     },
                   ]}
@@ -422,18 +479,22 @@ const DietScreen = ({navigation}: any) => {
             </View>
             {/* 지방 섭취량 및 진행 바 */}
             <View style={styles.nutritionItem}>
-              <Text style={styles.nutritionLabel}>지방</Text>
-              <Text style={styles.nutritionValue}>
-                {nutritionData.fat.current} / {nutritionData.fat.target}g
-              </Text>
+              <View style={styles.nutritionRow}>
+                <Text style={styles.nutritionLabel}>지방</Text>
+                <Text style={styles.nutritionValue}>
+                  {nutritionData.fat.current} / {nutritionData.fat.target}g
+                </Text>
+              </View>
               <View style={styles.nutritionProgress}>
                 <View
                   style={[
                     styles.nutritionProgressFill,
                     {
                       width: `${
-                        (nutritionData.fat.current / nutritionData.fat.target) *
-                        100
+                        nutritionData.fat.target > 0
+                          ? (nutritionData.fat.current / nutritionData.fat.target) *
+                            100
+                          : 0
                       }%`,
                     },
                   ]}
@@ -443,43 +504,57 @@ const DietScreen = ({navigation}: any) => {
           </View>
         </View>
 
-        {/* 식사별 섹션: 아침, 점심, 저녁, 야식 등 각 식사 정보 표시 */}
-        <View style={styles.mealsContainer}>
-          {meals.map((meal, index) => (
-            <View key={index} style={styles.mealSection}>
-              {/* 식사 헤더: 식사 종류, 시간, 칼로리 */}
-              <View style={styles.mealHeader}>
-                <View style={styles.mealLeft}>
-                  <Text style={styles.mealTitle}>{meal.type}</Text>
-                  <Text style={styles.mealTime}>{meal.time}</Text>
-                </View>
-                {/* 해당 식사의 총 칼로리 */}
-                <Text style={styles.mealCalories}>{meal.calories} kcal</Text>
-              </View>
-              {/* 섭취한 음식 목록: 음식명을 태그 형태로 표시 */}
-              <View style={styles.foodTags}>
-                {meal.foods.map((food, foodIndex) => (
-                  <View
-                    key={foodIndex}
-                    style={[
-                      styles.foodTag,
-                      {backgroundColor: food.color},
-                    ]}>
-                    <Text style={styles.foodTagText}>{food.name}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          ))}
+        {/* 식단 기록하기 섹션: 새로운 식단을 추가하는 화면으로 이동 */}
+        <View style={styles.addMealSection}>
+          <View style={styles.mealRecordHeader}>
+            <Text style={styles.mealRecordTitle}>식단 기록하기</Text>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => navigation.navigate('MealAdd')}>
+              <Icon name="add" size={18} color={colors.text} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* 식단 추가하기 버튼: 새로운 식단을 추가하는 화면으로 이동 */}
-        <View style={styles.addMealSection}>
-          <TouchableOpacity
-            style={styles.addMealButton}
-            onPress={() => navigation.navigate('MealAdd')}>
-            <Text style={styles.addMealButtonText}>식단 추가하기</Text>
-          </TouchableOpacity>
+        {/* 식사별 섹션: 아침, 점심, 저녁, 야식 등 각 식사 정보 표시 */}
+        <View style={styles.mealsContainer}>
+          {meals.map((meal, index) => {
+            const originalMeal = dailyMealsData?.meals[index];
+            return (
+              <TouchableOpacity
+                key={index}
+                style={styles.mealSection}
+                onPress={() => {
+                  if (originalMeal) {
+                    navigation.navigate('MealAdd', { meal: originalMeal });
+                  }
+                }}
+                activeOpacity={0.7}>
+                {/* 식사 헤더: 식사 종류, 시간, 칼로리 */}
+                <View style={styles.mealHeader}>
+                  <View style={styles.mealLeft}>
+                    <Text style={styles.mealTitle}>{meal.type}</Text>
+                    <Text style={styles.mealTime}>{meal.time}</Text>
+                  </View>
+                  {/* 해당 식사의 총 칼로리 */}
+                  <Text style={styles.mealCalories}>{meal.calories} kcal</Text>
+                </View>
+                {/* 섭취한 음식 목록: 음식명을 태그 형태로 표시 */}
+                <View style={styles.foodTags}>
+                  {meal.foods.map((food, foodIndex) => (
+                    <View
+                      key={foodIndex}
+                      style={[
+                        styles.foodTag,
+                        {backgroundColor: food.color},
+                      ]}>
+                      <Text style={styles.foodTagText}>{food.name}</Text>
+                    </View>
+                  ))}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </ScrollView>
     </ContainerComponent>
@@ -636,93 +711,97 @@ const styles = StyleSheet.create({
   },
   calorieSection: {
     backgroundColor: colors.cardBackground,
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
   },
   calorieHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 12,
   },
   calorieMain: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 8,
+    gap: 6,
   },
   calorieNumber: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: colors.text,
-    lineHeight: 24,
+    lineHeight: 22,
   },
   calorieUnit: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '400',
     color: colors.text,
   },
   caloriePercentage: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: colors.text,
   },
   progressBarContainer: {
-    marginBottom: 20,
+    marginBottom: 12,
   },
   progressBar: {
-    height: 40,
+    height: 32,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 10,
+    borderRadius: 8,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     backgroundColor: '#e3ff7c',
-    borderRadius: 10,
+    borderRadius: 8,
   },
   nutritionBars: {
     flexDirection: 'row',
-    gap: 20,
+    gap: 12,
     width: '100%',
   },
   nutritionItem: {
     flex: 1,
-    padding: 10,
+    padding: 8,
     borderRadius: 5,
-    minHeight: 50,
+    minHeight: 40,
     justifyContent: 'center',
     gap: 8,
   },
+  nutritionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   nutritionLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: 5,
-    lineHeight: 12,
+    lineHeight: 11,
   },
   nutritionValue: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '400',
     color: colors.text,
-    lineHeight: 12,
+    lineHeight: 11,
   },
   nutritionProgress: {
     width: '100%',
-    height: 4,
+    height: 6,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 2,
+    borderRadius: 3,
     overflow: 'hidden',
-    marginTop: 5,
   },
   nutritionProgressFill: {
     height: '100%',
     backgroundColor: '#e3ff7c',
-    borderRadius: 2,
+    borderRadius: 3,
   },
   mealsContainer: {
     gap: 20,
-    marginBottom: 20,
+    marginBottom: 12,
   },
   mealSection: {
     backgroundColor: colors.cardBackground,
@@ -773,23 +852,27 @@ const styles = StyleSheet.create({
     color: '#000000',
   },
   addMealSection: {
+    marginTop: 0,
+    marginBottom: 12,
+  },
+  mealRecordHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  mealRecordTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  addButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.cardBackground,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 20,
-  },
-  addMealButton: {
-    backgroundColor: colors.cardBackground,
-    borderRadius: 10,
-    paddingVertical: 20,
-    paddingHorizontal: 40,
-    width: '100%',
-    maxWidth: 362,
-    alignItems: 'center',
-  },
-  addMealButtonText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '700',
   },
   calendarNumberSelected: {
     borderWidth: 2,
