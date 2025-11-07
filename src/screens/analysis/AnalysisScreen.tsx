@@ -40,10 +40,6 @@ const AnalysisScreen = ({navigation}: any) => {
       return acc;
     }, {} as Record<string, WorkoutSession[]>);
 
-    console.log('[ANALYSIS] 그룹화된 운동:', Object.keys(groupedByExercise).map(name => 
-      `${name} (${groupedByExercise[name].length}회)`
-    ));
-
     // 각 운동별로 최근 8개만 유지하고 날짜순 정렬
     const recentExercises: any[] = [];
     
@@ -82,18 +78,12 @@ const AnalysisScreen = ({navigation}: any) => {
           change = weightChange;
           
           if (weightChange !== 0) {
-            console.log(`[ANALYSIS] ${name} 중량 변화: ${prevMaxWeight}kg → ${maxWeight}kg = ${weightChange > 0 ? '+' : ''}${weightChange}kg`);
-            
             if (change > 0) {
               changeType = 'positive';
             } else if (change < 0) {
               changeType = 'negative';
             }
-          } else {
-            console.log(`[ANALYSIS] ${name}: 중량 변화 없음 (${maxWeight}kg 유지)`);
           }
-        } else {
-          console.log(`[ANALYSIS] ${name}: 기록 1회만 있음, 변화량 계산 불가`);
         }
         
         recentExercises.push({
@@ -131,12 +121,7 @@ const AnalysisScreen = ({navigation}: any) => {
       
       const workouts = await fetchUserWorkouts(userIdStr);
       setWorkoutHistory(workouts);
-      console.log('[ANALYSIS] 운동 기록 조회 성공:', workouts.length, '개');
-      console.log('[ANALYSIS] 운동 기록 상세:', workouts.map(w => ({
-        name: w.exerciseName,
-        date: w.workoutDate,
-        maxWeight: Math.max(...w.sets.map(s => s.weight))
-      })));
+      console.log('[ANALYSIS] 운동 기록', { count: workouts.length });
     } catch (error) {
       console.error('[ANALYSIS] 운동 기록 조회 실패:', error);
       setWorkoutHistory([]);

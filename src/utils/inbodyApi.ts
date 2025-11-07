@@ -46,8 +46,6 @@ export const postInBody = async (
 ): Promise<InBodyResponse> => {
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-    console.log("[INBODY][POST] API 요청 URL:", INBODY_API_URL);
-    console.log("[INBODY][POST] 페이로드:", payload);
 
     const response = await axios.post(INBODY_API_URL, payload, {
       headers: {
@@ -57,7 +55,6 @@ export const postInBody = async (
       },
     });
 
-    console.log("[INBODY][POST] API 응답 성공:", response.data);
     return response.data;
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
@@ -80,7 +77,6 @@ export const postInBody = async (
 export const getInBodyList = async (): Promise<any> => {
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-    console.log("[INBODY][GET] API 요청 URL:", INBODY_API_URL);
 
     const response = await axios.get(INBODY_API_URL, {
       headers: {
@@ -90,7 +86,6 @@ export const getInBodyList = async (): Promise<any> => {
       },
     });
 
-    console.log("[INBODY][GET] API 응답 성공:", response.data);
     return response.data;
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
@@ -114,7 +109,6 @@ export const getLatestInBody = async (): Promise<any> => {
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
     const url = `${INBODY_API_URL}/latest`;
-    console.log("[INBODY][GET LATEST] API 요청 URL:", url);
 
     const response = await axios.get(url, {
       headers: {
@@ -124,7 +118,6 @@ export const getLatestInBody = async (): Promise<any> => {
       },
     });
 
-    console.log("[INBODY][GET LATEST] API 응답 성공:", response.data);
     return response.data;
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
@@ -153,8 +146,6 @@ export const patchInBody = async (
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
     const url = `${INBODY_API_URL}/${inBodyId}`;
-    console.log("[INBODY][PATCH] API 요청 URL:", url);
-    console.log("[INBODY][PATCH] 페이로드:", payload);
 
     const response = await axios.patch(url, payload, {
       headers: {
@@ -164,7 +155,6 @@ export const patchInBody = async (
       },
     });
 
-    console.log("[INBODY][PATCH] API 응답 성공:", response.data);
     return response.data;
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
@@ -198,7 +188,6 @@ export const getInBodyByDate = async (date: string): Promise<any> => {
   for (const formattedDate of dateFormats) {
     try {
       const url = `${INBODY_API_URL}?date=${encodeURIComponent(formattedDate)}`;
-      console.log("[INBODY][GET BY DATE] API 요청 URL:", url);
 
       const response = await axios.get(url, {
         headers: {
@@ -208,7 +197,6 @@ export const getInBodyByDate = async (date: string): Promise<any> => {
         },
       });
 
-      console.log("[INBODY][GET BY DATE] API 응답 성공:", response.data);
       return response.data;
     } catch (error: any) {
       // 마지막 시도가 아니면 계속 진행

@@ -237,7 +237,7 @@ const InBodyScreen = ({ navigation }: any) => {
           })
           .filter((date: string | null) => date !== null) as string[];
         setInBodyDatesList(dates);
-        console.log("[INBODY SCREEN] 날짜 목록 로드 성공:", dates);
+        console.log("[INBODY] 저장된 날짜 수", { count: dates.length });
       } else {
         // 목록이 없으면 최신 데이터에서 날짜 추출
         try {
@@ -249,7 +249,7 @@ const InBodyScreen = ({ navigation }: any) => {
               ? latestData.measurementDate 
               : latestData.measurementDate.replace(/-/g, ".");
             setInBodyDatesList([date]);
-            console.log("[INBODY SCREEN] 최신 데이터에서 날짜 추출:", date);
+            console.log("[INBODY] 날짜 목록 없음 → 최신", { date });
           }
         } catch (e) {
           console.error("[INBODY SCREEN] 최신 데이터에서 날짜 추출 실패:", e);
@@ -267,7 +267,7 @@ const InBodyScreen = ({ navigation }: any) => {
             ? latestData.measurementDate 
             : latestData.measurementDate.replace(/-/g, ".");
           setInBodyDatesList([date]);
-          console.log("[INBODY SCREEN] 에러 후 최신 데이터에서 날짜 추출:", date);
+          console.log("[INBODY] 날짜 목록 실패 → 최신", { date });
         }
       } catch (e) {
         console.error("[INBODY SCREEN] 최신 데이터에서 날짜 추출 실패:", e);
@@ -288,107 +288,94 @@ const InBodyScreen = ({ navigation }: any) => {
         return dateStr.replace(/-/g, ".");
       };
       
+      let resolvedData: any = null;
+      let dataSource: "api" | "cache" | "list" | "latest" | "none" = "none";
+
       // 먼저 getInBodyByDate 시도
       try {
         const response = await getInBodyByDate(dateStr);
         const inBodyData = response?.success ? response.inBody : response;
         
         if (inBodyData && inBodyData.id) {
-          // 캐시에 저장
-          setInBodyDataCache(prev => {
-            const newCache = new Map(prev);
-            newCache.set(dateStr, inBodyData);
-            return newCache;
-          });
-          
-          // 날짜 목록에 추가
-          setInBodyDatesList(prev => {
-            if (!prev.includes(dateStr)) {
-              return [...prev, dateStr].sort();
-            }
-            return prev;
-          });
-          
-          setInBodyData(inBodyData);
-          console.log("[INBODY SCREEN] 날짜별 데이터 로드 성공:", inBodyData);
-          return;
+          resolvedData = inBodyData;
+          dataSource = "api";
         }
       } catch (e) {
         console.warn("[INBODY SCREEN] 날짜별 조회 API 실패, 목록에서 검색 시도...");
       }
       
-      // 캐시에서 먼저 확인 (함수형 업데이트로 현재 캐시 값 읽기)
-      let cachedData: any = null;
-      setInBodyDataCache(prev => {
-        cachedData = prev.get(dateStr);
-        return prev; // 변경 없음
-      });
+      if (!resolvedData) {
+        // 캐시에서 먼저 확인 (함수형 업데이트로 현재 캐시 값 읽기)
+        let cachedData: any = null;
+        setInBodyDataCache(prev => {
+          cachedData = prev.get(dateStr);
+          return prev; // 변경 없음
+        });
+        
+        if (cachedData) {
+          resolvedData = cachedData;
+          dataSource = "cache";
+        }
+      }
       
-      if (cachedData) {
-        setInBodyData(cachedData);
-        console.log("[INBODY SCREEN] 캐시에서 날짜별 데이터 찾음:", cachedData);
-        // 날짜 목록에 추가 (없는 경우)
+      if (!resolvedData) {
+        // getInBodyByDate가 실패하면 getInBodyList로 모든 데이터 가져와서 필터링
+        try {
+          const response = await getInBodyList();
+          const inBodyList = response?.data || response?.inBodyList || (Array.isArray(response) ? response : []);
+          
+          if (Array.isArray(inBodyList) && inBodyList.length > 0) {
+            const foundData = inBodyList.find((item: any) => {
+              const itemDate = item.measurementDate || item.date;
+              if (!itemDate) return false;
+              
+              const normalizedItemDate = normalizeDate(itemDate);
+              const normalizedTargetDate = normalizeDate(dateStr);
+              return normalizedItemDate === normalizedTargetDate;
+            });
+            
+            if (foundData) {
+              resolvedData = foundData;
+              dataSource = "list";
+            }
+          }
+        } catch (e) {
+          console.warn("[INBODY SCREEN] 목록 조회 실패:", e);
+        }
+      }
+      
+      if (!resolvedData) {
+        // 해당 날짜에 데이터가 없으면 최신 데이터 조회
+        try {
+          const latestResponse = await getLatestInBody();
+          const latestData = latestResponse?.success ? latestResponse.inBody : latestResponse;
+          if (latestData && latestData.id) {
+            resolvedData = latestData;
+            dataSource = "latest";
+          }
+        } catch (e) {
+          console.error("[INBODY SCREEN] 최신 데이터 조회 실패:", e);
+        }
+      }
+
+      if (resolvedData) {
+        // 캐시에 저장
+        setInBodyDataCache(prev => {
+          const newCache = new Map(prev);
+          newCache.set(dateStr, resolvedData);
+          return newCache;
+        });
+
+        // 날짜 목록 업데이트
         setInBodyDatesList(prev => {
           if (!prev.includes(dateStr)) {
             return [...prev, dateStr].sort();
           }
           return prev;
         });
-        return;
-      }
-      
-      // getInBodyByDate가 실패하면 getInBodyList로 모든 데이터 가져와서 필터링
-      try {
-        const response = await getInBodyList();
-        const inBodyList = response?.data || response?.inBodyList || (Array.isArray(response) ? response : []);
-        
-        if (Array.isArray(inBodyList) && inBodyList.length > 0) {
-          // 해당 날짜의 데이터 찾기
-          const foundData = inBodyList.find((item: any) => {
-            const itemDate = item.measurementDate || item.date;
-            if (!itemDate) return false;
-            
-            // 날짜 형식 정규화 후 비교
-            const normalizedItemDate = normalizeDate(itemDate);
-            const normalizedTargetDate = normalizeDate(dateStr);
-            return normalizedItemDate === normalizedTargetDate;
-          });
-          
-          if (foundData) {
-            // 캐시에 저장
-            setInBodyDataCache(prev => {
-              const newCache = new Map(prev);
-              newCache.set(dateStr, foundData);
-              return newCache;
-            });
-            
-            // 날짜 목록에 추가
-            setInBodyDatesList(prev => {
-              if (!prev.includes(dateStr)) {
-                return [...prev, dateStr].sort();
-              }
-              return prev;
-            });
-            
-            setInBodyData(foundData);
-            console.log("[INBODY SCREEN] 목록에서 날짜별 데이터 찾음:", foundData);
-            return;
-          }
-        }
-      } catch (e) {
-        console.warn("[INBODY SCREEN] 목록 조회 실패:", e);
-      }
-      
-      // 해당 날짜에 데이터가 없으면 최신 데이터 조회
-      try {
-        const latestResponse = await getLatestInBody();
-        const latestData = latestResponse?.success ? latestResponse.inBody : latestResponse;
-        if (latestData && latestData.id) {
-          setInBodyData(latestData);
-          console.log("[INBODY SCREEN] 해당 날짜 데이터 없음, 최신 데이터 표시");
-        }
-      } catch (e) {
-        console.error("[INBODY SCREEN] 최신 데이터 조회 실패:", e);
+
+        setInBodyData(resolvedData);
+        console.log("[INBODY] 날짜 선택", { date: dateStr, source: dataSource });
       }
     } catch (error) {
       console.error("[INBODY SCREEN] 날짜별 데이터 로드 실패:", error);
@@ -418,7 +405,6 @@ const InBodyScreen = ({ navigation }: any) => {
       
       if (inBodyData && inBodyData.id) {
         setInBodyData(inBodyData);
-        console.log("[INBODY SCREEN] 최신 데이터 로드 성공:", inBodyData);
         
         // 데이터를 캐시에 저장
         if (inBodyData.measurementDate) {
@@ -446,7 +432,7 @@ const InBodyScreen = ({ navigation }: any) => {
           const date = new Date(dateStr);
           if (!isNaN(date.getTime())) {
             setSelectedDate(date);
-            console.log("[INBODY SCREEN] 최신 날짜 설정:", inBodyData.measurementDate, date);
+            console.log("[INBODY] 최신 데이터 갱신", { date: inBodyData.measurementDate });
           }
         }
       } else {
@@ -465,7 +451,7 @@ const InBodyScreen = ({ navigation }: any) => {
   useFocusEffect(
     useCallback(() => {
       // 캐시 초기화 (새로 저장된 데이터 반영을 위해)
-      console.log("[INBODY SCREEN] 화면 포커스, 캐시 초기화 및 데이터 새로고침");
+      console.log("[INBODY] 화면 재진입");
       setInBodyDataCache(new Map()); // 캐시 초기화
       fetchInBodyData();
       fetchInBodyDates();

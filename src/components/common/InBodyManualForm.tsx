@@ -48,6 +48,7 @@ interface InBodyManualFormProps {
     fatCtrl: string;
     musCtrl: string;
   }>;
+  inBodyDates?: string[];
 }
 
 // iOS 숫자패드 상단에 표시될 액세서리 뷰의 고유 ID
@@ -56,6 +57,7 @@ const ACCESSORY_ID = "doneAccessory";
 const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
   onSubmit,
   defaultValues,
+  inBodyDates,
 }) => {
   const scrollViewRef = useRef<ScrollView>(null);
   const ageInputRef = useRef<TextInput>(null);
@@ -694,7 +696,9 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
         onClose={() => setCalendarVisible(false)}
         onSelectDate={handleDateSelect}
         selectedDate={v.date ? new Date(v.date) : new Date()}
-        inBodyDates={[]} // 수기 입력에서는 모든 날짜 선택 가능
+        inBodyDates={(inBodyDates || []).map((date) =>
+          date.includes(".") ? date : date.replace(/-/g, ".")
+        )}
       />
     </>
   );
