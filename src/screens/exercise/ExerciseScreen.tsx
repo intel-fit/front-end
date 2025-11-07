@@ -11,9 +11,9 @@ import {
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
 import { useFocusEffect } from "@react-navigation/native";
-// import { fetchUserWorkouts } from '../../utils/exerciseApi'; // 임시 테스트 제거
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import ExerciseModal from "../../components/modals/ExerciseModal";
+import InBodyCalendarModal from "../../components/common/InBodyCalendarModal";
 import {
   deleteWorkoutSession,
   postWorkoutSession,
@@ -32,6 +32,7 @@ interface Activity {
   name: string;
   details: string;
   time: string;
+  date: string; // YYYY-MM-DD 형식
   isCompleted: boolean;
   sessionId?: string; // 서버 저장된 세션과 연동용
   sets?: any[]; // 세트 내역 보존
@@ -39,7 +40,20 @@ interface Activity {
 
 const ExerciseScreen = ({ navigation }: any) => {
   const [monthBase, setMonthBase] = useState(new Date());
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const [calendarVisible, setCalendarVisible] = useState(false);
+  const [allActivities, setAllActivities] = useState<Activity[]>([]); // 모든 날짜의 운동 기록
+  const { selectedDate, setSelectedDate } = useDate(); // 선택된 날짜 (전역 상태)
+
+  // 선택된 날짜의 운동 기록만 필터링
+  const activities = React.useMemo(() => {
+    if (!selectedDate) return [];
+    const selectedDateStr = `${selectedDate.getFullYear()}-${String(
+      selectedDate.getMonth() + 1
+    ).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+    return allActivities.filter(
+      (activity) => activity.date === selectedDateStr
+    );
+  }, [allActivities, selectedDate]);
   const [goalData, setGoalData] = useState<WorkoutGoals>({
     frequency: 3,
     duration: "30분 이상",
@@ -49,7 +63,6 @@ const ExerciseScreen = ({ navigation }: any) => {
   const [completedThisWeek, setCompletedThisWeek] = useState(0);
   const [weeklyCalories, setWeeklyCalories] = useState(0);
   const [showMonthView, setShowMonthView] = useState(false);
-  const {selectedDate, setSelectedDate} = useDate(); // 선택된 날짜 (전역 상태)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
   const [selectedExercise, setSelectedExercise] = useState<Activity | null>(
@@ -142,7 +155,7 @@ const ExerciseScreen = ({ navigation }: any) => {
         const saved = await AsyncStorage.getItem(ACTIVITIES_KEY);
         if (saved) {
           const parsed: Activity[] = JSON.parse(saved);
-          if (Array.isArray(parsed)) setActivities(parsed);
+          if (Array.isArray(parsed)) setAllActivities(parsed);
         }
       } catch {}
     })();
@@ -151,10 +164,13 @@ const ExerciseScreen = ({ navigation }: any) => {
   React.useEffect(() => {
     (async () => {
       try {
-        await AsyncStorage.setItem(ACTIVITIES_KEY, JSON.stringify(activities));
+        await AsyncStorage.setItem(
+          ACTIVITIES_KEY,
+          JSON.stringify(allActivities)
+        );
       } catch {}
     })();
-  }, [activities]);
+  }, [allActivities]);
 
   // (임시 API 테스트 버튼 제거)
 
@@ -179,22 +195,27 @@ const ExerciseScreen = ({ navigation }: any) => {
       sets.length
     }세트`;
 
-    // 로그: 서버에 보낼 가상의 페이로드(세션 단위)
-    const localIso = new Date();
-    const workoutDate = `${localIso.getFullYear()}-${String(
-      localIso.getMonth() + 1
-    ).padStart(2, "0")}-${String(localIso.getDate()).padStart(2, "0")}T${String(
-      localIso.getHours()
-    ).padStart(2, "0")}:${String(localIso.getMinutes()).padStart(
+    // userId 가져오기
+    const userIdStr = await AsyncStorage.getItem("userId");
+    const userId = userIdStr ? parseInt(userIdStr, 10) : 1; // 기본값 1
+
+    // 선택된 날짜로 workoutDate 생성 (시간은 현재 시간 사용)
+    const activeDate = selectedDate || new Date();
+    const now = new Date();
+    const workoutDate = `${activeDate.getFullYear()}-${String(
+      activeDate.getMonth() + 1
+    ).padStart(2, "0")}-${String(activeDate.getDate()).padStart(
       2,
       "0"
-    )}:${String(localIso.getSeconds()).padStart(2, "0")}`;
+    )}T${String(now.getHours()).padStart(2, "0")}:${String(
+      now.getMinutes()
+    ).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
     const sessionPayload = {
       sessionId: `S-${Date.now()}`,
       exerciseName,
       category: meta?.category || "기타",
       workoutDate,
-      userId: 1, // TODO: 실제 로그인 사용자 id로 교체
+      userId, // AsyncStorage에서 가져온 실제 userId 사용
       exerciseId: meta?.externalId,
       sets: sets.map((s: any, idx: number) => ({
         setNumber: idx + 1,
@@ -224,8 +245,8 @@ const ExerciseScreen = ({ navigation }: any) => {
           const delta = nextCompleted ? 1 : -1;
           setCompletedCountPersist(Math.max(0, completedThisWeek + delta));
         }
-        setActivities(
-          activities.map((activity) =>
+        setAllActivities(
+          allActivities.map((activity) =>
             activity.id === selectedExercise.id
               ? {
                   ...activity,
@@ -239,6 +260,9 @@ const ExerciseScreen = ({ navigation }: any) => {
           )
         );
       } else {
+        const selectedDateStr = `${activeDate.getFullYear()}-${String(
+          activeDate.getMonth() + 1
+        ).padStart(2, "0")}-${String(activeDate.getDate()).padStart(2, "0")}`;
         const newWorkout: Activity = {
           id: Date.now(),
           name: exerciseName,
@@ -248,11 +272,12 @@ const ExerciseScreen = ({ navigation }: any) => {
             minute: "2-digit",
             hour12: true,
           }),
+          date: selectedDateStr,
           isCompleted: allSetsCompleted,
           sessionId: serverSessionId,
           sets,
         };
-        setActivities([...activities, newWorkout]);
+        setAllActivities([...allActivities, newWorkout]);
         if (allSetsCompleted) {
           setCompletedCountPersist(completedThisWeek + 1);
         }
@@ -282,12 +307,12 @@ const ExerciseScreen = ({ navigation }: any) => {
           } catch (e) {
             console.error("[WORKOUT][DELETE][FAIL]", e);
           } finally {
-            const target = activities.find((a) => a.id === workoutId);
+            const target = allActivities.find((a) => a.id === workoutId);
             if (target?.isCompleted) {
               setCompletedCountPersist(Math.max(0, completedThisWeek - 1));
             }
-            setActivities(
-              activities.filter((activity) => activity.id !== workoutId)
+            setAllActivities(
+              allActivities.filter((activity) => activity.id !== workoutId)
             );
           }
         },
@@ -310,7 +335,8 @@ const ExerciseScreen = ({ navigation }: any) => {
                   style={styles.navBtn}
                   onPress={() =>
                     setMonthBase(
-                      (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)
+                      (prev) =>
+                        new Date(prev.getFullYear(), prev.getMonth() - 1, 1)
                     )
                   }
                 >
@@ -323,7 +349,8 @@ const ExerciseScreen = ({ navigation }: any) => {
                   style={styles.navBtn}
                   onPress={() =>
                     setMonthBase(
-                      (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)
+                      (prev) =>
+                        new Date(prev.getFullYear(), prev.getMonth() + 1, 1)
                     )
                   }
                 >
@@ -400,7 +427,9 @@ const ExerciseScreen = ({ navigation }: any) => {
               return (
                 <View style={styles.monthGrid}>
                   {days.map(({ key, d, isToday, isCurrentMonth }) => {
-                    const isSelected = selectedDate && d.toDateString() === selectedDate.toDateString();
+                    const isSelected = selectedDate
+                      ? d.toDateString() === selectedDate.toDateString()
+                      : false;
                     return (
                       <TouchableOpacity
                         key={key}
@@ -408,21 +437,25 @@ const ExerciseScreen = ({ navigation }: any) => {
                         onPress={() => {
                           setSelectedDate(d);
                           setShowMonthView(false);
-                          setMonthBase(new Date(d.getFullYear(), d.getMonth(), 1));
+                          setMonthBase(
+                            new Date(d.getFullYear(), d.getMonth(), 1)
+                          );
                         }}
                         activeOpacity={0.7}
                       >
                         <View
                           style={[
                             styles.monthDateBadge,
-                            isSelected && styles.monthDateBadgeToday,
+                            isToday && styles.monthDateBadgeToday,
+                            isSelected && styles.monthDateBadgeSelected,
                           ]}
                         >
                           <Text
                             style={[
                               styles.monthDateText,
-                              isSelected && styles.monthDateTextToday,
+                              isToday && styles.monthDateTextToday,
                               !isCurrentMonth && styles.monthDateTextMuted,
+                              isSelected && styles.monthDateTextSelected,
                             ]}
                           >
                             {d.getDate()}
@@ -479,7 +512,9 @@ const ExerciseScreen = ({ navigation }: any) => {
                   );
                   const label = String(d.getDate());
                   const isToday = d.toDateString() === today.toDateString();
-                  const isSelected = selectedDate && d.toDateString() === selectedDate.toDateString();
+                  const isSelected = selectedDate
+                    ? d.toDateString() === selectedDate.toDateString()
+                    : false;
                   return (
                     <TouchableOpacity
                       key={startThis.toISOString() + "-w-" + index}
@@ -490,13 +525,15 @@ const ExerciseScreen = ({ navigation }: any) => {
                       <View
                         style={[
                           styles.calendarNumber,
-                          isSelected && styles.calendarNumberToday,
+                          isToday && styles.calendarNumberToday,
+                          isSelected && styles.calendarNumberSelected,
                         ]}
                       >
                         <Text
                           style={[
                             styles.calendarNumberText,
-                            isSelected && styles.calendarNumberTodayText,
+                            isToday && styles.calendarNumberTodayText,
+                            isSelected && styles.calendarNumberSelectedText,
                           ]}
                         >
                           {label}
@@ -678,8 +715,11 @@ const styles = StyleSheet.create({
   monthDateBadgeToday: {
     backgroundColor: "#e3ff7c",
   },
+  monthDateBadgeSelected: {
+    backgroundColor: "#ffffff",
+  },
   monthDateText: {
-    color: "#e3ff7c", // 주간 위젯과 동일한 색감
+    color: "#e3ff7c",
     fontSize: 16,
     fontWeight: "700",
     lineHeight: 19,
@@ -687,6 +727,10 @@ const styles = StyleSheet.create({
   },
   monthDateTextToday: {
     color: "#000",
+  },
+  monthDateTextSelected: {
+    color: "#000",
+    fontWeight: "700",
   },
   monthDateTextMuted: {
     color: "#777777",
@@ -714,6 +758,12 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     backgroundColor: "#e3ff7c",
   },
+  calendarNumberSelected: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#ffffff",
+  },
   calendarNumberText: {
     fontSize: 16,
     fontWeight: "700",
@@ -722,6 +772,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   calendarNumberTodayText: {
+    color: "#000000",
+    fontSize: 16,
+    fontWeight: "700",
+    lineHeight: 19,
+  },
+  calendarNumberSelectedText: {
     color: "#000000",
     fontSize: 16,
     fontWeight: "700",

@@ -407,59 +407,12 @@ const InBodyScreen = ({ navigation }: any) => {
     }
   }, []);
 
-  // API로 최신 인바디 정보 조회
+  // API로 최신 인바디 정보 조회 (항상 가장 최신 저장 이력 표시)
   const fetchInBodyData = useCallback(async () => {
     try {
       setLoading(true);
       
-      // 먼저 오늘 날짜 데이터 확인
-      const today = new Date();
-      const todayStr = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, "0")}.${String(today.getDate()).padStart(2, "0")}`;
-      
-      // 캐시에서 오늘 날짜 확인 (함수형 업데이트로 현재 캐시 값 읽기)
-      let todayCachedData: any = null;
-      setInBodyDataCache(prev => {
-        todayCachedData = prev.get(todayStr);
-        return prev; // 변경 없음
-      });
-      
-      if (todayCachedData) {
-        setInBodyData(todayCachedData);
-        const todayDate = new Date(todayStr.replace(/\./g, "-"));
-        setSelectedDate(todayDate);
-        console.log("[INBODY SCREEN] 오늘 날짜 데이터 (캐시):", todayCachedData);
-        setLoading(false);
-        return;
-      }
-      
-      // 오늘 날짜 API 조회 시도
-      try {
-        const todayResponse = await getInBodyByDate(todayStr);
-        const todayData = todayResponse?.success ? todayResponse.inBody : todayResponse;
-        if (todayData && todayData.id) {
-          // 캐시에 저장
-          setInBodyDataCache(prev => {
-            const newCache = new Map(prev);
-            newCache.set(todayStr, todayData);
-            return newCache;
-          });
-          setInBodyDatesList(prev => {
-            if (!prev.includes(todayStr)) {
-              return [...prev, todayStr].sort();
-            }
-            return prev;
-          });
-          setInBodyData(todayData);
-          setSelectedDate(today);
-          console.log("[INBODY SCREEN] 오늘 날짜 데이터 조회 성공:", todayData);
-          setLoading(false);
-          return;
-        }
-      } catch (e) {
-        console.log("[INBODY SCREEN] 오늘 날짜 데이터 없음, 최신 데이터 조회...");
-      }
-      
-      // 오늘 날짜에 데이터가 없으면 최신 데이터 조회
+      // 가장 최신 데이터 조회
       const response = await getLatestInBody();
       const inBodyData = response?.success ? response.inBody : response;
       
@@ -506,11 +459,14 @@ const InBodyScreen = ({ navigation }: any) => {
     } finally {
       setLoading(false);
     }
-  }, []); // 의존성 배열에서 inBodyDataCache 제거
+  }, []);
 
   // 화면이 포커스될 때마다 최신 데이터 조회
   useFocusEffect(
     useCallback(() => {
+      // 캐시 초기화 (새로 저장된 데이터 반영을 위해)
+      console.log("[INBODY SCREEN] 화면 포커스, 캐시 초기화 및 데이터 새로고침");
+      setInBodyDataCache(new Map()); // 캐시 초기화
       fetchInBodyData();
       fetchInBodyDates();
     }, [fetchInBodyData, fetchInBodyDates])

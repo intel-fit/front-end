@@ -1,24 +1,156 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect, useCallback, useMemo} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import {colors} from '../../theme/colors';
 import InBodyPhotoModal from '../../components/modals/InBodyPhotoModal';
+import {fetchUserWorkouts, WorkoutSession} from '../../utils/exerciseApi';
+import {useFocusEffect} from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const AnalysisScreen = ({navigation}: any) => {
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
-  const exercises = [
-    {id: 1, name: '스쿼트', change: 5, changeType: 'positive', rm: 50},
-    {id: 2, name: '데드리프트', change: 0, changeType: 'neutral', rm: 75},
-    {id: 3, name: '벤치 프레스', change: -3, changeType: 'negative', rm: 60},
-    {id: 4, name: '오버헤드 프레스', change: 2, changeType: 'positive', rm: 40},
-  ];
+  const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // 1RM 계산 함수 (Epley 공식)
+  const calculate1RM = (weight: number, reps: number): number => {
+    if (reps === 1) return weight;
+    return Math.round(weight * (1 + reps / 30) * 10) / 10;
+  };
+
+  // 운동별 최근 8개 기록을 그룹화하고 이전 기록과 비교
+  const exercises = useMemo(() => {
+    if (workoutHistory.length === 0) return [];
+
+    // 운동 이름별로 그룹화
+    const groupedByExercise = workoutHistory.reduce((acc, session) => {
+      const name = session.exerciseName;
+      if (!acc[name]) {
+        acc[name] = [];
+      }
+      acc[name].push(session);
+      return acc;
+    }, {} as Record<string, WorkoutSession[]>);
+
+    console.log('[ANALYSIS] 그룹화된 운동:', Object.keys(groupedByExercise).map(name => 
+      `${name} (${groupedByExercise[name].length}회)`
+    ));
+
+    // 각 운동별로 최근 8개만 유지하고 날짜순 정렬
+    const recentExercises: any[] = [];
+    
+    Object.entries(groupedByExercise).forEach(([name, sessions]) => {
+      // 날짜순 정렬 (최신순)
+      const sorted = sessions.sort((a, b) => 
+        new Date(b.workoutDate).getTime() - new Date(a.workoutDate).getTime()
+      );
+      
+      // 최근 8개만
+      const recent = sorted.slice(0, 8);
+      
+      if (recent.length > 0) {
+        // 가장 최근 세션
+        const latest = recent[0];
+        
+        // 최대 중량 계산 (가장 무거운 세트)
+        const maxWeight = Math.max(...latest.sets.map(s => s.weight));
+        const maxWeightSet = latest.sets.find(s => s.weight === maxWeight);
+        
+        // 1RM 계산
+        const oneRM = maxWeightSet 
+          ? calculate1RM(maxWeightSet.weight, maxWeightSet.reps)
+          : 0;
+        
+        // 이전 기록과 비교 (2번째 최근 기록) - 중량 변화만 추적
+        let change = 0;
+        let changeType: 'positive' | 'negative' | 'neutral' = 'neutral';
+        
+        if (recent.length > 1) {
+          const previous = recent[1];
+          const prevMaxWeight = Math.max(...previous.sets.map(s => s.weight));
+          const weightChange = maxWeight - prevMaxWeight;
+          
+          // 중량 변화만 표시
+          change = weightChange;
+          
+          if (weightChange !== 0) {
+            console.log(`[ANALYSIS] ${name} 중량 변화: ${prevMaxWeight}kg → ${maxWeight}kg = ${weightChange > 0 ? '+' : ''}${weightChange}kg`);
+            
+            if (change > 0) {
+              changeType = 'positive';
+            } else if (change < 0) {
+              changeType = 'negative';
+            }
+          } else {
+            console.log(`[ANALYSIS] ${name}: 중량 변화 없음 (${maxWeight}kg 유지)`);
+          }
+        } else {
+          console.log(`[ANALYSIS] ${name}: 기록 1회만 있음, 변화량 계산 불가`);
+        }
+        
+        recentExercises.push({
+          id: latest.sessionId,
+          name,
+          change: Math.abs(change),
+          changeType,
+          rm: oneRM,
+          recordCount: recent.length,
+        });
+      }
+    });
+    
+    // 최근 운동순으로 정렬 (가장 최근에 한 운동이 위로)
+    return recentExercises
+      .sort((a, b) => {
+        const aLatest = groupedByExercise[a.name][0];
+        const bLatest = groupedByExercise[b.name][0];
+        return new Date(bLatest.workoutDate).getTime() - new Date(aLatest.workoutDate).getTime();
+      })
+      .slice(0, 8); // 최대 8개
+  }, [workoutHistory]);
+
+  // 운동 기록 조회
+  const loadWorkoutHistory = useCallback(async () => {
+    try {
+      setLoading(true);
+      // userId 가져오기 (로그인 정보에서)
+      const userIdStr = await AsyncStorage.getItem('userId');
+      if (!userIdStr) {
+        console.warn('[ANALYSIS] userId가 없습니다.');
+        setWorkoutHistory([]);
+        return;
+      }
+      
+      const workouts = await fetchUserWorkouts(userIdStr);
+      setWorkoutHistory(workouts);
+      console.log('[ANALYSIS] 운동 기록 조회 성공:', workouts.length, '개');
+      console.log('[ANALYSIS] 운동 기록 상세:', workouts.map(w => ({
+        name: w.exerciseName,
+        date: w.workoutDate,
+        maxWeight: Math.max(...w.sets.map(s => s.weight))
+      })));
+    } catch (error) {
+      console.error('[ANALYSIS] 운동 기록 조회 실패:', error);
+      setWorkoutHistory([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // 화면 포커스 시 운동 기록 새로고침
+  useFocusEffect(
+    useCallback(() => {
+      loadWorkoutHistory();
+    }, [loadWorkoutHistory])
+  );
 
   const nutrients = [
     {name: '탄수화물', current: 95, goal: 120, color: '#fc9658'},
@@ -92,51 +224,62 @@ const AnalysisScreen = ({navigation}: any) => {
         <View style={styles.exerciseSection}>
           <Text style={styles.sectionTitle}>운동 분석</Text>
           <Text style={styles.exerciseSummary}>
-            "<Text style={styles.highlightText}>등, 어깨, 하체</Text> 근력이
-            강해졌어요. 최근 운동 종목의 1RM을 알아보세요."
+            "최근 운동 종목의 중량 변화와 1RM을 알아보세요."
           </Text>
-          <ScrollView style={styles.exerciseList} showsVerticalScrollIndicator={false}>
-            {exercises.map((exercise, index) => (
-              <View key={exercise.id} style={[styles.exerciseItem, index === exercises.length - 1 && styles.exerciseItemLast]}>
-                <View style={styles.exerciseIcon}>
-                  <Text style={styles.exerciseIconText}>🏋️</Text>
-                </View>
-                <View style={styles.exerciseInfo}>
-                  <Text style={styles.exerciseName}>{exercise.name}</Text>
-                  <View style={styles.exerciseChangeContainer}>
-                    {exercise.changeType === 'positive' && (
-                      <>
-                        <Icon name="arrow-up" size={10} color="#4ade80" />
-                        <Text style={[styles.exerciseChange, styles.positive]}>
-                          {' '}
-                          {exercise.change}kg
-                        </Text>
-                      </>
-                    )}
-                    {exercise.changeType === 'negative' && (
-                      <>
-                        <Icon name="arrow-down" size={10} color="#ef4444" />
-                        <Text style={[styles.exerciseChange, styles.negative]}>
-                          {' '}
-                          {Math.abs(exercise.change)}kg
-                        </Text>
-                      </>
-                    )}
-                    {exercise.changeType === 'neutral' && (
-                      <>
-                        <Icon name="remove" size={10} color="#aaa" />
-                        <Text style={[styles.exerciseChange, styles.neutral]}>
-                          {' '}
-                          -kg
-                        </Text>
-                      </>
-                    )}
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#d6ff4b" />
+              <Text style={styles.loadingText}>운동 기록 불러오는 중...</Text>
+            </View>
+          ) : exercises.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>운동 기록이 없습니다.</Text>
+              <Text style={styles.emptySubText}>운동을 기록하고 분석을 확인하세요.</Text>
+            </View>
+          ) : (
+            <ScrollView style={styles.exerciseList} showsVerticalScrollIndicator={false}>
+              {exercises.map((exercise, index) => (
+                <View key={exercise.id} style={[styles.exerciseItem, index === exercises.length - 1 && styles.exerciseItemLast]}>
+                  <View style={styles.exerciseIcon}>
+                    <Text style={styles.exerciseIconText}>🏋️</Text>
                   </View>
+                  <View style={styles.exerciseInfo}>
+                    <Text style={styles.exerciseName}>{exercise.name}</Text>
+                    <View style={styles.exerciseChangeContainer}>
+                      {exercise.changeType === 'positive' && (
+                        <>
+                          <Icon name="arrow-up" size={10} color="#4ade80" />
+                          <Text style={[styles.exerciseChange, styles.positive]}>
+                            {' '}
+                            +{exercise.change}kg
+                          </Text>
+                        </>
+                      )}
+                      {exercise.changeType === 'negative' && (
+                        <>
+                          <Icon name="arrow-down" size={10} color="#ef4444" />
+                          <Text style={[styles.exerciseChange, styles.negative]}>
+                            {' '}
+                            -{exercise.change}kg
+                          </Text>
+                        </>
+                      )}
+                      {exercise.changeType === 'neutral' && (
+                        <>
+                          <Icon name="remove" size={10} color="#aaa" />
+                          <Text style={[styles.exerciseChange, styles.neutral]}>
+                            {' '}
+                            변화없음
+                          </Text>
+                        </>
+                      )}
+                    </View>
+                  </View>
+                  <Text style={styles.exercise1rm}>1RM {exercise.rm}kg</Text>
                 </View>
-                <Text style={styles.exercise1rm}>1RM {exercise.rm}kg</Text>
-              </View>
-            ))}
-          </ScrollView>
+              ))}
+            </ScrollView>
+          )}
         </View>
 
         {/* 식단 분석 섹션 */}
@@ -349,6 +492,31 @@ const styles = StyleSheet.create({
   },
   exerciseList: {
     maxHeight: 216,
+  },
+  loadingContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: '#aaaaaa',
+  },
+  emptyContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#ffffff',
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  emptySubText: {
+    fontSize: 13,
+    color: '#aaaaaa',
   },
   exerciseItem: {
     flexDirection: 'row',
