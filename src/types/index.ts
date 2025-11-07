@@ -72,7 +72,7 @@ export interface DailyMealFood {
 export interface DailyMeal {
   id: number;
   mealDate: string;
-  mealType: 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
+  mealType: 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'OTHER';
   mealTypeName: string;
   totalCalories: number;
   totalCarbs: number;
@@ -110,7 +110,7 @@ export interface AddMealFoodRequest {
 
 export interface AddMealRequest {
   mealDate: string; // yyyy-MM-dd 형식
-  mealType: 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
+  mealType: 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'OTHER';
   foods: AddMealFoodRequest[];
   memo?: string;
 }

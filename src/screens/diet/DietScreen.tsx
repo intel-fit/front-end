@@ -6,6 +6,7 @@ import {
   StyleSheet,
   SafeAreaView,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import {colors} from '../../theme/colors';
@@ -87,6 +88,7 @@ const DietScreen = ({navigation}: any) => {
       'LUNCH': '점심',
       'DINNER': '저녁',
       'SNACK': '야식',
+      'OTHER': '기타',
     };
 
     // 시간 포맷팅 (createdAt에서 시간 추출)
@@ -478,7 +480,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   monthDateBadgeToday: {
-    backgroundColor: '#e3ff7c',
+    backgroundColor: '#ffffff',
   },
   monthDateText: {
     color: '#e3ff7c',
@@ -529,7 +531,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#e3ff7c',
+    backgroundColor: '#ffffff',
   },
   calendarNumberTodayText: {
     color: '#000000',

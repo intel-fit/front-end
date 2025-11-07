@@ -36,7 +36,7 @@ interface Food {
 const MealAddScreen = ({navigation, route}: any) => {
   const {selectedDate} = useDate();
   const [mealName, setMealName] = useState('');
-  const [mealType, setMealType] = useState<'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK'>('DINNER');
+  const [mealType, setMealType] = useState<'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'OTHER'>('BREAKFAST');
   const [photos, setPhotos] = useState<string[]>([]);
   const [isFoodOptionsModalOpen, setIsFoodOptionsModalOpen] = useState(false);
   const [foods, setFoods] = useState<Food[]>([]);
@@ -139,6 +139,7 @@ const onChangeTime = (event: any, time?: Date) => {
       '점심': 'LUNCH',
       '저녁': 'DINNER',
       '야식': 'SNACK',
+      '기타': 'OTHER',
     };
     return typeMap[type] || 'DINNER';
   };
@@ -150,6 +151,7 @@ const onChangeTime = (event: any, time?: Date) => {
       'LUNCH': '점심',
       'DINNER': '저녁',
       'SNACK': '야식',
+      'OTHER': '기타',
     };
     return typeMap[type] || '저녁';
   };
@@ -319,6 +321,10 @@ const onChangeTime = (event: any, time?: Date) => {
         {
           text: '야식',
           onPress: () => setMealType('SNACK'),
+        },
+        {
+          text: '기타',
+          onPress: () => setMealType('OTHER'),
         },
         {
           text: '취소',
