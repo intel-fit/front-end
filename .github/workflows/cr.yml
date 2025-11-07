@@ -17,5 +17,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }} 
           LANGUAGE: Korean #한국어 
-          MODEL: gpt-3.5-turbo 
+          MODEL: gpt-4o-mini
           max_tokens: 10000 #이번 리뷰에서 사용할 토큰의 최대 개수
+          PROMPT: |
+            당신은 GitHub 코드 리뷰어입니다.
+            코드의 가독성, 성능, 보안, 유지보수성, 그리고 버그 가능성에 대해 비판적으로 검토하세요.
+            단순히 "LGTM"이라고 말하지 말고, PR의 코드가 아주 완벽하더라도 잠재적 개선 아이디어를 제시해주세요.
