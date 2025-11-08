@@ -1,24 +1,129 @@
-import React, {useState, useEffect, useCallback, useMemo} from 'react';
+import React, {useState, useEffect, useCallback, useMemo, useRef} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Image,
   ActivityIndicator,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import {colors} from '../../theme/colors';
 import InBodyPhotoModal from '../../components/modals/InBodyPhotoModal';
-import {fetchUserWorkouts, WorkoutSession} from '../../utils/exerciseApi';
+import axios from 'axios';
+import {
+  fetchExerciseDetail,
+  fetchExercises,
+  fetchUserWorkouts,
+  WorkoutSession,
+} from '../../utils/exerciseApi';
 import {useFocusEffect} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ACCESS_TOKEN_KEY } from '../../services/apiConfig';
+import MacroDonut from '../../components/charts/MacroDonut';
+
+interface MealComparison {
+  thisWeekStart: string;
+  thisWeekEnd: string;
+  thisWeekCalories: number;
+  lastWeekCalories: number;
+  caloriesDifference: number;
+  caloriesChangeRate: number;
+  carbsChangeRate: number;
+  proteinChangeRate: number;
+  fatChangeRate: number;
+  analysisMessage?: string;
+  thisWeekMacroRatio?: MacroRatio;
+  lastWeekMacroRatio?: MacroRatio;
+}
+
+interface MacroRatio {
+  protein?: number | null;
+  carbs?: number | null;
+  fat?: number | null;
+}
 
 const AnalysisScreen = ({navigation}: any) => {
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mealComparison, setMealComparison] = useState<MealComparison | null>(null);
+  const [mealLoading, setMealLoading] = useState(true);
+  const [mealError, setMealError] = useState<string | null>(null);
+
+  const formatNumber = useCallback((value?: number | null) => {
+    if (value === null || value === undefined || Number.isNaN(value)) return '0';
+    return Math.round(value).toLocaleString('ko-KR');
+  }, []);
+
+  const formatPercent = useCallback((value?: number | null) => {
+    if (value === null || value === undefined || Number.isNaN(value)) return '0%';
+    const rounded = Number(value.toFixed(1));
+    const sign = rounded > 0 ? '+' : '';
+    return `${sign}${rounded}%`;
+  }, []);
+
+  const formatSignedNumber = useCallback((value?: number | null) => {
+    if (value === null || value === undefined || Number.isNaN(value)) return '0';
+    const sign = value > 0 ? '+' : '';
+    return `${sign}${Math.round(value).toLocaleString('ko-KR')}`;
+  }, []);
+
+  const getBadgeTone = useCallback((value?: number | null) => {
+    if (value === null || value === undefined || Number.isNaN(value) || value === 0) return 'neutral';
+    return value > 0 ? 'positive' : 'negative';
+  }, []);
+
+  const getBadgeIcon = useCallback((value?: number | null) => {
+    if (value === null || value === undefined || Number.isNaN(value) || value === 0) return 'remove';
+    return value > 0 ? 'arrow-up' : 'arrow-down';
+  }, []);
+
+  const getThisWeekStart = useCallback(() => {
+    const today = new Date();
+    const day = today.getDay(); // Sun=0
+    const diff = day === 0 ? -6 : 1 - day; // move to Monday
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + diff);
+    monday.setHours(0, 0, 0, 0);
+    return monday;
+  }, []);
+
+  const toDateParam = useCallback((date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  const normalizeRatio = useCallback((ratio?: MacroRatio | null) => {
+    if (!ratio) return null;
+    const protein = Number(ratio.protein ?? 0);
+    const carbs = Number(ratio.carbs ?? 0);
+    const fat = Number(ratio.fat ?? 0);
+    const total = protein + carbs + fat;
+    if (!Number.isFinite(total) || total <= 0) return null;
+    const clampPercent = (value: number) =>
+      Math.max(0, Math.min(100, Math.round((value / total) * 100)));
+    const normalized = {
+      protein: clampPercent(protein),
+      carbs: clampPercent(carbs),
+      fat: clampPercent(fat),
+    };
+    const sum = normalized.protein + normalized.carbs + normalized.fat;
+    const fixDelta = 100 - sum;
+    if (fixDelta !== 0) {
+      if (Math.abs(fixDelta) > 0) {
+        normalized.protein = Math.max(
+          0,
+          Math.min(100, normalized.protein + fixDelta),
+        );
+      }
+    }
+    return normalized;
+  }, []);
 
   // 1RM 계산 함수 (Epley 공식)
   const calculate1RM = (weight: number, reps: number): number => {
@@ -93,6 +198,14 @@ const AnalysisScreen = ({navigation}: any) => {
           changeType,
           rm: oneRM,
           recordCount: recent.length,
+          exerciseId: latest.exerciseId,
+          imageUrl:
+            latest.imageUrl ||
+            latest.exerciseImageUrl ||
+            latest.image ||
+            latest.imgUrl ||
+            latest.photoUrl ||
+            '',
         });
       }
     });
@@ -106,6 +219,119 @@ const AnalysisScreen = ({navigation}: any) => {
       })
       .slice(0, 8); // 최대 8개
   }, [workoutHistory]);
+
+  const [exerciseImages, setExerciseImages] = useState<Record<string, string>>({});
+  const [exerciseImagesByName, setExerciseImagesByName] = useState<Record<string, string>>({});
+  const fetchedImageIdsRef = useRef<Set<string>>(new Set());
+  const fetchedNameRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const missingIds = exercises
+      .map((ex) => ({
+        id: ex.exerciseId,
+        fallbackUrl: ex.imageUrl,
+      }))
+      .filter((item) => {
+        if (!item.id) return false;
+        if (exerciseImages[item.id]) return false;
+        if (fetchedImageIdsRef.current.has(item.id)) return false;
+        return true;
+      });
+
+    if (missingIds.length === 0) return;
+
+    let cancelled = false;
+
+    const loadImages = async () => {
+      for (const { id } of missingIds) {
+        if (!id) continue;
+        fetchedImageIdsRef.current.add(id);
+        try {
+          const detail = await fetchExerciseDetail(id);
+          const url =
+            detail?.imageUrl ||
+            detail?.image ||
+            detail?.imgUrl ||
+            detail?.photoUrl;
+          if (url && !cancelled) {
+            setExerciseImages((prev) => ({
+              ...prev,
+              [id]: url,
+            }));
+          }
+        } catch (error) {
+          if (__DEV__) {
+            console.warn('[ANALYSIS] 운동 이미지 불러오기 실패:', {
+              id,
+              error,
+            });
+          }
+        }
+      }
+    };
+
+    loadImages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [exercises, exerciseImages]);
+
+  useEffect(() => {
+    const missingByName = exercises
+      .filter(
+        (ex) =>
+          !ex.exerciseId &&
+          !ex.imageUrl &&
+          ex.name &&
+          !exerciseImagesByName[ex.name.toLowerCase()] &&
+          !fetchedNameRef.current.has(ex.name.toLowerCase()),
+      )
+      .map((ex) => ex.name as string);
+
+    if (missingByName.length === 0) return;
+
+    let cancelled = false;
+
+    const loadByName = async () => {
+      for (const rawName of missingByName) {
+        const key = rawName.toLowerCase();
+        fetchedNameRef.current.add(key);
+        try {
+          const response = await fetchExercises({
+            keyword: rawName,
+            size: 1,
+            page: 0,
+          });
+          const first = response?.content?.[0];
+          const url =
+            first?.imageUrl ||
+            first?.image ||
+            first?.imgUrl ||
+            first?.photoUrl;
+          if (url && !cancelled) {
+            setExerciseImagesByName((prev) => ({
+              ...prev,
+              [key]: url,
+            }));
+          }
+        } catch (error) {
+          if (__DEV__) {
+            console.warn('[ANALYSIS] 운동 이미지 검색 실패:', {
+              name: rawName,
+              error,
+            });
+          }
+        }
+      }
+    };
+
+    loadByName();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [exercises, exerciseImagesByName]);
 
   // 운동 기록 조회
   const loadWorkoutHistory = useCallback(async () => {
@@ -130,19 +356,95 @@ const AnalysisScreen = ({navigation}: any) => {
     }
   }, []);
 
+  const loadMealComparison = useCallback(async () => {
+    try {
+      setMealLoading(true);
+      setMealError(null);
+
+      const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+      if (!token) {
+        setMealComparison(null);
+        setMealError('로그인이 필요합니다.');
+        return;
+      }
+
+      const monday = getThisWeekStart();
+      const params = { thisWeekStart: toDateParam(monday) };
+      const response = await axios.get<MealComparison>(
+        'http://43.200.40.140/api/meals/week-comparison',
+        {
+          params,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        },
+      );
+      setMealComparison(response.data);
+    } catch (error: any) {
+      console.error('[ANALYSIS] 식단 비교 조회 실패:', {
+        message: error?.message,
+        status: error?.response?.status,
+        data: error?.response?.data,
+      });
+      setMealComparison(null);
+      setMealError(
+        error?.response?.data?.message ||
+          '식단 분석 데이터를 불러오지 못했습니다.',
+      );
+    } finally {
+      setMealLoading(false);
+    }
+  }, [getThisWeekStart, toDateParam]);
+
   // 화면 포커스 시 운동 기록 새로고침
   useFocusEffect(
     useCallback(() => {
       loadWorkoutHistory();
-    }, [loadWorkoutHistory])
+      loadMealComparison();
+    }, [loadWorkoutHistory, loadMealComparison])
   );
 
-  const nutrients = [
-    {name: '탄수화물', current: 95, goal: 120, color: '#fc9658'},
-    {name: '단백질', current: 95, goal: 120, color: '#4fc6f1'},
-    {name: '지방', current: 95, goal: 120, color: '#87e26e'},
-    {name: '나트륨', current: 95, goal: 120, color: '#eab308'},
-  ];
+  const nutrientChanges = useMemo(
+    () =>
+      mealComparison
+        ? [
+            {
+              key: 'carbs',
+              label: '탄수화물',
+              change: mealComparison.carbsChangeRate,
+            },
+            {
+              key: 'protein',
+              label: '단백질',
+              change: mealComparison.proteinChangeRate,
+            },
+            { key: 'fat', label: '지방', change: mealComparison.fatChangeRate },
+          ]
+        : [],
+    [mealComparison],
+  );
+
+  const lastWeekRatio = useMemo(
+    () => normalizeRatio(mealComparison?.lastWeekMacroRatio),
+    [mealComparison, normalizeRatio],
+  );
+
+  const thisWeekRatio = useMemo(
+    () => normalizeRatio(mealComparison?.thisWeekMacroRatio),
+    [mealComparison, normalizeRatio],
+  );
+
+  const macroDonutItems = useMemo(() => {
+    const items: Array<{ key: string; label: string; ratio: NonNullable<ReturnType<typeof normalizeRatio>> }> = [];
+    if (lastWeekRatio) {
+      items.push({ key: 'last', label: '지난주 영양소 비율', ratio: lastWeekRatio });
+    }
+    if (thisWeekRatio) {
+      items.push({ key: 'this', label: '이번주 영양소 비율', ratio: thisWeekRatio });
+    }
+    return items;
+  }, [lastWeekRatio, thisWeekRatio]);
 
   const handleInBodyClick = () => {
     navigation.navigate('InBody');
@@ -226,7 +528,33 @@ const AnalysisScreen = ({navigation}: any) => {
               {exercises.map((exercise, index) => (
                 <View key={exercise.id} style={[styles.exerciseItem, index === exercises.length - 1 && styles.exerciseItemLast]}>
                   <View style={styles.exerciseIcon}>
-                    <Text style={styles.exerciseIconText}>🏋️</Text>
+                    {(() => {
+                      const idKey = exercise.exerciseId
+                        ? String(exercise.exerciseId)
+                        : undefined;
+                      const nameKey = exercise.name
+                        ? exercise.name.toLowerCase()
+                        : undefined;
+
+                      const displayUrl =
+                        exercise.imageUrl ||
+                        (idKey ? exerciseImages[idKey] : undefined) ||
+                        (nameKey ? exerciseImagesByName[nameKey] : undefined);
+                      if (displayUrl) {
+                        return (
+                          <Image
+                            source={{ uri: displayUrl }}
+                            style={styles.exerciseImage}
+                            resizeMode="cover"
+                          />
+                        );
+                      }
+                      return (
+                        <View style={styles.exerciseImagePlaceholder}>
+                          <Icon name="barbell" size={16} color="#666666" />
+                        </View>
+                      );
+                    })()}
                   </View>
                   <View style={styles.exerciseInfo}>
                     <Text style={styles.exerciseName}>{exercise.name}</Text>
@@ -270,75 +598,188 @@ const AnalysisScreen = ({navigation}: any) => {
         {/* 식단 분석 섹션 */}
         <View style={styles.dietSection}>
           <Text style={styles.sectionTitle}>식단 분석</Text>
-          <Text style={styles.dietSummary}>
-            "단백질을 더 섭취하세요(약 100g 부족){'\n'}저번주보다 지방을 약 1.5배
-            섭취중이에요 😥"
-          </Text>
-
-          <View style={styles.calorieSection}>
-            <View style={styles.calorieChart}>
-              <View style={styles.donutChart}>
-                <View style={styles.chartInnerCircle}>
-                  <View style={styles.chartCenter}>
-                    <Text style={styles.chartValue}>1850</Text>
-                    <Text style={styles.chartGoal}>목표 2000kcal</Text>
-                  </View>
-                </View>
-              </View>
-              <View style={styles.nutrientLegend}>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendBox, styles.legendBoxProtein]}>
-                  <Text style={styles.legendBoxText}>50%</Text>
-                </View>
-                <Text style={styles.legendLetter}>P</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendBox, styles.legendBoxCarbs]}>
-                  <Text style={styles.legendBoxText}>40%</Text>
-                </View>
-                <Text style={styles.legendLetter}>C</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendBox, styles.legendBoxFat]}>
-                  <Text style={styles.legendBoxText}>10%</Text>
-                </View>
-                <Text style={styles.legendLetter}>F</Text>
-              </View>
+          {mealLoading ? (
+            <View style={styles.mealLoadingContainer}>
+              <ActivityIndicator size="small" color="#d6ff4b" />
+              <Text style={styles.loadingText}>식단 데이터 불러오는 중...</Text>
             </View>
-            </View>
-          </View>
+          ) : mealComparison ? (
+            <>
+              <Text style={styles.dietSummary}>
+                {mealComparison.analysisMessage ||
+                  '이번 주와 지난 주의 식단 데이터를 비교했어요.'}
+              </Text>
 
-          <View style={styles.nutrientAnalysis}>
-            <Text style={styles.nutrientAnalysisTitle}>세부 영양소 분석</Text>
-            {nutrients.map((nutrient, index) => {
-              const getProgressColor = () => {
-                if (nutrient.name === '탄수화물') return '#fc9658';
-                if (nutrient.name === '단백질') return '#4fc6f1';
-                if (nutrient.name === '지방') return '#87e26e';
-                if (nutrient.name === '나트륨') return '#eab308';
-                return nutrient.color;
-              };
-              return (
-                <View key={index} style={styles.nutrientItem}>
-                  <Text style={styles.nutrientName}>{nutrient.name}</Text>
-                  <View style={styles.nutrientBar}>
-                    <View
-                      style={[
-                        styles.nutrientProgress,
-                        {
-                          width: `${(nutrient.current / nutrient.goal) * 100}%`,
-                          backgroundColor: getProgressColor(),
-                        },
-                      ]}
+              <View style={styles.calorieSection}>
+                <View style={styles.calorieStatsCard}>
+                  <Text style={styles.calorieLabel}>이번주 총 섭취</Text>
+                  <Text style={styles.calorieValue}>
+                    {formatNumber(mealComparison.thisWeekCalories)} kcal
+                  </Text>
+                  <Text style={styles.calorieSubText}>
+                    지난주 {formatNumber(mealComparison.lastWeekCalories)} kcal
+                  </Text>
+                  <View
+                    style={[
+                      styles.calorieDiffBadge,
+                      getBadgeTone(mealComparison.caloriesDifference) ===
+                      'positive'
+                        ? styles.badgePositive
+                        : getBadgeTone(mealComparison.caloriesDifference) ===
+                          'negative'
+                        ? styles.badgeNegative
+                        : styles.badgeNeutral,
+                    ]}>
+                    <Icon
+                      name={getBadgeIcon(mealComparison.caloriesDifference)}
+                      size={12}
+                      color={
+                        getBadgeTone(mealComparison.caloriesDifference) ===
+                        'positive'
+                          ? '#4ade80'
+                          : getBadgeTone(mealComparison.caloriesDifference) ===
+                            'negative'
+                          ? '#ef4444'
+                          : '#cccccc'
+                      }
                     />
+                    <Text
+                      style={[
+                        styles.calorieDiffText,
+                        getBadgeTone(mealComparison.caloriesDifference) ===
+                        'positive'
+                          ? styles.badgePositiveText
+                          : getBadgeTone(mealComparison.caloriesDifference) ===
+                            'negative'
+                          ? styles.badgeNegativeText
+                          : styles.badgeNeutralText,
+                      ]}>
+                      {formatSignedNumber(
+                        mealComparison.caloriesDifference,
+                      )}{' '}
+                      kcal · {formatPercent(mealComparison.caloriesChangeRate)}
+                    </Text>
                   </View>
-                  <Text style={styles.nutrientValue}>
-                    {nutrient.current}g / {nutrient.goal}g
+                </View>
+
+                <View style={styles.caloriePeriodRow}>
+                  <Text style={styles.caloriePeriod}>
+                    {mealComparison.thisWeekStart} ~ {mealComparison.thisWeekEnd}
                   </Text>
                 </View>
-              );
-            })}
-          </View>
+
+            </View>
+
+            {macroDonutItems.length > 0 && (
+              <View style={styles.macroDonutSection}>
+                {macroDonutItems.map(({ key, label, ratio }) => (
+                  <View key={key} style={styles.macroDonutCard}>
+                    <Text style={styles.macroDonutTitle}>{label}</Text>
+                    <View style={styles.macroDonutRow}>
+                      <MacroDonut
+                        segments={[
+                          { percentage: ratio.protein, color: '#FF9F43' },
+                          { percentage: ratio.carbs, color: '#29ABE2' },
+                          { percentage: ratio.fat, color: '#A3E635' },
+                        ]}
+                        size={96}
+                        thickness={18}
+                      />
+                      <View style={styles.macroLegend}>
+                        <View style={styles.macroLegendRow}>
+                          <View
+                            style={[styles.macroLegendBadge, { backgroundColor: '#FF9F43' }]}
+                          />
+                          <Text style={styles.macroLegendText}>
+                            단백질 {ratio.protein}%
+                          </Text>
+                        </View>
+                        <View style={styles.macroLegendRow}>
+                          <View
+                            style={[styles.macroLegendBadge, { backgroundColor: '#29ABE2' }]}
+                          />
+                          <Text style={styles.macroLegendText}>
+                            탄수화물 {ratio.carbs}%
+                          </Text>
+                        </View>
+                        <View style={styles.macroLegendRow}>
+                          <View
+                            style={[styles.macroLegendBadge, { backgroundColor: '#A3E635' }]}
+                          />
+                          <Text style={styles.macroLegendText}>
+                            지방 {ratio.fat}%
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+              <View style={styles.nutrientAnalysis}>
+                <Text style={styles.nutrientAnalysisTitle}>영양소 변화율</Text>
+                {nutrientChanges.length > 0 ? (
+                  nutrientChanges.map((item) => {
+                    const tone = getBadgeTone(item.change);
+                    return (
+                      <View key={item.key} style={styles.nutrientItem}>
+                        <View style={styles.nutrientItemHeader}>
+                          <Text style={styles.nutrientName}>{item.label}</Text>
+                          <View
+                            style={[
+                              styles.nutrientBadge,
+                              tone === 'positive'
+                                ? styles.badgePositive
+                                : tone === 'negative'
+                                ? styles.badgeNegative
+                                : styles.badgeNeutral,
+                            ]}>
+                            <Icon
+                              name={getBadgeIcon(item.change)}
+                              size={12}
+                              color={
+                                tone === 'positive'
+                                  ? '#4ade80'
+                                  : tone === 'negative'
+                                  ? '#ef4444'
+                                  : '#cccccc'
+                              }
+                            />
+                            <Text
+                              style={[
+                                styles.nutrientBadgeText,
+                                tone === 'positive'
+                                  ? styles.badgePositiveText
+                                  : tone === 'negative'
+                                  ? styles.badgeNegativeText
+                                  : styles.badgeNeutralText,
+                              ]}>
+                              {formatPercent(item.change)}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={styles.nutrientChangeText}>
+                          지난주 대비 {formatPercent(item.change)}
+                        </Text>
+                      </View>
+                    );
+                  })
+                ) : (
+                  <Text style={styles.nutrientChangeText}>
+                    표시할 영양소 변화 데이터가 없습니다.
+                  </Text>
+                )}
+              </View>
+            </>
+          ) : (
+            <View style={styles.mealEmptyContainer}>
+              <Text style={styles.emptyText}>식단 데이터를 불러오지 못했어요.</Text>
+              {mealError ? (
+                <Text style={styles.emptySubText}>{mealError}</Text>
+              ) : null}
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -517,15 +958,25 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   exerciseIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 6,
-    backgroundColor: '#444444',
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#2c2c2c',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
-  exerciseIconText: {
-    fontSize: 14.4,
+  exerciseImage: {
+    width: 40,
+    height: 40,
+  },
+  exerciseImagePlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#2c2c2c',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   exerciseInfo: {
     flex: 1,
@@ -578,44 +1029,7 @@ const styles = StyleSheet.create({
   },
   calorieSection: {
     marginBottom: 20,
-  },
-  calorieChart: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 20,
-  },
-  donutChart: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#fc9658',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  chartInnerCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#2a2a2a',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'absolute',
-  },
-  chartCenter: {
-    position: 'relative',
-    zIndex: 1,
-    alignItems: 'center',
-  },
-  chartValue: {
-    fontSize: 19.2,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 2,
-  },
-  chartGoal: {
-    fontSize: 9.6,
-    color: '#aaaaaa',
+    gap: 16,
   },
   nutrientLegend: {
     flexDirection: 'row',
@@ -635,27 +1049,53 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  legendBoxProtein: {
-    backgroundColor: '#fc9658',
-  },
-  legendBoxCarbs: {
-    backgroundColor: '#4fc6f1',
-  },
-  legendBoxFat: {
-    backgroundColor: '#87e26e',
-  },
-  legendBoxText: {
-    fontSize: 8,
-    fontWeight: '400',
-    color: '#ffffff',
-  },
-  legendLetter: {
-    fontSize: 12.8,
-    color: '#aaaaaa',
-    fontWeight: '400',
-  },
   nutrientAnalysis: {
     marginTop: 0,
+    gap: 12,
+  },
+  macroDonutSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 4,
+    marginBottom: 16,
+    flexWrap: 'wrap',
+  },
+  macroDonutCard: {
+    flex: 1,
+    minWidth: 150,
+    backgroundColor: '#1f1f1f',
+    borderRadius: 12,
+    padding: 16,
+    gap: 12,
+  },
+  macroDonutTitle: {
+    fontSize: 12,
+    color: '#cccccc',
+    fontWeight: '500',
+  },
+  macroDonutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  macroLegend: {
+    flex: 1,
+    gap: 8,
+  },
+  macroLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  macroLegendBadge: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  macroLegendText: {
+    fontSize: 11.2,
+    color: '#cccccc',
   },
   nutrientAnalysisTitle: {
     fontSize: 14.4,
@@ -664,33 +1104,108 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   nutrientItem: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+    gap: 8,
+  },
+  nutrientItemHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
+    justifyContent: 'space-between',
   },
   nutrientName: {
     fontSize: 12.8,
     fontWeight: '400',
     color: '#ffffff',
-    minWidth: 60,
   },
-  nutrientBar: {
-    flex: 1,
-    height: 8,
-    backgroundColor: '#333333',
-    borderRadius: 4,
-    overflow: 'hidden',
+  nutrientBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
   },
-  nutrientProgress: {
-    height: '100%',
-    borderRadius: 4,
+  nutrientBadgeText: {
+    fontSize: 11.2,
+    fontWeight: '500',
   },
-  nutrientValue: {
+  nutrientChangeText: {
     fontSize: 11.2,
     color: '#aaaaaa',
-    minWidth: 80,
-    textAlign: 'right',
+  },
+  mealLoadingContainer: {
+    paddingVertical: 28,
+    alignItems: 'center',
+    gap: 8,
+  },
+  mealEmptyContainer: {
+    paddingVertical: 28,
+    alignItems: 'center',
+    gap: 6,
+  },
+  calorieStatsCard: {
+    backgroundColor: '#1f1f1f',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    gap: 4,
+  },
+  calorieLabel: {
+    fontSize: 12,
+    color: '#aaaaaa',
+  },
+  calorieValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  calorieSubText: {
+    fontSize: 12,
+    color: '#888888',
+    marginTop: 4,
+  },
+  calorieDiffBadge: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  calorieDiffText: {
+    fontSize: 11.2,
+    fontWeight: '600',
+  },
+  badgePositive: {
+    backgroundColor: 'rgba(74, 222, 128, 0.18)',
+  },
+  badgeNegative: {
+    backgroundColor: 'rgba(239, 68, 68, 0.18)',
+  },
+  badgeNeutral: {
+    backgroundColor: '#333333',
+  },
+  badgePositiveText: {
+    color: '#4ade80',
+  },
+  badgeNegativeText: {
+    color: '#ef4444',
+  },
+  badgeNeutralText: {
+    color: '#dddddd',
+  },
+  caloriePeriodRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  caloriePeriod: {
+    fontSize: 11,
+    color: '#777777',
   },
 });
 

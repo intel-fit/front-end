@@ -14,7 +14,11 @@ import Svg, { Path, Circle, Line, Text as SvgText, G } from "react-native-svg";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import InbodyDateNavigator from "../../components/common/InbodyDateNavigator";
 import InBodyCalendarModal from "../../components/common/InBodyCalendarModal";
-import { getLatestInBody, getInBodyList, getInBodyByDate } from "../../utils/inbodyApi";
+import {
+  getLatestInBody,
+  getInBodyList,
+  getInBodyByDate,
+} from "../../utils/inbodyApi";
 
 const InBodyScreen = ({ navigation }: any) => {
   const [activeTab, setActiveTab] = useState<"info" | "graph">("info");
@@ -31,30 +35,38 @@ const InBodyScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(true);
   const [calendarVisible, setCalendarVisible] = useState(false);
   const [inBodyDatesList, setInBodyDatesList] = useState<string[]>([]);
-  const [inBodyDataCache, setInBodyDataCache] = useState<Map<string, any>>(new Map()); // 날짜별 데이터 캐시
+  const [inBodyDataCache, setInBodyDataCache] = useState<Map<string, any>>(
+    new Map()
+  ); // 날짜별 데이터 캐시
 
   // 그래프 데이터 (실제 API 데이터 기반)
   const graphData = useMemo(() => {
     // 캐시된 데이터를 날짜순으로 정렬
     const sortedDates = Array.from(inBodyDataCache.keys())
-      .map(dateStr => {
+      .map((dateStr) => {
         const date = new Date(dateStr.replace(/\./g, "-"));
         return { dateStr, date };
       })
-      .filter(item => !isNaN(item.date.getTime()))
+      .filter((item) => !isNaN(item.date.getTime()))
       .sort((a, b) => a.date.getTime() - b.date.getTime());
 
     // 선택된 필터에 따라 값 추출
     const getValue = (data: any): number | null => {
       if (!data) return null;
-      
+
       switch (selectedFilter) {
         case "체중":
           return data.muscleFatAnalysis?.weight || data.weight || null;
         case "체지방량":
-          return data.muscleFatAnalysis?.bodyFatMass || data.bodyFatMass || null;
+          return (
+            data.muscleFatAnalysis?.bodyFatMass || data.bodyFatMass || null
+          );
         case "골격근량":
-          return data.muscleFatAnalysis?.skeletalMuscleMass || data.skeletalMuscleMass || null;
+          return (
+            data.muscleFatAnalysis?.skeletalMuscleMass ||
+            data.skeletalMuscleMass ||
+            null
+          );
         default:
           return null;
       }
@@ -65,26 +77,26 @@ const InBodyScreen = ({ navigation }: any) => {
       .map(({ dateStr, date }) => {
         const cachedData = inBodyDataCache.get(dateStr);
         const value = getValue(cachedData);
-        
+
         if (value === null || value === undefined) return null;
-        
+
         // 날짜 포맷: MM/DD
         const month = String(date.getMonth() + 1).padStart(2, "0");
         const day = String(date.getDate()).padStart(2, "0");
-        
+
         return {
           x: `${month}/${day}`,
           y: value,
           date: dateStr,
         };
       })
-      .filter((item): item is { x: string; y: number; date: string } => item !== null);
+      .filter(
+        (item): item is { x: string; y: number; date: string } => item !== null
+      );
 
     // 데이터가 없으면 기본값 반환
     if (data.length === 0) {
-      return [
-        { x: "01/01", y: 50 },
-      ];
+      return [{ x: "01/01", y: 50 }];
     }
 
     return data;
@@ -108,23 +120,23 @@ const InBodyScreen = ({ navigation }: any) => {
         baseline: 0,
       };
     }
-    
+
     const allValues = graphData.map((d) => d.y);
     const minValue = Math.min(...allValues);
     const maxValue = Math.max(...allValues);
     const range = maxValue - minValue;
     const paddingValue = Math.max(range * 0.1, 1); // 최소 1의 여백
-    
+
     const calculatedMinY = Math.max(0, minValue - paddingValue);
     const calculatedMaxY = maxValue + paddingValue;
-    
+
     // Y축 눈금 생성 (5개 정도)
     const ticks: number[] = [];
     const step = (calculatedMaxY - calculatedMinY) / 4;
     for (let i = 0; i <= 4; i++) {
       ticks.push(Math.round((calculatedMaxY - step * i) * 10) / 10);
     }
-    
+
     return {
       minY: calculatedMinY,
       maxY: calculatedMaxY,
@@ -220,58 +232,21 @@ const InBodyScreen = ({ navigation }: any) => {
   // 인바디 날짜 목록 조회
   const fetchInBodyDates = useCallback(async () => {
     try {
-      const response = await getInBodyList();
-      // API 응답 구조 확인: response.data, response.inBodyList, 또는 response 자체가 배열
-      const inBodyList = response?.data || response?.inBodyList || (Array.isArray(response) ? response : []);
-      
-      if (Array.isArray(inBodyList) && inBodyList.length > 0) {
-        // 날짜 형식 유지: API 응답 형식(점) 그대로 사용
-        const dates = inBodyList
-          .map((item: any) => {
-            const date = item.measurementDate || item.date;
-            if (date) {
-              // 점(.) 형식이면 그대로, 하이픈(-) 형식이면 점으로 변환
-              return date.includes(".") ? date : date.replace(/-/g, ".");
-            }
-            return null;
-          })
-          .filter((date: string | null) => date !== null) as string[];
-        setInBodyDatesList(dates);
-        console.log("[INBODY] 저장된 날짜 수", { count: dates.length });
+      const latestResponse = await getLatestInBody();
+      const latestData = latestResponse?.success
+        ? latestResponse.inBody
+        : latestResponse;
+      if (latestData?.measurementDate) {
+        const formattedDate = latestData.measurementDate.includes(".")
+          ? latestData.measurementDate
+          : latestData.measurementDate.replace(/-/g, ".");
+        setInBodyDatesList([formattedDate]);
       } else {
-        // 목록이 없으면 최신 데이터에서 날짜 추출
-        try {
-          const latestResponse = await getLatestInBody();
-          const latestData = latestResponse?.success ? latestResponse.inBody : latestResponse;
-          if (latestData?.measurementDate) {
-            // API 응답 형식(점) 그대로 유지
-            const date = latestData.measurementDate.includes(".") 
-              ? latestData.measurementDate 
-              : latestData.measurementDate.replace(/-/g, ".");
-            setInBodyDatesList([date]);
-            console.log("[INBODY] 날짜 목록 없음 → 최신", { date });
-          }
-        } catch (e) {
-          console.error("[INBODY SCREEN] 최신 데이터에서 날짜 추출 실패:", e);
-        }
+        setInBodyDatesList([]);
       }
     } catch (error) {
-      console.error("[INBODY SCREEN] 날짜 목록 로드 실패:", error);
-      // 에러 발생 시 최신 데이터에서 날짜 추출
-      try {
-        const latestResponse = await getLatestInBody();
-        const latestData = latestResponse?.success ? latestResponse.inBody : latestResponse;
-        if (latestData?.measurementDate) {
-          // API 응답 형식(점) 그대로 유지
-          const date = latestData.measurementDate.includes(".") 
-            ? latestData.measurementDate 
-            : latestData.measurementDate.replace(/-/g, ".");
-          setInBodyDatesList([date]);
-          console.log("[INBODY] 날짜 목록 실패 → 최신", { date });
-        }
-      } catch (e) {
-        console.error("[INBODY SCREEN] 최신 데이터에서 날짜 추출 실패:", e);
-      }
+      console.error("[INBODY SCREEN] 최신 날짜 로드 실패:", error);
+      setInBodyDatesList([]);
     }
   }, []);
 
@@ -279,116 +254,59 @@ const InBodyScreen = ({ navigation }: any) => {
   const fetchInBodyDataByDate = useCallback(async (date: Date) => {
     try {
       setLoading(true);
-      // 점 형식으로 변환 (API 응답 형식과 일치)
-      const dateStr = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
-      
-      // 날짜 비교 헬퍼 함수 (점 형식으로 통일)
-      const normalizeDate = (dateStr: string): string => {
-        // 하이픈을 점으로 변환하여 점 형식으로 통일
-        return dateStr.replace(/-/g, ".");
-      };
-      
-      let resolvedData: any = null;
-      let dataSource: "api" | "cache" | "list" | "latest" | "none" = "none";
+      const dateKey = `${date.getFullYear()}.${String(
+        date.getMonth() + 1
+      ).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
 
-      // 먼저 getInBodyByDate 시도
-      try {
-        const response = await getInBodyByDate(dateStr);
-        const inBodyData = response?.success ? response.inBody : response;
-        
-        if (inBodyData && inBodyData.id) {
-          resolvedData = inBodyData;
-          dataSource = "api";
-        }
-      } catch (e) {
-        console.warn("[INBODY SCREEN] 날짜별 조회 API 실패, 목록에서 검색 시도...");
+      let cachedData: any = null;
+      setInBodyDataCache((prev) => {
+        cachedData = prev.get(dateKey);
+        return prev;
+      });
+
+      if (cachedData) {
+        setInBodyData(cachedData);
+        return;
       }
-      
-      if (!resolvedData) {
-        // 캐시에서 먼저 확인 (함수형 업데이트로 현재 캐시 값 읽기)
-        let cachedData: any = null;
-        setInBodyDataCache(prev => {
-          cachedData = prev.get(dateStr);
-          return prev; // 변경 없음
-        });
-        
-        if (cachedData) {
-          resolvedData = cachedData;
-          dataSource = "cache";
-        }
-      }
-      
-      if (!resolvedData) {
-        // getInBodyByDate가 실패하면 getInBodyList로 모든 데이터 가져와서 필터링
-        try {
-          const response = await getInBodyList();
-          const inBodyList = response?.data || response?.inBodyList || (Array.isArray(response) ? response : []);
-          
-          if (Array.isArray(inBodyList) && inBodyList.length > 0) {
-            const foundData = inBodyList.find((item: any) => {
-              const itemDate = item.measurementDate || item.date;
-              if (!itemDate) return false;
-              
-              const normalizedItemDate = normalizeDate(itemDate);
-              const normalizedTargetDate = normalizeDate(dateStr);
-              return normalizedItemDate === normalizedTargetDate;
-            });
-            
-            if (foundData) {
-              resolvedData = foundData;
-              dataSource = "list";
+
+      const latestResponse = await getLatestInBody();
+      const latestData = latestResponse?.success
+        ? latestResponse.inBody
+        : latestResponse;
+
+      if (latestData && latestData.id) {
+        const normalizedDate = latestData.measurementDate?.includes(".")
+          ? latestData.measurementDate
+          : latestData.measurementDate?.replace(/-/g, ".");
+
+        if (normalizedDate) {
+          setInBodyDataCache((prev) => {
+            const next = new Map(prev);
+            next.set(normalizedDate, latestData);
+            return next;
+          });
+          setInBodyDatesList((prev) => {
+            if (!normalizedDate) {
+              return prev;
             }
+            if (prev.includes(normalizedDate)) {
+              return prev;
+            }
+            return [...prev, normalizedDate].sort();
+          });
+
+          if (normalizedDate === dateKey) {
+            setInBodyData(latestData);
+            return;
           }
-        } catch (e) {
-          console.warn("[INBODY SCREEN] 목록 조회 실패:", e);
         }
-      }
-      
-      if (!resolvedData) {
-        // 해당 날짜에 데이터가 없으면 최신 데이터 조회
-        try {
-          const latestResponse = await getLatestInBody();
-          const latestData = latestResponse?.success ? latestResponse.inBody : latestResponse;
-          if (latestData && latestData.id) {
-            resolvedData = latestData;
-            dataSource = "latest";
-          }
-        } catch (e) {
-          console.error("[INBODY SCREEN] 최신 데이터 조회 실패:", e);
-        }
-      }
-
-      if (resolvedData) {
-        // 캐시에 저장
-        setInBodyDataCache(prev => {
-          const newCache = new Map(prev);
-          newCache.set(dateStr, resolvedData);
-          return newCache;
-        });
-
-        // 날짜 목록 업데이트
-        setInBodyDatesList(prev => {
-          if (!prev.includes(dateStr)) {
-            return [...prev, dateStr].sort();
-          }
-          return prev;
-        });
-
-        setInBodyData(resolvedData);
-        console.log("[INBODY] 날짜 선택", { date: dateStr, source: dataSource });
+        setInBodyData(latestData);
+      } else {
+        setInBodyData(null);
       }
     } catch (error) {
       console.error("[INBODY SCREEN] 날짜별 데이터 로드 실패:", error);
-      // 에러 발생 시 최신 데이터 조회
-      try {
-        const latestResponse = await getLatestInBody();
-        const latestData = latestResponse?.success ? latestResponse.inBody : latestResponse;
-        if (latestData && latestData.id) {
-          setInBodyData(latestData);
-        }
-      } catch (e) {
-        console.error("[INBODY SCREEN] 최신 데이터 조회 실패:", e);
-      }
+      setInBodyData(null);
     } finally {
       setLoading(false);
     }
@@ -398,41 +316,40 @@ const InBodyScreen = ({ navigation }: any) => {
   const fetchInBodyData = useCallback(async () => {
     try {
       setLoading(true);
-      
+
       // 가장 최신 데이터 조회
       const response = await getLatestInBody();
       const inBodyData = response?.success ? response.inBody : response;
-      
+
       if (inBodyData && inBodyData.id) {
         setInBodyData(inBodyData);
-        
+
         // 데이터를 캐시에 저장
         if (inBodyData.measurementDate) {
-          const normalizedDate = inBodyData.measurementDate.includes(".") 
-            ? inBodyData.measurementDate 
+          const normalizedDate = inBodyData.measurementDate.includes(".")
+            ? inBodyData.measurementDate
             : inBodyData.measurementDate.replace(/-/g, ".");
-          setInBodyDataCache(prev => {
+          setInBodyDataCache((prev) => {
             const newCache = new Map(prev);
             newCache.set(normalizedDate, inBodyData);
             return newCache;
           });
-          
+
           // 날짜 목록에 추가 (없는 경우)
-          setInBodyDatesList(prev => {
+          setInBodyDatesList((prev) => {
             if (!prev.includes(normalizedDate)) {
               return [...prev, normalizedDate].sort();
             }
             return prev;
           });
         }
-        
+
         // 최신 데이터의 measurementDate를 사용해서 selectedDate 설정
         if (inBodyData.measurementDate) {
           const dateStr = inBodyData.measurementDate.replace(/\./g, "-");
           const date = new Date(dateStr);
           if (!isNaN(date.getTime())) {
             setSelectedDate(date);
-            console.log("[INBODY] 최신 데이터 갱신", { date: inBodyData.measurementDate });
           }
         }
       } else {
@@ -451,7 +368,6 @@ const InBodyScreen = ({ navigation }: any) => {
   useFocusEffect(
     useCallback(() => {
       // 캐시 초기화 (새로 저장된 데이터 반영을 위해)
-      console.log("[INBODY] 화면 재진입");
       setInBodyDataCache(new Map()); // 캐시 초기화
       fetchInBodyData();
       fetchInBodyDates();
@@ -459,10 +375,13 @@ const InBodyScreen = ({ navigation }: any) => {
   );
 
   // 날짜 선택 핸들러
-  const handleDateSelect = useCallback((date: Date) => {
-    setSelectedDate(date);
-    fetchInBodyDataByDate(date);
-  }, [fetchInBodyDataByDate]);
+  const handleDateSelect = useCallback(
+    (date: Date) => {
+      setSelectedDate(date);
+      fetchInBodyDataByDate(date);
+    },
+    [fetchInBodyDataByDate]
+  );
 
   // 컴포넌트 마운트 시 마지막 포인트를 활성화
   useEffect(() => {
@@ -549,19 +468,21 @@ const InBodyScreen = ({ navigation }: any) => {
 
     // API에서 가져온 모든 날짜 목록과 최신 데이터 날짜를 합침
     const allDates = new Set<string>(baseDates);
-    
+
     // inBodyDatesList에 있는 모든 날짜 추가
-    inBodyDatesList.forEach(date => {
+    inBodyDatesList.forEach((date) => {
       if (date) {
-        const normalizedDate = date.includes(".") ? date : date.replace(/-/g, ".");
+        const normalizedDate = date.includes(".")
+          ? date
+          : date.replace(/-/g, ".");
         allDates.add(normalizedDate);
       }
     });
-    
+
     // 최신 데이터의 날짜도 추가
     if (inBodyData?.measurementDate) {
-      const apiDate = inBodyData.measurementDate.includes(".") 
-        ? inBodyData.measurementDate 
+      const apiDate = inBodyData.measurementDate.includes(".")
+        ? inBodyData.measurementDate
         : inBodyData.measurementDate.replace(/-/g, ".");
       allDates.add(apiDate);
     }
@@ -636,7 +557,12 @@ const InBodyScreen = ({ navigation }: any) => {
                 onChange={handleDateSelect}
                 selectedDate={selectedDate}
               />
-              <Icon name="calendar-outline" size={20} color="#d6ff4b" style={styles.calendarIcon} />
+              <Icon
+                name="calendar-outline"
+                size={20}
+                color="#d6ff4b"
+                style={styles.calendarIcon}
+              />
             </TouchableOpacity>
           </View>
         )}
@@ -658,10 +584,14 @@ const InBodyScreen = ({ navigation }: any) => {
                     <View style={styles.metricItem}>
                       <Text style={styles.metricName}>체수분</Text>
                       <Text style={styles.metricValue}>
-                        {extractValue(inBodyData.bodyComposition?.totalBodyWater)}
+                        {extractValue(
+                          inBodyData.bodyComposition?.totalBodyWater
+                        )}
                       </Text>
                       <Text style={styles.metricRange}>
-                        {extractRange(inBodyData.bodyComposition?.totalBodyWater)}
+                        {extractRange(
+                          inBodyData.bodyComposition?.totalBodyWater
+                        )}
                       </Text>
                     </View>
                     <View style={styles.metricItem}>
@@ -705,21 +635,35 @@ const InBodyScreen = ({ navigation }: any) => {
                     </View>
                     <BarChartItem
                       label="체수분"
-                      value={extractValue(inBodyData.bodyComposition?.totalBodyWater)}
+                      value={extractValue(
+                        inBodyData.bodyComposition?.totalBodyWater
+                      )}
                       percentage={75}
                       status="표준"
                     />
                     <BarChartItem
                       label="골격근량"
-                      value={inBodyData.muscleFatAnalysis?.skeletalMuscleMass?.toFixed(1) || "N/A"}
+                      value={
+                        inBodyData.muscleFatAnalysis?.skeletalMuscleMass?.toFixed(
+                          1
+                        ) || "N/A"
+                      }
                       percentage={30}
-                      status={inBodyData.muscleFatAnalysis?.skeletalMuscleStatus || "표준"}
+                      status={
+                        inBodyData.muscleFatAnalysis?.skeletalMuscleStatus ||
+                        "표준"
+                      }
                     />
                     <BarChartItem
                       label="체지방량"
-                      value={inBodyData.muscleFatAnalysis?.bodyFatMass?.toFixed(1) || "N/A"}
+                      value={
+                        inBodyData.muscleFatAnalysis?.bodyFatMass?.toFixed(1) ||
+                        "N/A"
+                      }
                       percentage={50}
-                      status={inBodyData.muscleFatAnalysis?.bodyFatStatus || "표준"}
+                      status={
+                        inBodyData.muscleFatAnalysis?.bodyFatStatus || "표준"
+                      }
                       isLast
                     />
                   </View>
@@ -736,15 +680,24 @@ const InBodyScreen = ({ navigation }: any) => {
                     </View>
                     <BarChartItem
                       label="BMI"
-                      value={inBodyData.obesityAnalysis?.bmi?.toFixed(1) || "N/A"}
+                      value={
+                        inBodyData.obesityAnalysis?.bmi?.toFixed(1) || "N/A"
+                      }
                       percentage={38}
                       status={inBodyData.obesityAnalysis?.bmiStatus || "표준"}
                     />
                     <BarChartItem
                       label="체지방률"
-                      value={inBodyData.obesityAnalysis?.bodyFatPercentage?.toFixed(1) || "N/A"}
+                      value={
+                        inBodyData.obesityAnalysis?.bodyFatPercentage?.toFixed(
+                          1
+                        ) || "N/A"
+                      }
                       percentage={72}
-                      status={inBodyData.obesityAnalysis?.bodyFatPercentageStatus || "표준"}
+                      status={
+                        inBodyData.obesityAnalysis?.bodyFatPercentageStatus ||
+                        "표준"
+                      }
                       isLast
                     />
                   </View>
@@ -763,31 +716,41 @@ const InBodyScreen = ({ navigation }: any) => {
                       label="오른팔"
                       value="N/A"
                       percentage={58}
-                      status={inBodyData.segmentalMuscleAnalysis?.rightArm || "표준"}
+                      status={
+                        inBodyData.segmentalMuscleAnalysis?.rightArm || "표준"
+                      }
                     />
                     <BarChartItem
                       label="왼팔"
                       value="N/A"
                       percentage={66}
-                      status={inBodyData.segmentalMuscleAnalysis?.leftArm || "표준"}
+                      status={
+                        inBodyData.segmentalMuscleAnalysis?.leftArm || "표준"
+                      }
                     />
                     <BarChartItem
                       label="몸통"
                       value="N/A"
                       percentage={22}
-                      status={inBodyData.segmentalMuscleAnalysis?.trunk || "표준"}
+                      status={
+                        inBodyData.segmentalMuscleAnalysis?.trunk || "표준"
+                      }
                     />
                     <BarChartItem
                       label="오른다리"
                       value="N/A"
                       percentage={55}
-                      status={inBodyData.segmentalMuscleAnalysis?.rightLeg || "표준"}
+                      status={
+                        inBodyData.segmentalMuscleAnalysis?.rightLeg || "표준"
+                      }
                     />
                     <BarChartItem
                       label="왼다리"
                       value="N/A"
                       percentage={59}
-                      status={inBodyData.segmentalMuscleAnalysis?.leftLeg || "표준"}
+                      status={
+                        inBodyData.segmentalMuscleAnalysis?.leftLeg || "표준"
+                      }
                       isLast
                     />
                   </View>
@@ -796,7 +759,9 @@ const InBodyScreen = ({ navigation }: any) => {
             ) : (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>인바디 데이터가 없습니다.</Text>
-                <Text style={styles.emptySubText}>수기로 입력하거나 사진으로 입력해주세요.</Text>
+                <Text style={styles.emptySubText}>
+                  수기로 입력하거나 사진으로 입력해주세요.
+                </Text>
               </View>
             )}
           </>
