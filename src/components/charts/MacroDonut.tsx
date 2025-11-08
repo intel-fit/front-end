@@ -37,12 +37,17 @@ const describeDonutSegment = (
   startAngle: number,
   endAngle: number,
 ) => {
-  const outerStart = polarToCartesian(center, center, outerRadius, startAngle);
-  const outerEnd = polarToCartesian(center, center, outerRadius, endAngle);
-  const innerEnd = polarToCartesian(center, center, innerRadius, endAngle);
-  const innerStart = polarToCartesian(center, center, innerRadius, startAngle);
+  // startAngle이 endAngle보다 클 수 있는 상황을 방어
+  const safeStart = Math.min(startAngle, endAngle);
+  const safeEnd = Math.max(startAngle, endAngle);
 
-  const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
+  const outerStart = polarToCartesian(center, center, outerRadius, safeStart);
+  const outerEnd = polarToCartesian(center, center, outerRadius, safeEnd);
+  const innerEnd = polarToCartesian(center, center, innerRadius, safeEnd);
+  const innerStart = polarToCartesian(center, center, innerRadius, safeStart);
+
+  const deltaAngle = Math.abs(safeEnd - safeStart);
+  const largeArcFlag = deltaAngle <= 180 ? '0' : '1';
 
   return `
     M ${outerStart.x} ${outerStart.y}
@@ -60,16 +65,22 @@ const MacroDonut: React.FC<MacroDonutProps> = ({
   style,
   backgroundColor = '#1e1e1e',
 }) => {
-  const center = size / 2;
-  const outerRadius = center;
-  const innerRadius = outerRadius - thickness;
+  const safeSize = typeof size === 'number' && size > 0 ? size : 96;
+  const safeThickness =
+    typeof thickness === 'number' && thickness > 0
+      ? Math.min(thickness, safeSize / 2)
+      : Math.min(18, safeSize / 2);
 
-  const normalizedSegments = segments
-    .map((segment) => ({
-      ...segment,
-      percentage: clampPercentage(segment.percentage),
-    }))
-    .filter((segment) => segment.percentage > 0);
+  const center = safeSize / 2;
+  const outerRadius = center;
+  const innerRadius = outerRadius - safeThickness;
+
+  const normalizedSegments = segments.reduce<MacroSegment[]>((acc, segment) => {
+    const percentage = clampPercentage(segment.percentage);
+    if (percentage <= 0) return acc;
+    acc.push({ ...segment, percentage });
+    return acc;
+  }, []);
 
   if (normalizedSegments.length === 0) {
     return null;
@@ -77,28 +88,39 @@ const MacroDonut: React.FC<MacroDonutProps> = ({
 
   let cumulative = 0;
   const paths = normalizedSegments.map((segment, index) => {
+    const fraction = Math.min(segment.percentage / 100, 1 - cumulative);
     const startAngle = cumulative * 360;
-    const angle = segment.percentage * 3.6;
+    const angle = fraction * 360;
     const endAngle = startAngle + angle;
-    cumulative += segment.percentage / 100;
+    cumulative += fraction;
+
+    if (angle <= 0) {
+      return null;
+    }
 
     return (
       <Path
         key={`${segment.color}-${index}`}
-        d={describeDonutSegment(center, outerRadius, innerRadius, startAngle, endAngle)}
+        d={describeDonutSegment(
+          center,
+          outerRadius,
+          innerRadius,
+          startAngle,
+          endAngle,
+        )}
         fill={segment.color}
       />
     );
   });
 
   return (
-    <Svg width={size} height={size} style={style}>
+    <Svg width={safeSize} height={safeSize} style={style}>
       <Circle
         cx={center}
         cy={center}
-        r={outerRadius - thickness / 2}
+        r={outerRadius - safeThickness / 2}
         stroke={backgroundColor}
-        strokeWidth={thickness}
+        strokeWidth={safeThickness}
         fill="transparent"
       />
       {paths}
