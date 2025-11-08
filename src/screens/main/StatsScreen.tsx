@@ -15,21 +15,40 @@ import DietScreen from '../diet/DietScreen';
 const StatsScreen = ({navigation}: any) => {
   const [activeTab, setActiveTab] = useState(0);
   const [goalData, setGoalData] = useState<any>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [userIdLoaded, setUserIdLoaded] = useState(false);
+
+  const storageKey = React.useMemo(
+    () => (userId ? `workoutGoals:${userId}` : 'workoutGoals'),
+    [userId],
+  );
 
   useEffect(() => {
-    loadGoalData();
+    (async () => {
+      try {
+        const storedUserId = await AsyncStorage.getItem('userId');
+        setUserId(storedUserId);
+      } finally {
+        setUserIdLoaded(true);
+      }
+    })();
   }, []);
 
-  const loadGoalData = async () => {
-    try {
-      const saved = await AsyncStorage.getItem('workoutGoals');
-      if (saved) {
-        setGoalData(JSON.parse(saved));
+  useEffect(() => {
+    if (!userIdLoaded) return;
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(storageKey);
+        if (saved) {
+          setGoalData(JSON.parse(saved));
+        } else {
+          setGoalData(null);
+        }
+      } catch (error) {
+        console.log('Failed to load goal data', error);
       }
-    } catch (error) {
-      console.log('Failed to load goal data', error);
-    }
-  };
+    })();
+  }, [userIdLoaded, storageKey]);
 
   const tabs = ['운동기록', '식단기록'];
 

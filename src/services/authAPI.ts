@@ -279,6 +279,7 @@ export const authAPI = {
     await AsyncStorage.removeItem(ACCESS_TOKEN_KEY);
     await AsyncStorage.removeItem(REFRESH_TOKEN_KEY);
     await AsyncStorage.removeItem('userId');
+    await AsyncStorage.removeItem('userName');
   },
 
   /**

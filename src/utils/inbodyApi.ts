@@ -135,6 +135,40 @@ export const getLatestInBody = async (): Promise<any> => {
 };
 
 /**
+ * 인바디 상세 조회 (ID 기반)
+ */
+export const getInBodyById = async (
+  inBodyId: number | string
+): Promise<any> => {
+  try {
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const url = `${INBODY_API_URL}/${inBodyId}`;
+
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token || ""}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+    });
+
+    return response.data;
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      console.error("[INBODY][GET BY ID] API 에러:", {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+      });
+    } else {
+      console.error("[INBODY][GET BY ID] 예상치 못한 에러:", error);
+    }
+    throw error;
+  }
+};
+
+/**
  * 인바디 정보 수정
  * @param inBodyId 인바디 기록 ID
  * @param payload 수정할 데이터 (선택적 필드)
@@ -178,12 +212,45 @@ export const patchInBody = async (
 export const getInBodyByDate = async (date: string): Promise<any> => {
   const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
 
-  // 여러 날짜 형식 시도
-  const dateFormats = [
-    date.replace(/\./g, "-"), // 점을 하이픈으로: YYYY-MM-DD
-    date.replace(/-/g, "."), // 하이픈을 점으로: YYYY.MM.DD
-    date, // 원본 형식
-  ];
+  const sanitized = (date || "").trim();
+  if (!sanitized) {
+    throw new Error("조회할 날짜가 비어 있습니다.");
+  }
+
+  const compact = sanitized.replace(/[^\d]/g, "");
+  const hyphenated =
+    compact.length === 8
+      ? `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6)}`
+      : sanitized.replace(/\./g, "-");
+  const dotted =
+    compact.length === 8
+      ? `${compact.slice(0, 4)}.${compact.slice(4, 6)}.${compact.slice(6)}`
+      : hyphenated.replace(/-/g, ".");
+
+  const withTimeHyphen =
+    hyphenated && !hyphenated.includes("T")
+      ? `${hyphenated}T00:00:00`
+      : hyphenated;
+  const withTimeSpace =
+    hyphenated && !hyphenated.includes(" ")
+      ? `${hyphenated} 00:00:00`
+      : hyphenated;
+
+  const dateFormats = Array.from(
+    new Set(
+      [
+        sanitized,
+        hyphenated,
+        dotted,
+        sanitized.replace(/\s+/g, ""),
+        hyphenated.replace(/\s+/g, ""),
+        dotted.replace(/\s+/g, ""),
+        compact.length === 8 ? compact : null,
+        withTimeHyphen,
+        withTimeSpace,
+      ].filter(Boolean)
+    )
+  );
 
   for (const formattedDate of dateFormats) {
     try {
@@ -199,8 +266,9 @@ export const getInBodyByDate = async (date: string): Promise<any> => {
 
       return response.data;
     } catch (error: any) {
-      // 마지막 시도가 아니면 계속 진행
-      if (dateFormats.indexOf(formattedDate) < dateFormats.length - 1) {
+      const isLastAttempt =
+        dateFormats[dateFormats.length - 1] === formattedDate;
+      if (!isLastAttempt) {
         console.warn(
           `[INBODY][GET BY DATE] 날짜 형식 ${formattedDate} 실패, 다음 형식 시도...`
         );
