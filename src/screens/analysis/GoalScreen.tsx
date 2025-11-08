@@ -40,9 +40,15 @@ const GoalScreen = ({navigation}: any) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Icon name="chevron-back" size={28} color="#ffffff" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>운동 목표 설정</Text>
-        <TouchableOpacity onPress={handleSave} style={styles.saveBtn}>
-          <Icon name="checkmark" size={12} color="#ffffff" />
+        <TouchableOpacity 
+          onPress={handleSave} 
+          style={styles.saveButton}
+          disabled={false}>
+          <Icon name="checkmark" size={28} color="#ffffff" />
         </TouchableOpacity>
       </View>
 
@@ -151,29 +157,36 @@ const GoalScreen = ({navigation}: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#252525',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
-    paddingVertical: 26,
+    backgroundColor: '#252525',
+    paddingTop: 40,
+    paddingBottom: 16,
     paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333333',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '800',
+    fontStyle: 'italic',
     color: '#ffffff',
+    flex: 1,
+    textAlign: 'center',
   },
-  saveBtn: {
-    width: 24,
-    height: 24,
+  saveButton: {
+    width: 40,
+    height: 40,
     justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 12,
+    alignItems: 'flex-end',
   },
   content: {
     flex: 1,

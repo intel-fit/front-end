@@ -72,7 +72,7 @@ export interface DailyMealFood {
 export interface DailyMeal {
   id: number;
   mealDate: string;
-  mealType: 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
+  mealType: 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'OTHER';
   mealTypeName: string;
   totalCalories: number;
   totalCarbs: number;
@@ -110,7 +110,7 @@ export interface AddMealFoodRequest {
 
 export interface AddMealRequest {
   mealDate: string; // yyyy-MM-dd 형식
-  mealType: 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
+  mealType: 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'OTHER';
   foods: AddMealFoodRequest[];
   memo?: string;
 }
@@ -119,5 +119,12 @@ export interface AddMealResponse {
   success: boolean;
   message: string;
   meal: DailyMeal;
+}
+
+// 일일 운동 진행률 타입
+export interface DailyProgressWeekItem {
+  date: string; // yyyy-MM-dd 형식
+  exerciseRate: number; // 운동 달성률 (0~100)
+  totalCalorie: number; // 총 칼로리
 }
 

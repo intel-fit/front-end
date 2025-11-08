@@ -501,7 +501,7 @@ export const authAPI = {
     isSaved: boolean;
     meals: Array<{
       id: number;
-      mealType: "BREAKFAST" | "LUNCH" | "DINNER";
+      mealType: "BREAKFAST" | "LUNCH" | "DINNER" | "SNACK" | "OTHER";
       mealTypeName: string;
       totalCalories: number;
       totalCarbs: number;

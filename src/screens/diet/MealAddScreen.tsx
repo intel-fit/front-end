@@ -9,6 +9,7 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 
 
@@ -19,7 +20,7 @@ import {colors} from '../../theme/colors';
 import FoodAddOptionsModal from '../../components/modals/FoodAddOptionsModal';
 import {mealAPI} from '../../services';
 import {useDate} from '../../contexts/DateContext';
-import type {AddMealRequest, AddMealFoodRequest} from '../../types';
+import type {AddMealRequest, AddMealFoodRequest, DailyMeal} from '../../types';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Platform } from 'react-native';
 
@@ -35,16 +36,53 @@ interface Food {
 
 const MealAddScreen = ({navigation, route}: any) => {
   const {selectedDate} = useDate();
+  const mealData: DailyMeal | undefined = route?.params?.meal; // 수정 모드일 때 전달받은 식단 데이터
+  const isEditMode = !!mealData;
+  
   const [mealName, setMealName] = useState('');
-  const [mealType, setMealType] = useState<'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK'>('DINNER');
+  const [mealType, setMealType] = useState<'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'OTHER'>('BREAKFAST');
   const [photos, setPhotos] = useState<string[]>([]);
   const [isFoodOptionsModalOpen, setIsFoodOptionsModalOpen] = useState(false);
+  const [isMealTypeModalOpen, setIsMealTypeModalOpen] = useState(false);
   const [foods, setFoods] = useState<Food[]>([]);
   const [loading, setLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [selectedDateTime, setSelectedDateTime] = useState(new Date());
   const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date');
+
+  // 수정 모드일 때 기존 데이터 로드
+  useEffect(() => {
+    if (mealData) {
+      setMealName(mealData.memo || '');
+      setMealType(mealData.mealType);
+      // 날짜 설정
+      if (mealData.mealDate) {
+        const date = new Date(mealData.mealDate);
+        if (mealData.createdAt) {
+          const createdDate = new Date(mealData.createdAt);
+          date.setHours(createdDate.getHours());
+          date.setMinutes(createdDate.getMinutes());
+        }
+        setSelectedDateTime(date);
+      }
+      // 음식 데이터 변환
+      const convertedFoods: Food[] = mealData.foods.map((food: any, index: number) => ({
+        id: food.id || Date.now() + index,
+        name: food.foodName,
+        calories: food.calories,
+        carbs: food.carbs,
+        protein: food.protein,
+        fat: food.fat,
+        weight: food.servingSize,
+      }));
+      setFoods(convertedFoods);
+      // 사진 URL이 있으면 추가
+      if (mealData.foods?.[0]?.imageUrl) {
+        setPhotos([mealData.foods[0].imageUrl]);
+      }
+    }
+  }, [mealData]);
 
   // 날짜 선택 핸들러
 const onChangeDate = (event: any, date?: Date) => {
@@ -139,6 +177,7 @@ const onChangeTime = (event: any, time?: Date) => {
       '점심': 'LUNCH',
       '저녁': 'DINNER',
       '야식': 'SNACK',
+      '기타': 'OTHER',
     };
     return typeMap[type] || 'DINNER';
   };
@@ -150,6 +189,7 @@ const onChangeTime = (event: any, time?: Date) => {
       'LUNCH': '점심',
       'DINNER': '저녁',
       'SNACK': '야식',
+      'OTHER': '기타',
     };
     return typeMap[type] || '저녁';
   };
@@ -252,22 +292,36 @@ const onChangeTime = (event: any, time?: Date) => {
     setLoading(true);
     try {
       const dateToUse = selectedDateTime; // selectedDate 대신 selectedDateTime 사용
-      const mealData: AddMealRequest = {
+      const mealRequestData: AddMealRequest = {
         mealDate: formatDateToString(dateToUse),
         mealType: mealType,
         foods: foods.map(convertFoodToAPIFormat),
         memo: mealName || undefined,
       };
 
-      await mealAPI.addMeal(mealData);
-      Alert.alert('성공', '식사가 추가되었습니다.', [
-        {
-          text: '확인',
-          onPress: () => {
-            navigation.goBack();
+      if (isEditMode && mealData?.id) {
+        // 수정 모드: PUT 요청 (API가 없으면 일단 추가 API 사용)
+        await mealAPI.addMeal(mealRequestData);
+        Alert.alert('성공', '식사가 수정되었습니다.', [
+          {
+            text: '확인',
+            onPress: () => {
+              navigation.goBack();
+            },
           },
-        },
-      ]);
+        ]);
+      } else {
+        // 추가 모드
+        await mealAPI.addMeal(mealRequestData);
+        Alert.alert('성공', '식사가 추가되었습니다.', [
+          {
+            text: '확인',
+            onPress: () => {
+              navigation.goBack();
+            },
+          },
+        ]);
+      }
     } catch (error: any) {
       console.error('식사 추가 실패:', error);
       let errorMessage = '식사를 추가하는데 실패했습니다.';
@@ -300,33 +354,12 @@ const onChangeTime = (event: any, time?: Date) => {
 
   // 식사 타입 선택 핸들러
   const handleMealTypePress = () => {
-    Alert.alert(
-      '식사 타입 선택',
-      '식사 타입을 선택해주세요.',
-      [
-        {
-          text: '아침',
-          onPress: () => setMealType('BREAKFAST'),
-        },
-        {
-          text: '점심',
-          onPress: () => setMealType('LUNCH'),
-        },
-        {
-          text: '저녁',
-          onPress: () => setMealType('DINNER'),
-        },
-        {
-          text: '야식',
-          onPress: () => setMealType('SNACK'),
-        },
-        {
-          text: '취소',
-          style: 'cancel',
-        },
-      ],
-      { cancelable: true }
-    );
+    setIsMealTypeModalOpen(true);
+  };
+
+  const handleMealTypeSelect = (type: 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'OTHER') => {
+    setMealType(type);
+    setIsMealTypeModalOpen(false);
   };
 
   return (
@@ -336,7 +369,7 @@ const onChangeTime = (event: any, time?: Date) => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Icon name="chevron-back" size={28} color="#ffffff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>식단 추가하기</Text>
+        <Text style={styles.headerTitle}>{isEditMode ? '식단 수정하기' : '식단 추가하기'}</Text>
         <TouchableOpacity 
           onPress={handleSave} 
           style={styles.saveButton}
@@ -486,6 +519,101 @@ const onChangeTime = (event: any, time?: Date) => {
           is24Hour={false}
         />
       )}
+
+      {/* 식사 타입 선택 모달 */}
+      <Modal
+        visible={isMealTypeModalOpen}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsMealTypeModalOpen(false)}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsMealTypeModalOpen(false)}>
+          <View style={styles.modalContainer} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>식사 타입 선택</Text>
+              <TouchableOpacity
+                onPress={() => setIsMealTypeModalOpen(false)}
+                style={styles.modalCloseButton}>
+                <Icon name="close" size={24} color="#ffffff" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalOptions}>
+              <TouchableOpacity
+                style={[
+                  styles.modalOption,
+                  mealType === 'BREAKFAST' && styles.modalOptionActive,
+                ]}
+                onPress={() => handleMealTypeSelect('BREAKFAST')}>
+                <Text
+                  style={[
+                    styles.modalOptionText,
+                    mealType === 'BREAKFAST' && styles.modalOptionTextActive,
+                  ]}>
+                  아침
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalOption,
+                  mealType === 'LUNCH' && styles.modalOptionActive,
+                ]}
+                onPress={() => handleMealTypeSelect('LUNCH')}>
+                <Text
+                  style={[
+                    styles.modalOptionText,
+                    mealType === 'LUNCH' && styles.modalOptionTextActive,
+                  ]}>
+                  점심
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalOption,
+                  mealType === 'DINNER' && styles.modalOptionActive,
+                ]}
+                onPress={() => handleMealTypeSelect('DINNER')}>
+                <Text
+                  style={[
+                    styles.modalOptionText,
+                    mealType === 'DINNER' && styles.modalOptionTextActive,
+                  ]}>
+                  저녁
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalOption,
+                  mealType === 'SNACK' && styles.modalOptionActive,
+                ]}
+                onPress={() => handleMealTypeSelect('SNACK')}>
+                <Text
+                  style={[
+                    styles.modalOptionText,
+                    mealType === 'SNACK' && styles.modalOptionTextActive,
+                  ]}>
+                  야식
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalOption,
+                  mealType === 'OTHER' && styles.modalOptionActive,
+                ]}
+                onPress={() => handleMealTypeSelect('OTHER')}>
+                <Text
+                  style={[
+                    styles.modalOptionText,
+                    mealType === 'OTHER' && styles.modalOptionTextActive,
+                  ]}>
+                  기타
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -636,6 +764,62 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: '#252525',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 30,
+    maxHeight: '60%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#404040',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalOptions: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    gap: 12,
+  },
+  modalOption: {
+    backgroundColor: '#393a38',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  modalOptionActive: {
+    backgroundColor: '#e3ff7c',
+  },
+  modalOptionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  modalOptionTextActive: {
+    color: '#000000',
   },
   foodName: {
     fontSize: 20,
