@@ -12,17 +12,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path, Circle, Line, Text as SvgText, G } from "react-native-svg";
 import { Ionicons as Icon } from "@expo/vector-icons";
-import InbodyDateNavigator from "../../components/common/InbodyDateNavigator";
-import InBodyCalendarModal from "../../components/common/InBodyCalendarModal";
-import {
-  getLatestInBody,
-  getInBodyList,
-  getInBodyByDate,
-} from "../../utils/inbodyApi";
+import { getLatestInBody } from "../../utils/inbodyApi";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const InBodyScreen = ({ navigation }: any) => {
   const [activeTab, setActiveTab] = useState<"info" | "graph">("info");
-  const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedFilter, setSelectedFilter] = useState("체중");
   const [selectedPointIndex, setSelectedPointIndex] = useState<number | null>(
     null
@@ -33,24 +27,14 @@ const InBodyScreen = ({ navigation }: any) => {
   } | null>(null);
   const [inBodyData, setInBodyData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [calendarVisible, setCalendarVisible] = useState(false);
-  const [inBodyDatesList, setInBodyDatesList] = useState<string[]>([]);
-  const [inBodyDataCache, setInBodyDataCache] = useState<Map<string, any>>(
-    new Map()
-  ); // 날짜별 데이터 캐시
+  const [userName, setUserName] = useState<string | null>(null);
+  const displayName = useMemo(
+    () => (userName ? `${userName}님` : "회원님"),
+    [userName]
+  );
 
   // 그래프 데이터 (실제 API 데이터 기반)
   const graphData = useMemo(() => {
-    // 캐시된 데이터를 날짜순으로 정렬
-    const sortedDates = Array.from(inBodyDataCache.keys())
-      .map((dateStr) => {
-        const date = new Date(dateStr.replace(/\./g, "-"));
-        return { dateStr, date };
-      })
-      .filter((item) => !isNaN(item.date.getTime()))
-      .sort((a, b) => a.date.getTime() - b.date.getTime());
-
-    // 선택된 필터에 따라 값 추출
     const getValue = (data: any): number | null => {
       if (!data) return null;
 
@@ -72,35 +56,29 @@ const InBodyScreen = ({ navigation }: any) => {
       }
     };
 
-    // 그래프 데이터 생성
-    const data = sortedDates
-      .map(({ dateStr, date }) => {
-        const cachedData = inBodyDataCache.get(dateStr);
-        const value = getValue(cachedData);
-
-        if (value === null || value === undefined) return null;
-
-        // 날짜 포맷: MM/DD
-        const month = String(date.getMonth() + 1).padStart(2, "0");
-        const day = String(date.getDate()).padStart(2, "0");
-
-        return {
-          x: `${month}/${day}`,
-          y: value,
-          date: dateStr,
-        };
-      })
-      .filter(
-        (item): item is { x: string; y: number; date: string } => item !== null
-      );
-
-    // 데이터가 없으면 기본값 반환
-    if (data.length === 0) {
-      return [{ x: "01/01", y: 50 }];
+    const value = getValue(inBodyData);
+    if (value === null || value === undefined || !inBodyData) {
+      return [];
     }
 
-    return data;
-  }, [inBodyDataCache, selectedFilter]);
+    const measurementDate = inBodyData.measurementDate?.replace(/\./g, "-");
+    const dateObj = measurementDate ? new Date(measurementDate) : null;
+
+    const label =
+      dateObj && !isNaN(dateObj.getTime())
+        ? `${String(dateObj.getMonth() + 1).padStart(2, "0")}/${String(
+            dateObj.getDate()
+          ).padStart(2, "0")}`
+        : "최근";
+
+    return [
+      {
+        x: label,
+        y: value,
+        date: inBodyData.measurementDate ?? label,
+      },
+    ];
+  }, [inBodyData, selectedFilter]);
 
   const screenWidth = Dimensions.get("window").width;
   const chartWidth = Math.min(screenWidth - 40, 400);
@@ -108,7 +86,7 @@ const InBodyScreen = ({ navigation }: any) => {
   const width = chartWidth;
   const height = 210;
   const smoothness = 0.22;
-  const lastPointIndex = graphData.length - 1;
+  const lastPointIndex = graphData.length > 0 ? graphData.length - 1 : null;
 
   // Y축 범위 동적 계산
   const { minY, maxY, yTicks, baseline } = useMemo(() => {
@@ -201,159 +179,258 @@ const InBodyScreen = ({ navigation }: any) => {
   };
 
   const handleChartHostPress = () => {
-    if (selectedPointIndex !== lastPointIndex) {
+    if (
+      lastPointIndex !== null &&
+      selectedPointIndex !== null &&
+      selectedPointIndex !== lastPointIndex
+    ) {
       setSelectedPointIndex(null);
       setTooltipPosition(null);
     }
   };
 
-  const filterMessages: {
-    [key: string]: { tag: string; text: string; detail: string };
-  } = {
-    체중: {
-      tag: "체중 조절",
-      text: "적정 체중 | 50.0kg",
-      detail: "-1.4kg의 체중 감량이 필요합니다",
-    },
-    체지방량: {
-      tag: "지방량 조절",
-      text: "적정 체지방량 | 12.5kg",
-      detail: "-0.8kg의 체지방 감량이 필요합니다",
-    },
-    골격근량: {
-      tag: "근육량 조절",
-      text: "적정 근육량 | 25.0kg",
-      detail: "+2.1kg의 근육량 증가가 필요합니다",
-    },
-  };
-
-  const currentMessage = filterMessages[selectedFilter];
-
-  // 인바디 날짜 목록 조회
-  const fetchInBodyDates = useCallback(async () => {
-    try {
-      const latestResponse = await getLatestInBody();
-      const latestData = latestResponse?.success
-        ? latestResponse.inBody
-        : latestResponse;
-      if (latestData?.measurementDate) {
-        const formattedDate = latestData.measurementDate.includes(".")
-          ? latestData.measurementDate
-          : latestData.measurementDate.replace(/-/g, ".");
-        setInBodyDatesList([formattedDate]);
-      } else {
-        setInBodyDatesList([]);
-      }
-    } catch (error) {
-      console.error("[INBODY SCREEN] 최신 날짜 로드 실패:", error);
-      setInBodyDatesList([]);
+  const formatAdjustmentValue = useCallback((rawValue: any) => {
+    if (rawValue === null || rawValue === undefined) return undefined;
+    if (typeof rawValue === "number" && isFinite(rawValue)) {
+      return `${Math.round(rawValue * 10) / 10}kg`;
     }
+    if (typeof rawValue === "string") {
+      const trimmed = rawValue.trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    }
+    return String(rawValue);
   }, []);
 
-  // 특정 날짜의 인바디 데이터 조회
-  const fetchInBodyDataByDate = useCallback(async (date: Date) => {
-    try {
-      setLoading(true);
-      const dateKey = `${date.getFullYear()}.${String(
-        date.getMonth() + 1
-      ).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+  const parseNumericValue = useCallback((value: any): number | undefined => {
+    if (value === null || value === undefined) return undefined;
+    if (typeof value === "number" && isFinite(value)) {
+      return Math.round(value * 100) / 100;
+    }
+    if (typeof value === "string") {
+      const match = value.match(/-?\d+(\.\d+)?/);
+      if (!match) return undefined;
+      const parsed = parseFloat(match[0]);
+      return isFinite(parsed) ? Math.round(parsed * 100) / 100 : undefined;
+    }
+    return undefined;
+  }, []);
 
-      let cachedData: any = null;
-      setInBodyDataCache((prev) => {
-        cachedData = prev.get(dateKey);
-        return prev;
-      });
-
-      if (cachedData) {
-        setInBodyData(cachedData);
-        return;
+  const parseRangeRatio = useCallback(
+    (rawValue: any): number | null => {
+      if (typeof rawValue !== "string") {
+        return null;
       }
 
-      const latestResponse = await getLatestInBody();
-      const latestData = latestResponse?.success
-        ? latestResponse.inBody
-        : latestResponse;
+      const value = parseNumericValue(rawValue);
+      if (value === undefined) {
+        return null;
+      }
 
-      if (latestData && latestData.id) {
-        const normalizedDate = latestData.measurementDate?.includes(".")
-          ? latestData.measurementDate
-          : latestData.measurementDate?.replace(/-/g, ".");
+      const rangeMatch = rawValue.match(/\(([^)]+)\)/);
+      if (!rangeMatch) {
+        return null;
+      }
 
-        if (normalizedDate) {
-          setInBodyDataCache((prev) => {
-            const next = new Map(prev);
-            next.set(normalizedDate, latestData);
-            return next;
-          });
-          setInBodyDatesList((prev) => {
-            if (!normalizedDate) {
-              return prev;
-            }
-            if (prev.includes(normalizedDate)) {
-              return prev;
-            }
-            return [...prev, normalizedDate].sort();
-          });
+      const [minRaw, maxRaw] = rangeMatch[1]
+        .split("~")
+        .map((part) => parseNumericValue(part));
 
-          if (normalizedDate === dateKey) {
-            setInBodyData(latestData);
-            return;
-          }
+      if (
+        minRaw === undefined ||
+        maxRaw === undefined ||
+        !isFinite(minRaw) ||
+        !isFinite(maxRaw) ||
+        maxRaw <= minRaw
+      ) {
+        return null;
+      }
+
+      const ratio = (value - minRaw) / (maxRaw - minRaw);
+      return Math.max(0, Math.min(1, ratio));
+    },
+    [parseNumericValue]
+  );
+
+  const resolveBarPercentage = useCallback(
+    (rawValue: any, status?: string) => {
+      const clamp = (percent: number) =>
+        Math.min(95, Math.max(10, Math.round(percent)));
+
+      const ratio = parseRangeRatio(rawValue);
+      if (ratio !== null) {
+        return clamp(45 + ratio * 45);
+      }
+
+      const normalizedStatus = (status ?? "")
+        .toString()
+        .replace(/\s+/g, "")
+        .toLowerCase();
+
+      if (normalizedStatus.length > 0) {
+        if (
+          normalizedStatus.includes("이상") ||
+          normalizedStatus.includes("높음") ||
+          normalizedStatus.includes("증가") ||
+          normalizedStatus.includes("above") ||
+          normalizedStatus.includes("high")
+        ) {
+          return clamp(85);
         }
-        setInBodyData(latestData);
-      } else {
-        setInBodyData(null);
+        if (
+          normalizedStatus.includes("이하") ||
+          normalizedStatus.includes("낮음") ||
+          normalizedStatus.includes("감소") ||
+          normalizedStatus.includes("below") ||
+          normalizedStatus.includes("low")
+        ) {
+          return clamp(30);
+        }
+        if (
+          normalizedStatus.includes("표준") ||
+          normalizedStatus.includes("정상") ||
+          normalizedStatus.includes("normal")
+        ) {
+          return clamp(55);
+        }
       }
-    } catch (error) {
-      console.error("[INBODY SCREEN] 날짜별 데이터 로드 실패:", error);
-      setInBodyData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+
+      return clamp(55);
+    },
+    [parseRangeRatio]
+  );
+
+  const formatAdjustmentDetail = useCallback(
+    (rawValue: any, label: string) => {
+      if (rawValue === null || rawValue === undefined) {
+        return `${label} 조절 정보가 없습니다.`;
+      }
+
+      const sanitized =
+        typeof rawValue === "string" ? rawValue.replace(/\s+/g, "") : rawValue;
+      const numeric = parseNumericValue(sanitized);
+
+      if (numeric === undefined) {
+        const valueStr = formatAdjustmentValue(rawValue);
+        return valueStr
+          ? `${label} 조절 권장량 ${valueStr}을 참고해주세요.`
+          : `${label} 조절 정보가 없습니다.`;
+      }
+
+      if (Math.abs(numeric) < 0.1) {
+        return `${label}은 현재 수준을 유지하면 충분해요.`;
+      }
+
+      const direction = numeric < 0 ? "감량" : "증가";
+      return `${Math.abs(numeric).toFixed(1)}kg ${direction}이 필요합니다.`;
+    },
+    [formatAdjustmentValue, parseNumericValue]
+  );
+
+  const filterMessages = useMemo(() => {
+    const weightControl = inBodyData?.weightControl || {};
+
+    const weightTarget = formatAdjustmentValue(weightControl.targetWeight);
+    const weightAdjustmentValue = formatAdjustmentValue(
+      weightControl.weightAdjustment
+    );
+    const fatAdjustmentValue = formatAdjustmentValue(
+      weightControl.fatAdjustment
+    );
+    const muscleAdjustmentValue = formatAdjustmentValue(
+      weightControl.muscleAdjustment
+    );
+
+    const weightTextParts: string[] = [];
+    if (weightTarget) weightTextParts.push(`목표 체중 ${weightTarget}`);
+    if (weightAdjustmentValue)
+      weightTextParts.push(`권장 조절량 ${weightAdjustmentValue}`);
+
+    return {
+      체중: {
+        tag: "체중 조절",
+        text:
+          weightTextParts.length > 0
+            ? weightTextParts.join(" · ")
+            : "체중 조절 데이터를 입력해주세요.",
+        detail: formatAdjustmentDetail(weightControl.weightAdjustment, "체중"),
+      },
+      체지방량: {
+        tag: "지방량 조절",
+        text: fatAdjustmentValue
+          ? `권장 체지방 조절량 ${fatAdjustmentValue}`
+          : "체지방 조절 데이터를 입력해주세요.",
+        detail: formatAdjustmentDetail(weightControl.fatAdjustment, "체지방"),
+      },
+      골격근량: {
+        tag: "근육량 조절",
+        text: muscleAdjustmentValue
+          ? `권장 근육 조절량 ${muscleAdjustmentValue}`
+          : "근육 조절 데이터를 입력해주세요.",
+        detail: formatAdjustmentDetail(weightControl.muscleAdjustment, "근육"),
+      },
+    } as const;
+  }, [formatAdjustmentDetail, formatAdjustmentValue, inBodyData]);
+
+  const currentMessage = useMemo(() => {
+    const key = selectedFilter as keyof typeof filterMessages;
+    return filterMessages[key] ?? filterMessages["체중"];
+  }, [filterMessages, selectedFilter]);
+
+  useEffect(() => {
+    if (!inBodyData) return;
+
+    console.log("[INBODY][WEIGHT CONTROL]", {
+      selectedFilter,
+      weightControl: inBodyData.weightControl,
+      currentMessage,
+    });
+  }, [inBodyData, selectedFilter, currentMessage]);
 
   // API로 최신 인바디 정보 조회 (항상 가장 최신 저장 이력 표시)
   const fetchInBodyData = useCallback(async () => {
     try {
       setLoading(true);
 
-      // 가장 최신 데이터 조회
       const response = await getLatestInBody();
-      const inBodyData = response?.success ? response.inBody : response;
+      const latest = response?.success ? response.inBody : response;
 
-      if (inBodyData && inBodyData.id) {
-        setInBodyData(inBodyData);
+      if (latest && latest.measurementDate) {
+        const normalizedDate = latest.measurementDate.includes(".")
+          ? latest.measurementDate
+          : latest.measurementDate.replace(/-/g, ".");
 
-        // 데이터를 캐시에 저장
-        if (inBodyData.measurementDate) {
-          const normalizedDate = inBodyData.measurementDate.includes(".")
-            ? inBodyData.measurementDate
-            : inBodyData.measurementDate.replace(/-/g, ".");
-          setInBodyDataCache((prev) => {
-            const newCache = new Map(prev);
-            newCache.set(normalizedDate, inBodyData);
-            return newCache;
-          });
-
-          // 날짜 목록에 추가 (없는 경우)
-          setInBodyDatesList((prev) => {
-            if (!prev.includes(normalizedDate)) {
-              return [...prev, normalizedDate].sort();
-            }
-            return prev;
-          });
-        }
-
-        // 최신 데이터의 measurementDate를 사용해서 selectedDate 설정
-        if (inBodyData.measurementDate) {
-          const dateStr = inBodyData.measurementDate.replace(/\./g, "-");
-          const date = new Date(dateStr);
-          if (!isNaN(date.getTime())) {
-            setSelectedDate(date);
+        console.log("[INBODY][FETCH][LATEST]", {
+          normalizedDate,
+          source: latest?.source || "api",
+          segmental: {
+            segmentalMuscleAnalysis: latest?.segmentalMuscleAnalysis,
+            segmentalMuscleMass: latest?.segmentalMuscleMass,
+            rightArmMuscle: latest?.rightArmMuscle,
+            leftArmMuscle: latest?.leftArmMuscle,
+            trunkMuscle: latest?.trunkMuscle,
+            rightLegMuscle: latest?.rightLegMuscle,
+            leftLegMuscle: latest?.leftLegMuscle,
+          },
+        });
+        if (__DEV__) {
+          try {
+            console.log(
+              "[INBODY][FETCH][LATEST][RAW]",
+              JSON.stringify(latest, null, 2)
+            );
+          } catch (error) {
+            console.log("[INBODY][FETCH][LATEST][RAW] stringify 실패", error);
           }
         }
+
+        setInBodyData({
+          ...latest,
+          measurementDate: normalizedDate,
+        });
       } else {
-        console.warn("[INBODY SCREEN] API 응답에 데이터가 없습니다:", response);
+        console.warn("[INBODY][FETCH][LATEST] 유효한 데이터가 없습니다.", {
+          response,
+        });
         setInBodyData(null);
       }
     } catch (error) {
@@ -367,136 +444,249 @@ const InBodyScreen = ({ navigation }: any) => {
   // 화면이 포커스될 때마다 최신 데이터 조회
   useFocusEffect(
     useCallback(() => {
-      // 캐시 초기화 (새로 저장된 데이터 반영을 위해)
-      setInBodyDataCache(new Map()); // 캐시 초기화
       fetchInBodyData();
-      fetchInBodyDates();
-    }, [fetchInBodyData, fetchInBodyDates])
-  );
-
-  // 날짜 선택 핸들러
-  const handleDateSelect = useCallback(
-    (date: Date) => {
-      setSelectedDate(date);
-      fetchInBodyDataByDate(date);
-    },
-    [fetchInBodyDataByDate]
+    }, [fetchInBodyData])
   );
 
   // 컴포넌트 마운트 시 마지막 포인트를 활성화
   useEffect(() => {
-    if (graphPoints.length > 0 && activeTab === "graph") {
+    if (
+      graphPoints.length > 0 &&
+      lastPointIndex !== null &&
+      activeTab === "graph"
+    ) {
       const lastPoint = graphPoints[lastPointIndex];
+      if (!lastPoint) return;
       setSelectedPointIndex(lastPointIndex);
       setTooltipPosition({
         x: (lastPoint.x / width) * 100,
         y: ((lastPoint.y - 30) / height) * 100,
       });
     }
-  }, [graphPoints.length, activeTab]);
+  }, [graphPoints, lastPointIndex, activeTab, width, height]);
 
   // API 데이터에서 값 추출 헬퍼 함수
-  const extractValue = (str: string | undefined): string => {
-    if (!str) return "N/A";
-    // "30.4 ( 26.1 ~ 34.3 )" 형식에서 숫자만 추출
-    const match = str.match(/^([\d.]+)/);
-    return match ? match[1] : str;
+  const extractValue = (value: string | number | undefined): string => {
+    if (value === undefined || value === null) return "N/A";
+    if (typeof value === "number") {
+      if (!isFinite(value)) return "N/A";
+      return `${Math.round(value * 10) / 10}`;
+    }
+    const valueStr = String(value);
+    const match = valueStr.match(/^([\d.]+)/);
+    return match ? match[1] : valueStr;
   };
 
-  const extractRange = (str: string | undefined): string => {
-    if (!str) return "";
-    // "30.4 ( 26.1 ~ 34.3 )" 형식에서 범위 추출
-    const match = str.match(/\(([^)]+)\)/);
+  const extractRange = (value: string | number | undefined): string => {
+    if (value === undefined || value === null) return "";
+    if (typeof value === "number") return "";
+    const match = value.match(/\(([^)]+)\)/);
     return match ? `(${match[1]})` : "";
   };
 
-  // API에서 가져온 날짜를 포함한 날짜 배열 (점 형식으로 통일)
-  const inbodyDates = useMemo(() => {
-    const baseDates = [
-      "2025.01.15",
-      "2025.01.22",
-      "2025.01.29",
-      "2025.02.05",
-      "2025.02.12",
-      "2025.02.19",
-      "2025.02.26",
-      "2025.03.05",
-      "2025.03.12",
-      "2025.03.19",
-      "2025.03.26",
-      "2025.04.02",
-      "2025.04.09",
-      "2025.04.16",
-      "2025.04.23",
-      "2025.04.30",
-      "2025.05.07",
-      "2025.05.14",
-      "2025.05.21",
-      "2025.05.28",
-      "2025.06.04",
-      "2025.06.11",
-      "2025.06.18",
-      "2025.06.25",
-      "2025.07.02",
-      "2025.07.09",
-      "2025.07.16",
-      "2025.07.23",
-      "2025.07.30",
-      "2025.08.06",
-      "2025.08.13",
-      "2025.08.20",
-      "2025.08.27",
-      "2025.09.03",
-      "2025.09.10",
-      "2025.09.17",
-      "2025.09.24",
-      "2025.10.01",
-      "2025.10.08",
-      "2025.10.15",
-      "2025.10.22",
-      "2025.10.29",
-      "2025.11.05",
-      "2025.11.12",
-      "2025.11.19",
-      "2025.11.26",
-      "2025.12.03",
-      "2025.12.10",
-      "2025.12.17",
-      "2025.12.24",
-      "2025.12.31",
-    ];
-
-    // API에서 가져온 모든 날짜 목록과 최신 데이터 날짜를 합침
-    const allDates = new Set<string>(baseDates);
-
-    // inBodyDatesList에 있는 모든 날짜 추가
-    inBodyDatesList.forEach((date) => {
-      if (date) {
-        const normalizedDate = date.includes(".")
-          ? date
-          : date.replace(/-/g, ".");
-        allDates.add(normalizedDate);
+  useEffect(() => {
+    (async () => {
+      try {
+        const storedUserName = await AsyncStorage.getItem("userName");
+        if (storedUserName) {
+          setUserName(storedUserName);
+        }
+      } catch (error) {
+        console.error("[INBODY] 사용자 정보 로드 실패:", error);
       }
-    });
+    })();
+  }, []);
 
-    // 최신 데이터의 날짜도 추가
-    if (inBodyData?.measurementDate) {
-      const apiDate = inBodyData.measurementDate.includes(".")
-        ? inBodyData.measurementDate
-        : inBodyData.measurementDate.replace(/-/g, ".");
-      allDates.add(apiDate);
+  const segmentalMuscleItems = useMemo(() => {
+    if (!inBodyData) {
+      return [
+        { label: "오른팔", value: undefined, status: undefined },
+        { label: "왼팔", value: undefined, status: undefined },
+        { label: "몸통", value: undefined, status: undefined },
+        { label: "오른다리", value: undefined, status: undefined },
+        { label: "왼다리", value: undefined, status: undefined },
+      ];
     }
 
-    // 정렬하여 반환
-    return Array.from(allDates).sort();
-  }, [inBodyData?.measurementDate, inBodyDatesList]);
+    const analysis: any = inBodyData.segmentalMuscleAnalysis || {};
+    const mass: any =
+      inBodyData.segmentalMuscleMass ||
+      inBodyData.segmentalMuscle ||
+      inBodyData.segmentalLeanBodyMass ||
+      {};
+
+    const collectCandidateValues = (input: any): any[] => {
+      if (input === null || input === undefined) return [];
+      if (typeof input === "number" || typeof input === "string") {
+        return [input];
+      }
+      if (Array.isArray(input)) {
+        return input.flatMap((item) => collectCandidateValues(item));
+      }
+      if (typeof input === "object") {
+        const priorityKeys = [
+          "value",
+          "current",
+          "currentValue",
+          "currentWeight",
+          "currentKg",
+          "weight",
+          "kg",
+          "mass",
+          "amount",
+          "score",
+          "data",
+        ];
+        const collected: any[] = [];
+        priorityKeys.forEach((key) => {
+          if (Object.prototype.hasOwnProperty.call(input, key)) {
+            collected.push((input as any)[key]);
+          }
+        });
+        Object.values(input).forEach((val) => {
+          if (typeof val !== "object") {
+            collected.push(val);
+          }
+        });
+        return collected.flatMap((val) => collectCandidateValues(val));
+      }
+      return [];
+    };
+
+    const resolveStatusLabel = (raw: any): string | undefined => {
+      if (!raw) return undefined;
+      if (typeof raw === "string") return raw;
+      const candidates = collectCandidateValues(raw);
+      const firstString = candidates.find((candidate) => {
+        if (typeof candidate !== "string") return false;
+        return candidate.length > 0;
+      });
+      if (typeof raw.status === "string") {
+        return raw.status;
+      }
+      return typeof firstString === "string" ? firstString : undefined;
+    };
+
+    const candidates = [
+      {
+        label: "오른팔",
+        keys: collectCandidateValues([
+          inBodyData.rightArmMuscle,
+          mass.rightArm,
+          analysis.rightArm,
+          analysis.rightArmValue,
+        ]),
+        status: resolveStatusLabel(analysis.rightArm),
+      },
+      {
+        label: "왼팔",
+        keys: collectCandidateValues([
+          inBodyData.leftArmMuscle,
+          mass.leftArm,
+          analysis.leftArm,
+          analysis.leftArmValue,
+        ]),
+        status: resolveStatusLabel(analysis.leftArm),
+      },
+      {
+        label: "몸통",
+        keys: collectCandidateValues([
+          inBodyData.trunkMuscle,
+          mass.trunk,
+          analysis.trunk,
+          analysis.trunkValue,
+        ]),
+        status: resolveStatusLabel(analysis.trunk),
+      },
+      {
+        label: "오른다리",
+        keys: collectCandidateValues([
+          inBodyData.rightLegMuscle,
+          mass.rightLeg,
+          analysis.rightLeg,
+          analysis.rightLegValue,
+        ]),
+        status: resolveStatusLabel(analysis.rightLeg),
+      },
+      {
+        label: "왼다리",
+        keys: collectCandidateValues([
+          inBodyData.leftLegMuscle,
+          mass.leftLeg,
+          analysis.leftLeg,
+          analysis.leftLegValue,
+        ]),
+        status: resolveStatusLabel(analysis.leftLeg),
+      },
+    ];
+
+    const resolved = candidates.map((item) => {
+      const numericValue = item.keys
+        .map((candidate) => parseNumericValue(candidate))
+        .find((value) => value !== undefined);
+
+      return {
+        label: item.label,
+        numericValue,
+        status: item.status || "표준",
+      };
+    });
+
+    return resolved.map((item) => {
+      const hasNumericValue =
+        item.numericValue !== undefined && !Number.isNaN(item.numericValue);
+      const fallbackStatus = item.status || "정보 없음";
+      const percentage = resolveBarPercentage(
+        hasNumericValue ? item.numericValue : undefined,
+        fallbackStatus
+      );
+
+      return {
+        label: item.label,
+        value: hasNumericValue
+          ? `${item.numericValue.toFixed(1)}kg`
+          : fallbackStatus,
+        percentage,
+        status: fallbackStatus,
+      };
+    });
+  }, [inBodyData, parseNumericValue, resolveBarPercentage]);
+
+  useEffect(() => {
+    if (!inBodyData) {
+      console.log("[INBODY][SEGMENTAL] inBodyData 없음", {
+        measurementDate: null,
+      });
+      return;
+    }
+
+    console.log("[INBODY][SEGMENTAL] 원본 데이터", {
+      measurementDate:
+        inBodyData.measurementDate ||
+        inBodyData.date ||
+        inBodyData.measurement_date ||
+        null,
+      directValues: {
+        rightArmMuscle: inBodyData.rightArmMuscle,
+        leftArmMuscle: inBodyData.leftArmMuscle,
+        trunkMuscle: inBodyData.trunkMuscle,
+        rightLegMuscle: inBodyData.rightLegMuscle,
+        leftLegMuscle: inBodyData.leftLegMuscle,
+      },
+      segmentalMuscleAnalysis: inBodyData.segmentalMuscleAnalysis,
+      segmentalMuscleMass: inBodyData.segmentalMuscleMass,
+      segmentalMuscle: inBodyData.segmentalMuscle,
+      segmentalLeanBodyMass: inBodyData.segmentalLeanBodyMass,
+      source: inBodyData.source || "unknown",
+    });
+  }, [inBodyData]);
+
+  useEffect(() => {
+    console.log("[INBODY][SEGMENTAL] 계산된 항목", segmentalMuscleItems);
+  }, [segmentalMuscleItems]);
 
   const handleGraphClick = () => {
     setActiveTab("graph");
-  };
-
-  const handleDateChange = (newDate: Date) => {
-    setSelectedDate(newDate);
   };
 
   return (
@@ -545,28 +735,6 @@ const InBodyScreen = ({ navigation }: any) => {
           </TouchableOpacity>
         </View>
 
-        {/* 날짜 선택 - 인바디 정보 탭에서만 표시 */}
-        {activeTab === "info" && (
-          <View style={styles.dateNavigatorContainer}>
-            <TouchableOpacity
-              onPress={() => setCalendarVisible(true)}
-              style={styles.dateNavigatorTouchable}
-            >
-              <InbodyDateNavigator
-                dates={inbodyDates}
-                onChange={handleDateSelect}
-                selectedDate={selectedDate}
-              />
-              <Icon
-                name="calendar-outline"
-                size={20}
-                color="#d6ff4b"
-                style={styles.calendarIcon}
-              />
-            </TouchableOpacity>
-          </View>
-        )}
-
         {/* 인바디 정보 탭 컨텐츠 */}
         {activeTab === "info" && (
           <>
@@ -577,6 +745,14 @@ const InBodyScreen = ({ navigation }: any) => {
               </View>
             ) : inBodyData ? (
               <>
+                {inBodyData.measurementDate && (
+                  <View style={styles.measurementInfo}>
+                    <Text style={styles.measurementInfoText}>
+                      최근 측정일 {inBodyData.measurementDate}
+                    </Text>
+                  </View>
+                )}
+
                 {/* 체성분 분석 */}
                 <View style={styles.analysisSection}>
                   <Text style={styles.sectionTitle}>체성분 분석</Text>
@@ -638,7 +814,10 @@ const InBodyScreen = ({ navigation }: any) => {
                       value={extractValue(
                         inBodyData.bodyComposition?.totalBodyWater
                       )}
-                      percentage={75}
+                      percentage={resolveBarPercentage(
+                        inBodyData.bodyComposition?.totalBodyWater,
+                        "표준"
+                      )}
                       status="표준"
                     />
                     <BarChartItem
@@ -648,7 +827,10 @@ const InBodyScreen = ({ navigation }: any) => {
                           1
                         ) || "N/A"
                       }
-                      percentage={30}
+                      percentage={resolveBarPercentage(
+                        inBodyData.muscleFatAnalysis?.skeletalMuscleMass,
+                        inBodyData.muscleFatAnalysis?.skeletalMuscleStatus
+                      )}
                       status={
                         inBodyData.muscleFatAnalysis?.skeletalMuscleStatus ||
                         "표준"
@@ -660,7 +842,10 @@ const InBodyScreen = ({ navigation }: any) => {
                         inBodyData.muscleFatAnalysis?.bodyFatMass?.toFixed(1) ||
                         "N/A"
                       }
-                      percentage={50}
+                      percentage={resolveBarPercentage(
+                        inBodyData.muscleFatAnalysis?.bodyFatMass,
+                        inBodyData.muscleFatAnalysis?.bodyFatStatus
+                      )}
                       status={
                         inBodyData.muscleFatAnalysis?.bodyFatStatus || "표준"
                       }
@@ -683,7 +868,10 @@ const InBodyScreen = ({ navigation }: any) => {
                       value={
                         inBodyData.obesityAnalysis?.bmi?.toFixed(1) || "N/A"
                       }
-                      percentage={38}
+                      percentage={resolveBarPercentage(
+                        inBodyData.obesityAnalysis?.bmi,
+                        inBodyData.obesityAnalysis?.bmiStatus
+                      )}
                       status={inBodyData.obesityAnalysis?.bmiStatus || "표준"}
                     />
                     <BarChartItem
@@ -693,7 +881,10 @@ const InBodyScreen = ({ navigation }: any) => {
                           1
                         ) || "N/A"
                       }
-                      percentage={72}
+                      percentage={resolveBarPercentage(
+                        inBodyData.obesityAnalysis?.bodyFatPercentage,
+                        inBodyData.obesityAnalysis?.bodyFatPercentageStatus
+                      )}
                       status={
                         inBodyData.obesityAnalysis?.bodyFatPercentageStatus ||
                         "표준"
@@ -712,47 +903,16 @@ const InBodyScreen = ({ navigation }: any) => {
                       <Text style={styles.barRangeLabel}>표준</Text>
                       <Text style={styles.barRangeLabel}>표준이상</Text>
                     </View>
-                    <BarChartItem
-                      label="오른팔"
-                      value="N/A"
-                      percentage={58}
-                      status={
-                        inBodyData.segmentalMuscleAnalysis?.rightArm || "표준"
-                      }
-                    />
-                    <BarChartItem
-                      label="왼팔"
-                      value="N/A"
-                      percentage={66}
-                      status={
-                        inBodyData.segmentalMuscleAnalysis?.leftArm || "표준"
-                      }
-                    />
-                    <BarChartItem
-                      label="몸통"
-                      value="N/A"
-                      percentage={22}
-                      status={
-                        inBodyData.segmentalMuscleAnalysis?.trunk || "표준"
-                      }
-                    />
-                    <BarChartItem
-                      label="오른다리"
-                      value="N/A"
-                      percentage={55}
-                      status={
-                        inBodyData.segmentalMuscleAnalysis?.rightLeg || "표준"
-                      }
-                    />
-                    <BarChartItem
-                      label="왼다리"
-                      value="N/A"
-                      percentage={59}
-                      status={
-                        inBodyData.segmentalMuscleAnalysis?.leftLeg || "표준"
-                      }
-                      isLast
-                    />
+                    {segmentalMuscleItems.map((item, index) => (
+                      <BarChartItem
+                        key={item.label}
+                        label={item.label}
+                        value={item.value}
+                        percentage={item.percentage}
+                        status={item.status}
+                        isLast={index === segmentalMuscleItems.length - 1}
+                      />
+                    ))}
                   </View>
                 </View>
               </>
@@ -825,8 +985,8 @@ const InBodyScreen = ({ navigation }: any) => {
             {/* 사용자 메시지 */}
             <View style={styles.userMessage}>
               <Text style={styles.userMessageText}>
-                <Text style={styles.highlightName}>유정님</Text>, 지난주보다
-                체중이 1.2% 감소했어요!{"\n"}목표치가 얼마 안 남았어요 👍
+                <Text style={styles.highlightName}>{displayName}</Text>
+                {` 오늘도 꾸준한 기록으로 멋진 변화를 만들어봐요! 💪`}
               </Text>
             </View>
 
@@ -978,15 +1138,6 @@ const InBodyScreen = ({ navigation }: any) => {
           </>
         )}
       </ScrollView>
-
-      {/* 달력 모달 */}
-      <InBodyCalendarModal
-        visible={calendarVisible}
-        onClose={() => setCalendarVisible(false)}
-        onSelectDate={handleDateSelect}
-        selectedDate={selectedDate}
-        inBodyDates={inBodyDatesList}
-      />
     </SafeAreaView>
   );
 };
@@ -1010,10 +1161,15 @@ const BarChartItem: React.FC<BarChartItemProps> = ({
     <Text style={styles.barLabel}>{label}</Text>
     <View style={styles.barChartContainer}>
       <View style={styles.barContainer}>
-        <View style={[styles.barFill, { width: `${percentage}%` }]} />
-        <Text style={styles.barValue}>{value}</Text>
+        <View
+          style={[
+            styles.barFill,
+            { width: `${Math.max(0, Math.min(100, percentage))}%` },
+          ]}
+        />
       </View>
     </View>
+    <Text style={styles.barValue}>{value}</Text>
     <Text style={styles.barStatus}>{status}</Text>
   </View>
 );
@@ -1075,21 +1231,21 @@ const styles = StyleSheet.create({
     backgroundColor: "#daff50",
     alignSelf: "center",
   },
-  dateNavigatorContainer: {
-    marginBottom: 20,
-  },
-  dateNavigatorTouchable: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-  },
-  calendarIcon: {
-    position: "absolute",
-    right: 16,
-  },
   analysisSection: {
     marginBottom: 24,
+  },
+  measurementInfo: {
+    marginBottom: 24,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: "#2a2a2a",
+    alignItems: "center",
+  },
+  measurementInfoText: {
+    fontSize: 14.4,
+    color: "#ffffff",
+    fontWeight: "500",
   },
   sectionTitle: {
     fontSize: 16,
@@ -1168,13 +1324,14 @@ const styles = StyleSheet.create({
   },
   barChartContainer: {
     flex: 1,
+    marginRight: -79,
   },
   barContainer: {
-    position: "relative",
     height: 20,
     backgroundColor: "#333333",
     borderRadius: 10,
     overflow: "hidden",
+    width: "100%",
   },
   barFill: {
     height: "100%",
@@ -1182,10 +1339,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   barValue: {
-    position: "absolute",
-    right: 8,
-    top: "50%",
-    transform: [{ translateY: -10 }],
+    minWidth: 50,
+    textAlign: "right",
     fontSize: 12.8,
     color: "#ffffff",
     fontWeight: "500",

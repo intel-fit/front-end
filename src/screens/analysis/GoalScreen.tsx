@@ -19,10 +19,46 @@ const GoalScreen = ({navigation}: any) => {
     type: '유산소',
     calories: 1500,
   });
+  const [userId, setUserId] = useState<string | null>(null);
+  const [userIdLoaded, setUserIdLoaded] = useState(false);
+
+  const storageKey = React.useMemo(
+    () => (userId ? `workoutGoals:${userId}` : 'workoutGoals'),
+    [userId],
+  );
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const storedUserId = await AsyncStorage.getItem('userId');
+        setUserId(storedUserId);
+      } finally {
+        setUserIdLoaded(true);
+      }
+    })();
+  }, []);
+
+  React.useEffect(() => {
+    if (!userIdLoaded) return;
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(storageKey);
+        if (saved) {
+          setGoals(JSON.parse(saved));
+        }
+      } catch (error) {
+        console.error('목표 불러오기 실패:', error);
+      }
+    })();
+  }, [userIdLoaded, storageKey]);
 
   const handleSave = async () => {
     try {
-      await AsyncStorage.setItem('workoutGoals', JSON.stringify(goals));
+      if (!userIdLoaded) {
+        console.warn('사용자 정보를 불러오는 중입니다.');
+        return;
+      }
+      await AsyncStorage.setItem(storageKey, JSON.stringify(goals));
       console.log('목표 저장:', goals);
       navigation.navigate('Stats');
     } catch (error) {

@@ -17,6 +17,7 @@ import {
   getInBodyList,
 } from "../../utils/inbodyApi";
 import { useFocusEffect } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const InBodyManualScreen = ({ navigation, route }: any) => {
   const [loading, setLoading] = useState(false);
@@ -24,8 +25,18 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
   const defaultValues = route?.params?.defaultValues;
   const [inBodyDates, setInBodyDates] = useState<string[]>([]);
 
-  const normalizeDate = (date: string) =>
-    date.includes(".") ? date : date.replace(/-/g, ".");
+  const normalizeDate = useCallback(
+    (date: string) => (date.includes(".") ? date : date.replace(/-/g, ".")),
+    []
+  );
+
+  const getManualBaseKey = useCallback(
+    async () => {
+      const storedUserId = await AsyncStorage.getItem("userId");
+      return `manualInBody:${storedUserId || "guest"}`;
+    },
+    []
+  );
 
   const loadInBodyDates = useCallback(async () => {
     try {
@@ -36,21 +47,90 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
         response?.inBodies ||
         (Array.isArray(response) ? response : []);
 
+      const dateSet = new Set<string>();
+
       if (Array.isArray(list)) {
-        const dates = Array.from(
-          new Set(
-            list
-              .map((item: any) => item?.measurementDate || item?.date)
-              .filter((date: string | undefined) => !!date)
-              .map((date: string) => normalizeDate(date))
-          )
-        ).sort();
-        setInBodyDates(dates);
+        list
+          .map((item: any) => item?.measurementDate || item?.date)
+          .filter((date: string | undefined) => !!date)
+          .map((date: string) => normalizeDate(date))
+          .forEach((date) => dateSet.add(date));
       }
+
+      // 수기 저장된 날짜 병합
+      const manualBaseKey = await getManualBaseKey();
+      const manualDatesKey = `${manualBaseKey}:dates`;
+      const manualDatesRaw = await AsyncStorage.getItem(manualDatesKey);
+      if (manualDatesRaw) {
+        try {
+          const manualDates: string[] = JSON.parse(manualDatesRaw);
+          manualDates
+            .map((date) => normalizeDate(date))
+            .forEach((date) => dateSet.add(date));
+        } catch (error) {
+          console.error(
+            "[INBODY MANUAL] 수기 날짜 목록 파싱 실패:",
+            manualDatesRaw,
+            error
+          );
+        }
+      }
+
+      setInBodyDates(Array.from(dateSet).sort());
     } catch (error) {
       console.error("[INBODY MANUAL] 인바디 날짜 목록 불러오기 실패:", error);
     }
-  }, []);
+  }, [getManualBaseKey, normalizeDate]);
+
+  const storeManualPayload = useCallback(
+    async (measurementDate: string, payload: InBodyPayload) => {
+      const normalizedDate = normalizeDate(measurementDate);
+      const manualBaseKey = await getManualBaseKey();
+      const manualEntryKey = `${manualBaseKey}:${normalizedDate}`;
+      const manualDatesKey = `${manualBaseKey}:dates`;
+
+      const storedPayload = {
+        ...payload,
+        measurementDate: normalizedDate,
+        savedAt: new Date().toISOString(),
+        source: "manual",
+      };
+
+      try {
+        await AsyncStorage.setItem(
+          manualEntryKey,
+          JSON.stringify(storedPayload)
+        );
+
+        const manualDatesRaw = await AsyncStorage.getItem(manualDatesKey);
+        let manualDates: string[] = [];
+        if (manualDatesRaw) {
+          try {
+            manualDates = JSON.parse(manualDatesRaw);
+          } catch (error) {
+            console.error(
+              "[INBODY MANUAL] 수기 날짜 목록 파싱 실패:",
+              manualDatesRaw,
+              error
+            );
+            manualDates = [];
+          }
+        }
+
+        if (!manualDates.includes(normalizedDate)) {
+          manualDates.push(normalizedDate);
+          manualDates.sort();
+          await AsyncStorage.setItem(
+            manualDatesKey,
+            JSON.stringify(manualDates)
+          );
+        }
+      } catch (error) {
+        console.error("[INBODY MANUAL] 수기 데이터 저장 실패:", error);
+      }
+    },
+    [getManualBaseKey, normalizeDate]
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -263,6 +343,10 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
 
       if (response.success) {
         const inBodyId = response.inBody?.id ?? "N/A";
+        await storeManualPayload(
+          cleanPayload.measurementDate || measurementDate,
+          cleanPayload
+        );
         await loadInBodyDates();
         console.log("[INBODY] 등록된 인바디 ID:", inBodyId);
         Alert.alert(

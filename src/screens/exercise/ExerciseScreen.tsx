@@ -57,12 +57,7 @@ const ExerciseScreen = ({ navigation }: any) => {
       (activity) => activity.date === selectedDateStr
     );
   }, [allActivities, selectedDate]);
-  const [goalData, setGoalData] = useState<WorkoutGoals>({
-    frequency: 3,
-    duration: "30분 이상",
-    type: "유산소",
-    calories: 1500,
-  });
+  const [goalData, setGoalData] = useState<WorkoutGoals | null>(null);
   const [completedThisWeek, setCompletedThisWeek] = useState(0);
   const [weeklyCalories, setWeeklyCalories] = useState(0);
   const [weeklyProgress, setWeeklyProgress] = useState<DailyProgressWeekItem[]>([]);
@@ -73,27 +68,47 @@ const ExerciseScreen = ({ navigation }: any) => {
   const [selectedExercise, setSelectedExercise] = useState<Activity | null>(
     null
   );
+  const [userId, setUserId] = useState<string | null>(null);
+  const [userIdLoaded, setUserIdLoaded] = useState(false);
+
+  const WORKOUT_GOALS_KEY_BASE = "workoutGoals";
+  const COMPLETED_COUNT_KEY_BASE = "workoutCompletedThisWeek";
+  const ACTIVITIES_KEY_BASE = "user_activities_v1";
+
+  const getStorageKey = React.useCallback(
+    (base: string) => (userId ? `${base}:${userId}` : base),
+    [userId]
+  );
 
   React.useEffect(() => {
-    loadGoalData();
+    (async () => {
+      try {
+        const storedUserId = await AsyncStorage.getItem("userId");
+        setUserId(storedUserId);
+      } finally {
+        setUserIdLoaded(true);
+      }
+    })();
   }, []);
 
-  const loadGoalData = async () => {
+  const loadGoalData = React.useCallback(async () => {
     try {
-      const saved = await AsyncStorage.getItem("workoutGoals");
-      if (saved) {
-        setGoalData(JSON.parse(saved));
-      }
-      const completed = await AsyncStorage.getItem("workoutCompletedThisWeek");
-      if (completed) {
-        setCompletedThisWeek(parseInt(completed, 10));
-      }
+      const saved = await AsyncStorage.getItem(
+        getStorageKey(WORKOUT_GOALS_KEY_BASE)
+      );
+      setGoalData(saved ? JSON.parse(saved) : null);
+
+      const completed = await AsyncStorage.getItem(
+        getStorageKey(COMPLETED_COUNT_KEY_BASE)
+      );
+      setCompletedThisWeek(completed ? parseInt(completed, 10) || 0 : 0);
     } catch (error) {
       console.log("Failed to load goal data", error);
     }
-  };
+  }, [getStorageKey]);
+
   // 주간 칼로리 합계 로드 (이번 주)
-  const loadWeeklyCalories = async () => {
+  const loadWeeklyCalories = React.useCallback(async () => {
     try {
       const data = await fetchWeeklyProgress();
       setWeeklyProgress(Array.isArray(data) ? data : []);
@@ -109,7 +124,12 @@ const ExerciseScreen = ({ navigation }: any) => {
       setWeeklyCalories(0);
       setWeeklyProgress([]);
     }
-  };
+  }, []);
+
+  React.useEffect(() => {
+    if (!userIdLoaded) return;
+    loadGoalData();
+  }, [userIdLoaded, loadGoalData]);
 
   // 날짜를 yyyy-MM-dd 형식으로 변환
   const formatDateToString = (date: Date): string => {
@@ -147,22 +167,28 @@ const ExerciseScreen = ({ navigation }: any) => {
   // 화면 포커스 시 목표/진행 재로딩 (다른 화면에서 저장 후 복귀 시 반영)
   useFocusEffect(
     React.useCallback(() => {
+      if (!userIdLoaded) return;
       loadGoalData();
       loadWeeklyCalories();
-    }, [])
+    }, [userIdLoaded, loadGoalData, loadWeeklyCalories])
   );
 
   // 완료 횟수 저장 helper
   const setCompletedCountPersist = async (count: number) => {
     try {
       setCompletedThisWeek(count);
-      await AsyncStorage.setItem("workoutCompletedThisWeek", String(count));
+      if (!userIdLoaded) return;
+      await AsyncStorage.setItem(
+        getStorageKey(COMPLETED_COUNT_KEY_BASE),
+        String(count)
+      );
     } catch {}
   };
 
   // 서버 목록 섹션 제거됨
 
   const getProgressPercentage = () => {
+    if (!goalData) return 0;
     // 횟수 기준 진행률
     const countTarget = Math.max(1, goalData.frequency || 1);
     const countRate = Math.min(1, Math.max(0, completedThisWeek / countTarget));
@@ -184,30 +210,36 @@ const ExerciseScreen = ({ navigation }: any) => {
   };
 
   // 운동 기록 영속화: 페이지 전환해도 유지되도록 저장/복원
-  const ACTIVITIES_KEY = "user_activities_v1";
-
   React.useEffect(() => {
+    if (!userIdLoaded) return;
     (async () => {
       try {
-        const saved = await AsyncStorage.getItem(ACTIVITIES_KEY);
+        const saved = await AsyncStorage.getItem(
+          getStorageKey(ACTIVITIES_KEY_BASE)
+        );
         if (saved) {
           const parsed: Activity[] = JSON.parse(saved);
-          if (Array.isArray(parsed)) setAllActivities(parsed);
+          if (Array.isArray(parsed)) {
+            setAllActivities(parsed);
+            return;
+          }
         }
+        setAllActivities([]);
       } catch {}
     })();
-  }, []);
+  }, [userIdLoaded, getStorageKey]);
 
   React.useEffect(() => {
+    if (!userIdLoaded) return;
     (async () => {
       try {
         await AsyncStorage.setItem(
-          ACTIVITIES_KEY,
+          getStorageKey(ACTIVITIES_KEY_BASE),
           JSON.stringify(allActivities)
         );
       } catch {}
     })();
-  }, [allActivities]);
+  }, [allActivities, userIdLoaded, getStorageKey]);
 
   // (임시 API 테스트 버튼 제거)
 
@@ -614,8 +646,9 @@ const ExerciseScreen = ({ navigation }: any) => {
           <View style={styles.goalContent}>
             <Text style={styles.goalTitle}>운동 목표 설정</Text>
             <Text style={styles.goalDescription}>
-              주 {goalData.frequency}회, {goalData.duration}, {goalData.type},{" "}
-              {goalData.calories}kcal
+              {goalData
+                ? `주 ${goalData.frequency}회, ${goalData.duration}, ${goalData.type}, ${goalData.calories}kcal`
+                : "아직 설정된 운동 목표가 없습니다"}
             </Text>
             <View style={styles.progressContainer}>
               <View style={styles.progressBar}>
