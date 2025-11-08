@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,79 +10,56 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import InBodyManualForm from "../../components/common/InBodyManualForm";
-import { postInBody, patchInBody, InBodyPayload } from "../../utils/inbodyApi";
+import {
+  postInBody,
+  patchInBody,
+  InBodyPayload,
+  getInBodyList,
+} from "../../utils/inbodyApi";
+import { useFocusEffect } from "@react-navigation/native";
 
 const InBodyManualScreen = ({ navigation, route }: any) => {
   const [loading, setLoading] = useState(false);
   const inBodyId: number | string | undefined = route?.params?.inBodyId;
   const defaultValues = route?.params?.defaultValues;
+  const [inBodyDates, setInBodyDates] = useState<string[]>([]);
+
+  const normalizeDate = (date: string) =>
+    date.includes(".") ? date : date.replace(/-/g, ".");
+
+  const loadInBodyDates = useCallback(async () => {
+    try {
+      const response = await getInBodyList();
+      const list =
+        response?.data ||
+        response?.inBodyList ||
+        response?.inBodies ||
+        (Array.isArray(response) ? response : []);
+
+      if (Array.isArray(list)) {
+        const dates = Array.from(
+          new Set(
+            list
+              .map((item: any) => item?.measurementDate || item?.date)
+              .filter((date: string | undefined) => !!date)
+              .map((date: string) => normalizeDate(date))
+          )
+        ).sort();
+        setInBodyDates(dates);
+      }
+    } catch (error) {
+      console.error("[INBODY MANUAL] 인바디 날짜 목록 불러오기 실패:", error);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadInBodyDates();
+    }, [loadInBodyDates])
+  );
 
   // 검증 가이드 생성 함수
-  const getValidationGuide = (payload: InBodyPayload): string => {
-    const issues: string[] = [];
-
-    // 분절 근육 합계 검증
-    if (
-      payload.skeletalMuscleMass &&
-      (payload.leftArmMuscle ||
-        payload.rightArmMuscle ||
-        payload.trunkMuscle ||
-        payload.leftLegMuscle ||
-        payload.rightLegMuscle)
-    ) {
-      const segmentSum =
-        (payload.leftArmMuscle || 0) +
-        (payload.rightArmMuscle || 0) +
-        (payload.trunkMuscle || 0) +
-        (payload.leftLegMuscle || 0) +
-        (payload.rightLegMuscle || 0);
-      const smm = payload.skeletalMuscleMass;
-      const diff = Math.abs(segmentSum - smm);
-
-      if (diff > 2) {
-        issues.push(
-          `⚠ 분절 근육 합계(${segmentSum}kg) ≠ 골격근량(${smm}kg)\n  → 분절 근육 합계를 ${smm}kg로 맞춰주세요`
-        );
-      }
-    }
-
-    // 체지방량과 체지방률 일치 검증
-    if (payload.weight && payload.bodyFatMass && payload.bodyFatPercentage) {
-      const calculatedPBF = (payload.bodyFatMass / payload.weight) * 100;
-      const inputPBF = payload.bodyFatPercentage;
-      const diff = Math.abs(calculatedPBF - inputPBF);
-
-      if (diff > 5) {
-        issues.push(
-          `⚠ 체지방률 불일치: 계산값(${calculatedPBF.toFixed(
-            1
-          )}%) ≠ 입력값(${inputPBF}%)\n  → 체지방량을 ${(
-            (inputPBF / 100) *
-            payload.weight
-          ).toFixed(1)}kg로 수정하거나\n  → 체지방률을 ${calculatedPBF.toFixed(
-            1
-          )}%로 수정해주세요`
-        );
-      }
-    }
-
-    // 일반적인 입력 가이드 (항상 표시)
-    const generalGuide =
-      `\n\n📋 입력 가이드:\n` +
-      `• 날짜: YYYY-MM-DD 형식 (예: 2025-11-06)\n` +
-      `• 체중: 20~300kg 범위\n` +
-      `• 골격근량: 5~60kg 범위\n` +
-      `• 분절 근육 합계 = 골격근량이어야 함\n` +
-      `• 체지방률 = (체지방량 ÷ 체중) × 100\n` +
-      `• 체지방률: 0~100% 범위\n` +
-      `• 내장지방 레벨: 1~20 범위`;
-
-    if (issues.length > 0) {
-      return `\n\n❌ 발견된 문제:\n${issues.join("\n\n")}${generalGuide}`;
-    }
-
-    return generalGuide;
-  };
+  const getValidationGuide = (_payload?: InBodyPayload) => "";
 
   const handleSubmit = async (data: any) => {
     // 에러 처리에서 사용할 수 있도록 변수 선언
@@ -152,6 +129,7 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
         obesityDegree: parseNumber(data.obesityDegree),
         visceralFatLevel: parseNumber(data.vfa),
         basalMetabolicRate: parseNumber(data.bmr),
+        bmi: parseNumber(data.bmi),
       };
 
       // undefined 필드 제거 (서버에 불필요한 필드 전송 방지)
@@ -167,19 +145,7 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
       // 에러 처리에서 사용할 수 있도록 변수 저장
       finalPayload = cleanPayload;
 
-      // 필수 필드 검증: 체중과 골격근량만 필수
-      if (
-        !cleanPayload.weight ||
-        cleanPayload.weight <= 0 ||
-        !cleanPayload.skeletalMuscleMass ||
-        cleanPayload.skeletalMuscleMass <= 0
-      ) {
-        Alert.alert("입력 오류", "필수 항목(체중, 골격근량)을 입력해주세요.");
-        setLoading(false);
-        return;
-      }
-
-      // muscleMass도 필수 필드로 검증 (skeletalMuscleMass가 있으면 muscleMass도 있어야 함)
+      // muscleMass가 비어 있으면 골격근량과 동일하게 설정
       if (!cleanPayload.muscleMass) {
         cleanPayload.muscleMass = cleanPayload.skeletalMuscleMass;
       }
@@ -187,108 +153,6 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
       // 검사일이 없으면 오늘 날짜로 자동 설정
       if (!cleanPayload.measurementDate) {
         cleanPayload.measurementDate = new Date().toISOString().slice(0, 10);
-      }
-
-      // 날짜 검증: 미래 날짜는 허용하지 않음 (서버가 거부할 수 있음)
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const inputDate = new Date(cleanPayload.measurementDate);
-      if (isNaN(inputDate.getTime())) {
-        Alert.alert(
-          "입력 오류",
-          "올바른 날짜 형식(YYYY-MM-DD)을 입력해주세요."
-        );
-        setLoading(false);
-        return;
-      }
-      if (inputDate > today) {
-        Alert.alert(
-          "입력 오류",
-          "미래 날짜는 입력할 수 없습니다.\n\n오늘 날짜 또는 과거 날짜를 입력해주세요."
-        );
-        setLoading(false);
-        return;
-      }
-
-      // 값 범위 검증
-      if (cleanPayload.bodyFatPercentage !== undefined) {
-        if (
-          cleanPayload.bodyFatPercentage < 0 ||
-          cleanPayload.bodyFatPercentage > 100
-        ) {
-          Alert.alert("입력 오류", "체지방률은 0-100 사이의 값이어야 합니다.");
-          setLoading(false);
-          return;
-        }
-      }
-
-      // 클라이언트 측 검증: 분절 근육 합계 확인 (경고만 표시, 저장은 진행)
-      if (
-        cleanPayload.skeletalMuscleMass &&
-        (cleanPayload.leftArmMuscle ||
-          cleanPayload.rightArmMuscle ||
-          cleanPayload.trunkMuscle ||
-          cleanPayload.leftLegMuscle ||
-          cleanPayload.rightLegMuscle)
-      ) {
-        const segmentSum =
-          (cleanPayload.leftArmMuscle || 0) +
-          (cleanPayload.rightArmMuscle || 0) +
-          (cleanPayload.trunkMuscle || 0) +
-          (cleanPayload.leftLegMuscle || 0) +
-          (cleanPayload.rightLegMuscle || 0);
-        const smm = cleanPayload.skeletalMuscleMass;
-        const diff = Math.abs(segmentSum - smm);
-
-        // 차이가 2kg 이상이면 경고만 표시 (저장은 진행)
-        if (diff > 2) {
-          console.warn(
-            `[검증 경고] 분절 근육 합계(${segmentSum}kg) ≠ 골격근량(${smm}kg), 차이: ${diff.toFixed(
-              1
-            )}kg`
-          );
-        }
-      }
-
-      // 클라이언트 측 검증: 체지방량과 체지방률 일치 확인 (경고만 표시, 저장은 진행)
-      if (
-        cleanPayload.weight &&
-        cleanPayload.bodyFatMass &&
-        cleanPayload.bodyFatPercentage
-      ) {
-        const calculatedPBF =
-          (cleanPayload.bodyFatMass / cleanPayload.weight) * 100;
-        const inputPBF = cleanPayload.bodyFatPercentage;
-        const diff = Math.abs(calculatedPBF - inputPBF);
-
-        // 차이가 5% 이상이면 경고만 표시 (저장은 진행)
-        if (diff > 5) {
-          console.warn(
-            `[검증 경고] 체지방률 불일치: 계산값(${calculatedPBF.toFixed(
-              1
-            )}%) ≠ 입력값(${inputPBF}%), 차이: ${diff.toFixed(1)}%`
-          );
-        }
-      }
-
-      if (cleanPayload.visceralFatLevel !== undefined) {
-        if (
-          cleanPayload.visceralFatLevel < 0 ||
-          cleanPayload.visceralFatLevel > 20
-        ) {
-          Alert.alert(
-            "입력 오류",
-            "내장지방 레벨은 0-20 사이의 값이어야 합니다."
-          );
-          setLoading(false);
-          return;
-        }
-      }
-
-      // muscleMass 최종 확인 및 설정 (API 호출 직전)
-      if (cleanPayload.skeletalMuscleMass && !cleanPayload.muscleMass) {
-        cleanPayload.muscleMass = cleanPayload.skeletalMuscleMass;
-        console.log("[INBODY] muscleMass 자동 설정:", cleanPayload.muscleMass);
       }
 
       console.log(
@@ -399,6 +263,7 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
 
       if (response.success) {
         const inBodyId = response.inBody?.id ?? "N/A";
+        await loadInBodyDates();
         console.log("[INBODY] 등록된 인바디 ID:", inBodyId);
         Alert.alert(
           inBodyId ? "수정 완료" : "저장 완료",
@@ -438,70 +303,7 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
       // 클라이언트 측 검증 결과
       let clientValidation = "";
       if (finalPayload) {
-        const issues: string[] = [];
-
-        // 분절 근육 합계 검증
-        if (
-          finalPayload.skeletalMuscleMass &&
-          (finalPayload.leftArmMuscle ||
-            finalPayload.rightArmMuscle ||
-            finalPayload.trunkMuscle ||
-            finalPayload.leftLegMuscle ||
-            finalPayload.rightLegMuscle)
-        ) {
-          const segmentSum =
-            (finalPayload.leftArmMuscle || 0) +
-            (finalPayload.rightArmMuscle || 0) +
-            (finalPayload.trunkMuscle || 0) +
-            (finalPayload.leftLegMuscle || 0) +
-            (finalPayload.rightLegMuscle || 0);
-          const smm = finalPayload.skeletalMuscleMass;
-          const diff = Math.abs(segmentSum - smm);
-
-          if (diff > 2) {
-            issues.push(
-              `❌ 분절 근육 합계(${segmentSum}kg) ≠ 골격근량(${smm}kg), 차이: ${diff.toFixed(
-                1
-              )}kg`
-            );
-          } else {
-            issues.push(
-              `✓ 분절 근육 합계(${segmentSum}kg) = 골격근량(${smm}kg)`
-            );
-          }
-        }
-
-        // 체지방량과 체지방률 일치 검증
-        if (
-          finalPayload.weight &&
-          finalPayload.bodyFatMass &&
-          finalPayload.bodyFatPercentage
-        ) {
-          const calculatedPBF =
-            (finalPayload.bodyFatMass / finalPayload.weight) * 100;
-          const inputPBF = finalPayload.bodyFatPercentage;
-          const diff = Math.abs(calculatedPBF - inputPBF);
-
-          if (diff > 5) {
-            issues.push(
-              `❌ 체지방률 불일치: 계산값(${calculatedPBF.toFixed(
-                1
-              )}%) ≠ 입력값(${inputPBF}%), 차이: ${diff.toFixed(1)}%`
-            );
-          } else {
-            issues.push(
-              `✓ 체지방률 일치: 계산값(${calculatedPBF.toFixed(
-                1
-              )}%) ≈ 입력값(${inputPBF}%)`
-            );
-          }
-        }
-
-        if (issues.length > 0) {
-          clientValidation = `\n\n🔍 클라이언트 검증 결과:\n${issues.join(
-            "\n"
-          )}`;
-        }
+        clientValidation = "";
       }
 
       if (error.response?.status === 409) {
@@ -603,7 +405,11 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
           <Text style={styles.loadingText}>저장 중...</Text>
         </View>
       )}
-      <InBodyManualForm onSubmit={handleSubmit} defaultValues={defaultValues} />
+      <InBodyManualForm
+        onSubmit={handleSubmit}
+        defaultValues={defaultValues}
+        inBodyDates={inBodyDates}
+      />
     </SafeAreaView>
   );
 };

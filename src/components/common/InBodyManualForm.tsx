@@ -48,14 +48,39 @@ interface InBodyManualFormProps {
     fatCtrl: string;
     musCtrl: string;
   }>;
+  inBodyDates?: string[];
 }
 
 // iOS 숫자패드 상단에 표시될 액세서리 뷰의 고유 ID
 const ACCESSORY_ID = "doneAccessory";
 
+const normalizeCalendarDate = (value?: string | null): string | null => {
+  if (!value) return null;
+
+  // 숫자만 남겨서 YYYYMMDD 길이 확보
+  const digitsOnly = value.replace(/\D/g, "");
+  if (digitsOnly.length >= 8) {
+    const year = digitsOnly.slice(0, 4);
+    const month = digitsOnly.slice(4, 6);
+    const day = digitsOnly.slice(6, 8);
+    return `${year}.${month}.${day}`;
+  }
+
+  if (value.includes(".")) {
+    return value;
+  }
+
+  if (value.includes("-")) {
+    return value.replace(/-/g, ".");
+  }
+
+  return null;
+};
+
 const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
   onSubmit,
   defaultValues,
+  inBodyDates,
 }) => {
   const scrollViewRef = useRef<ScrollView>(null);
   const ageInputRef = useRef<TextInput>(null);
@@ -127,6 +152,20 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
 
   const [calendarVisible, setCalendarVisible] = useState(false);
 
+  const normalizedInBodyDates = React.useMemo(() => {
+    if (!Array.isArray(inBodyDates) || inBodyDates.length === 0) {
+      return undefined;
+    }
+
+    return inBodyDates.reduce<string[]>((acc, current) => {
+      const normalized = normalizeCalendarDate(current);
+      if (normalized) {
+        acc.push(normalized);
+      }
+      return acc;
+    }, []);
+  }, [inBodyDates]);
+
   // apply defaults on mount/update
   React.useEffect(() => {
     if (defaultValues && typeof defaultValues === "object") {
@@ -144,7 +183,9 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
 
   // 달력에서 날짜 선택 핸들러
   const handleDateSelect = (selectedDate: Date) => {
-    const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+    const dateStr = `${selectedDate.getFullYear()}-${String(
+      selectedDate.getMonth() + 1
+    ).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
     handle("date", dateStr);
     setCalendarVisible(false);
   };
@@ -687,14 +728,14 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
 
       {/* ✅ InputAccessoryView는 ScrollView 밖에 렌더링되어야 합니다. */}
       {DoneBar}
-      
-      {/* 날짜 선택 달력 모달 */}
+
+      {/* 날짜 선택 달력 모달: 저장된 날짜가 없으면 전체 날짜 선택 가능 */}
       <InBodyCalendarModal
         visible={calendarVisible}
         onClose={() => setCalendarVisible(false)}
         onSelectDate={handleDateSelect}
         selectedDate={v.date ? new Date(v.date) : new Date()}
-        inBodyDates={[]} // 수기 입력에서는 모든 날짜 선택 가능
+        inBodyDates={normalizedInBodyDates}
       />
     </>
   );
@@ -848,4 +889,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default InBodyManualForm;
+export default React.memo(InBodyManualForm);
