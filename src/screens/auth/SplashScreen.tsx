@@ -1,6 +1,10 @@
 import React, {useEffect} from 'react';
 import {View, Text, StyleSheet, Animated} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {colors} from '../../theme/colors';
+import {ROUTES} from '../../constants/routes';
+
+const ONBOARDING_KEY = '@intelfit_onboarding_completed';
 
 const SplashScreen = ({navigation}: any) => {
   const fadeAnim = new Animated.Value(0);
@@ -32,15 +36,32 @@ const SplashScreen = ({navigation}: any) => {
     );
     dotAnimation.start();
 
-    // 3초 후 로그인 화면으로 이동
-    const timer = setTimeout(() => {
-      navigation.replace('Login');
-    }, 3000);
+    // 온보딩 완료 여부 확인 후 적절한 화면으로 이동
+    const checkOnboarding = async () => {
+      try {
+        const onboardingCompleted = await AsyncStorage.getItem(ONBOARDING_KEY);
+        const timer = setTimeout(() => {
+          if (onboardingCompleted === 'true') {
+            navigation.replace(ROUTES.LOGIN);
+          } else {
+            navigation.replace(ROUTES.ONBOARDING);
+          }
+        }, 2000); // 스플래시 화면 2초 표시
 
-    return () => {
-      clearTimeout(timer);
-      dotAnimation.stop();
+        return () => {
+          clearTimeout(timer);
+          dotAnimation.stop();
+        };
+      } catch (error) {
+        console.error('온보딩 상태 확인 실패:', error);
+        // 에러 발생 시 온보딩 화면으로 이동
+        setTimeout(() => {
+          navigation.replace(ROUTES.ONBOARDING);
+        }, 2000);
+      }
     };
+
+    checkOnboarding();
   }, [navigation]);
 
   return (
