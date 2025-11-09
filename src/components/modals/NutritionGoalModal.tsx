@@ -4,16 +4,14 @@ import {
   Text,
   Modal,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   StyleSheet,
   TextInput,
   Alert,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
 } from 'react-native';
 import { Ionicons as Icon } from '@expo/vector-icons';
-import { colors } from '../../theme/colors';
 import { mealAPI } from '../../services';
 import type { NutritionGoal, SetNutritionGoalRequest } from '../../types';
 
@@ -31,28 +29,39 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
   onGoalUpdate,
 }) => {
   const [loading, setLoading] = useState(false);
-  const [goalType, setGoalType] = useState<'AUTO' | 'MANUAL'>('AUTO');
+  const [goalType, setGoalType] = useState<'AUTO' | 'MANUAL'>('MANUAL');
   const [targetCalories, setTargetCalories] = useState('');
   const [targetCarbs, setTargetCarbs] = useState('');
   const [targetProtein, setTargetProtein] = useState('');
   const [targetFat, setTargetFat] = useState('');
 
   useEffect(() => {
-    if (currentGoal) {
-      setGoalType(currentGoal.goalType);
-      setTargetCalories(String(currentGoal.targetCalories || 0));
-      setTargetCarbs(String(currentGoal.targetCarbs || 0));
-      setTargetProtein(String(currentGoal.targetProtein || 0));
-      setTargetFat(String(currentGoal.targetFat || 0));
-    } else {
-      // 목표가 없으면 0으로 초기화
+    if (isOpen) {
+      // 모달이 열릴 때 항상 수동 입력 모드로 설정
       setGoalType('MANUAL');
-      setTargetCalories('0');
-      setTargetCarbs('0');
-      setTargetProtein('0');
-      setTargetFat('0');
+      
+      if (currentGoal) {
+        setTargetCalories(String(currentGoal.targetCalories || 0));
+        setTargetCarbs(String(currentGoal.targetCarbs || 0));
+        setTargetProtein(String(currentGoal.targetProtein || 0));
+        setTargetFat(String(currentGoal.targetFat || 0));
+      } else {
+        // 목표가 없으면 0으로 초기화
+        setTargetCalories('0');
+        setTargetCarbs('0');
+        setTargetProtein('0');
+        setTargetFat('0');
+      }
     }
   }, [currentGoal, isOpen]);
+
+  const handleClose = () => {
+    setTargetCalories('');
+    setTargetCarbs('');
+    setTargetProtein('');
+    setTargetFat('');
+    onClose();
+  };
 
   const handleSave = async () => {
     const calories = Number(targetCalories);
@@ -85,7 +94,7 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
         targetCarbs: carbs,
         targetProtein: protein,
         targetFat: fat,
-        goalType: goalType,
+        goalType: goalType, // 현재 선택된 목표 타입 사용
       };
 
       await mealAPI.setNutritionGoal(goalData);
@@ -94,7 +103,7 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
           text: '확인',
           onPress: () => {
             onGoalUpdate();
-            onClose();
+            handleClose();
           },
         },
       ]);
@@ -106,216 +115,180 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
     }
   };
 
+  if (!isOpen) return null;
+
   return (
     <Modal
       visible={isOpen}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalContainer}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {/* 헤더 */}
-            <View style={styles.header}>
-              <Text style={styles.headerTitle}>영양 목표 설정</Text>
-              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                <Icon name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
+      animationType="fade"
+      transparent={true}
+      onRequestClose={handleClose}>
+      <View style={styles.overlay}>
+        <TouchableWithoutFeedback onPress={handleClose}>
+          <View style={styles.overlayTouchable} />
+        </TouchableWithoutFeedback>
+        <TouchableWithoutFeedback>
+          <View style={styles.modalContainer} onStartShouldSetResponder={() => true}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={handleClose}>
+              <Icon name="close" size={28} color="#ffffff" />
+            </TouchableOpacity>
 
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-              {/* 목표 타입 표시 */}
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>목표 타입</Text>
-                <Text style={styles.goalTypeText}>
-                  {goalType === 'AUTO' ? '자동 계산' : '수동 입력'}
-                </Text>
-              </View>
-
-              {/* 입력 필드 - 항상 표시 */}
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>일일 목표량</Text>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>칼로리 (kcal)</Text>
+            <ScrollView
+              style={styles.modalContent}
+              contentContainerStyle={styles.modalContentContainer}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}>
+              {/* 칼로리 & 탄수화물 */}
+              <View style={styles.inputRow}>
+                <View style={styles.inputGroupHalf}>
+                  <Text style={[styles.inputLabel, {marginBottom: 10}]}>칼로리</Text>
                   <TextInput
-                    style={styles.input}
+                    style={styles.inputField}
+                    placeholder="0"
+                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
                     value={targetCalories}
                     onChangeText={setTargetCalories}
-                    placeholder="예: 2000"
-                    placeholderTextColor="#666666"
-                    keyboardType="numeric"
-                    editable={true}
-                    selectionColor="#e3ff7c"
+                    keyboardType="number-pad"
                   />
                 </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>탄수화물 (g)</Text>
+                <View style={styles.inputGroupHalf}>
+                  <Text style={[styles.inputLabel, {marginBottom: 10}]}>탄수화물</Text>
                   <TextInput
-                    style={styles.input}
+                    style={styles.inputField}
+                    placeholder="0"
+                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
                     value={targetCarbs}
                     onChangeText={setTargetCarbs}
-                    placeholder="예: 250"
-                    placeholderTextColor="#666666"
-                    keyboardType="numeric"
-                    editable={true}
-                    selectionColor="#e3ff7c"
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>단백질 (g)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={targetProtein}
-                    onChangeText={setTargetProtein}
-                    placeholder="예: 150"
-                    placeholderTextColor="#666666"
-                    keyboardType="numeric"
-                    editable={true}
-                    selectionColor="#e3ff7c"
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>지방 (g)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={targetFat}
-                    onChangeText={setTargetFat}
-                    placeholder="예: 67"
-                    placeholderTextColor="#666666"
-                    keyboardType="numeric"
-                    editable={true}
-                    selectionColor="#e3ff7c"
+                    keyboardType="number-pad"
                   />
                 </View>
               </View>
-            </ScrollView>
 
-            {/* 저장 버튼 */}
-            <View style={styles.footer}>
-              <TouchableOpacity
-                style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+              {/* 단백질 & 지방 */}
+              <View style={styles.inputRow}>
+                <View style={styles.inputGroupHalf}>
+                  <Text style={[styles.inputLabel, {marginBottom: 10}]}>단백질</Text>
+                  <TextInput
+                    style={styles.inputField}
+                    placeholder="0"
+                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                    value={targetProtein}
+                    onChangeText={setTargetProtein}
+                    keyboardType="number-pad"
+                  />
+                </View>
+                <View style={styles.inputGroupHalf}>
+                  <Text style={[styles.inputLabel, {marginBottom: 10}]}>지방</Text>
+                  <TextInput
+                    style={styles.inputField}
+                    placeholder="0"
+                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                    value={targetFat}
+                    onChangeText={setTargetFat}
+                    keyboardType="number-pad"
+                  />
+                </View>
+              </View>
+
+              {/* 저장하기 버튼 */}
+              <TouchableOpacity 
+                style={[styles.saveButton, loading && styles.saveButtonDisabled]} 
                 onPress={handleSave}
                 disabled={loading}>
                 {loading ? (
-                  <ActivityIndicator size="small" color="#000" />
+                  <ActivityIndicator size="small" color="#000000" />
                 ) : (
-                  <Text style={styles.saveButtonText}>저장</Text>
+                  <Text style={styles.saveButtonText}>저장하기</Text>
                 )}
               </TouchableOpacity>
-            </View>
+            </ScrollView>
           </View>
-        </View>
-      </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
+      </View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  modalContainer: {
+  overlay: {
     flex: 1,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '90%',
-    paddingBottom: 20,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: colors.text,
+  overlayTouchable: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  modalContainer: {
+    backgroundColor: '#252525',
+    borderRadius: 20,
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+    width: '90%',
+    maxWidth: 420,
+    maxHeight: '90%',
+    position: 'relative',
+    zIndex: 999,
+    elevation: 5,
   },
   closeButton: {
-    padding: 4,
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    padding: 0,
+    zIndex: 10,
   },
-  content: {
-    flex: 1,
-    padding: 20,
+  modalContent: {
+    width: '100%',
   },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 16,
-  },
-  goalTypeText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    paddingVertical: 8,
+  modalContentContainer: {
+    paddingTop: 10,
+    paddingBottom: 10,
   },
   inputGroup: {
-    marginBottom: 16,
+    marginBottom: 20,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    gap: 20,
+  },
+  inputGroupHalf: {
+    flex: 1,
   },
   inputLabel: {
     fontSize: 15,
     fontWeight: '700',
-    color: colors.text,
-    marginBottom: 10,
+    color: '#ffffff',
+    textAlign: 'center',
   },
-  input: {
-    backgroundColor: colors.cardBackground,
+  inputField: {
+    width: '100%',
+    backgroundColor: '#464646',
+    borderWidth: 0,
     borderRadius: 10,
-    padding: 16,
+    padding: 20,
     fontSize: 16,
-    color: colors.text,
-    borderWidth: 2,
-    borderColor: '#555555',
-    minHeight: 50,
-  },
-  infoContainer: {
-    backgroundColor: colors.cardBackground,
-    borderRadius: 10,
-    padding: 16,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  infoLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  infoValue: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: colors.text,
-  },
-  footer: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    fontWeight: '700',
+    color: '#ffffff',
+    textAlign: 'center',
   },
   saveButton: {
+    width: '100%',
     backgroundColor: '#e3ff7c',
+    borderWidth: 0,
     borderRadius: 10,
-    paddingVertical: 16,
+    paddingVertical: 20,
     alignItems: 'center',
+    marginTop: 10,
   },
   saveButtonDisabled: {
     opacity: 0.6,
@@ -323,7 +296,7 @@ const styles = StyleSheet.create({
   saveButtonText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#000',
+    color: '#000000',
   },
 });
 

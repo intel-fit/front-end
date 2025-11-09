@@ -9,8 +9,11 @@ import {
   TextInput,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons as Icon } from '@expo/vector-icons';
+import {mealAPI} from '../../services';
+import type {SearchFoodResponse} from '../../types';
 
 interface FoodDirectInputModalProps {
   isOpen: boolean;
@@ -36,24 +39,53 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
   const [protein, setProtein] = useState('');
   const [fat, setFat] = useState('');
   const [weight, setWeight] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!foodName.trim()) {
       Alert.alert('알림', '음식 이름을 입력해주세요.');
       return;
     }
 
-    const foodData = {
-      name: foodName,
-      calories: Number(calories) || 0,
-      carbs: Number(carbs) || 0,
-      protein: Number(protein) || 0,
-      fat: Number(fat) || 0,
-      weight: Number(weight) || 0,
-    };
+    const weightValue = Number(weight) || 0;
+    if (weightValue <= 0) {
+      Alert.alert('알림', '총 중량을 입력해주세요.');
+      return;
+    }
 
-    onSave(foodData);
-    handleClose();
+    setIsLoading(true);
+
+    try {
+      const foodData = {
+        name: foodName.trim(),
+        weight: weightValue,
+        calories: Number(calories) || 0,
+        carbs: Number(carbs) || 0,
+        protein: Number(protein) || 0,
+        fat: Number(fat) || 0,
+      };
+
+      const response: SearchFoodResponse = await mealAPI.addManualFood(foodData);
+
+      // API 응답을 Food 타입으로 변환하여 onSave 콜백 호출
+      const savedFood = {
+        id: response.id,
+        name: response.name,
+        calories: response.calories,
+        carbs: response.carbs,
+        protein: response.protein,
+        fat: response.fat,
+        weight: response.weight,
+      };
+
+      onSave(savedFood);
+      handleClose();
+    } catch (error: any) {
+      console.error('직접 음식 입력 오류:', error);
+      Alert.alert('오류', error.message || '음식 저장에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleClose = () => {
@@ -158,24 +190,26 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
             {/* 총 중량 */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabelCenter}>총 중량</Text>
-              <View style={styles.weightInputWrapper}>
-                <TextInput
-                  style={styles.weightInput}
-                  placeholder="0"
-                  placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                  value={weight}
-                  onChangeText={setWeight}
-                  keyboardType="number-pad"
-                />
-                <View style={styles.dropdownIcon}>
-                  <Icon name="chevron-down" size={24} color="#ffffff" />
-                </View>
-              </View>
+              <TextInput
+                style={styles.inputField}
+                placeholder="0"
+                placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                value={weight}
+                onChangeText={setWeight}
+                keyboardType="number-pad"
+              />
             </View>
 
             {/* 저장하기 버튼 */}
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.saveButtonText}>저장하기</Text>
+            <TouchableOpacity 
+              style={[styles.saveButton, isLoading && styles.saveButtonDisabled]} 
+              onPress={handleSave}
+              disabled={isLoading}>
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#000000" />
+              ) : (
+                <Text style={styles.saveButtonText}>저장하기</Text>
+              )}
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -272,29 +306,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     textAlign: 'center',
   },
-  weightInputWrapper: {
-    position: 'relative',
-    width: '100%',
-  },
-  weightInput: {
-    width: '100%',
-    backgroundColor: '#464646',
-    borderWidth: 0,
-    borderRadius: 10,
-    paddingVertical: 20,
-    paddingLeft: 20,
-    paddingRight: 50,
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#ffffff',
-    textAlign: 'center',
-  },
-  dropdownIcon: {
-    position: 'absolute',
-    right: 15,
-    top: '50%',
-    transform: [{translateY: -12}],
-  },
   saveButton: {
     width: '100%',
     backgroundColor: '#e3ff7c',
@@ -303,6 +314,9 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     alignItems: 'center',
     marginTop: 10,
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
   },
   saveButtonText: {
     fontSize: 16,
