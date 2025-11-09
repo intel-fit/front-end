@@ -144,6 +144,11 @@ export interface WorkoutSession {
   sets: WorkoutSet[];
   userId?: number | string;
   exerciseId?: string; // externalId
+  imageUrl?: string;
+  exerciseImageUrl?: string;
+  image?: string;
+  imgUrl?: string;
+  photoUrl?: string;
 }
 
 export const fetchUserWorkouts = async (userId: string | number): Promise<WorkoutSession[]> => {
