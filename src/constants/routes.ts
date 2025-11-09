@@ -1,6 +1,7 @@
 export const ROUTES = {
   // Auth
   SPLASH: 'Splash',
+  ONBOARDING: 'Onboarding',
   LOGIN: 'Login',
   SIGNUP: 'Signup',
   FIND_ID: 'FindId',
