@@ -230,19 +230,26 @@ export const fetchWeeklyProgress = async (): Promise<DailyProgressWeekItem[]> =>
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
     const url = 'http://43.200.40.140/api/daily-progress/week';
+    console.log('주간 진행률 API 호출:', url);
     const response = await axios.get(url, {
       headers: {
         Authorization: `Bearer ${token || ''}`,
         Accept: 'application/json',
       },
     });
-    return (response.data as DailyProgressWeekItem[]) || [];
+    console.log('주간 진행률 API 응답 상태:', response.status);
+    console.log('주간 진행률 API 응답 데이터:', JSON.stringify(response.data, null, 2));
+    const data = (response.data as DailyProgressWeekItem[]) || [];
+    console.log('주간 진행률 파싱된 데이터:', data);
+    return data;
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
       console.error('주간 진행률 조회 에러:', {
         message: error.message,
         status: error.response?.status,
+        statusText: error.response?.statusText,
         data: error.response?.data,
+        headers: error.response?.headers,
       });
     } else {
       console.error('주간 진행률 조회 예외:', error);
@@ -256,6 +263,65 @@ export const fetchMonthlyProgress = async (yearMonth: string): Promise<DailyProg
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
     const url = `http://43.200.40.140/api/daily-progress/month?yearMonth=${encodeURIComponent(yearMonth)}`;
+    console.log('월별 진행률 API 호출:', url);
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token || ''}`,
+        Accept: 'application/json',
+      },
+    });
+    console.log('월별 진행률 API 응답 상태:', response.status);
+    console.log('월별 진행률 API 응답 데이터:', JSON.stringify(response.data, null, 2));
+    const data = (response.data as DailyProgressWeekItem[]) || [];
+    console.log('월별 진행률 파싱된 데이터:', data);
+    return data;
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      console.error('월별 진행률 조회 에러:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        headers: error.response?.headers,
+      });
+    } else {
+      console.error('월별 진행률 조회 예외:', error);
+    }
+    throw error;
+  }
+};
+
+// 오늘의 운동 달성률과 칼로리 조회
+export const fetchTodayProgress = async (): Promise<DailyProgressWeekItem> => {
+  try {
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const url = 'http://43.200.40.140/api/daily-progress/today';
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token || ''}`,
+        Accept: 'application/json',
+      },
+    });
+    return response.data as DailyProgressWeekItem;
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      console.error('오늘 진행률 조회 에러:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+    } else {
+      console.error('오늘 진행률 조회 예외:', error);
+    }
+    throw error;
+  }
+};
+
+// 최근 N일간 운동 달성률 및 칼로리 목록 조회
+export const fetchRecentProgress = async (days: number = 7): Promise<DailyProgressWeekItem[]> => {
+  try {
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const url = `http://43.200.40.140/api/daily-progress/recent?days=${days}`;
     const response = await axios.get(url, {
       headers: {
         Authorization: `Bearer ${token || ''}`,
@@ -265,13 +331,39 @@ export const fetchMonthlyProgress = async (yearMonth: string): Promise<DailyProg
     return (response.data as DailyProgressWeekItem[]) || [];
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
-      console.error('월별 진행률 조회 에러:', {
+      console.error('최근 진행률 조회 에러:', {
         message: error.message,
         status: error.response?.status,
         data: error.response?.data,
       });
     } else {
-      console.error('월별 진행률 조회 예외:', error);
+      console.error('최근 진행률 조회 예외:', error);
+    }
+    throw error;
+  }
+};
+
+// 특정 날짜의 운동 달성률과 칼로리 조회
+export const fetchDateProgress = async (date: string): Promise<DailyProgressWeekItem> => {
+  try {
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const url = `http://43.200.40.140/api/daily-progress/date?date=${encodeURIComponent(date)}`;
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token || ''}`,
+        Accept: 'application/json',
+      },
+    });
+    return response.data as DailyProgressWeekItem;
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      console.error('날짜별 진행률 조회 에러:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+    } else {
+      console.error('날짜별 진행률 조회 예외:', error);
     }
     throw error;
   }

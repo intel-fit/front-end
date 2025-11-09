@@ -43,6 +43,16 @@ export const request = async <T = any>(
     console.log('API 요청:', `${API_BASE_URL}${endpoint}`);
     console.log('요청 옵션:', {method: options.method || 'GET', headers});
     
+    // POST/PUT 요청인 경우 본문도 로깅
+    if (options.body && (options.method === 'POST' || options.method === 'PUT' || options.method === 'PATCH')) {
+      try {
+        const bodyData = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+        console.log('요청 본문:', JSON.stringify(bodyData, null, 2));
+      } catch (e) {
+        console.log('요청 본문 (원본):', options.body);
+      }
+    }
+    
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers,
@@ -70,6 +80,30 @@ export const request = async <T = any>(
 
     // 에러 응답 처리 (400, 401, 500 등)
     if (!response.ok) {
+      // 400 에러인 경우 더 자세한 정보 로깅
+      if (response.status === 400) {
+        console.error('400 에러 상세 정보:', {
+          status: response.status,
+          statusText: response.statusText,
+          data: JSON.stringify(data, null, 2),
+          code: data.code,
+          message: data.message,
+          errors: data.errors, // validation errors가 있을 수 있음
+          details: data.details, // 상세 에러 정보
+          validationErrors: data.validationErrors, // 추가 검증 에러
+          fieldErrors: data.fieldErrors, // 필드별 에러
+        });
+        
+        // 응답 본문 전체를 다시 읽어서 확인
+        try {
+          const responseClone = response.clone();
+          const responseText = await responseClone.text();
+          console.error('400 에러 원본 응답:', responseText);
+        } catch (e) {
+          console.error('응답 본문 읽기 실패:', e);
+        }
+      }
+      
       const errorMessage = data.message || data.error || data.errorMessage || `HTTP error! status: ${response.status}`;
       const error: any = new Error(errorMessage);
       error.status = response.status; // 상태 코드 저장
@@ -99,7 +133,7 @@ export const request = async <T = any>(
         url: `${API_BASE_URL}${endpoint}`,
         message: '서버에 연결할 수 없습니다. 인터넷 연결을 확인해주세요.',
       });
-      const networkError = new Error('네트워크 연결에 실패했습니다. 인터넷 연결을 확인해주세요.');
+      const networkError: any = new Error('네트워크 연결에 실패했습니다. 인터넷 연결을 확인해주세요.');
       networkError.status = 0;
       throw networkError;
     }

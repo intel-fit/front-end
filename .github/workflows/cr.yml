@@ -19,3 +19,4 @@ jobs:
           LANGUAGE: Korean #한국어 
           MODEL: gpt-4o-mini
           max_tokens: 10000 #이번 리뷰에서 사용할 토큰의 최대 개수
+          prompt: pr 1개에 대해 코멘트 1개만 간단하게 달아주세요. 

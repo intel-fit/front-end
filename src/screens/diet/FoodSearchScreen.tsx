@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,15 @@ import {
   TouchableOpacity,
   StyleSheet,
   FlatList,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import {colors} from '../../theme/colors';
 import FoodDirectInputModal from '../../components/modals/FoodDirectInputModal';
+import {mealAPI} from '../../services';
+import type {SearchFoodResponse} from '../../types';
 
 interface Food {
   id: number;
@@ -26,69 +30,55 @@ interface Food {
 const FoodSearchScreen = ({navigation}: any) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDirectInputModalOpen, setIsDirectInputModalOpen] = useState(false);
+  const [foods, setFoods] = useState<Food[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const foods: Food[] = [
-    {
-      id: 1,
-      name: '엽기 떡복이',
-      calories: 3289,
-      carbs: 198,
-      protein: 132,
-      fat: 149,
-      weight: 81,
-      recordCount: '1000+',
-    },
-    {
-      id: 2,
-      name: '엽기 떡복이',
-      calories: 3289,
-      carbs: 198,
-      protein: 132,
-      fat: 149,
-      weight: 81,
-      recordCount: '100미만',
-    },
-    {
-      id: 3,
-      name: '엽기 떡복이',
-      calories: 3289,
-      carbs: 198,
-      protein: 132,
-      fat: 149,
-      weight: 81,
-    },
-    {
-      id: 4,
-      name: '엽기 떡복이',
-      calories: 3289,
-      carbs: 198,
-      protein: 132,
-      fat: 149,
-      weight: 81,
-    },
-    {
-      id: 5,
-      name: '엽기 떡복이',
-      calories: 3289,
-      carbs: 198,
-      protein: 132,
-      fat: 149,
-      weight: 81,
-    },
-    {
-      id: 6,
-      name: '엽기 떡복이',
-      calories: 3289,
-      carbs: 198,
-      protein: 132,
-      fat: 149,
-      weight: 81,
-    },
-  ];
+  // 검색어 변경 시 API 호출 (디바운싱)
+  useEffect(() => {
+    // 이전 타이머 취소
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
 
-  const filteredFoods = foods.filter(food =>
-    food.name.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+    // 검색어가 비어있으면 결과 초기화
+    if (searchQuery.trim() === '') {
+      setFoods([]);
+      return;
+    }
+
+    // 500ms 후에 API 호출 (디바운싱)
+    setIsLoading(true);
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const results = await mealAPI.searchFood(searchQuery.trim());
+        // API 응답을 Food 타입으로 변환
+        const convertedFoods: Food[] = results.map((item: SearchFoodResponse) => ({
+          id: item.id,
+          name: item.name,
+          calories: item.calories,
+          carbs: item.carbs,
+          protein: item.protein,
+          fat: item.fat,
+          weight: item.weight || undefined,
+        }));
+        setFoods(convertedFoods);
+      } catch (error: any) {
+        console.error('음식 검색 오류:', error);
+        Alert.alert('오류', '음식 검색에 실패했습니다. 다시 시도해주세요.');
+        setFoods([]);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 500);
+
+    // cleanup 함수
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery]);
 
   const handleFoodSelect = (food: Food) => {
     navigation.navigate('MealAdd', {selectedFood: food});
@@ -109,7 +99,7 @@ const FoodSearchScreen = ({navigation}: any) => {
       onPress={() => handleFoodSelect(item)}>
       <View style={styles.foodItemHeader}>
         <View style={styles.foodNameGroup}>
-          <Text style={styles.foodName}>{item.name}</Text>
+          <Text style={styles.foodName} numberOfLines={2}>{item.name}</Text>
           {item.recordCount && (
             <Text style={styles.recordCount}>{item.recordCount} 기록</Text>
           )}
@@ -146,7 +136,7 @@ const FoodSearchScreen = ({navigation}: any) => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Icon name="chevron-back" size={28} color="#ffffff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>식단 검색하기</Text>
+        <Text style={styles.headerTitle}>음식 검색하기</Text>
         <TouchableOpacity onPress={() => navigation.navigate('MealAdd')} style={styles.checkButton}>
           <Icon name="checkmark" size={28} color="#ffffff" />
         </TouchableOpacity>
@@ -181,13 +171,27 @@ const FoodSearchScreen = ({navigation}: any) => {
       </View>
 
       {/* 음식 검색 결과 */}
-      <FlatList
-        data={filteredFoods}
-        renderItem={renderFoodItem}
-        keyExtractor={item => item.id.toString()}
-        style={styles.foodList}
-        contentContainerStyle={styles.foodListContent}
-      />
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#ffffff" />
+          <Text style={styles.loadingText}>검색 중...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={foods}
+          renderItem={renderFoodItem}
+          keyExtractor={item => item.id.toString()}
+          style={styles.foodList}
+          contentContainerStyle={styles.foodListContent}
+          ListEmptyComponent={
+            searchQuery.trim() !== '' ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>검색 결과가 없습니다</Text>
+              </View>
+            ) : null
+          }
+        />
+      )}
 
       {/* 직접 음식 입력 모달 */}
       <FoodDirectInputModal
@@ -291,14 +295,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 12,
+    gap: 12,
   },
   foodNameGroup: {
     flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
   },
   foodName: {
     fontSize: 16,
     fontWeight: '700',
     color: '#ffffff',
+    flexShrink: 1,
   },
   recordCount: {
     fontSize: 8,
@@ -311,7 +319,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#ffffff',
     textAlign: 'right',
-    marginLeft: 10,
+    flexShrink: 0,
   },
   foodNutrition: {
     flexDirection: 'row',
@@ -332,6 +340,29 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '400',
     color: '#ffffff',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#ffffff',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: 'rgba(255, 255, 255, 0.7)',
   },
 });
 

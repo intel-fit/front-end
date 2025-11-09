@@ -45,7 +45,7 @@ const FoodAddOptionsModal: React.FC<FoodAddOptionsModalProps> = ({
         onPress={onClose}>
         <View style={styles.modalContainer} onStartShouldSetResponder={() => true}>
           <View style={styles.optionsContainer}>
-            {/* 사진으로 식단 입력하기 */}
+            {/* 사진으로 음식 입력하기 */}
             <TouchableOpacity
               style={styles.optionCard}
               onPress={handlePhotoOption}>
@@ -53,18 +53,18 @@ const FoodAddOptionsModal: React.FC<FoodAddOptionsModalProps> = ({
                 <Icon name="camera" size={34} color="#ffffff" />
               </View>
               <Text style={styles.optionText}>
-                사진으로{'\n'}식단 입력하기
+                사진으로{'\n'}음식 입력하기
               </Text>
             </TouchableOpacity>
 
-            {/* 식단 검색하기 */}
+            {/* 음식 검색하기 */}
             <TouchableOpacity
               style={styles.optionCard}
               onPress={handleSearchOption}>
               <View style={styles.optionIcon}>
                 <Icon name="search" size={34} color="#ffffff" />
               </View>
-              <Text style={styles.optionText}>식단 검색하기</Text>
+              <Text style={styles.optionText}>음식 검색하기</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Image,
   Alert,
   ActivityIndicator,
   Modal,
@@ -16,11 +15,12 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import {colors} from '../../theme/colors';
+import {useFocusEffect} from '@react-navigation/native';
 import FoodAddOptionsModal from '../../components/modals/FoodAddOptionsModal';
+import FoodEditModal from '../../components/modals/FoodEditModal';
 import {mealAPI} from '../../services';
 import {useDate} from '../../contexts/DateContext';
-import type {AddMealRequest, AddMealFoodRequest, DailyMeal} from '../../types';
+import type {AddMealRequest, AddMealFoodRequest, DailyMeal, DailyMealsResponse, NutritionGoal, SearchFoodResponse} from '../../types';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Platform } from 'react-native';
 
@@ -35,25 +35,112 @@ interface Food {
 }
 
 const MealAddScreen = ({navigation, route}: any) => {
-  const {selectedDate} = useDate();
+  const {selectedDate: contextSelectedDate} = useDate();
   const mealData: DailyMeal | undefined = route?.params?.meal; // 수정 모드일 때 전달받은 식단 데이터
+  const routeSelectedDate: Date | undefined = route?.params?.selectedDate; // DietScreen에서 전달받은 선택 날짜
   const isEditMode = !!mealData;
+  
+  // 날짜 우선순위: route에서 전달받은 날짜 > context의 선택 날짜 > 오늘 날짜
+  const initialDate = routeSelectedDate || contextSelectedDate || new Date();
   
   const [mealName, setMealName] = useState('');
   const [mealType, setMealType] = useState<'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'OTHER'>('BREAKFAST');
-  const [photos, setPhotos] = useState<string[]>([]);
   const [isFoodOptionsModalOpen, setIsFoodOptionsModalOpen] = useState(false);
   const [isMealTypeModalOpen, setIsMealTypeModalOpen] = useState(false);
   const [foods, setFoods] = useState<Food[]>([]);
+  const [isFoodEditModalOpen, setIsFoodEditModalOpen] = useState(false);
+  const [selectedFood, setSelectedFood] = useState<Food | null>(null);
   const [loading, setLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [selectedDateTime, setSelectedDateTime] = useState(new Date());
+  const [selectedDateTime, setSelectedDateTime] = useState(initialDate);
   const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date');
+  const [nutritionGoal, setNutritionGoal] = useState<NutritionGoal | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [dailyMealsData, setDailyMealsData] = useState<DailyMealsResponse | null>(null);
 
-  // 수정 모드일 때 기존 데이터 로드
+  // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
+  const formatDateToString = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // 일일 식단 데이터 조회
+  const fetchDailyMeals = async (date: Date) => {
+    try {
+      const dateString = formatDateToString(date);
+      const data = await mealAPI.getDailyMeals(dateString);
+      setDailyMealsData(data);
+    } catch (error: any) {
+      console.error('일별 식단 조회 실패:', error);
+      setDailyMealsData(null);
+    }
+  };
+
+  // 영양 목표 로드 (목표가 없으면 API에서 자동 생성)
+  const loadNutritionGoal = async () => {
+    try {
+      const data = await mealAPI.getNutritionGoal();
+      setNutritionGoal(data);
+      console.log('영양 목표 조회 성공:', data);
+    } catch (e: any) {
+      console.error('영양 목표 로드 실패:', e);
+      // 401 에러가 아닌 경우에만 기본값 설정 (인증 문제가 아닌 경우)
+      if (e?.status !== 401) {
+        // API에서 자동 생성되므로 잠시 후 재시도
+        setTimeout(async () => {
+          try {
+            const retryData = await mealAPI.getNutritionGoal();
+            setNutritionGoal(retryData);
+            console.log('영양 목표 재시도 성공:', retryData);
+          } catch (retryError) {
+            console.error('영양 목표 재시도 실패:', retryError);
+            // 재시도 실패 시 현재 nutritionGoal이 없으면 0으로 설정
+            setNutritionGoal(prev => {
+              if (!prev) {
+                return {
+                  id: 0,
+                  targetCalories: 0,
+                  targetCarbs: 0,
+                  targetProtein: 0,
+                  targetFat: 0,
+                  goalType: 'AUTO',
+                  goalTypeDescription: '자동 계산',
+                };
+              }
+              return prev;
+            });
+          }
+        }, 500);
+      }
+    }
+  };
+
+  // 컴포넌트 마운트 시 영양 목표 조회
+  useEffect(() => {
+    loadNutritionGoal();
+  }, []);
+
+  // 화면 포커스 시 영양 목표 다시 조회
+  useFocusEffect(
+    React.useCallback(() => {
+      loadNutritionGoal();
+      // 선택된 날짜의 일일 식단 데이터 조회
+      fetchDailyMeals(selectedDateTime);
+    }, [selectedDateTime])
+  );
+
+  // selectedDateTime이 변경될 때 일일 식단 데이터 조회
+  useEffect(() => {
+    fetchDailyMeals(selectedDateTime);
+  }, [selectedDateTime]);
+
+  // 수정 모드일 때 기존 데이터 로드, 또는 route에서 날짜를 받았을 때 날짜 설정
   useEffect(() => {
     if (mealData) {
+      // 수정 모드
       setMealName(mealData.memo || '');
       setMealType(mealData.mealType);
       // 날짜 설정
@@ -77,12 +164,11 @@ const MealAddScreen = ({navigation, route}: any) => {
         weight: food.servingSize,
       }));
       setFoods(convertedFoods);
-      // 사진 URL이 있으면 추가
-      if (mealData.foods?.[0]?.imageUrl) {
-        setPhotos([mealData.foods[0].imageUrl]);
-      }
+    } else if (routeSelectedDate && !mealData) {
+      // route에서 날짜를 받았을 때 날짜 설정 (수정 모드가 아닐 때)
+      setSelectedDateTime(new Date(routeSelectedDate));
     }
-  }, [mealData]);
+  }, [mealData, routeSelectedDate]);
 
   // 날짜 선택 핸들러
 const onChangeDate = (event: any, date?: Date) => {
@@ -162,14 +248,6 @@ const onChangeTime = (event: any, time?: Date) => {
     }
   }, [route?.params?.selectedFood]);
 
-  // 날짜 형식 변환 (Date -> yyyy-MM-dd)
-  const formatDateToString = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
   // 한글 mealType을 영어로 변환
   const getMealTypeName = (type: string): string => {
     const typeMap: Record<string, string> = {
@@ -219,68 +297,73 @@ const onChangeTime = (event: any, time?: Date) => {
     }
   };
 
-  const totalCalories = foods.reduce((sum, food) => sum + food.calories, 0);
-  const targetCalories = 1157;
-  const totalCarbs = foods.reduce((sum, food) => sum + food.carbs, 0);
-  const totalProtein = foods.reduce((sum, food) => sum + food.protein, 0);
-  const totalFat = foods.reduce((sum, food) => sum + food.fat, 0);
+  // API 데이터를 UI 형식으로 변환 (목표가 없으면 0)
+  const targetCalories = nutritionGoal?.targetCalories || 0;
+  const targetCarbs = nutritionGoal?.targetCarbs || 0;
+  const targetProtein = nutritionGoal?.targetProtein || 0;
+  const targetFat = nutritionGoal?.targetFat || 0;
 
-  const handlePhotoUpload = () => {
-    Alert.alert('사진 추가', '사진을 선택하세요', [
-      {
-        text: '카메라',
-        onPress: async () => {
-          const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-          if (permissionResult.granted === false) {
-            Alert.alert('권한 필요', '카메라 권한이 필요합니다.');
-            return;
-          }
-          const result = await ImagePicker.launchCameraAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            quality: 0.8,
-          });
-          if (!result.canceled && result.assets && result.assets[0]) {
-            setPhotos([...photos, result.assets[0].uri]);
-          }
-        },
-      },
-      {
-        text: '갤러리',
-        onPress: async () => {
-          const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (permissionResult.granted === false) {
-            Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.');
-            return;
-          }
-          const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            quality: 0.8,
-          });
-          if (!result.canceled && result.assets && result.assets[0]) {
-            setPhotos([...photos, result.assets[0].uri]);
-          }
-        },
-      },
-      {text: '취소', style: 'cancel'},
-    ]);
-  };
+  // 현재 입력 중인 음식의 영양소 합계
+  const currentMealCalories = foods.reduce((sum, food) => sum + food.calories, 0);
+  const currentMealCarbs = foods.reduce((sum, food) => sum + food.carbs, 0);
+  const currentMealProtein = foods.reduce((sum, food) => sum + food.protein, 0);
+  const currentMealFat = foods.reduce((sum, food) => sum + food.fat, 0);
+
+  // 수정 모드일 때는 현재 수정 중인 식단의 영양소를 제외하고 계산
+  const existingMealsCalories = isEditMode && mealData
+    ? (dailyMealsData?.dailyTotalCalories || 0) - mealData.totalCalories
+    : (dailyMealsData?.dailyTotalCalories || 0);
+
+  const existingMealsCarbs = isEditMode && mealData
+    ? (dailyMealsData?.dailyTotalCarbs || 0) - mealData.totalCarbs
+    : (dailyMealsData?.dailyTotalCarbs || 0);
+
+  const existingMealsProtein = isEditMode && mealData
+    ? (dailyMealsData?.dailyTotalProtein || 0) - mealData.totalProtein
+    : (dailyMealsData?.dailyTotalProtein || 0);
+
+  const existingMealsFat = isEditMode && mealData
+    ? (dailyMealsData?.dailyTotalFat || 0) - mealData.totalFat
+    : (dailyMealsData?.dailyTotalFat || 0);
+
+  // 전체 일일 영양소 합계 (기존 식단 + 현재 입력 중인 음식)
+  const totalCalories = existingMealsCalories + currentMealCalories;
+  const totalCarbs = existingMealsCarbs + currentMealCarbs;
+  const totalProtein = existingMealsProtein + currentMealProtein;
+  const totalFat = existingMealsFat + currentMealFat;
 
   // Food를 API 형식으로 변환
   const convertFoodToAPIFormat = (food: Food): AddMealFoodRequest => {
-    return {
-      foodName: food.name,
-      servingSize: food.weight || 100, // weight를 servingSize로 사용
-      calories: food.calories,
-      carbs: food.carbs,
-      protein: food.protein,
-      fat: food.fat,
-      sodium: 0, // 기본값
-      cholesterol: 0, // 기본값
-      sugar: 0, // 기본값
-      fiber: 0, // 기본값
-      imageUrl: photos[0] || undefined, // 첫 번째 사진 URL
-      aiConfidenceScore: undefined,
+    // 숫자 타입 보장 및 검증
+    const servingSize = typeof food.weight === 'number' 
+      ? (food.weight > 0 ? food.weight : 100)
+      : (parseFloat(String(food.weight || 100)) || 100);
+    
+    const calories = typeof food.calories === 'number' 
+      ? food.calories 
+      : (parseFloat(String(food.calories || 0)) || 0);
+    const carbs = typeof food.carbs === 'number' 
+      ? food.carbs 
+      : (parseFloat(String(food.carbs || 0)) || 0);
+    const protein = typeof food.protein === 'number' 
+      ? food.protein 
+      : (parseFloat(String(food.protein || 0)) || 0);
+    const fat = typeof food.fat === 'number' 
+      ? food.fat 
+      : (parseFloat(String(food.fat || 0)) || 0);
+    
+    // 필수 필드만 포함 (optional 필드는 제외)
+    const foodData: AddMealFoodRequest = {
+      foodName: food.name.trim(),
+      servingSize: Math.max(1, Math.round(servingSize)),
+      calories: Math.max(0, Math.round(calories)),
+      carbs: Math.max(0, Math.round(carbs * 10) / 10), // 소수점 1자리
+      protein: Math.max(0, Math.round(protein * 10) / 10),
+      fat: Math.max(0, Math.round(fat * 10) / 10), // 소수점 1자리
+      // optional 필드들은 제외 (sodium, cholesterol, sugar, fiber)
     };
+    
+    return foodData;
   };
 
   const handleSave = async () => {
@@ -292,16 +375,161 @@ const onChangeTime = (event: any, time?: Date) => {
     setLoading(true);
     try {
       const dateToUse = selectedDateTime; // selectedDate 대신 selectedDateTime 사용
-      const mealRequestData: AddMealRequest = {
-        mealDate: formatDateToString(dateToUse),
+      
+      // 음식 데이터 검증 및 변환
+      const convertedFoods = foods.map(convertFoodToAPIFormat);
+      
+      // 검증: 모든 음식이 유효한지 확인
+      for (let i = 0; i < convertedFoods.length; i++) {
+        const food = convertedFoods[i];
+        if (!food.foodName || food.foodName.trim() === '') {
+          Alert.alert('알림', `${i + 1}번째 음식의 이름이 비어있습니다.`);
+          setLoading(false);
+          return;
+        }
+        if (food.servingSize <= 0) {
+          Alert.alert('알림', `${food.foodName}의 중량이 0보다 커야 합니다.`);
+          setLoading(false);
+          return;
+        }
+        if (food.calories < 0 || food.carbs < 0 || food.protein < 0 || food.fat < 0) {
+          Alert.alert('알림', `${food.foodName}의 영양소 값이 올바르지 않습니다.`);
+          setLoading(false);
+          return;
+        }
+      }
+      
+      const mealDateString = formatDateToString(dateToUse);
+      
+      // 최종 검증: 모든 음식 데이터 확인
+      const validatedFoods = convertedFoods.map((food, index) => {
+        // 모든 필수 필드가 있는지 확인
+        if (!food.foodName || food.foodName.trim() === '') {
+          throw new Error(`${index + 1}번째 음식의 이름이 비어있습니다.`);
+        }
+        if (!food.servingSize || food.servingSize <= 0) {
+          throw new Error(`${food.foodName}의 중량이 올바르지 않습니다.`);
+        }
+        if (food.calories < 0 || food.carbs < 0 || food.protein < 0 || food.fat < 0) {
+          throw new Error(`${food.foodName}의 영양소 값이 올바르지 않습니다.`);
+        }
+        
+        // foodName 길이 제한 (서버 검증을 위해)
+        const trimmedName = food.foodName.trim();
+        const maxNameLength = 100; // 서버가 요구하는 최대 길이 (필요시 조정)
+        const finalFoodName = trimmedName.length > maxNameLength 
+          ? trimmedName.substring(0, maxNameLength) 
+          : trimmedName;
+        
+        // 숫자 값 검증 및 정규화 (API 스펙에 맞게)
+        // servingSize는 정수 (1~10000)
+        const finalServingSize = Math.max(1, Math.min(10000, Math.round(food.servingSize)));
+        
+        // calories는 정수 (0~100000)
+        const finalCalories = Math.max(0, Math.min(100000, Math.round(food.calories)));
+        
+        // carbs, protein, fat은 소수점 가능 (소수점 1자리로 제한, 0~10000)
+        // API 스펙 예제를 보면 fat: 3.6처럼 소수점이 있음
+        const finalCarbs = Math.max(0, Math.min(10000, Math.round((food.carbs || 0) * 10) / 10));
+        const finalProtein = Math.max(0, Math.min(10000, Math.round((food.protein || 0) * 10) / 10));
+        const finalFat = Math.max(0, Math.min(10000, Math.round((food.fat || 0) * 10) / 10));
+        
+        // optional 필드들도 정규화 (소수점 가능)
+        const finalSodium = Math.max(0, Math.min(100000, Math.round((food.sodium || 0) * 10) / 10));
+        const finalCholesterol = Math.max(0, Math.min(100000, Math.round((food.cholesterol || 0) * 10) / 10));
+        const finalSugar = Math.max(0, Math.min(10000, Math.round((food.sugar || 0) * 10) / 10));
+        const finalFiber = Math.max(0, Math.min(10000, Math.round((food.fiber || 0) * 10) / 10));
+        
+        // NaN이나 Infinity 체크
+        if (isNaN(finalServingSize) || isNaN(finalCalories) || isNaN(finalCarbs) || 
+            isNaN(finalProtein) || isNaN(finalFat) || isNaN(finalSodium) || 
+            isNaN(finalCholesterol) || isNaN(finalSugar) || isNaN(finalFiber)) {
+          throw new Error(`${food.foodName}의 영양소 값에 유효하지 않은 숫자가 포함되어 있습니다.`);
+        }
+        
+        // API 스펙에 맞게 모든 필드 포함 (필드 순서도 스펙과 동일하게)
+        const foodData: any = {
+          foodName: finalFoodName,
+          servingSize: finalServingSize,
+          calories: finalCalories,
+          carbs: finalCarbs,
+          protein: finalProtein,
+          fat: finalFat,
+          sodium: finalSodium,
+          cholesterol: finalCholesterol,
+          sugar: finalSugar,
+          fiber: finalFiber,
+        };
+        
+        // optional 필드들 (값이 있을 때만 추가, undefined 제거)
+        if (food.imageUrl) {
+          foodData.imageUrl = food.imageUrl;
+        }
+        if (food.aiConfidenceScore !== undefined && food.aiConfidenceScore !== null) {
+          foodData.aiConfidenceScore = food.aiConfidenceScore;
+        }
+        
+        console.log(`검증된 음식 데이터 ${index + 1}:`, JSON.stringify(foodData, null, 2));
+        
+        return foodData as AddMealFoodRequest;
+      });
+      
+      // 최종 요청 데이터 구성 (API 스펙 순서대로, undefined 필드 제거)
+      const mealRequestData: any = {
+        mealDate: mealDateString,
         mealType: mealType,
-        foods: foods.map(convertFoodToAPIFormat),
-        memo: mealName || undefined,
+        foods: validatedFoods,
       };
+      
+      // memo가 비어있지 않으면 추가 (길이 제한, 빈 문자열은 제외)
+      const trimmedMemo = mealName?.trim() || '';
+      if (trimmedMemo.length > 0) {
+        mealRequestData.memo = trimmedMemo.length > 500 ? trimmedMemo.substring(0, 500) : trimmedMemo;
+      }
+      
+      // undefined 필드 제거 (서버가 거부할 수 있음)
+      const cleanMealRequestData = JSON.parse(JSON.stringify(mealRequestData));
+      
+      // 최종 검증: 날짜 형식 재확인
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(mealDateString)) {
+        Alert.alert('오류', '날짜 형식이 올바르지 않습니다.');
+        setLoading(false);
+        return;
+      }
+      
+      // 최종 검증: mealType 확인
+      const validMealTypes = ['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK', 'OTHER'];
+      if (!validMealTypes.includes(mealType)) {
+        Alert.alert('오류', '식사 타입이 올바르지 않습니다.');
+        setLoading(false);
+        return;
+      }
+      
+      // 최종 검증: foods 배열이 비어있지 않은지 확인
+      if (!cleanMealRequestData.foods || cleanMealRequestData.foods.length === 0) {
+        Alert.alert('알림', '음식을 추가해주세요.');
+        setLoading(false);
+        return;
+      }
+      
+      console.log('식사 추가 요청 데이터:', JSON.stringify(cleanMealRequestData, null, 2));
+      console.log('날짜:', mealDateString);
+      console.log('식사 타입:', mealType);
+      console.log('음식 개수:', validatedFoods.length);
+      validatedFoods.forEach((food, index) => {
+        console.log(`음식 ${index + 1}:`, {
+          foodName: food.foodName,
+          servingSize: food.servingSize,
+          calories: food.calories,
+          carbs: food.carbs,
+          protein: food.protein,
+          fat: food.fat,
+        });
+      });
 
       if (isEditMode && mealData?.id) {
         // 수정 모드: PUT 요청 (API가 없으면 일단 추가 API 사용)
-        await mealAPI.addMeal(mealRequestData);
+        await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
         Alert.alert('성공', '식사가 수정되었습니다.', [
           {
             text: '확인',
@@ -312,7 +540,7 @@ const onChangeTime = (event: any, time?: Date) => {
         ]);
       } else {
         // 추가 모드
-        await mealAPI.addMeal(mealRequestData);
+        await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
         Alert.alert('성공', '식사가 추가되었습니다.', [
           {
             text: '확인',
@@ -344,8 +572,132 @@ const onChangeTime = (event: any, time?: Date) => {
     setIsFoodOptionsModalOpen(true);
   };
 
-  const handlePhotoOption = () => {
-    handlePhotoUpload();
+  const handlePhotoOption = async () => {
+    Alert.alert('사진 추가', '사진을 선택하세요', [
+      {
+        text: '카메라',
+        onPress: async () => {
+          const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+          if (permissionResult.granted === false) {
+            Alert.alert('권한 필요', '카메라 권한이 필요합니다.');
+            return;
+          }
+          const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ['images'],
+            quality: 0.8,
+            allowsEditing: false,
+          });
+          if (!result.canceled && result.assets && result.assets[0]) {
+            await handleUploadFood(result.assets[0].uri);
+          }
+        },
+      },
+      {
+        text: '갤러리',
+        onPress: async () => {
+          const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (permissionResult.granted === false) {
+            Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.');
+            return;
+          }
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            quality: 0.8,
+            allowsEditing: false,
+          });
+          if (!result.canceled && result.assets && result.assets[0]) {
+            await handleUploadFood(result.assets[0].uri);
+          }
+        },
+      },
+      {text: '취소', style: 'cancel'},
+    ]);
+  };
+
+  const handleUploadFood = async (imageUri: string) => {
+    setIsUploading(true);
+    try {
+      const response = await mealAPI.uploadFood(imageUri);
+      
+      // API 응답에서 음식 정보 추출 (응답 형식에 따라 조정 필요)
+      // 예상 응답 형식: { ai_result: {...} }, { foods: [...] }, 또는 직접 음식 배열
+      let foodData: Food | null = null;
+      
+      console.log('업로드 응답:', JSON.stringify(response, null, 2));
+      
+      // ai_result 객체가 있는 경우 (사진 업로드 응답)
+      if (response.ai_result) {
+        const item = response.ai_result;
+        
+        // 숫자 타입 보장 및 검증
+        const calories = typeof item.calories === 'number' ? item.calories : parseFloat(String(item.calories || 0)) || 0;
+        const carbs = typeof item.carbs === 'number' ? item.carbs : parseFloat(String(item.carbs || 0)) || 0;
+        const protein = typeof item.protein === 'number' ? item.protein : parseFloat(String(item.protein || 0)) || 0;
+        const fat = typeof item.fat === 'number' ? item.fat : parseFloat(String(item.fat || 0)) || 0;
+        const weight = typeof item.weight === 'number' ? item.weight : parseFloat(String(item.weight || 100)) || 100;
+        
+        foodData = {
+          id: item.id || Date.now(),
+          name: item.name || '음식',
+          calories: Math.max(0, calories),
+          carbs: Math.max(0, carbs),
+          protein: Math.max(0, protein),
+          fat: Math.max(0, fat),
+          weight: Math.max(1, weight), // weight는 최소 1
+        };
+        
+        console.log('사진 업로드로 변환된 음식 데이터:', foodData);
+      } else if (Array.isArray(response)) {
+        // 배열인 경우 첫 번째 음식 사용
+        if (response.length > 0) {
+          const item = response[0];
+          foodData = {
+            id: item.id || Date.now(),
+            name: item.name || '음식',
+            calories: item.calories || 0,
+            carbs: item.carbs || 0,
+            protein: item.protein || 0,
+            fat: item.fat || 0,
+            weight: item.weight || 100,
+          };
+        }
+      } else if (response.foods && Array.isArray(response.foods) && response.foods.length > 0) {
+        // foods 배열이 있는 경우
+        const item = response.foods[0];
+        foodData = {
+          id: item.id || Date.now(),
+          name: item.name || item.foodName || '음식',
+          calories: item.calories || 0,
+          carbs: item.carbs || 0,
+          protein: item.protein || 0,
+          fat: item.fat || 0,
+          weight: item.weight || item.servingSize || 100,
+        };
+      } else if (response.name) {
+        // 직접 음식 객체인 경우
+        foodData = {
+          id: response.id || Date.now(),
+          name: response.name,
+          calories: response.calories || 0,
+          carbs: response.carbs || 0,
+          protein: response.protein || 0,
+          fat: response.fat || 0,
+          weight: response.weight || response.servingSize || 100,
+        };
+      }
+
+      if (foodData) {
+        setFoods(prev => [...prev, foodData!]);
+        Alert.alert('성공', '음식이 추가되었습니다.');
+      } else {
+        Alert.alert('알림', '음식 정보를 가져올 수 없습니다.');
+      }
+    } catch (error: any) {
+      console.error('사진 업로드 오류:', error);
+      Alert.alert('오류', error.message || '사진 업로드에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleSearchOption = () => {
@@ -360,6 +712,24 @@ const onChangeTime = (event: any, time?: Date) => {
   const handleMealTypeSelect = (type: 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'OTHER') => {
     setMealType(type);
     setIsMealTypeModalOpen(false);
+  };
+
+  // 음식 수정 핸들러
+  const handleFoodUpdate = (updatedFood: Food) => {
+    setFoods(prev => prev.map(food => 
+      food.id === updatedFood.id ? updatedFood : food
+    ));
+  };
+
+  // 음식 삭제 핸들러
+  const handleFoodDelete = (foodId: number) => {
+    setFoods(prev => prev.filter(food => food.id !== foodId));
+  };
+
+  // 소수점 한 자리 포맷팅 (소수점이 0이면 정수로 표시)
+  const formatDecimal = (value: number): string => {
+    const fixed = value.toFixed(1);
+    return fixed.endsWith('.0') ? fixed.slice(0, -2) : fixed;
   };
 
   return (
@@ -411,51 +781,41 @@ const onChangeTime = (event: any, time?: Date) => {
         {/* 칼로리 요약 */}
         <View style={styles.calorieSummary}>
           <Text style={styles.calorieText}>
-            {totalCalories} / {targetCalories}kcal
+            {formatDecimal(totalCalories)} / {formatDecimal(targetCalories)}kcal
           </Text>
           <View style={styles.nutritionInline}>
             <View style={styles.nutritionInlineItem}>
               <Text style={styles.nutritionInlineLabel}>탄수화물</Text>
               <Text style={styles.nutritionInlineValue}>
-                {totalCarbs} / 198g
+                {formatDecimal(totalCarbs)} / {formatDecimal(targetCarbs)}g
               </Text>
             </View>
             <View style={styles.nutritionInlineItem}>
               <Text style={styles.nutritionInlineLabel}>단백질</Text>
               <Text style={styles.nutritionInlineValue}>
-                {totalProtein} / 132g
+                {formatDecimal(totalProtein)} / {formatDecimal(targetProtein)}g
               </Text>
             </View>
             <View style={styles.nutritionInlineItem}>
               <Text style={styles.nutritionInlineLabel}>지방</Text>
-              <Text style={styles.nutritionInlineValue}>{totalFat} / 49g</Text>
+              <Text style={styles.nutritionInlineValue}>{formatDecimal(totalFat)} / {formatDecimal(targetFat)}g</Text>
             </View>
           </View>
         </View>
 
-        {/* 사진 섹션 */}
-        <ScrollView
-          horizontal
-          style={styles.photoSection}
-          showsHorizontalScrollIndicator={false}>
-          {photos.map((photo, idx) => (
-            <View key={idx} style={styles.photoBox}>
-              <Image source={{uri: photo}} style={styles.photoImage} />
-            </View>
-          ))}
-          <TouchableOpacity
-            style={styles.photoBox}
-            onPress={handlePhotoUpload}>
-            <Icon name="camera" size={34} color="#ffffff" />
-          </TouchableOpacity>
-        </ScrollView>
-
         {/* 음식 목록 */}
         <View style={styles.foodList}>
           {foods.map((food, index) => (
-            <View key={food.id} style={styles.foodItem}>
+            <TouchableOpacity
+              key={food.id}
+              style={styles.foodItem}
+              onPress={() => {
+                setSelectedFood(food);
+                setIsFoodEditModalOpen(true);
+              }}
+              activeOpacity={0.7}>
               <View style={styles.foodItemHeader}>
-                <Text style={styles.foodName}>{food.name}</Text>
+                <Text style={styles.foodName} numberOfLines={2}>{food.name}</Text>
                 <Text style={styles.foodCalories}>{food.calories}kcal</Text>
               </View>
               <View style={styles.foodNutrition}>
@@ -476,7 +836,7 @@ const onChangeTime = (event: any, time?: Date) => {
                   <Text style={styles.nutritionValue}>{food.weight}g</Text>
                 </View>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
 
@@ -496,6 +856,32 @@ const onChangeTime = (event: any, time?: Date) => {
         onPhotoOption={handlePhotoOption}
         onSearchOption={handleSearchOption}
       />
+
+      <FoodEditModal
+        isOpen={isFoodEditModalOpen}
+        onClose={() => {
+          setIsFoodEditModalOpen(false);
+          setSelectedFood(null);
+        }}
+        food={selectedFood}
+        onSave={handleFoodUpdate}
+        onDelete={handleFoodDelete}
+      />
+
+      {/* 업로드 중 로딩 모달 */}
+      {isUploading && (
+        <Modal
+          visible={isUploading}
+          transparent={true}
+          animationType="fade">
+          <View style={styles.loadingOverlay}>
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#e3ff7c" />
+              <Text style={styles.loadingText}>사진 분석 중...</Text>
+            </View>
+          </View>
+        </Modal>
+      )}
 
       {/* 날짜 선택기 */}
       {showDatePicker && (
@@ -728,26 +1114,6 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: '#ffffff',
   },
-  photoSection: {
-    flexDirection: 'row',
-    gap: 18,
-    paddingHorizontal: 20,
-    marginBottom: 15,
-  },
-  photoBox: {
-    width: 136,
-    height: 124,
-    backgroundColor: '#393a38',
-    borderRadius: 20,
-    marginRight: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  photoImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 20,
-  },
   foodList: {
     paddingHorizontal: 20,
     marginBottom: 15,
@@ -762,8 +1128,9 @@ const styles = StyleSheet.create({
   foodItemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 12,
+    gap: 12,
   },
   modalOverlay: {
     flex: 1,
@@ -825,12 +1192,16 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#ffffff',
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
   },
   foodCalories: {
     fontSize: 20,
     fontWeight: '400',
     color: '#ffffff',
     textAlign: 'right',
+    flexShrink: 0,
   },
   foodNutrition: {
     flexDirection: 'row',
@@ -867,7 +1238,27 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  loadingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContainer: {
+    backgroundColor: '#252525',
+    borderRadius: 20,
+    padding: 30,
+    alignItems: 'center',
+    gap: 15,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
 });
 
 export default MealAddScreen;
+
+
 
