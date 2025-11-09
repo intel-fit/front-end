@@ -444,22 +444,28 @@ const AnalysisScreen = ({ navigation }: any) => {
   }, []);
 
   const loadUserName = useCallback(async () => {
-    if (userName) return;
+    let cachedName: string | null = null;
     try {
-      const cachedName = await AsyncStorage.getItem("userName");
+      cachedName = await AsyncStorage.getItem("userName");
       if (cachedName) {
         setUserName(cachedName);
-        return;
       }
+    } catch (error) {
+      console.warn("[ANALYSIS] 사용자 이름 캐시 로드 실패:", error);
+    }
+
+    try {
       const profile = await authAPI.getProfile();
       if (profile?.name) {
         setUserName(profile.name);
-        await AsyncStorage.setItem("userName", profile.name);
+        if (profile.name !== cachedName) {
+          await AsyncStorage.setItem("userName", profile.name);
+        }
       }
     } catch (error) {
-      console.error("[ANALYSIS] 사용자 이름 불러오기 실패:", error);
+      console.error("[ANALYSIS] 사용자 이름 갱신 실패:", error);
     }
-  }, [userName]);
+  }, []);
 
   const loadLatestInBodyDate = useCallback(async () => {
     if (!userIdLoaded) return;
@@ -997,7 +1003,7 @@ const styles = StyleSheet.create({
   greetingHighlight: {
     fontSize: 19.2,
     fontWeight: "600",
-    color: "#ccff00",
+    color: "#E3FF7C",
   },
   inbodySection: {
     backgroundColor: "#2a2a2a",
@@ -1053,7 +1059,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: "#4ade80",
+    backgroundColor: "#E3FF7C",
     gap: 8,
     marginBottom: 15,
   },
@@ -1076,7 +1082,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   highlightText: {
-    color: "#ccff00",
+    color: "#E3FF7C",
     fontWeight: "400",
   },
   exerciseList: {
