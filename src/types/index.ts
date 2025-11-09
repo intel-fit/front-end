@@ -18,6 +18,33 @@ export interface Food {
   recordCount?: string;
 }
 
+// 음식 검색 API 응답 타입
+export interface SearchFoodResponse {
+  id: number;
+  name: string;
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  fiber: number;
+  sugar: number;
+  sodium: number;
+  weight: number;
+  glycemic_index: number;
+  processing_level: number;
+  company: string;
+}
+
+// 직접 음식 입력 API 요청 타입
+export interface AddManualFoodRequest {
+  name: string;
+  weight: number;
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+}
+
 export interface Meal {
   id: string;
   date: string;
@@ -126,5 +153,33 @@ export interface DailyProgressWeekItem {
   date: string; // yyyy-MM-dd 형식
   exerciseRate: number; // 운동 달성률 (0~100)
   totalCalorie: number; // 총 칼로리
+}
+
+// 영양 목표 타입
+export interface NutritionGoal {
+  id: number;
+  targetCalories: number;
+  targetCarbs: number;
+  targetProtein: number;
+  targetFat: number;
+  goalType: string;
+  goalTypeDescription: string;
+}
+
+// 영양 목표 설정 요청 타입
+export interface SetNutritionGoalRequest {
+  targetCalories: number;
+  targetCarbs: number;
+  targetProtein: number;
+  targetFat: number;
+  goalType?: 'AUTO' | 'MANUAL';
+}
+
+// 영양 목표 설정 응답 타입
+export interface SetNutritionGoalResponse {
+  success: boolean;
+  message?: string;
+  goal?: NutritionGoal;
+  data?: NutritionGoal;
 }
 

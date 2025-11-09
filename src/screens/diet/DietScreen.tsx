@@ -15,6 +15,7 @@ import {mealAPI} from '../../services';
 import {fetchWeeklyProgress, fetchMonthlyProgress} from '../../utils/exerciseApi';
 import {useFocusEffect} from '@react-navigation/native';
 import type {DailyMealsResponse, DailyMeal, DailyProgressWeekItem, NutritionGoal} from '../../types';
+import NutritionGoalModal from '../../components/modals/NutritionGoalModal';
 
 const DietScreen = ({navigation}: any) => {
   // 달력 관련 상태
@@ -28,6 +29,7 @@ const DietScreen = ({navigation}: any) => {
   const [weeklyProgress, setWeeklyProgress] = useState<DailyProgressWeekItem[]>([]);
   const [monthlyProgress, setMonthlyProgress] = useState<DailyProgressWeekItem[]>([]);
   const [nutritionGoal, setNutritionGoal] = useState<NutritionGoal | null>(null);
+  const [isNutritionModalOpen, setIsNutritionModalOpen] = useState(false);
 
   // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
   const formatDateToString = (date: Date): string => {
@@ -53,6 +55,47 @@ const DietScreen = ({navigation}: any) => {
     }
   };
 
+  // 식사 삭제 핸들러
+  const handleDeleteMeal = async (mealId: number) => {
+    Alert.alert(
+      '식사 삭제',
+      '이 식사를 삭제하시겠습니까?',
+      [
+        {text: '취소', style: 'cancel'},
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await mealAPI.deleteMeal(mealId);
+              Alert.alert('성공', '식사가 삭제되었습니다.');
+              
+              // 삭제 후 데이터 새로고침
+              const dateToFetch = selectedDate || new Date();
+              await fetchDailyMeals(dateToFetch);
+            } catch (error: any) {
+              console.error('식사 삭제 실패:', error);
+              let errorMessage = '식사 삭제에 실패했습니다.';
+              
+              if (error.status === 404) {
+                errorMessage = '삭제할 식사를 찾을 수 없습니다.';
+              } else if (error.status === 403) {
+                errorMessage = '삭제 권한이 없습니다.';
+              } else if (error.message) {
+                errorMessage = error.message;
+              }
+              
+              Alert.alert('오류', errorMessage);
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // 선택된 날짜가 변경될 때마다 API 호출
   useEffect(() => {
     const dateToFetch = selectedDate || new Date();
@@ -70,7 +113,16 @@ const DietScreen = ({navigation}: any) => {
   // 주간 데이터 로드
   const loadWeeklyProgress = async () => {
     try {
+      console.log('주간 진행률 조회 시작');
       const data = await fetchWeeklyProgress();
+      console.log('주간 진행률 데이터:', data);
+      console.log('주간 진행률 데이터 개수:', Array.isArray(data) ? data.length : 0);
+      if (Array.isArray(data) && data.length > 0) {
+        console.log('주간 진행률 첫 번째 항목:', data[0]);
+        console.log('날짜 형식 확인:', data[0]?.date);
+        console.log('칼로리 값:', data[0]?.totalCalorie);
+        console.log('운동 달성률:', data[0]?.exerciseRate);
+      }
       setWeeklyProgress(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error('주간 식단 진행률 로드 실패:', e);
@@ -81,8 +133,16 @@ const DietScreen = ({navigation}: any) => {
   // 월별 데이터 로드
   const loadMonthlyProgress = async (year: number, month: number) => {
     try {
+      // API는 YYYY-MM 형식 요구 (예: 2025-11)
       const yearMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
+      console.log('월별 진행률 조회:', yearMonth);
       const data = await fetchMonthlyProgress(yearMonth);
+      console.log('월별 진행률 데이터:', data);
+      console.log('월별 진행률 데이터 개수:', Array.isArray(data) ? data.length : 0);
+      if (Array.isArray(data) && data.length > 0) {
+        console.log('월별 진행률 첫 번째 항목:', data[0]);
+        console.log('날짜 형식 확인:', data[0]?.date);
+      }
       setMonthlyProgress(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error('월별 식단 진행률 로드 실패:', e);
@@ -94,8 +154,21 @@ const DietScreen = ({navigation}: any) => {
   const getDayProgress = (date: Date): DailyProgressWeekItem | undefined => {
     const dateStr = formatDateToString(date);
     // 먼저 월별 데이터에서 찾고, 없으면 주간 데이터에서 찾기
-    return monthlyProgress.find(item => item.date === dateStr) 
+    const found = monthlyProgress.find(item => item.date === dateStr) 
       || weeklyProgress.find(item => item.date === dateStr);
+    
+    // 디버깅: 데이터가 없을 때만 로그 출력 (너무 많은 로그 방지)
+    if (!found && (monthlyProgress.length > 0 || weeklyProgress.length > 0)) {
+      console.log(`날짜 ${dateStr}에 대한 데이터를 찾을 수 없음. 월별: ${monthlyProgress.length}개, 주간: ${weeklyProgress.length}개`);
+      if (monthlyProgress.length > 0) {
+        console.log('월별 데이터 샘플:', monthlyProgress.slice(0, 3));
+      }
+      if (weeklyProgress.length > 0) {
+        console.log('주간 데이터 샘플:', weeklyProgress.slice(0, 3));
+      }
+    }
+    
+    return found;
   };
 
   // 영양 목표 로드 (목표가 없으면 API에서 자동 생성)
@@ -305,8 +378,19 @@ const DietScreen = ({navigation}: any) => {
                         </View>
                         {(() => {
                           const dayProgress = getDayProgress(d);
-                          const calories = dayProgress?.totalCalorie || 0;
-                          const rate = dayProgress?.exerciseRate || 0;
+                          const calories = dayProgress?.totalCalorie ?? 0;
+                          const rate = dayProgress?.exerciseRate ?? 0;
+                          
+                          // 디버깅: 특정 날짜의 데이터 확인
+                          if (d.getDate() === new Date().getDate() && d.getMonth() === new Date().getMonth()) {
+                            console.log(`오늘 날짜 ${formatDateToString(d)}의 진행률:`, {
+                              found: !!dayProgress,
+                              calories,
+                              rate,
+                              dayProgress
+                            });
+                          }
+                          
                           return (
                             <>
                               <Text
@@ -373,21 +457,21 @@ const DietScreen = ({navigation}: any) => {
                           {d.getDate()}
                         </Text>
                       </View>
-                      {(() => {
-                        const dayProgress = getDayProgress(d);
-                        const calories = dayProgress?.totalCalorie || 0;
-                        const rate = dayProgress?.exerciseRate || 0;
-                        return (
-                          <>
-                            <Text style={styles.calendarCalories}>
-                              {calories > 0 ? `${Math.round(calories)}k` : ''}
-                            </Text>
-                            <Text style={styles.calendarPercentage}>
-                              {rate > 0 ? `${Math.round(rate)}%` : ''}
-                            </Text>
-                          </>
-                        );
-                      })()}
+                        {(() => {
+                          const dayProgress = getDayProgress(d);
+                          const calories = dayProgress?.totalCalorie ?? 0;
+                          const rate = dayProgress?.exerciseRate ?? 0;
+                          return (
+                            <>
+                              <Text style={styles.calendarCalories}>
+                                {calories > 0 ? `${Math.round(calories)}k` : ''}
+                              </Text>
+                              <Text style={styles.calendarPercentage}>
+                                {rate > 0 ? `${Math.round(rate)}%` : ''}
+                              </Text>
+                            </>
+                          );
+                        })()}
                     </TouchableOpacity>
                   );
                 });
@@ -407,10 +491,18 @@ const DietScreen = ({navigation}: any) => {
                 / {nutritionData.target}kcal
               </Text>
             </View>
-            {/* 목표 대비 달성률 (%) */}
-            <Text style={styles.caloriePercentage}>
-              {nutritionData.percentage}%
-            </Text>
+            <View style={styles.calorieHeaderRight}>
+              {/* 목표 대비 달성률 (%) */}
+              <Text style={styles.caloriePercentage}>
+                {nutritionData.percentage}%
+              </Text>
+              {/* 영양 목표 설정 버튼 */}
+              <TouchableOpacity
+                style={styles.nutritionButton}
+                onPress={() => setIsNutritionModalOpen(true)}>
+                <Icon name="settings-outline" size={20} color={colors.text} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* 칼로리 진행 바: 목표 달성률을 시각적으로 표시 */}
@@ -510,7 +602,11 @@ const DietScreen = ({navigation}: any) => {
             <Text style={styles.mealRecordTitle}>식단 기록하기</Text>
             <TouchableOpacity
               style={styles.addButton}
-              onPress={() => navigation.navigate('MealAdd')}>
+              onPress={() => {
+                // 선택한 날짜를 MealAddScreen으로 전달
+                const dateToPass = selectedDate || new Date();
+                navigation.navigate('MealAdd', { selectedDate: dateToPass });
+              }}>
               <Icon name="add" size={18} color={colors.text} />
             </TouchableOpacity>
           </View>
@@ -521,42 +617,63 @@ const DietScreen = ({navigation}: any) => {
           {meals.map((meal, index) => {
             const originalMeal = dailyMealsData?.meals[index];
             return (
-              <TouchableOpacity
-                key={index}
-                style={styles.mealSection}
-                onPress={() => {
-                  if (originalMeal) {
-                    navigation.navigate('MealAdd', { meal: originalMeal });
-                  }
-                }}
-                activeOpacity={0.7}>
-                {/* 식사 헤더: 식사 종류, 시간, 칼로리 */}
-                <View style={styles.mealHeader}>
-                  <View style={styles.mealLeft}>
-                    <Text style={styles.mealTitle}>{meal.type}</Text>
-                    <Text style={styles.mealTime}>{meal.time}</Text>
-                  </View>
-                  {/* 해당 식사의 총 칼로리 */}
-                  <Text style={styles.mealCalories}>{meal.calories} kcal</Text>
-                </View>
-                {/* 섭취한 음식 목록: 음식명을 태그 형태로 표시 */}
-                <View style={styles.foodTags}>
-                  {meal.foods.map((food, foodIndex) => (
-                    <View
-                      key={foodIndex}
-                      style={[
-                        styles.foodTag,
-                        {backgroundColor: food.color},
-                      ]}>
-                      <Text style={styles.foodTagText}>{food.name}</Text>
+              <View key={index} style={styles.mealSection}>
+                <TouchableOpacity
+                  style={styles.mealContent}
+                  onPress={() => {
+                    if (originalMeal) {
+                      navigation.navigate('MealAdd', { meal: originalMeal });
+                    }
+                  }}
+                  activeOpacity={0.7}>
+                  {/* 식사 헤더: 식사 종류, 시간, 칼로리 */}
+                  <View style={styles.mealHeader}>
+                    <View style={styles.mealLeft}>
+                      <Text style={styles.mealTitle}>{meal.type}</Text>
+                      <Text style={styles.mealTime}>{meal.time}</Text>
                     </View>
-                  ))}
-                </View>
-              </TouchableOpacity>
+                    {/* 해당 식사의 총 칼로리 */}
+                    <Text style={styles.mealCalories}>{meal.calories} kcal</Text>
+                  </View>
+                  {/* 섭취한 음식 목록: 음식명을 태그 형태로 표시 */}
+                  <View style={styles.foodTags}>
+                    {meal.foods.map((food, foodIndex) => (
+                      <View
+                        key={foodIndex}
+                        style={[
+                          styles.foodTag,
+                          {backgroundColor: food.color},
+                        ]}>
+                        <Text style={styles.foodTagText} numberOfLines={2}>{food.name}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </TouchableOpacity>
+                
+                {/* 삭제 버튼 */}
+                {originalMeal && (
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => handleDeleteMeal(originalMeal.id)}
+                    activeOpacity={0.7}>
+                    <Icon name="trash-outline" size={20} color={colors.textLight} />
+                  </TouchableOpacity>
+                )}
+              </View>
             );
           })}
         </View>
       </ScrollView>
+
+      {/* 영양 목표 설정 모달 */}
+      <NutritionGoalModal
+        isOpen={isNutritionModalOpen}
+        onClose={() => setIsNutritionModalOpen(false)}
+        currentGoal={nutritionGoal}
+        onGoalUpdate={() => {
+          loadNutritionGoal();
+        }}
+      />
     </ContainerComponent>
   );
 };
@@ -721,6 +838,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  calorieHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  nutritionButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.cardBackground,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   calorieMain: {
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -807,6 +937,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cardBackground,
     borderRadius: 20,
     padding: 20,
+    marginBottom: 12,
+    position: 'relative',
+  },
+  mealContent: {
+    flex: 1,
   },
   mealHeader: {
     flexDirection: 'row',
@@ -850,6 +985,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#000000',
+  },
+  deleteButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    padding: 4,
   },
   addMealSection: {
     marginTop: 0,
