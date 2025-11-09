@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,69 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {colors} from '../../theme/colors';
 import {ROUTES} from '../../constants/routes';
+import {useDate} from '../../contexts/DateContext';
+import {fetchWeeklyProgress} from '../../utils/exerciseApi';
+import {homeAPI} from '../../services';
+import type {DailyProgressWeekItem, HomeResponse} from '../../types';
 
 const HomeScreen = ({navigation}: any) => {
+  const {selectedDate, setSelectedDate} = useDate();
+  const [weeklyProgress, setWeeklyProgress] = useState<DailyProgressWeekItem[]>([]);
+  const [homeData, setHomeData] = useState<HomeResponse | null>(null);
+
+  // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
+  const formatDateToString = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // 주간 데이터 로드
+  const loadWeeklyProgress = async () => {
+    try {
+      const data = await fetchWeeklyProgress();
+      setWeeklyProgress(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error('주간 진행률 로드 실패:', e);
+      setWeeklyProgress([]);
+    }
+  };
+
+  // 특정 날짜의 진행률 데이터 가져오기
+  const getDayProgress = (date: Date): DailyProgressWeekItem | undefined => {
+    const dateStr = formatDateToString(date);
+    return weeklyProgress.find(item => item.date === dateStr);
+  };
+
+  // 홈 데이터 로드
+  const loadHomeData = async () => {
+    try {
+      const today = new Date();
+      const dateString = formatDateToString(today);
+      const data = await homeAPI.getHomeData(dateString);
+      setHomeData(data);
+    } catch (e: any) {
+      console.error('홈 데이터 로드 실패:', e);
+      setHomeData(null);
+    }
+  };
+
+  // 초기 데이터 로드
+  useEffect(() => {
+    loadWeeklyProgress();
+    loadHomeData();
+  }, []);
+
+  // 화면 포커스 시 데이터 새로고침
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadWeeklyProgress();
+      loadHomeData();
+    });
+    return unsubscribe;
+  }, [navigation]);
+
   const handleCalendarClick = () => {
     navigation.navigate('Calendar');
   };
@@ -28,7 +89,25 @@ const HomeScreen = ({navigation}: any) => {
             <View style={styles.profileImage}>
               <Text style={styles.profilePlaceholder}>👤</Text>
             </View>
-            <Text style={styles.greetingText}>님 어서오세요😊</Text>
+            <Text style={styles.greetingText}>
+              {homeData?.userSummary?.name || ''}님 어서오세요😊
+            </Text>
+          </View>
+          <View style={styles.messageContainer}>
+            {homeData?.todayMeal?.message && (
+              <View style={styles.messageBubble}>
+                <Text style={styles.messageText}>
+                  {homeData.todayMeal.message}
+                </Text>
+              </View>
+            )}
+            {homeData?.todayExercise?.message && (
+              <View style={styles.messageBubble}>
+                <Text style={styles.messageText}>
+                  {homeData.todayExercise.message}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -54,27 +133,67 @@ const HomeScreen = ({navigation}: any) => {
         {/* 운동 진행률 섹션 */}
         <TouchableOpacity
           style={styles.exerciseProgressSection}
-          onPress={handleCalendarClick}>
-          <View style={styles.progressGrid}>
-            {[1, 2, 3, 4, 5, 6, 7].map((day, index) => (
-              <View key={day} style={styles.progressItem}>
-                <View
-                  style={[
-                    styles.progressNumber,
-                    index === 3 && styles.progressNumberToday,
-                  ]}>
-                  <Text
-                    style={[
-                      styles.progressNumberText,
-                      index === 3 && styles.progressNumberTodayText,
-                    ]}>
-                    15
-                  </Text>
-                </View>
-                <Text style={styles.progressCalories}>388k</Text>
-                <Text style={styles.progressPercentage}>97%</Text>
-              </View>
-            ))}
+          onPress={handleCalendarClick}
+          activeOpacity={0.7}>
+          <View style={styles.weekCalendar}>
+            <View style={styles.calendarGrid}>
+              {(() => {
+                const today = new Date();
+                const getStartOfWeek = (d: Date) => {
+                  const n = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                  const diff = n.getDay();
+                  n.setDate(n.getDate() - diff);
+                  return n;
+                };
+                const dateToShow = selectedDate || today;
+                const startThis = getStartOfWeek(dateToShow);
+                return Array.from({length: 7}).map((_, i) => {
+                  const d = new Date(
+                    startThis.getFullYear(),
+                    startThis.getMonth(),
+                    startThis.getDate() + i,
+                  );
+                  const isToday = d.toDateString() === today.toDateString();
+                  const isSelected =
+                    selectedDate &&
+                    d.toDateString() === selectedDate.toDateString();
+                  return (
+                    <View
+                      key={startThis.toISOString() + i}
+                      style={styles.calendarItem}>
+                      <View
+                        style={[
+                          styles.calendarNumber,
+                          isSelected && styles.calendarNumberToday,
+                        ]}>
+                        <Text
+                          style={[
+                            styles.calendarNumberText,
+                            isSelected && styles.calendarNumberTodayText,
+                          ]}>
+                          {d.getDate()}
+                        </Text>
+                      </View>
+                      {(() => {
+                        const dayProgress = getDayProgress(d);
+                        const calories = dayProgress?.totalCalorie ?? 0;
+                        const rate = dayProgress?.exerciseRate ?? 0;
+                        return (
+                          <>
+                            <Text style={styles.calendarCalories}>
+                              {calories > 0 ? `${Math.round(calories)}k` : ''}
+                            </Text>
+                            <Text style={styles.calendarPercentage}>
+                              {rate > 0 ? `${Math.round(rate)}%` : ''}
+                            </Text>
+                          </>
+                        );
+                      })()}
+                    </View>
+                  );
+                });
+              })()}
+            </View>
           </View>
         </TouchableOpacity>
 
@@ -82,13 +201,29 @@ const HomeScreen = ({navigation}: any) => {
         <View style={styles.calorieSection}>
           <View style={styles.calorieHeader}>
             <View style={styles.calorieLeft}>
-              <Text style={styles.calorieCurrent}>384</Text>
-              <Text style={styles.calorieGoal}> / 1,157kcal</Text>
+              <Text style={styles.calorieCurrent}>
+                {homeData?.todayMeal?.totalCalories || 0}
+              </Text>
+              <Text style={styles.calorieGoal}>
+                {' '}
+                / {homeData?.todayMeal?.targetCalories || 0}kcal
+              </Text>
             </View>
-            <Text style={styles.caloriePercentage}>30%</Text>
+            <Text style={styles.caloriePercentage}>
+              {homeData?.todayMeal?.calorieAchievementRate || 0}%
+            </Text>
           </View>
           <View style={styles.calorieProgressBar}>
-            <View style={[styles.calorieProgressFill, {width: '30%'}]} />
+            <View
+              style={[
+                styles.calorieProgressFill,
+                {
+                  width: `${
+                    Math.min(100, homeData?.todayMeal?.calorieAchievementRate || 0)
+                  }%`,
+                },
+              ]}
+            />
           </View>
         </View>
 
@@ -114,27 +249,6 @@ const HomeScreen = ({navigation}: any) => {
           </View>
         </View>
 
-        {/* 추가 메뉴 섹션 */}
-        <View style={styles.additionalMenuSection}>
-          <View style={styles.menuGrid}>
-            <View style={[styles.menuItem, styles.weightItem]}>
-              <Text style={styles.menuTitle}>체중</Text>
-              <Text style={styles.menuValue}>51 / 58.6kg</Text>
-            </View>
-            <View style={[styles.menuItem, styles.nutritionItem]}>
-              <View style={styles.nutritionContent}>
-                <Text style={[styles.nutritionLine, {fontWeight: '700'}]}>탄 | 52g</Text>
-                <Text style={styles.nutritionLine}>단 | 120g</Text>
-                <Text style={styles.nutritionLine}>지 | 9g</Text>
-              </View>
-            </View>
-            <TouchableOpacity style={[styles.menuItem, styles.plusItem]}>
-              <View style={styles.plusButton}>
-                <Text style={styles.plusIcon}>+</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -200,50 +314,77 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
   },
+  messageContainer: {
+    marginTop: 12,
+    paddingHorizontal: 4,
+    gap: 8,
+  },
+  messageBubble: {
+    backgroundColor: '#555',
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignSelf: 'flex-start',
+    maxWidth: '90%',
+  },
+  messageText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: colors.text,
+    lineHeight: 20,
+  },
   exerciseProgressSection: {
     backgroundColor: colors.cardBackground,
     borderRadius: 20,
     paddingVertical: 15,
     paddingHorizontal: 14,
     marginBottom: 20,
-    height: 109,
   },
-  progressGrid: {
+  weekCalendar: {
+    marginTop: 1,
+    marginBottom: 6,
+  },
+  calendarGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    height: 79,
     gap: 0,
+    height: 79,
+    marginVertical: 6,
   },
-  progressItem: {
+  calendarItem: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    justifyContent: 'flex-start',
+    gap: 6,
+    minHeight: 79,
   },
-  progressNumber: {
-    height: 19,
+  calendarNumber: {
+    minHeight: 30,
+    minWidth: 30,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 4,
   },
-  progressNumberToday: {
+  calendarNumberText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#e3ff7c',
+    lineHeight: 19,
+    textAlign: 'center',
+  },
+  calendarNumberToday: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#e3ff7c',
+    backgroundColor: '#ffffff',
   },
-  progressNumberText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#738700',
-    lineHeight: 19.36,
-  },
-  progressNumberTodayText: {
+  calendarNumberTodayText: {
     color: '#000000',
     fontSize: 16,
     fontWeight: '700',
-    lineHeight: 1,
+    lineHeight: 19,
   },
-  progressCalories: {
+  calendarCalories: {
     fontSize: 12,
     fontWeight: '700',
     color: colors.text,
@@ -251,7 +392,7 @@ const styles = StyleSheet.create({
     height: 15,
     lineHeight: 14.52,
   },
-  progressPercentage: {
+  calendarPercentage: {
     fontSize: 12,
     fontWeight: '700',
     color: colors.text,

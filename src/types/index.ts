@@ -183,3 +183,59 @@ export interface SetNutritionGoalResponse {
   data?: NutritionGoal;
 }
 
+// 홈 화면 응답 타입
+export interface HomeResponse {
+  userSummary: {
+    name: string;
+    experienceLevel: string;
+    experienceLevelName: string;
+    healthGoal: string;
+    healthGoalName: string;
+    currentWeight: number;
+    targetWeight: number;
+    workoutDaysPerWeek: string;
+  };
+  todayExercise: {
+    date: string;
+    completed: boolean;
+    totalDurationMinutes: number;
+    totalCaloriesBurned: number;
+    exerciseCount: number;
+    mainCategories: string[];
+    message: string;
+  };
+  todayMeal: {
+    date: string;
+    totalCalories: number;
+    targetCalories: number;
+    calorieAchievementRate: number;
+    totalCarbs: number;
+    totalProtein: number;
+    totalFat: number;
+    mealCount: number;
+    message: string;
+  };
+  latestInBody: {
+    measurementDate: string;
+    weight: number;
+    skeletalMuscleMass: number;
+    bodyFatPercentage: number;
+    bmi: number;
+    weightChange: number;
+    achievementBadge: string;
+    message: string;
+  };
+  weeklySummary: {
+    weekStartDate: string;
+    weekEndDate: string;
+    weeklyExerciseDays: number;
+    weeklyTotalDurationMinutes: number;
+    weeklyAvgCalories: number;
+    exerciseChangeRate: number;
+    calorieChangeRate: number;
+    weeklyGoalAchievementRate: number;
+    message: string;
+  };
+  aiChatbotAvailable: boolean;
+}
+

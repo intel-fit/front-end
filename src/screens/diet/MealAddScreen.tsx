@@ -810,8 +810,9 @@ const onChangeTime = (event: any, time?: Date) => {
               key={food.id}
               style={styles.foodItem}
               onPress={() => {
-                setSelectedFood(food);
-                setIsFoodEditModalOpen(true);
+                // 음식 수정 기능 일시 비활성화
+                // setSelectedFood(food);
+                // setIsFoodEditModalOpen(true);
               }}
               activeOpacity={0.7}>
               <View style={styles.foodItemHeader}>

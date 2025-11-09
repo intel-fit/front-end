@@ -6,6 +6,7 @@
 
 export {authAPI} from './authAPI';
 export {mealAPI} from './mealAPI';
+export {homeAPI} from './homeAPI';
 export {request as apiRequest} from './apiConfig';
 export type {ApiResponse} from './apiConfig';
 
