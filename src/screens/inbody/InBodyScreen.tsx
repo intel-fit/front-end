@@ -740,7 +740,7 @@ const InBodyScreen = ({ navigation }: any) => {
           <>
             {loading ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#d6ff4b" />
+                <ActivityIndicator size="large" color="#E3FF7C" />
                 <Text style={styles.loadingText}>데이터 로딩 중...</Text>
               </View>
             ) : inBodyData ? (
@@ -1068,14 +1068,14 @@ const InBodyScreen = ({ navigation }: any) => {
                                   cx={point.x}
                                   cy={point.y}
                                   r={7}
-                                  fill="#daff50"
+                                  fill="#E3FF7C"
                                   opacity={0.3}
                                 />
                                 <Circle
                                   cx={point.x}
                                   cy={point.y}
                                   r={6}
-                                  fill="#daff50"
+                                  fill="#E3FF7C"
                                   opacity={0.4}
                                 />
                               </>
@@ -1085,7 +1085,7 @@ const InBodyScreen = ({ navigation }: any) => {
                               cy={point.y}
                               r={5}
                               fill="#0e0e0e"
-                              stroke="#daff50"
+                              stroke="#E3FF7C"
                               strokeWidth={2}
                               onPress={() => handlePointPress(i)}
                             />
@@ -1228,7 +1228,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: 80,
     height: 2,
-    backgroundColor: "#daff50",
+    backgroundColor: "#E3FF7C",
     alignSelf: "center",
   },
   analysisSection: {
@@ -1276,7 +1276,7 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     fontSize: 14.4,
-    color: "#ccff00",
+    color: "#E3FF7C",
     fontWeight: "600",
     textAlign: "center",
     flex: 1,
@@ -1347,7 +1347,7 @@ const styles = StyleSheet.create({
   },
   barStatus: {
     fontSize: 12.8,
-    color: "#4ade80",
+    color: "#E3FF7C",
     minWidth: 40,
     textAlign: "right",
   },
@@ -1366,7 +1366,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   filterBtnActive: {
-    backgroundColor: "#daff50",
+    backgroundColor: "#E3FF7C",
   },
   filterBtnText: {
     fontSize: 14.4,
@@ -1384,7 +1384,7 @@ const styles = StyleSheet.create({
     color: "#ffffff",
   },
   highlightName: {
-    color: "#daff50",
+    color: "#E3FF7C",
     fontWeight: "600",
   },
   graphSection: {
@@ -1419,7 +1419,7 @@ const styles = StyleSheet.create({
   },
   tooltip: {
     position: "absolute",
-    backgroundColor: "#d6ff4b",
+    backgroundColor: "#E3FF7C",
     paddingHorizontal: 6,
     paddingVertical: 4,
     borderRadius: 8,
