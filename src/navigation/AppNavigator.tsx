@@ -38,7 +38,6 @@ import RoutineRecommendNewScreen from '../screens/exercise/RoutineRecommendNewSc
 
 // Analysis Screens
 import AnalysisScreen from '../screens/analysis/AnalysisScreen';
-import GraphScreen from '../screens/analysis/GraphScreen';
 import CalendarScreen from '../screens/analysis/CalendarScreen';
 import GoalScreen from '../screens/analysis/GoalScreen';
 
@@ -140,7 +139,6 @@ export default function AppNavigator() {
 
         {/* Analysis Stack */}
         <Stack.Screen name={ROUTES.ANALYSIS} component={AnalysisScreen} />
-        <Stack.Screen name={ROUTES.GRAPH} component={GraphScreen} />
         <Stack.Screen name={ROUTES.CALENDAR} component={CalendarScreen} />
         <Stack.Screen name={ROUTES.GOAL} component={GoalScreen} />
 
