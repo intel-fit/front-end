@@ -621,9 +621,10 @@ const DietScreen = ({navigation}: any) => {
                 <TouchableOpacity
                   style={styles.mealContent}
                   onPress={() => {
-                    if (originalMeal) {
-                      navigation.navigate('MealAdd', { meal: originalMeal });
-                    }
+                    // 식단 수정 기능 일시 비활성화
+                    // if (originalMeal) {
+                    //   navigation.navigate('MealAdd', { meal: originalMeal });
+                    // }
                   }}
                   activeOpacity={0.7}>
                   {/* 식사 헤더: 식사 종류, 시간, 칼로리 */}
@@ -650,15 +651,15 @@ const DietScreen = ({navigation}: any) => {
                   </View>
                 </TouchableOpacity>
                 
-                {/* 삭제 버튼 */}
-                {originalMeal && (
+                {/* 삭제 버튼 - 일시 비활성화 */}
+                {/* {originalMeal && (
                   <TouchableOpacity
                     style={styles.deleteButton}
                     onPress={() => handleDeleteMeal(originalMeal.id)}
                     activeOpacity={0.7}>
                     <Icon name="trash-outline" size={20} color={colors.textLight} />
                   </TouchableOpacity>
-                )}
+                )} */}
               </View>
             );
           })}
