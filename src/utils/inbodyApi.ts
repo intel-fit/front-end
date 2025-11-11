@@ -121,9 +121,19 @@ export const getLatestInBody = async (): Promise<any> => {
     return response.data;
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      if (status === 400) {
+        if (__DEV__) {
+          console.log("[INBODY][GET LATEST] 데이터 없음 (400)", {
+            status,
+            data: error.response?.data,
+          });
+        }
+        return null;
+      }
       console.error("[INBODY][GET LATEST] API 에러:", {
         message: error.message,
-        status: error.response?.status,
+        status,
         statusText: error.response?.statusText,
         data: error.response?.data,
       });

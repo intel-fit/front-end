@@ -34,6 +34,7 @@ interface Activity {
   isCompleted: boolean;
   sessionId?: string; // 서버 저장된 세션과 연동용
   sets?: any[]; // 세트 내역 보존
+  comment?: string;
 }
 
 type ExerciseGoalInfo = {
@@ -312,12 +313,17 @@ const ExerciseScreen = ({ navigation }: any) => {
   const handleExerciseSave = async (
     sets: any[],
     exerciseName: string,
-    meta?: { externalId?: string; category?: string }
+    meta?: { externalId?: string; category?: string },
+    comment?: string
   ) => {
     const allSetsCompleted = sets.every((set: any) => set.completed);
     const details = `${sets[0]?.weight || 20}kg ${sets[0]?.reps || 12}회 ${
       sets.length
     }세트`;
+    const trimmedComment =
+      comment && typeof comment === "string" ? comment.trim() : "";
+    const commentToSave =
+      allSetsCompleted && trimmedComment.length > 0 ? trimmedComment : undefined;
 
     // userId 가져오기
     const userIdStr = await AsyncStorage.getItem("userId");
@@ -379,6 +385,12 @@ const ExerciseScreen = ({ navigation }: any) => {
                   isCompleted: nextCompleted,
                   sessionId: serverSessionId,
                   sets,
+                  comment:
+                    nextCompleted && commentToSave !== undefined
+                      ? commentToSave
+                      : nextCompleted
+                      ? activity.comment
+                      : undefined,
                 }
               : activity
           )
@@ -400,6 +412,7 @@ const ExerciseScreen = ({ navigation }: any) => {
           isCompleted: allSetsCompleted,
           sessionId: serverSessionId,
           sets,
+          comment: commentToSave,
         };
         setAllActivities([...allActivities, newWorkout]);
         if (allSetsCompleted) {
@@ -744,15 +757,17 @@ const ExerciseScreen = ({ navigation }: any) => {
                   onPress={() => handleExerciseClick(activity)}
                 >
                   <View style={styles.logCardContent}>
-                    <Text
-                      style={[
-                        styles.logName,
-                        !activity.isCompleted && styles.logNamePending,
-                      ]}
-                    >
-                      {activity.name}
-                    </Text>
-                    <Text style={styles.logDetails}>{activity.details}</Text>
+                    <View style={styles.logTextBlock}>
+                      <Text
+                        style={[
+                          styles.logName,
+                          !activity.isCompleted && styles.logNamePending,
+                        ]}
+                      >
+                        {activity.name}
+                      </Text>
+                      <Text style={styles.logDetails}>{activity.details}</Text>
+                    </View>
                   </View>
                   <Text style={styles.logTime}>{activity.time}</Text>
                   <TouchableOpacity
@@ -1050,6 +1065,10 @@ const styles = StyleSheet.create({
   },
   logCardContent: {
     flex: 1,
+    gap: 10,
+  },
+  logTextBlock: {
+    gap: 4,
   },
   logName: {
     fontSize: 16,
