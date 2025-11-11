@@ -20,6 +20,7 @@ import FoodAddOptionsModal from '../../components/modals/FoodAddOptionsModal';
 import FoodEditModal from '../../components/modals/FoodEditModal';
 import {mealAPI} from '../../services';
 import {useDate} from '../../contexts/DateContext';
+import {fetchDateProgress, fetchTodayProgress} from '../../utils/exerciseApi';
 import type {AddMealRequest, AddMealFoodRequest, DailyMeal, DailyMealsResponse, NutritionGoal, SearchFoodResponse} from '../../types';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Platform } from 'react-native';
@@ -527,13 +528,31 @@ const onChangeTime = (event: any, time?: Date) => {
         });
       });
 
+      // 식단 추가/수정할 날짜
+      const mealDate = formatDateToString(dateToUse);
+      const today = new Date();
+      const isToday = 
+        dateToUse.getFullYear() === today.getFullYear() &&
+        dateToUse.getMonth() === today.getMonth() &&
+        dateToUse.getDate() === today.getDate();
+
       if (isEditMode && mealData?.id) {
         // 수정 모드: PUT 요청 (API가 없으면 일단 추가 API 사용)
         await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
         Alert.alert('성공', '식사가 수정되었습니다.', [
           {
             text: '확인',
-            onPress: () => {
+            onPress: async () => {
+              // 해당 날짜의 진행률 가져오기
+              try {
+                if (isToday) {
+                  await fetchTodayProgress();
+                } else {
+                  await fetchDateProgress(mealDate);
+                }
+              } catch (error) {
+                console.error('진행률 조회 실패:', error);
+              }
               navigation.goBack();
             },
           },
@@ -544,7 +563,17 @@ const onChangeTime = (event: any, time?: Date) => {
         Alert.alert('성공', '식사가 추가되었습니다.', [
           {
             text: '확인',
-            onPress: () => {
+            onPress: async () => {
+              // 해당 날짜의 진행률 가져오기
+              try {
+                if (isToday) {
+                  await fetchTodayProgress();
+                } else {
+                  await fetchDateProgress(mealDate);
+                }
+              } catch (error) {
+                console.error('진행률 조회 실패:', error);
+              }
               navigation.goBack();
             },
           },

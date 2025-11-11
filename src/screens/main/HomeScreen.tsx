@@ -251,7 +251,7 @@ const HomeScreen = ({navigation}: any) => {
               </Text>
             </View>
             <Text style={styles.caloriePercentage}>
-              {homeData?.todayMeal?.calorieAchievementRate || 0}%
+              {Math.round(homeData?.todayMeal?.calorieAchievementRate || 0)}%
             </Text>
           </View>
           <View style={styles.calorieProgressBar}>
