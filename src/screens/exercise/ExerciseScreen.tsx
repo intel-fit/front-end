@@ -540,7 +540,7 @@ const ExerciseScreen = ({ navigation }: any) => {
                                   !isCurrentMonth && styles.monthMuted,
                                 ]}
                               >
-                                {calories > 0 ? `${Math.round(calories)}k` : ''}
+                                {`${Math.round(calories)}k`}
                               </Text>
                               <Text
                                 style={[
@@ -548,7 +548,7 @@ const ExerciseScreen = ({ navigation }: any) => {
                                   !isCurrentMonth && styles.monthMuted,
                                 ]}
                               >
-                                {rate > 0 ? `${Math.round(rate)}%` : ''}
+                                {`${Math.round(rate)}%`}
                               </Text>
                             </>
                           );
@@ -620,10 +620,10 @@ const ExerciseScreen = ({ navigation }: any) => {
                         return (
                           <>
                             <Text style={styles.calendarCalories}>
-                              {calories > 0 ? `${Math.round(calories)}k` : ''}
+                              {`${Math.round(calories)}k`}
                             </Text>
                             <Text style={styles.calendarPercentage}>
-                              {rate > 0 ? `${Math.round(rate)}%` : ''}
+                              {`${Math.round(rate)}%`}
                             </Text>
                           </>
                         );
@@ -854,7 +854,7 @@ const styles = StyleSheet.create({
   },
   calendarCalories: {
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "400",
     color: colors.text,
     textAlign: "center",
     height: 15,
@@ -862,7 +862,7 @@ const styles = StyleSheet.create({
   },
   calendarPercentage: {
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "400",
     color: colors.text,
     textAlign: "center",
     height: 15,

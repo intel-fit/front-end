@@ -10,7 +10,6 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {colors} from '../../theme/colors';
 import {ROUTES} from '../../constants/routes';
 import {useDate} from '../../contexts/DateContext';
-import {fetchWeeklyProgress} from '../../utils/exerciseApi';
 import {homeAPI} from '../../services';
 import type {DailyProgressWeekItem, HomeResponse} from '../../types';
 
@@ -30,10 +29,26 @@ const HomeScreen = ({navigation}: any) => {
   // 주간 데이터 로드
   const loadWeeklyProgress = async () => {
     try {
-      const data = await fetchWeeklyProgress();
-      setWeeklyProgress(Array.isArray(data) ? data : []);
-    } catch (e) {
+      console.log('주간 진행률 로드 시작...');
+      const data = await homeAPI.getWeeklyProgress();
+      console.log('주간 진행률 데이터 받음:', data);
+      console.log('데이터 타입:', Array.isArray(data) ? '배열' : typeof data);
+      console.log('데이터 길이:', Array.isArray(data) ? data.length : 'N/A');
+      
+      if (Array.isArray(data)) {
+        console.log('주간 진행률 설정:', data);
+        setWeeklyProgress(data);
+      } else {
+        console.warn('주간 진행률 데이터가 배열이 아닙니다:', data);
+        setWeeklyProgress([]);
+      }
+    } catch (e: any) {
       console.error('주간 진행률 로드 실패:', e);
+      console.error('에러 상세:', {
+        message: e.message,
+        status: e.status,
+        data: e.data,
+      });
       setWeeklyProgress([]);
     }
   };
@@ -41,7 +56,12 @@ const HomeScreen = ({navigation}: any) => {
   // 특정 날짜의 진행률 데이터 가져오기
   const getDayProgress = (date: Date): DailyProgressWeekItem | undefined => {
     const dateStr = formatDateToString(date);
-    return weeklyProgress.find(item => item.date === dateStr);
+    const progress = weeklyProgress.find(item => item.date === dateStr);
+    if (!progress) {
+      console.log(`날짜 ${dateStr}에 대한 진행률 데이터를 찾을 수 없습니다.`);
+      console.log('현재 weeklyProgress:', weeklyProgress);
+    }
+    return progress;
   };
 
   // 홈 데이터 로드
@@ -178,13 +198,21 @@ const HomeScreen = ({navigation}: any) => {
                         const dayProgress = getDayProgress(d);
                         const calories = dayProgress?.totalCalorie ?? 0;
                         const rate = dayProgress?.exerciseRate ?? 0;
+                        const dateStr = formatDateToString(d);
+                        
+                        // 디버깅: 첫 번째 날짜만 로그 출력
+                        if (i === 0) {
+                          console.log(`캘린더 렌더링 - 날짜: ${dateStr}, 진행률:`, dayProgress);
+                          console.log(`칼로리: ${calories}, 달성률: ${rate}`);
+                        }
+                        
                         return (
                           <>
                             <Text style={styles.calendarCalories}>
-                              {calories > 0 ? `${Math.round(calories)}k` : ''}
+                              {`${Math.round(calories)}k`}
                             </Text>
                             <Text style={styles.calendarPercentage}>
-                              {rate > 0 ? `${Math.round(rate)}%` : ''}
+                              {`${Math.round(rate)}%`}
                             </Text>
                           </>
                         );
@@ -386,7 +414,7 @@ const styles = StyleSheet.create({
   },
   calendarCalories: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '400',
     color: colors.text,
     textAlign: 'center',
     height: 15,
@@ -394,7 +422,7 @@ const styles = StyleSheet.create({
   },
   calendarPercentage: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '400',
     color: colors.text,
     textAlign: 'center',
     height: 15,
