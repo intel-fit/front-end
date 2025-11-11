@@ -10,6 +10,7 @@ export const homeAPI = {
     });
   },
   
+  
   // 이번 주(일~토) 운동 달성률 및 칼로리 목록 조회
   // GET /api/daily-progress/week
   // 응답: [{ date: "2025-11-11", exerciseRate: 0, totalCalorie: 0 }, ...]

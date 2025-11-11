@@ -801,8 +801,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 0,
-    paddingBottom: 12,
-    paddingTop: 8,
+    paddingBottom: 6,
+    paddingTop: 0,
   },
   monthNavLeft: {
     flexDirection: "row",
@@ -840,7 +840,7 @@ const styles = StyleSheet.create({
     marginVertical: 6,
   },
   monthGridContainer: {
-    marginTop: 6,
+    marginTop: 0,
     marginBottom: 6,
     paddingHorizontal: 4,
   },
