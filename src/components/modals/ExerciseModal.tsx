@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,9 @@ import {
   TextInput,
   ScrollView,
   Image,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
 } from "react-native";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
@@ -28,7 +31,15 @@ interface ExerciseModalProps {
   onClose: () => void;
   mode?: "add" | "edit";
   exerciseData?: any;
-  onSave?: (sets: Set[], exerciseName: string) => void;
+  onSave?: (
+    sets: Set[],
+    exerciseName: string,
+    meta?: {
+      externalId?: string;
+      category?: string;
+    },
+    comment?: string
+  ) => void;
 }
 
 const ExerciseModal: React.FC<ExerciseModalProps> = ({
@@ -53,6 +64,11 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   const [instructionLoading, setInstructionLoading] = useState<boolean>(false);
   const [instructionText, setInstructionText] = useState<string>("");
   const [instructionImageUrl, setInstructionImageUrl] = useState<string>("");
+  const [comment, setComment] = useState<string>("");
+  const allSetsCompleted = useMemo(
+    () => sets.length > 0 && sets.every((set) => set.completed),
+    [sets]
+  );
 
   useEffect(() => {
     if (isOpen) {
@@ -66,6 +82,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
           { id: 2, weight: 20, reps: 12, completed: false },
           { id: 3, weight: 20, reps: 12, completed: false },
         ]);
+        setComment("");
       } else if (mode === "edit") {
         setCurrentMode("detail");
         setSelectedExercise(exerciseData);
@@ -78,6 +95,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
             { id: 3, weight: 20, reps: 12, completed: false },
           ]);
         }
+        setComment(exerciseData?.comment || "");
       }
     } else {
       // 모달이 닫힐 때 초기화
@@ -85,10 +103,20 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
       setSelectedExercise(null);
       setSearchTerm("");
       setSelectedCategory("전체");
+      setComment("");
     }
   }, [isOpen, mode, exerciseData]);
 
-  const categories = ["전체", "가슴", "등", "하체", "어깨", "팔", "코어"];
+  const categories = [
+    "전체",
+    "가슴",
+    "등",
+    "하체",
+    "어깨",
+    "팔",
+    "코어",
+    "유산소",
+  ];
 
   // UI 카테고리 → API bodyPart 매핑 (서버가 다른 값을 사용할 수 있음)
   // 여러 후보 값을 시도하도록 수정
@@ -104,6 +132,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
     팔: ["상완이두근", "팔 아래", "팔"],
     // 코어 관련: 서버는 "허리"로 제공됨
     코어: ["허리", "코어"],
+    유산소: ["유산소", "유산소 운동", "카디오", "심폐"],
   };
 
   // API 운동 목록 상태
@@ -384,7 +413,11 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
           "",
       };
       // @ts-ignore - onSave 시그니처 확장 (호출 측에서 수용)
-      onSave(sets, fullName, meta);
+      const trimmedComment =
+        allSetsCompleted && comment.trim().length > 0
+          ? comment.trim()
+          : undefined;
+      onSave(sets, fullName, meta, trimmedComment);
     }
     onClose();
     setShowInstructions(false);
@@ -400,8 +433,12 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
       <View style={styles.overlay}>
         <View style={styles.modalContent}>
           {currentMode === "add" ? (
-            <View style={styles.addExerciseModal}>
-              <View style={styles.modalHeader}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : undefined}
+              style={styles.keyboardAvoider}
+            >
+              <View style={styles.addExerciseModal}>
+                <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>종목 추가</Text>
                 <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                   <Icon name="close" size={12} color="#ffffff" />
@@ -427,6 +464,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
                   showsHorizontalScrollIndicator={false}
                   style={styles.filterContainer}
                   contentContainerStyle={styles.filterContent}
+                  contentInset={{ left: 12, right: 12 }}
                   contentInsetAdjustmentBehavior="never"
                 >
                   {categories.map((category) => (
@@ -523,7 +561,8 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
                     </TouchableOpacity>
                   ))}
               </ScrollView>
-            </View>
+              </View>
+            </KeyboardAvoidingView>
           ) : (
             <View style={styles.exerciseDetailModal}>
               <View style={styles.modalHeader}>
@@ -578,11 +617,15 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
                 </View>
               </View>
 
-              <ScrollView
-                style={styles.detailScroll}
-                contentContainerStyle={{ paddingBottom: 140 }}
-                keyboardShouldPersistTaps="handled"
+              <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : undefined}
+                style={styles.detailKeyboardAvoider}
               >
+                <ScrollView
+                  style={styles.detailScroll}
+                  contentContainerStyle={styles.detailScrollContent}
+                  keyboardShouldPersistTaps="handled"
+                >
                 {showInstructions && (
                   <View style={styles.instructionBox}>
                     <Text style={styles.instructionTitle}>운동 방법</Text>
@@ -689,15 +732,55 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
                       </TouchableOpacity>
                     </View>
                   ))}
-                </View>
-              </ScrollView>
 
-              <TouchableOpacity
-                style={styles.saveExerciseBtn}
-                onPress={handleSave}
-              >
-                <Text style={styles.saveExerciseBtnText}>운동 저장</Text>
-              </TouchableOpacity>
+                  {allSetsCompleted && (
+                    <View style={styles.commentSection}>
+                      <Text style={styles.commentLabel}>운동 메모</Text>
+                      <View style={styles.commentInputWrapper}>
+                        <TextInput
+                          style={styles.commentInput}
+                          multiline
+                          maxLength={200}
+                          placeholder="오늘 운동을 마친 소감이나 느낀 점을 남겨주세요."
+                          placeholderTextColor="#777777"
+                          value={comment}
+                          onChangeText={setComment}
+                          textAlignVertical="top"
+                        />
+                        <Text style={styles.commentCounter}>
+                          {comment.length}/200
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[
+                          styles.commentSendButton,
+                          comment.trim().length === 0 &&
+                            styles.commentSendButtonDisabled,
+                        ]}
+                        disabled={comment.trim().length === 0}
+                        onPress={() =>
+                          Alert.alert(
+                            "전송 준비 중",
+                            "코멘트 전송 API가 준비되면 자동으로 연결될 예정입니다."
+                          )
+                        }
+                      >
+                        <Text style={styles.commentSendText}>메모 전송</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+                </ScrollView>
+              </KeyboardAvoidingView>
+
+              <View style={styles.footer}>
+                <TouchableOpacity
+                  style={styles.saveExerciseBtn}
+                  onPress={handleSave}
+                >
+                  <Text style={styles.saveExerciseBtnText}>운동 저장</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         </View>
@@ -707,6 +790,9 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
 };
 
 const styles = StyleSheet.create({
+  keyboardAvoider: {
+    flex: 1,
+  },
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.7)",
@@ -727,7 +813,9 @@ const styles = StyleSheet.create({
   exerciseDetailModal: {
     flex: 1,
     maxHeight: "100%",
-    paddingBottom: 100, // 하단 저장 버튼 공간 확보
+  },
+  detailKeyboardAvoider: {
+    flex: 1,
   },
   modalHeader: {
     flexDirection: "row",
@@ -793,6 +881,11 @@ const styles = StyleSheet.create({
   detailScroll: {
     flex: 1,
   },
+  detailScrollContent: {
+    paddingBottom: 48,
+    flexGrow: 1,
+    paddingHorizontal: 12,
+  },
   searchContainer: {
     padding: 20,
     paddingBottom: 12,
@@ -819,17 +912,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   filterContainer: {
-    paddingLeft: 45,
-    paddingRight: 20,
+    paddingLeft: 0,
+    paddingRight: 0,
     paddingBottom: 0,
     paddingTop: 0,
     marginBottom: 0,
     marginTop: 0,
     height: 28,
-    overflow: "hidden",
+    overflow: "visible",
   },
   filterContent: {
     paddingVertical: 0,
+    paddingLeft: 48,
+    paddingRight: 48,
     alignItems: "flex-start",
     height: 28,
     justifyContent: "center",
@@ -1039,20 +1134,71 @@ const styles = StyleSheet.create({
   completeBtnCompleted: {
     backgroundColor: "#e3ff7c",
   },
+  footer: {
+    paddingHorizontal: 12,
+    paddingBottom: 36,
+    paddingTop: 12,
+    backgroundColor: "#2a2a2a",
+  },
+  footerExtended: {
+    flexDirection: "column",
+    gap: 12,
+  },
   saveExerciseBtn: {
     backgroundColor: "#e3ff7c",
-    position: "absolute",
-    left: 20,
-    right: 20,
-    bottom: 20,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: "center",
+  },
+  saveExerciseBtnSmall: {
+    paddingVertical: 12,
   },
   saveExerciseBtnText: {
     color: "#000000",
     fontSize: 16,
     fontWeight: "600",
+  },
+  commentSection: {
+    marginHorizontal: 12,
+    marginTop: 24,
+    marginBottom: 48,
+    gap: 16,
+  },
+  commentLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#ffffff",
+  },
+  commentInputWrapper: {
+    backgroundColor: "#1f1f1f",
+    borderRadius: 12,
+    padding: 16,
+    gap: 8,
+  },
+  commentInput: {
+    minHeight: 60,
+    color: "#ffffff",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  commentCounter: {
+    fontSize: 12,
+    color: "#888888",
+    textAlign: "right",
+  },
+  commentSendButton: {
+    backgroundColor: "#e3ff7c",
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  commentSendButtonDisabled: {
+    backgroundColor: "#5f5f5f",
+  },
+  commentSendText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1c1c1c",
   },
 });
 
