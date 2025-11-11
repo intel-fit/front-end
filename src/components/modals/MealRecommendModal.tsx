@@ -1,3 +1,4 @@
+// src/components/MealRecommendModal.tsx
 import React, { useState } from "react";
 import {
   View,
@@ -242,6 +243,7 @@ const MealRecommendModal: React.FC<MealRecommendModalProps> = ({
                           <Icon name="trash" size={20} color={colors.error} />
                         </TouchableOpacity>
                       </View>
+
                       <View style={styles.cardBody}>
                         {meal.description && (
                           <Text style={styles.description} numberOfLines={2}>
@@ -318,30 +320,12 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.text,
   },
-  closeBtn: {
-    padding: 4,
-  },
-  body: {
-    padding: 20,
-  },
-  emptyState: {
-    alignItems: "center",
-    padding: 40,
-    gap: 12,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: colors.text,
-    textAlign: "center",
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: colors.textLight,
-    textAlign: "center",
-  },
-  list: {
-    gap: 12,
-  },
+  closeBtn: { padding: 4 },
+  body: { padding: 20 },
+  emptyState: { alignItems: "center", padding: 40, gap: 12 },
+  emptyText: { fontSize: 16, color: colors.text, textAlign: "center" },
+  emptySubtitle: { fontSize: 14, color: colors.textLight, textAlign: "center" },
+  list: { gap: 12 },
   card: {
     backgroundColor: colors.grayLight,
     padding: 16,
@@ -353,52 +337,21 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  date: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.text,
-    flex: 1,
-  },
-  deleteBtn: {
-    padding: 4,
-  },
-  cardBody: {
-    gap: 8,
-  },
-  description: {
-    fontSize: 14,
-    color: colors.textLight,
-    lineHeight: 20,
-  },
-  summary: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
+  date: { fontSize: 16, fontWeight: "600", color: colors.text, flex: 1 },
+  deleteBtn: { padding: 4 },
+  cardBody: { gap: 8 },
+  description: { fontSize: 14, color: colors.textLight, lineHeight: 20 },
+  summary: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   badge: {
     backgroundColor: colors.primary + "20",
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
   },
-  badgeText: {
-    fontSize: 12,
-    color: colors.primary,
-    fontWeight: "500",
-  },
-  cardDate: {
-    fontSize: 12,
-    color: colors.textLight,
-    marginTop: 4,
-  },
-  viewDetail: {
-    fontSize: 14,
-    color: colors.primary,
-    fontWeight: "500",
-  },
-  detail: {
-    gap: 16,
-  },
+  badgeText: { fontSize: 12, color: colors.primary, fontWeight: "500" },
+  cardDate: { fontSize: 12, color: colors.textLight, marginTop: 4 },
+  viewDetail: { fontSize: 14, color: colors.primary, fontWeight: "500" },
+  detail: { gap: 16 },
   backBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -406,26 +359,14 @@ const styles = StyleSheet.create({
     padding: 8,
     marginBottom: 8,
   },
-  backBtnText: {
-    fontSize: 16,
-    color: colors.text,
-  },
+  backBtnText: { fontSize: 16, color: colors.text },
   detailHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  detailTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: colors.text,
-    flex: 1,
-  },
-  detailDescription: {
-    fontSize: 14,
-    color: colors.textLight,
-    lineHeight: 20,
-  },
+  detailTitle: { fontSize: 20, fontWeight: "700", color: colors.text, flex: 1 },
+  detailDescription: { fontSize: 14, color: colors.textLight, lineHeight: 20 },
   recommendBox: {
     backgroundColor: colors.primary + "15",
     padding: 16,
@@ -439,11 +380,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 8,
   },
-  recommendText: {
-    fontSize: 14,
-    color: colors.text,
-    lineHeight: 20,
-  },
+  recommendText: { fontSize: 14, color: colors.text, lineHeight: 20 },
   nutritionSummary: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -452,23 +389,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 8,
   },
-  nutritionItem: {
-    flex: 1,
-    alignItems: "center",
-  },
-  nutritionLabel: {
-    fontSize: 12,
-    color: colors.textLight,
-    marginBottom: 4,
-  },
-  nutritionValue: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.primary,
-  },
-  mealsSection: {
-    gap: 12,
-  },
+  nutritionItem: { flex: 1, alignItems: "center" },
+  nutritionLabel: { fontSize: 12, color: colors.textLight, marginBottom: 4 },
+  nutritionValue: { fontSize: 16, fontWeight: "700", color: colors.primary },
+  mealsSection: { gap: 12 },
   sectionTitle: {
     fontSize: 16,
     fontWeight: "600",
@@ -486,43 +410,19 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  mealTypeName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.text,
-  },
-  mealCalories: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.primary,
-  },
-  mealNutrients: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  nutrientText: {
-    fontSize: 12,
-    color: colors.textLight,
-  },
-  foodsList: {
-    marginTop: 8,
-    gap: 6,
-  },
+  mealTypeName: { fontSize: 16, fontWeight: "600", color: colors.text },
+  mealCalories: { fontSize: 14, fontWeight: "600", color: colors.primary },
+  mealNutrients: { flexDirection: "row", gap: 12 },
+  nutrientText: { fontSize: 12, color: colors.textLight },
+  foodsList: { marginTop: 8, gap: 6 },
   foodItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: 4,
   },
-  foodName: {
-    fontSize: 14,
-    color: colors.text,
-    flex: 1,
-  },
-  foodCalories: {
-    fontSize: 12,
-    color: colors.textLight,
-  },
+  foodName: { fontSize: 14, color: colors.text, flex: 1 },
+  foodCalories: { fontSize: 12, color: colors.textLight },
   createdAt: {
     fontSize: 12,
     color: colors.textLight,

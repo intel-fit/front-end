@@ -4,16 +4,16 @@
  * import { authAPI, mealAPI, exerciseAPI } from '../services';
  */
 
-export {authAPI} from './authAPI';
-export {mealAPI} from './mealAPI';
-export {homeAPI} from './homeAPI';
-export {request as apiRequest} from './apiConfig';
-export type {ApiResponse} from './apiConfig';
-
+export { authAPI } from "./authAPI";
+export { mealAPI } from "./mealAPI";
+export { homeAPI } from "./homeAPI";
+export { request as apiRequest } from "./apiConfig";
+export type { ApiResponse } from "./apiConfig";
+export { chatAPI } from "./chatAPI";
+export { recommendedMealAPI } from "./recommendedMealAPI";
+export { recommendedExerciseAPI } from "./recommendedExerciseAPI";
 // 향후 추가될 API들
-// export {mealAPI} from './mealAPI';
 // export {exerciseAPI} from './exerciseAPI';
 // export {profileAPI} from './profileAPI';
 // export {inbodyAPI} from './inbodyAPI';
 // export {badgeAPI} from './badgeAPI';
-
