@@ -31,6 +31,7 @@ import { ACCESS_TOKEN_KEY } from "../../services/apiConfig";
 import MacroDonut from "../../components/charts/MacroDonut";
 import { authAPI } from "../../services";
 import { getLatestInBody } from "../../utils/inbodyApi";
+import { eventBus } from "../../utils/eventBus";
 
 interface MealComparison {
   thisWeekStart: string;
@@ -53,6 +54,8 @@ interface MacroRatio {
   fat?: number | null;
 }
 
+const ACTIVITY_STORAGE_BASE_KEY = "user_activities_v1";
+
 const AnalysisScreen = ({ navigation }: any) => {
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
@@ -66,6 +69,12 @@ const AnalysisScreen = ({ navigation }: any) => {
   const [userIdLoaded, setUserIdLoaded] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
   const [latestInBodyDate, setLatestInBodyDate] = useState<string | null>(null);
+  const [localSessionCompletion, setLocalSessionCompletion] = useState<
+    Record<string, boolean>
+  >({});
+  const [localCompletionByNameDate, setLocalCompletionByNameDate] = useState<
+    Record<string, boolean>
+  >({});
 
   const displayName = useMemo(
     () => (userName ? `${userName}님` : "회원님"),
@@ -166,11 +175,87 @@ const AnalysisScreen = ({ navigation }: any) => {
   };
 
   // 운동별 최근 8개 기록을 그룹화하고 이전 기록과 비교
+  const getActivityStorageKey = useCallback(() => {
+    return userId
+      ? `${ACTIVITY_STORAGE_BASE_KEY}:${userId}`
+      : ACTIVITY_STORAGE_BASE_KEY;
+  }, [userId]);
+
+  const interpretCompletion = useCallback((value: any): boolean | null => {
+    if (typeof value === "boolean") {
+      return value;
+    }
+    if (typeof value === "number") {
+      if (Number.isNaN(value)) return null;
+      return value !== 0;
+    }
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (!normalized) return null;
+      if (["true", "y", "yes", "완료", "done"].includes(normalized))
+        return true;
+      if (["false", "n", "no", "미완료"].includes(normalized)) return false;
+      const numeric = Number(normalized);
+      if (!Number.isNaN(numeric)) return numeric !== 0;
+    }
+    return null;
+  }, []);
+
+  const isSessionCompleted = useCallback(
+    (session: WorkoutSession) => {
+      if (!session) return false;
+      const sessionKey =
+        session.sessionId !== undefined && session.sessionId !== null
+          ? String(session.sessionId)
+          : null;
+      if (sessionKey && sessionKey in localSessionCompletion) {
+        return localSessionCompletion[sessionKey];
+      }
+
+      const sessionDateKey = (() => {
+        if (!session.exerciseName) return null;
+        const name = session.exerciseName.trim().toLowerCase();
+        if (!name) return null;
+        const dateStr = session.workoutDate
+          ? session.workoutDate.slice(0, 10)
+          : null;
+        if (!dateStr) return null;
+        return `${name}|${dateStr}`;
+      })();
+      if (sessionDateKey && sessionDateKey in localCompletionByNameDate) {
+        return localCompletionByNameDate[sessionDateKey];
+      }
+
+      const direct = interpretCompletion((session as any).isCompleted);
+      if (direct !== null) return direct;
+
+      const alt = interpretCompletion((session as any).completed);
+      if (alt !== null) return alt;
+
+      if (Array.isArray(session.sets) && session.sets.length > 0) {
+        const statuses = session.sets.map((set: any) =>
+          interpretCompletion(set?.completed)
+        );
+        const hasKnown = statuses.some((status) => status !== null);
+        if (!hasKnown) return false;
+        return statuses.every((status) => status === true);
+      }
+
+      return false;
+    },
+    [interpretCompletion, localSessionCompletion, localCompletionByNameDate]
+  );
+
+  const completedWorkoutHistory = useMemo(
+    () => workoutHistory.filter(isSessionCompleted),
+    [workoutHistory, isSessionCompleted]
+  );
+
   const exercises = useMemo(() => {
-    if (workoutHistory.length === 0) return [];
+    if (completedWorkoutHistory.length === 0) return [];
 
     // 운동 이름별로 그룹화
-    const groupedByExercise = workoutHistory.reduce((acc, session) => {
+    const groupedByExercise = completedWorkoutHistory.reduce((acc, session) => {
       const name = session.exerciseName;
       if (!acc[name]) {
         acc[name] = [];
@@ -256,7 +341,7 @@ const AnalysisScreen = ({ navigation }: any) => {
         );
       })
       .slice(0, 8); // 최대 8개
-  }, [workoutHistory]);
+  }, [completedWorkoutHistory]);
 
   const [exerciseImages, setExerciseImages] = useState<Record<string, string>>(
     {}
@@ -305,7 +390,7 @@ const AnalysisScreen = ({ navigation }: any) => {
           if (__DEV__) {
             console.warn("[ANALYSIS] 운동 이미지 불러오기 실패:", {
               id,
-              error,
+              message: (error as Error)?.message,
             });
           }
         }
@@ -358,7 +443,7 @@ const AnalysisScreen = ({ navigation }: any) => {
           if (__DEV__) {
             console.warn("[ANALYSIS] 운동 이미지 검색 실패:", {
               name: rawName,
-              error,
+              message: (error as Error)?.message,
             });
           }
         }
@@ -373,10 +458,70 @@ const AnalysisScreen = ({ navigation }: any) => {
   }, [exercises, exerciseImagesByName]);
 
   // 운동 기록 조회
+  const loadLocalCompletions = useCallback(async () => {
+    if (!userIdLoaded) return;
+    try {
+      const raw = await AsyncStorage.getItem(getActivityStorageKey());
+      if (!raw) {
+        setLocalSessionCompletion({});
+        setLocalCompletionByNameDate({});
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        setLocalSessionCompletion({});
+        setLocalCompletionByNameDate({});
+        return;
+      }
+      const sessionMap: Record<string, boolean> = {};
+      const nameDateMap: Record<string, boolean> = {};
+
+      parsed.forEach((activity: any) => {
+        const completedValue =
+          interpretCompletion(activity?.isCompleted) ??
+          (Array.isArray(activity?.sets) && activity.sets.length > 0
+            ? activity.sets.every(
+                (set: any) => interpretCompletion(set?.completed) === true
+              )
+            : false);
+
+        const sessionKey =
+          activity?.sessionId !== undefined && activity?.sessionId !== null
+            ? String(activity.sessionId)
+            : null;
+        if (sessionKey && completedValue) {
+          sessionMap[sessionKey] = true;
+        }
+
+        if (activity?.name && activity?.date) {
+          const nameKey = `${String(activity.name)
+            .trim()
+            .toLowerCase()}|${String(activity.date).trim()}`;
+          if (completedValue) {
+            nameDateMap[nameKey] = true;
+          }
+        }
+      });
+
+      setLocalSessionCompletion(sessionMap);
+      setLocalCompletionByNameDate(nameDateMap);
+    } catch (error) {
+      if (__DEV__) {
+        console.warn("[ANALYSIS] 로컬 완료 정보 로드 실패:", {
+          message: (error as Error)?.message,
+        });
+      }
+      setLocalSessionCompletion({});
+      setLocalCompletionByNameDate({});
+    }
+  }, [getActivityStorageKey, interpretCompletion, userIdLoaded]);
+
   const loadWorkoutHistory = useCallback(async () => {
     if (!userIdLoaded) return;
     if (!userId) {
-      console.warn("[ANALYSIS] userId가 없습니다.");
+      if (__DEV__) {
+        console.warn("[ANALYSIS] userId가 없습니다.");
+      }
       setWorkoutHistory([]);
       return;
     }
@@ -384,14 +529,73 @@ const AnalysisScreen = ({ navigation }: any) => {
       setLoading(true);
       const workouts = await fetchUserWorkouts(userId);
       setWorkoutHistory(workouts);
-      console.log("[ANALYSIS] 운동 기록", { count: workouts.length });
+      if (__DEV__) {
+        console.log("[ANALYSIS] 운동 기록", { count: workouts.length });
+      }
     } catch (error) {
-      console.error("[ANALYSIS] 운동 기록 조회 실패:", error);
+      console.error(
+        "[ANALYSIS] 운동 기록 조회 실패:",
+        (error as Error)?.message
+      );
       setWorkoutHistory([]);
     } finally {
       setLoading(false);
     }
   }, [userId]);
+
+  useEffect(() => {
+    const unsubscribe = eventBus.on(
+      "workoutSessionDeleted",
+      ({ sessionId, exerciseName, workoutDate }) => {
+        const targetId =
+          sessionId !== undefined && sessionId !== null
+            ? String(sessionId)
+            : null;
+        const targetName = exerciseName
+          ? exerciseName.trim().toLowerCase()
+          : null;
+        const targetDate = workoutDate ? workoutDate.trim() : null;
+
+        setWorkoutHistory((prev) =>
+          prev.filter((session) => {
+            const currentId =
+              session.sessionId !== undefined && session.sessionId !== null
+                ? String(session.sessionId)
+                : null;
+            if (targetId && currentId === targetId) {
+              return false;
+            }
+            if (targetName) {
+              const sessionName = (session.exerciseName || "")
+                .trim()
+                .toLowerCase();
+              if (sessionName === targetName) {
+                if (!targetDate) {
+                  return false;
+                }
+                const sessionDateStr = session.workoutDate
+                  ? session.workoutDate.slice(0, 10)
+                  : null;
+                if (sessionDateStr === targetDate) {
+                  return false;
+                }
+              }
+            }
+            return true;
+          })
+        );
+
+        loadWorkoutHistory();
+        (async () => {
+          await loadLocalCompletions();
+        })();
+      }
+    );
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, [loadWorkoutHistory, loadLocalCompletions]);
 
   const loadMealComparison = useCallback(async () => {
     try {
@@ -419,11 +623,10 @@ const AnalysisScreen = ({ navigation }: any) => {
       );
       setMealComparison(response.data);
     } catch (error: any) {
-      console.error("[ANALYSIS] 식단 비교 조회 실패:", {
-        message: error?.message,
-        status: error?.response?.status,
-        data: error?.response?.data,
-      });
+      console.error(
+        "[ANALYSIS] 식단 비교 조회 실패:",
+        error?.response?.data?.message || error?.message
+      );
       setMealComparison(null);
       setMealError(
         error?.response?.data?.message ||
@@ -451,7 +654,11 @@ const AnalysisScreen = ({ navigation }: any) => {
         setUserName(cachedName);
       }
     } catch (error) {
-      console.warn("[ANALYSIS] 사용자 이름 캐시 로드 실패:", error);
+      if (__DEV__) {
+        console.warn("[ANALYSIS] 사용자 이름 캐시 로드 실패:", {
+          message: (error as Error)?.message,
+        });
+      }
     }
 
     try {
@@ -463,7 +670,10 @@ const AnalysisScreen = ({ navigation }: any) => {
         }
       }
     } catch (error) {
-      console.error("[ANALYSIS] 사용자 이름 갱신 실패:", error);
+      console.error(
+        "[ANALYSIS] 사용자 이름 갱신 실패:",
+        (error as Error)?.message
+      );
     }
   }, []);
 
@@ -479,8 +689,18 @@ const AnalysisScreen = ({ navigation }: any) => {
         setLatestInBodyDate(normalized);
         return;
       }
-    } catch (error) {
-      console.error("[ANALYSIS] 최신 인바디 조회 실패:", error);
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (status === 400) {
+        if (__DEV__) {
+          console.log("[ANALYSIS] 최신 인바디 데이터 없음 (400 응답)", status);
+        }
+      } else {
+        console.error(
+          "[ANALYSIS] 최신 인바디 조회 실패:",
+          (error as Error)?.message
+        );
+      }
     }
 
     try {
@@ -498,7 +718,10 @@ const AnalysisScreen = ({ navigation }: any) => {
         }
       }
     } catch (error) {
-      console.error("[ANALYSIS] 수기 인바디 날짜 조회 실패:", error);
+      console.error(
+        "[ANALYSIS] 수기 인바디 날짜 조회 실패:",
+        (error as Error)?.message
+      );
     }
 
     setLatestInBodyDate(null);
@@ -508,6 +731,12 @@ const AnalysisScreen = ({ navigation }: any) => {
     loadUserId();
   }, [loadUserId]);
 
+  useEffect(() => {
+    if (userIdLoaded) {
+      loadLocalCompletions();
+    }
+  }, [userIdLoaded, loadLocalCompletions]);
+
   // 화면 포커스 시 운동 기록 새로고침
   useFocusEffect(
     useCallback(() => {
@@ -515,11 +744,13 @@ const AnalysisScreen = ({ navigation }: any) => {
       loadMealComparison();
       loadUserName();
       loadLatestInBodyDate();
+      loadLocalCompletions();
     }, [
       loadWorkoutHistory,
       loadMealComparison,
       loadLatestInBodyDate,
       loadUserName,
+      loadLocalCompletions,
     ])
   );
 
@@ -589,7 +820,9 @@ const AnalysisScreen = ({ navigation }: any) => {
   };
 
   const handlePhotoSave = (data: any) => {
-    console.log("인바디 사진 저장:", data);
+    if (__DEV__) {
+      console.log("인바디 사진 저장:", data?.id || "[photo]");
+    }
   };
 
   const greetingSummary = useMemo(
@@ -710,7 +943,13 @@ const AnalysisScreen = ({ navigation }: any) => {
                     })()}
                   </View>
                   <View style={styles.exerciseInfo}>
-                    <Text style={styles.exerciseName}>{exercise.name}</Text>
+                    <Text
+                      style={styles.exerciseName}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {exercise.name}
+                    </Text>
                     <View style={styles.exerciseChangeContainer}>
                       {exercise.changeType === "positive" && (
                         <>
@@ -1157,6 +1396,8 @@ const styles = StyleSheet.create({
     fontSize: 14.4,
     fontWeight: "500",
     color: "#ffffff",
+    flexShrink: 1,
+    maxWidth: "70%",
   },
   exerciseChangeContainer: {
     flexDirection: "row",

@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import ExerciseScreen from '../exercise/ExerciseScreen';
 import DietScreen from '../diet/DietScreen';
 
-const StatsScreen = ({navigation}: any) => {
+const StatsScreen = ({navigation, route}: any) => {
   const [activeTab, setActiveTab] = useState(0);
   const [goalData, setGoalData] = useState<any>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -34,21 +34,36 @@ const StatsScreen = ({navigation}: any) => {
     })();
   }, []);
 
-  useEffect(() => {
-    if (!userIdLoaded) return;
-    (async () => {
-      try {
-        const saved = await AsyncStorage.getItem(storageKey);
-        if (saved) {
-          setGoalData(JSON.parse(saved));
-        } else {
-          setGoalData(null);
-        }
-      } catch (error) {
-        console.log('Failed to load goal data', error);
+  const loadGoalData = useCallback(async () => {
+    try {
+      if (!userIdLoaded) return;
+      const saved = await AsyncStorage.getItem(storageKey);
+      if (saved) {
+        setGoalData(JSON.parse(saved));
+      } else {
+        setGoalData(null);
       }
-    })();
-  }, [userIdLoaded, storageKey]);
+    } catch (error) {
+      console.log('Failed to load goal data', error);
+    }
+  }, [storageKey, userIdLoaded]);
+
+  useEffect(() => {
+    loadGoalData();
+  }, [loadGoalData]);
+
+  useEffect(() => {
+    if (route?.params?.exerciseGoal !== undefined) {
+      const newGoal = route.params.exerciseGoal ?? null;
+      setGoalData(newGoal);
+      if (newGoal) {
+        AsyncStorage.setItem(storageKey, JSON.stringify(newGoal)).catch(() => {});
+      } else {
+        AsyncStorage.removeItem(storageKey).catch(() => {});
+      }
+      navigation.setParams({exerciseGoal: undefined});
+    }
+  }, [route?.params?.exerciseGoal, navigation, storageKey]);
 
   const tabs = ['운동기록', '식단기록'];
 

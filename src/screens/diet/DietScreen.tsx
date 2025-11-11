@@ -446,16 +446,24 @@ const DietScreen = ({navigation}: any) => {
                       onPress={() => setSelectedDate(d)}
                       activeOpacity={0.7}
                     >
-                      <View style={[
-                        styles.calendarNumber,
-                        isSelected && styles.calendarNumberToday
-                      ]}>
-                        <Text style={[
-                          styles.calendarNumberText,
-                          isSelected && styles.calendarNumberTodayText
-                        ]}>
-                          {d.getDate()}
-                        </Text>
+                      <View style={styles.calendarNumber}>
+                        <View
+                          style={[
+                            styles.calendarNumberInner,
+                            isSelected && styles.calendarNumberSelected,
+                            isToday && styles.calendarNumberToday,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.calendarNumberText,
+                              isSelected && styles.calendarNumberSelectedText,
+                              isToday && styles.calendarNumberTextToday,
+                            ]}
+                          >
+                            {d.getDate()}
+                          </Text>
+                        </View>
                       </View>
                         {(() => {
                           const dayProgress = getDayProgress(d);
@@ -783,11 +791,25 @@ const styles = StyleSheet.create({
     minHeight: 79,
   },
   calendarNumber: {
-    minHeight: 30,
-    minWidth: 30,
+    width: 32,
+    height: 32,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
+  },
+  calendarNumberInner: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  calendarNumberSelected: {
+    backgroundColor: '#e3ff7c',
+  },
+  calendarNumberToday: {
+    backgroundColor: '#e3ff7c',
   },
   calendarNumberText: {
     fontSize: 16,
@@ -796,17 +818,16 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     textAlign: 'center',
   },
-  calendarNumberToday: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#ffffff',
-  },
-  calendarNumberTodayText: {
-    color: '#000000',
+  calendarNumberTextToday: {
     fontSize: 16,
     fontWeight: '700',
+    color: '#1c1c1c',
     lineHeight: 19,
+    textAlign: 'center',
+  },
+  calendarNumberSelectedText: {
+    color: '#000000',
+    fontWeight: '700',
   },
   calendarMutedText: {
     color: '#777777',
@@ -1017,11 +1038,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   calendarNumberSelected: {
-    borderWidth: 2,
-    borderColor: '#e3ff7c',
+    backgroundColor: '#ffffff',
   },
   calendarNumberTextSelected: {
-    color: '#e3ff7c',
+    color: '#000000',
+    fontWeight: '700',
   },
 });
 

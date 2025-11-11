@@ -20,15 +20,10 @@ import {
   fetchWeeklyProgress,
   fetchMonthlyProgress,
 } from "../../utils/exerciseApi";
+import { getExerciseGoalSummary } from "../../utils/exerciseGoalApi";
+import { eventBus } from "../../utils/eventBus";
 import { useDate } from "../../contexts/DateContext";
 import type { DailyProgressWeekItem } from "../../types";
-
-interface WorkoutGoals {
-  frequency: number;
-  duration: string;
-  type: string;
-  calories: number;
-}
 
 interface Activity {
   id: number;
@@ -40,6 +35,13 @@ interface Activity {
   sessionId?: string; // 서버 저장된 세션과 연동용
   sets?: any[]; // 세트 내역 보존
 }
+
+type ExerciseGoalInfo = {
+  weeklyFrequency: string;
+  durationPerSession: string;
+  exerciseType?: string;
+  weeklyCalorieGoal?: number;
+};
 
 const ExerciseScreen = ({ navigation }: any) => {
   const [monthBase, setMonthBase] = useState(new Date());
@@ -57,7 +59,8 @@ const ExerciseScreen = ({ navigation }: any) => {
       (activity) => activity.date === selectedDateStr
     );
   }, [allActivities, selectedDate]);
-  const [goalData, setGoalData] = useState<WorkoutGoals | null>(null);
+
+  const [goalData, setGoalData] = useState<ExerciseGoalInfo | null>(null);
   const [completedThisWeek, setCompletedThisWeek] = useState(0);
   const [weeklyCalories, setWeeklyCalories] = useState(0);
   const [weeklyProgress, setWeeklyProgress] = useState<DailyProgressWeekItem[]>([]);
@@ -71,7 +74,32 @@ const ExerciseScreen = ({ navigation }: any) => {
   const [userId, setUserId] = useState<string | null>(null);
   const [userIdLoaded, setUserIdLoaded] = useState(false);
 
-  const WORKOUT_GOALS_KEY_BASE = "workoutGoals";
+  const goalSummaryText = React.useMemo(() => {
+    if (!goalData) {
+      return "목표치가 아직 설정되지 않았습니다";
+    }
+    const parts: string[] = [];
+    if (goalData.weeklyFrequency) {
+      parts.push(goalData.weeklyFrequency);
+    }
+    if (goalData.durationPerSession) {
+      parts.push(goalData.durationPerSession);
+    }
+    if (goalData.exerciseType) {
+      parts.push(goalData.exerciseType);
+    }
+    if (
+      typeof goalData.weeklyCalorieGoal === "number" &&
+      goalData.weeklyCalorieGoal > 0
+    ) {
+      parts.push(`${goalData.weeklyCalorieGoal}kcal`);
+    }
+    if (parts.length === 0) {
+      return "목표치가 아직 설정되지 않았습니다";
+    }
+    return `목표치 | ${parts.join(" · ")}`;
+  }, [goalData]);
+
   const COMPLETED_COUNT_KEY_BASE = "workoutCompletedThisWeek";
   const ACTIVITIES_KEY_BASE = "user_activities_v1";
 
@@ -91,19 +119,29 @@ const ExerciseScreen = ({ navigation }: any) => {
     })();
   }, []);
 
+  React.useEffect(() => {
+    if (!selectedDate) {
+      setSelectedDate(new Date());
+    }
+  }, [selectedDate, setSelectedDate]);
+
   const loadGoalData = React.useCallback(async () => {
     try {
-      const saved = await AsyncStorage.getItem(
-        getStorageKey(WORKOUT_GOALS_KEY_BASE)
-      );
-      setGoalData(saved ? JSON.parse(saved) : null);
+      const summary = await getExerciseGoalSummary();
+      setGoalData(summary);
+    } catch (error) {
+      console.log("[EXERCISE] 운동 목표 불러오기 실패:", error);
+      setGoalData(null);
+    }
 
+    try {
       const completed = await AsyncStorage.getItem(
         getStorageKey(COMPLETED_COUNT_KEY_BASE)
       );
       setCompletedThisWeek(completed ? parseInt(completed, 10) || 0 : 0);
     } catch (error) {
-      console.log("Failed to load goal data", error);
+      console.log("[EXERCISE] 완료 횟수 불러오기 실패:", error);
+      setCompletedThisWeek(0);
     }
   }, [getStorageKey]);
 
@@ -189,17 +227,34 @@ const ExerciseScreen = ({ navigation }: any) => {
 
   const getProgressPercentage = () => {
     if (!goalData) return 0;
-    // 횟수 기준 진행률
-    const countTarget = Math.max(1, goalData.frequency || 1);
+    const frequencyValue = goalData.weeklyFrequency
+      ? parseInt(goalData.weeklyFrequency.replace(/[^0-9]/g, ""), 10)
+      : NaN;
+    const countTarget = Math.max(
+      1,
+      Number.isNaN(frequencyValue) || frequencyValue <= 0 ? 1 : frequencyValue
+    );
     const countRate = Math.min(1, Math.max(0, completedThisWeek / countTarget));
-    // 칼로리 기준 진행률
-    const calorieTarget = Math.max(1, Number(goalData.calories) || 1);
+    const calorieTarget = Math.max(
+      1,
+      goalData.weeklyCalorieGoal && goalData.weeklyCalorieGoal > 0
+        ? Number(goalData.weeklyCalorieGoal)
+        : 1
+    );
     const calorieRate = Math.min(
       1,
       Math.max(0, weeklyCalories / calorieTarget)
     );
-    // 두 기준의 평균으로 주간 진행률 산출
-    const avgRate = (countRate + calorieRate) / 2;
+    const metrics: number[] = [];
+    metrics.push(countRate);
+    if (weeklyCalories > 0 || goalData.weeklyCalorieGoal) {
+      metrics.push(calorieRate);
+    }
+    if (metrics.length === 0) {
+      return 0;
+    }
+    const avgRate =
+      metrics.reduce((sum, rate) => sum + rate, 0) / metrics.length;
     return Math.round(avgRate * 100);
   };
 
@@ -383,6 +438,11 @@ const ExerciseScreen = ({ navigation }: any) => {
             setAllActivities(
               allActivities.filter((activity) => activity.id !== workoutId)
             );
+            eventBus.emit("workoutSessionDeleted", {
+              sessionId,
+              exerciseName: target?.name,
+              workoutDate: target?.date,
+            });
           }
         },
       },
@@ -598,20 +658,24 @@ const ExerciseScreen = ({ navigation }: any) => {
                       onPress={() => setSelectedDate(d)}
                       activeOpacity={0.7}
                     >
-                      <View
-                        style={[
-                          styles.calendarNumber,
-                          isSelected && styles.calendarNumberToday,
-                        ]}
-                      >
-                        <Text
+                      <View style={styles.calendarNumber}>
+                        <View
                           style={[
-                            styles.calendarNumberText,
-                            isSelected && styles.calendarNumberTodayText,
+                            styles.calendarNumberInner,
+                            isSelected && styles.calendarNumberSelected,
+                            isToday && styles.calendarNumberToday,
                           ]}
                         >
-                          {label}
-                        </Text>
+                          <Text
+                            style={[
+                              styles.calendarNumberText,
+                              isSelected && styles.calendarNumberSelectedText,
+                              isToday && styles.calendarNumberTodayText,
+                            ]}
+                          >
+                            {label}
+                          </Text>
+                        </View>
                       </View>
                       {(() => {
                         const dayProgress = getDayProgress(d);
@@ -645,11 +709,7 @@ const ExerciseScreen = ({ navigation }: any) => {
         >
           <View style={styles.goalContent}>
             <Text style={styles.goalTitle}>운동 목표 설정</Text>
-            <Text style={styles.goalDescription}>
-              {goalData
-                ? `주 ${goalData.frequency}회, ${goalData.duration}, ${goalData.type}, ${goalData.calories}kcal`
-                : "아직 설정된 운동 목표가 없습니다"}
-            </Text>
+            <Text style={styles.goalDescription}>{goalSummaryText}</Text>
             <View style={styles.progressContainer}>
               <View style={styles.progressBar}>
                 <View
@@ -827,17 +887,25 @@ const styles = StyleSheet.create({
     minHeight: 79,
   },
   calendarNumber: {
-    minHeight: 30,
-    minWidth: 30,
+    width: 32,
+    height: 32,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 4,
   },
-  calendarNumberToday: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+  calendarNumberInner: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "transparent",
+  },
+  calendarNumberSelected: {
     backgroundColor: "#ffffff",
+  },
+  calendarNumberToday: {
+    backgroundColor: "#e3ff7c",
   },
   calendarNumberText: {
     fontSize: 16,
@@ -846,8 +914,14 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     textAlign: "center",
   },
-  calendarNumberTodayText: {
+  calendarNumberSelectedText: {
     color: "#000000",
+    fontSize: 16,
+    fontWeight: "700",
+    lineHeight: 19,
+  },
+  calendarNumberTodayText: {
+    color: "#1c1c1c",
     fontSize: 16,
     fontWeight: "700",
     lineHeight: 19,
