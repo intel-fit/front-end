@@ -100,26 +100,45 @@ export const mealAPI = {
   // POST /food/upload_food - Azure + Gemini 기반 AI 음식 인식
   // 큰 이미지 자동 리사이즈 (800px 기준), 동일 이미지 해시로 캐싱
   uploadFood: async (imageUri: string): Promise<any> => {
+    let resizedUri: string | null = null;
+    
     try {
-      // 이미지 리사이즈 (800px 기준)
-      const manipResult = await ImageManipulator.manipulateAsync(
-        imageUri,
-        [{ resize: { width: 800 } }], // 800px 기준으로 리사이즈
-        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
-      );
+      // 이미지 리사이즈 시도 (800px 기준)
+      try {
+        const manipResult = await ImageManipulator.manipulateAsync(
+          imageUri,
+          [{ resize: { width: 800 } }], // 800px 기준으로 리사이즈
+          { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+        );
+        resizedUri = manipResult.uri;
+        console.log('이미지 리사이즈 성공:', resizedUri);
+      } catch (resizeError: any) {
+        console.warn('이미지 리사이즈 실패, 원본 사용:', resizeError.message);
+        resizedUri = null; // 리사이즈 실패 시 원본 사용
+      }
       
-      const resizedUri = manipResult.uri;
+      // 리사이즈된 URI가 없으면 원본 사용
+      const uploadUri = resizedUri || imageUri;
       
       // FormData 생성
       const formData = new FormData();
       
       // 파일명 추출 (안전하게 처리)
-      const filename = resizedUri.split('/').pop() || 'photo.jpg';
-      // 확장자 확인 및 타입 설정
+      // 원본 URI에서 확장자 확인 (리사이즈된 경우 jpg, 원본인 경우 원본 확장자)
+      const originalFilename = imageUri.split('/').pop() || 'photo.jpg';
+      const uploadFilename = uploadUri.split('/').pop() || originalFilename;
+      
+      // 원본 파일의 확장자 확인
       let fileExtension = 'jpg';
-      const match = /\.(\w+)$/.exec(filename.toLowerCase());
-      if (match) {
-        fileExtension = match[1];
+      const originalMatch = /\.(\w+)$/.exec(originalFilename.toLowerCase());
+      if (originalMatch) {
+        fileExtension = originalMatch[1];
+      } else {
+        // 리사이즈된 파일의 확장자 확인
+        const uploadMatch = /\.(\w+)$/.exec(uploadFilename.toLowerCase());
+        if (uploadMatch) {
+          fileExtension = uploadMatch[1];
+        }
       }
       
       // MIME 타입 설정
@@ -133,19 +152,22 @@ export const mealAPI = {
       const type = mimeTypes[fileExtension] || 'image/jpeg';
       
       // 파일명 정리 (특수문자 제거)
-      const cleanFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_') || 'photo.jpg';
+      // 리사이즈된 경우 jpg 확장자, 원본인 경우 원본 확장자 유지
+      const finalExtension = resizedUri ? 'jpg' : fileExtension;
+      const cleanFilename = `photo.${finalExtension}`.replace(/[^a-zA-Z0-9._-]/g, '_');
       
       // multipart/form-data로 file 필드 추가
       // React Native에서는 uri, name, type이 필요
       formData.append('file', {
-        uri: resizedUri,
+        uri: uploadUri,
         name: cleanFilename,
         type: type,
       } as any);
 
       console.log('음식 이미지 업로드 요청:', {
         originalUri: imageUri,
-        resizedUri: resizedUri,
+        uploadUri: uploadUri,
+        isResized: resizedUri !== null,
         filename: cleanFilename,
         type,
         fileExtension,
@@ -233,7 +255,11 @@ export const mealAPI = {
       
       // 이미지 리사이즈 에러이거나 400 에러인 경우 원본 이미지로 재시도
       const isImageManipulatorError = error.message && error.message.includes('ImageManipulator');
-      const is400Error = error.message && error.message.includes('status: 400');
+      const is400Error = error.message && (
+        error.message.includes('status: 400') || 
+        error.message.includes('Empty or invalid image file') ||
+        error.message.includes('invalid image')
+      );
       
       if (isImageManipulatorError || is400Error) {
         console.warn('이미지 리사이즈 실패 또는 400 에러, 원본 이미지로 재시도');

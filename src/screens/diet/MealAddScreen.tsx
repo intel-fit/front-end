@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useMemo} from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  InteractionManager,
 } from 'react-native';
 
 
@@ -38,14 +39,39 @@ interface Food {
 const MealAddScreen = ({navigation, route}: any) => {
   const {selectedDate: contextSelectedDate} = useDate();
   const mealData: DailyMeal | undefined = route?.params?.meal; // 수정 모드일 때 전달받은 식단 데이터
-  const routeSelectedDate: Date | undefined = route?.params?.selectedDate; // DietScreen에서 전달받은 선택 날짜
+  const routeSelectedDateString: string | undefined = route?.params?.selectedDate; // DietScreen에서 전달받은 선택 날짜 (문자열)
   const isEditMode = !!mealData;
   
   // 날짜 우선순위: route에서 전달받은 날짜 > context의 선택 날짜 > 오늘 날짜
   // 시간은 항상 현재 시간으로 설정 (또는 기존 시간 유지)
   const getInitialDate = (): Date => {
     const now = new Date();
-    const baseDate = routeSelectedDate || contextSelectedDate;
+    let baseDate: Date | null = null;
+    
+    // route에서 전달받은 날짜 문자열을 Date 객체로 변환
+    if (routeSelectedDateString) {
+      try {
+        // yyyy-MM-dd 형식의 문자열을 Date 객체로 변환
+        const parts = routeSelectedDateString.split('-');
+        if (parts.length === 3) {
+          baseDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        } else {
+          // ISO 형식으로 파싱 시도
+          baseDate = new Date(routeSelectedDateString);
+        }
+        if (isNaN(baseDate.getTime())) {
+          baseDate = null;
+        }
+      } catch (e) {
+        console.warn('날짜 파싱 실패:', routeSelectedDateString);
+        baseDate = null;
+      }
+    }
+    
+    // baseDate가 없으면 context의 선택 날짜 사용
+    if (!baseDate && contextSelectedDate) {
+      baseDate = contextSelectedDate;
+    }
     
     if (baseDate) {
       // 기존 날짜를 사용하되, 시간은 현재 시간으로 설정
@@ -191,18 +217,32 @@ const MealAddScreen = ({navigation, route}: any) => {
         weight: food.servingSize,
       }));
       setFoods(convertedFoods);
-    } else if (routeSelectedDate && !mealData) {
+    } else if (routeSelectedDateString && !mealData) {
       // route에서 날짜를 받았을 때 날짜 설정 (수정 모드가 아닐 때)
       // 날짜는 유지하고 시간은 현재 시간으로 설정
       const now = new Date();
-      const date = new Date(routeSelectedDate);
+      let date: Date;
+      try {
+        // yyyy-MM-dd 형식의 문자열을 Date 객체로 변환
+        const parts = routeSelectedDateString.split('-');
+        if (parts.length === 3) {
+          date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        } else {
+          date = new Date(routeSelectedDateString);
+        }
+        if (isNaN(date.getTime())) {
+          date = new Date(); // 파싱 실패 시 현재 날짜 사용
+        }
+      } catch (e) {
+        date = new Date(); // 파싱 실패 시 현재 날짜 사용
+      }
       date.setHours(now.getHours());
       date.setMinutes(now.getMinutes());
       date.setSeconds(0);
       date.setMilliseconds(0);
       setSelectedDateTime(date);
     }
-  }, [mealData, routeSelectedDate]);
+  }, [mealData, routeSelectedDateString]);
 
   // 날짜 선택 모달 열기
   const handleDateTimePress = () => {
@@ -356,11 +396,23 @@ const MealAddScreen = ({navigation, route}: any) => {
   const targetProtein = nutritionGoal?.targetProtein || 0;
   const targetFat = nutritionGoal?.targetFat || 0;
 
-  // 현재 입력 중인 음식의 영양소 합계
-  const currentMealCalories = foods.reduce((sum, food) => sum + food.calories, 0);
-  const currentMealCarbs = foods.reduce((sum, food) => sum + food.carbs, 0);
-  const currentMealProtein = foods.reduce((sum, food) => sum + food.protein, 0);
-  const currentMealFat = foods.reduce((sum, food) => sum + food.fat, 0);
+  // 현재 입력 중인 음식의 영양소 합계 (메모이제이션으로 성능 최적화)
+  const currentMealCalories = useMemo(() => 
+    foods.reduce((sum, food) => sum + food.calories, 0), 
+    [foods]
+  );
+  const currentMealCarbs = useMemo(() => 
+    foods.reduce((sum, food) => sum + food.carbs, 0), 
+    [foods]
+  );
+  const currentMealProtein = useMemo(() => 
+    foods.reduce((sum, food) => sum + food.protein, 0), 
+    [foods]
+  );
+  const currentMealFat = useMemo(() => 
+    foods.reduce((sum, food) => sum + food.fat, 0), 
+    [foods]
+  );
 
   // 수정 모드일 때는 현재 수정 중인 식단의 영양소를 제외하고 계산
   const existingMealsCalories = isEditMode && mealData
@@ -798,15 +850,23 @@ const MealAddScreen = ({navigation, route}: any) => {
       }
 
       if (foodData) {
+        // 상태 업데이트를 즉시 처리 (UI 블로킹 최소화)
         setFoods(prev => [...prev, foodData!]);
-        Alert.alert('성공', '음식이 추가되었습니다.');
+        // Alert 제거 - UI 블로킹 방지, 음식이 추가된 것을 화면에서 확인 가능
       } else {
-        Alert.alert('알림', '음식 정보를 가져올 수 없습니다.');
+        // 에러는 나중에 표시
+        setTimeout(() => {
+          Alert.alert('알림', '음식 정보를 가져올 수 없습니다.');
+        }, 100);
       }
     } catch (error: any) {
       console.error('사진 업로드 오류:', error);
-      Alert.alert('오류', error.message || '사진 업로드에 실패했습니다. 다시 시도해주세요.');
+      // 에러는 나중에 표시
+      setTimeout(() => {
+        Alert.alert('오류', error.message || '사진 업로드에 실패했습니다. 다시 시도해주세요.');
+      }, 100);
     } finally {
+      // 상태 업데이트를 즉시 처리
       setIsUploading(false);
     }
   };
@@ -891,9 +951,13 @@ const MealAddScreen = ({navigation, route}: any) => {
 
         {/* 칼로리 요약 */}
         <View style={styles.calorieSummary}>
-          <Text style={styles.calorieText}>
-            {formatDecimal(totalCalories)} / {formatDecimal(targetCalories)}kcal
-          </Text>
+          <View style={styles.calorieMain}>
+            <Text style={styles.calorieNumber}>{formatDecimal(totalCalories)}</Text>
+            <Text style={styles.calorieUnit}>
+              {' '}
+              / {formatDecimal(targetCalories)}kcal
+            </Text>
+          </View>
           <View style={styles.nutritionInline}>
             <View style={styles.nutritionInlineItem}>
               <Text style={styles.nutritionInlineLabel}>탄수화물</Text>
@@ -1211,11 +1275,23 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 15,
   },
-  calorieText: {
-    fontSize: 15,
+  calorieMain: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+    marginBottom: 15,
+  },
+  calorieNumber: {
+    fontSize: 18,
     fontWeight: '700',
     color: '#ffffff',
-    marginBottom: 15,
+    lineHeight: 22,
+  },
+  calorieUnit: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: '#ffffff',
+    lineHeight: 13,
   },
   nutritionInline: {
     flexDirection: 'row',

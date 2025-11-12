@@ -672,9 +672,10 @@ const DietScreen = ({navigation, route}: any) => {
             <TouchableOpacity
               style={styles.addButton}
               onPress={() => {
-                // 선택한 날짜를 MealAddScreen으로 전달
+                // 선택한 날짜를 MealAddScreen으로 전달 (문자열로 변환하여 전달)
                 const dateToPass = selectedDate || new Date();
-                navigation.navigate('MealAdd', { selectedDate: dateToPass });
+                const dateString = formatDateToString(dateToPass);
+                navigation.navigate('MealAdd', { selectedDate: dateString });
               }}>
               <Icon name="add" size={18} color={colors.text} />
             </TouchableOpacity>
@@ -1014,14 +1015,14 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   mealsContainer: {
-    gap: 20,
+    gap: 4,
     marginBottom: 12,
   },
   mealSection: {
     backgroundColor: colors.cardBackground,
     borderRadius: 20,
     padding: 20,
-    marginBottom: 12,
+    marginBottom: 4,
     position: 'relative',
   },
   mealContent: {
