@@ -19,6 +19,8 @@ import {
   postWorkoutSession,
   fetchWeeklyProgress,
   fetchMonthlyProgress,
+  fetchDateProgress,
+  fetchTodayProgress,
 } from "../../utils/exerciseApi";
 import { getExerciseGoalSummary } from "../../utils/exerciseGoalApi";
 import { eventBus } from "../../utils/eventBus";
@@ -168,7 +170,12 @@ const ExerciseScreen = ({ navigation }: any) => {
   React.useEffect(() => {
     if (!userIdLoaded) return;
     loadGoalData();
-  }, [userIdLoaded, loadGoalData]);
+    // 페이지 열 때 그 주 진행률 가져오기
+    loadWeeklyCalories();
+    // 페이지 열 때 선택된 날짜의 달 데이터 가져오기
+    const dateToFetch = selectedDate || new Date();
+    loadMonthlyProgress(dateToFetch.getFullYear(), dateToFetch.getMonth());
+  }, [userIdLoaded, loadGoalData, loadWeeklyCalories, selectedDate]);
 
   // 날짜를 yyyy-MM-dd 형식으로 변환
   const formatDateToString = (date: Date): string => {
@@ -198,18 +205,43 @@ const ExerciseScreen = ({ navigation }: any) => {
     }
   };
 
-  // monthBase가 변경될 때 월별 데이터 로드
+  // monthBase가 변경될 때 월별 데이터 로드 (달력이 펼쳐져 있을 때만)
   React.useEffect(() => {
-    loadMonthlyProgress(monthBase.getFullYear(), monthBase.getMonth());
-  }, [monthBase]);
+    if (showMonthView) {
+      loadMonthlyProgress(monthBase.getFullYear(), monthBase.getMonth());
+    }
+  }, [monthBase, showMonthView]);
 
-  // 화면 포커스 시 목표/진행 재로딩 (다른 화면에서 저장 후 복귀 시 반영)
+  // 달력을 펼치거나 접을 때 해당 달의 월별 데이터 가져오기
+  React.useEffect(() => {
+    const dateToFetch = selectedDate || new Date();
+    if (showMonthView) {
+      // 달력을 펼칠 때 monthBase의 달 데이터 가져오기
+      loadMonthlyProgress(monthBase.getFullYear(), monthBase.getMonth());
+    } else {
+      // 달력을 접을 때 선택된 날짜의 달 데이터 가져오기 (주간 달력 표시 시)
+      loadMonthlyProgress(dateToFetch.getFullYear(), dateToFetch.getMonth());
+    }
+  }, [showMonthView, selectedDate]);
+
+  // 선택된 날짜가 변경될 때 해당 달의 월별 데이터 가져오기
+  React.useEffect(() => {
+    const dateToFetch = selectedDate || new Date();
+    loadMonthlyProgress(dateToFetch.getFullYear(), dateToFetch.getMonth());
+  }, [selectedDate]);
+
+  // 화면 포커스 시 목표/진행 재로딩
+  // 다른 페이지에 갔다 오거나 식단 기록을 갔다 왔을 때, 탭 바꾸기 등 모든 행동 시
+  // 해당 달의 모든 데이터 가져오기
   useFocusEffect(
     React.useCallback(() => {
       if (!userIdLoaded) return;
       loadGoalData();
       loadWeeklyCalories();
-    }, [userIdLoaded, loadGoalData, loadWeeklyCalories])
+      // 해당 달의 월별 데이터 가져오기
+      const dateToFetch = selectedDate || new Date();
+      loadMonthlyProgress(dateToFetch.getFullYear(), dateToFetch.getMonth());
+    }, [userIdLoaded, loadGoalData, loadWeeklyCalories, selectedDate])
   );
 
   // 완료 횟수 저장 helper
@@ -365,6 +397,55 @@ const ExerciseScreen = ({ navigation }: any) => {
       const serverSessionId =
         (res && (res.sessionId || res.data?.sessionId)) ||
         sessionPayload.sessionId;
+      
+      // 운동 저장 후 해당 날짜의 진행률 다시 가져오기
+      const activeDateStr = formatDateToString(activeDate);
+      const today = new Date();
+      const isToday = 
+        activeDate.getFullYear() === today.getFullYear() &&
+        activeDate.getMonth() === today.getMonth() &&
+        activeDate.getDate() === today.getDate();
+      
+      try {
+        let dateProgress: DailyProgressWeekItem;
+        if (isToday) {
+          dateProgress = await fetchTodayProgress();
+        } else {
+          dateProgress = await fetchDateProgress(activeDateStr);
+        }
+        
+        // 주간 진행률 업데이트
+        setWeeklyProgress(prev => {
+          const index = prev.findIndex(item => item.date === activeDateStr);
+          if (index >= 0) {
+            const updated = [...prev];
+            updated[index] = dateProgress;
+            return updated;
+          } else {
+            // 주간 범위에 없으면 추가하지 않음 (주간 API가 자동으로 관리)
+            return prev;
+          }
+        });
+        
+        // 월별 진행률 업데이트
+        setMonthlyProgress(prev => {
+          const index = prev.findIndex(item => item.date === activeDateStr);
+          if (index >= 0) {
+            const updated = [...prev];
+            updated[index] = dateProgress;
+            return updated;
+          } else {
+            // 월별 범위에 없으면 추가
+            return [...prev, dateProgress];
+          }
+        });
+        
+        // 해당 달의 월별 데이터 전체 다시 가져오기
+        loadMonthlyProgress(activeDate.getFullYear(), activeDate.getMonth());
+      } catch (progressError) {
+        console.error('진행률 조회 실패:', progressError);
+      }
+      
       // POST 성공 시 활동 항목에 sessionId 저장 및 세트 내역 보존
       if (modalMode === "edit" && selectedExercise) {
         // 이전 완료 상태와 비교하여 카운트 조정
@@ -437,9 +518,58 @@ const ExerciseScreen = ({ navigation }: any) => {
         style: "destructive",
         onPress: async () => {
           try {
+            const target = allActivities.find((a) => a.id === workoutId);
+            const targetDate = target?.date;
+            
             if (sessionId) {
               const res = await deleteWorkoutSession(sessionId);
               console.log("[WORKOUT][DELETE][OK]", res);
+            }
+            
+            // 운동 삭제 후 해당 날짜의 진행률 다시 가져오기
+            if (targetDate) {
+              try {
+                const today = new Date();
+                const targetDateObj = new Date(targetDate);
+                const isToday = 
+                  targetDateObj.getFullYear() === today.getFullYear() &&
+                  targetDateObj.getMonth() === today.getMonth() &&
+                  targetDateObj.getDate() === today.getDate();
+                
+                let dateProgress: DailyProgressWeekItem;
+                if (isToday) {
+                  dateProgress = await fetchTodayProgress();
+                } else {
+                  dateProgress = await fetchDateProgress(targetDate);
+                }
+                
+                // 주간 진행률 업데이트
+                setWeeklyProgress(prev => {
+                  const index = prev.findIndex(item => item.date === targetDate);
+                  if (index >= 0) {
+                    const updated = [...prev];
+                    updated[index] = dateProgress;
+                    return updated;
+                  }
+                  return prev;
+                });
+                
+                // 월별 진행률 업데이트
+                setMonthlyProgress(prev => {
+                  const index = prev.findIndex(item => item.date === targetDate);
+                  if (index >= 0) {
+                    const updated = [...prev];
+                    updated[index] = dateProgress;
+                    return updated;
+                  }
+                  return prev;
+                });
+                
+                // 해당 달의 월별 데이터 전체 다시 가져오기
+                loadMonthlyProgress(targetDateObj.getFullYear(), targetDateObj.getMonth());
+              } catch (progressError) {
+                console.error('진행률 조회 실패:', progressError);
+              }
             }
           } catch (e) {
             console.error("[WORKOUT][DELETE][FAIL]", e);
@@ -816,8 +946,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 0,
-    paddingBottom: 12,
-    paddingTop: 8,
+    paddingBottom: 6,
+    paddingTop: 0,
   },
   monthNavLeft: {
     flexDirection: "row",
@@ -855,7 +985,7 @@ const styles = StyleSheet.create({
     marginVertical: 6,
   },
   monthGridContainer: {
-    marginTop: 6,
+    marginTop: 0,
     marginBottom: 6,
     paddingHorizontal: 4,
   },

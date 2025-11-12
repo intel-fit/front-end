@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ const HomeScreen = ({navigation}: any) => {
   const {selectedDate, setSelectedDate} = useDate();
   const [weeklyProgress, setWeeklyProgress] = useState<DailyProgressWeekItem[]>([]);
   const [homeData, setHomeData] = useState<HomeResponse | null>(null);
+  const isLoadingRef = useRef(false); // 중복 호출 방지
 
   // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
   const formatDateToString = (date: Date): string => {
@@ -26,20 +27,17 @@ const HomeScreen = ({navigation}: any) => {
     return `${year}-${month}-${day}`;
   };
 
-  // 주간 데이터 로드
+  // 주간 진행률 데이터 로드
+  // GET /api/daily-progress/week 호출하여 이번 주(일~토) 데이터 가져오기
   const loadWeeklyProgress = async () => {
     try {
-      console.log('주간 진행률 로드 시작...');
       const data = await homeAPI.getWeeklyProgress();
-      console.log('주간 진행률 데이터 받음:', data);
-      console.log('데이터 타입:', Array.isArray(data) ? '배열' : typeof data);
-      console.log('데이터 길이:', Array.isArray(data) ? data.length : 'N/A');
       
-      if (Array.isArray(data)) {
-        console.log('주간 진행률 설정:', data);
+      if (Array.isArray(data) && data.length > 0) {
+        console.log('주간 진행률 데이터 로드 성공');
         setWeeklyProgress(data);
       } else {
-        console.warn('주간 진행률 데이터가 배열이 아닙니다:', data);
+        console.warn('주간 진행률 데이터 비어있음');
         setWeeklyProgress([]);
       }
     } catch (e: any) {
@@ -54,13 +52,16 @@ const HomeScreen = ({navigation}: any) => {
   };
 
   // 특정 날짜의 진행률 데이터 가져오기
+  // weeklyProgress 배열에서 해당 날짜의 데이터를 찾아 반환
   const getDayProgress = (date: Date): DailyProgressWeekItem | undefined => {
     const dateStr = formatDateToString(date);
     const progress = weeklyProgress.find(item => item.date === dateStr);
+    
     if (!progress) {
-      console.log(`날짜 ${dateStr}에 대한 진행률 데이터를 찾을 수 없습니다.`);
-      console.log('현재 weeklyProgress:', weeklyProgress);
+      // 데이터가 없어도 정상 (해당 날짜에 기록이 없을 수 있음)
+      return undefined;
     }
+    
     return progress;
   };
 
@@ -77,18 +78,23 @@ const HomeScreen = ({navigation}: any) => {
     }
   };
 
-  // 초기 데이터 로드
-  useEffect(() => {
-    loadWeeklyProgress();
-    loadHomeData();
-  }, []);
-
-  // 화면 포커스 시 데이터 새로고침
+  // 화면 포커스 시 데이터 로드
+  // React Navigation에서는 화면이 처음 마운트될 때도 'focus' 이벤트가 발생하므로
+  // useEffect 없이 focus 리스너만 사용하면 중복 호출을 방지할 수 있습니다
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      loadWeeklyProgress();
-      loadHomeData();
+      // 중복 호출 방지
+      if (isLoadingRef.current) {
+        console.log('⏸️ 이미 데이터 로딩 중이므로 스킵');
+        return;
+      }
+      
+      isLoadingRef.current = true;
+      Promise.all([loadWeeklyProgress(), loadHomeData()]).finally(() => {
+        isLoadingRef.current = false;
+      });
     });
+    
     return unsubscribe;
   }, [navigation]);
 
@@ -150,7 +156,7 @@ const HomeScreen = ({navigation}: any) => {
           </View>
         </View>
 
-        {/* 운동 진행률 섹션 */}
+        {/* 주간 진행률 섹션 */}
         <TouchableOpacity
           style={styles.exerciseProgressSection}
           onPress={handleCalendarClick}
@@ -158,6 +164,7 @@ const HomeScreen = ({navigation}: any) => {
           <View style={styles.weekCalendar}>
             <View style={styles.calendarGrid}>
               {(() => {
+                // 주간 시작 날짜 계산
                 const today = new Date();
                 const getStartOfWeek = (d: Date) => {
                   const n = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -165,22 +172,31 @@ const HomeScreen = ({navigation}: any) => {
                   n.setDate(n.getDate() - diff);
                   return n;
                 };
+                // selectedDate가 있으면 해당 날짜 기준, 없으면 오늘 기준
                 const dateToShow = selectedDate || today;
                 const startThis = getStartOfWeek(dateToShow);
+
+                // 7일로된 배열 생성
                 return Array.from({length: 7}).map((_, i) => {
                   const d = new Date(
                     startThis.getFullYear(),
                     startThis.getMonth(),
                     startThis.getDate() + i,
                   );
+
+                  // 오늘 날짜 체크
                   const isToday = d.toDateString() === today.toDateString();
                   const isSelected =
                     selectedDate &&
                     d.toDateString() === selectedDate.toDateString();
+
+                  // 렌더링
                   return (
                     <View
                       key={startThis.toISOString() + i}
                       style={styles.calendarItem}>
+
+                      {/* 날짜 렌더링 */}
                       <View
                         style={[
                           styles.calendarNumber,
@@ -194,17 +210,14 @@ const HomeScreen = ({navigation}: any) => {
                           {d.getDate()}
                         </Text>
                       </View>
+
+                      {/* 칼로리 및 운동 달성률 렌더링 */}
                       {(() => {
+                        // API에서 받은 데이터에서 해당 날짜의 진행률 찾기
                         const dayProgress = getDayProgress(d);
                         const calories = dayProgress?.totalCalorie ?? 0;
                         const rate = dayProgress?.exerciseRate ?? 0;
                         const dateStr = formatDateToString(d);
-                        
-                        // 디버깅: 첫 번째 날짜만 로그 출력
-                        if (i === 0) {
-                          console.log(`캘린더 렌더링 - 날짜: ${dateStr}, 진행률:`, dayProgress);
-                          console.log(`칼로리: ${calories}, 달성률: ${rate}`);
-                        }
                         
                         return (
                           <>
@@ -238,7 +251,7 @@ const HomeScreen = ({navigation}: any) => {
               </Text>
             </View>
             <Text style={styles.caloriePercentage}>
-              {homeData?.todayMeal?.calorieAchievementRate || 0}%
+              {Math.round(homeData?.todayMeal?.calorieAchievementRate || 0)}%
             </Text>
           </View>
           <View style={styles.calorieProgressBar}>

@@ -352,6 +352,8 @@ const SignupScreen = ({navigation}: any) => {
                   <TextInput
                     style={[styles.input, styles.inputFlex]}
                     placeholder="아이디"
+                    textContentType="none"
+                    autoComplete="off"
                     value={formData.username}
                     onChangeText={text => handleChange('username', text)}
                     placeholderTextColor="rgba(255, 255, 255, 0.7)"
@@ -379,6 +381,8 @@ const SignupScreen = ({navigation}: any) => {
                   value={formData.password}
                   onChangeText={text => handleChange('password', text)}
                   secureTextEntry
+                  textContentType="none"
+                  autoComplete="off"
                   placeholderTextColor="rgba(255, 255, 255, 0.7)"
                 />
                 {errors.password && (
@@ -393,6 +397,8 @@ const SignupScreen = ({navigation}: any) => {
                   value={formData.confirmPassword}
                   onChangeText={text => handleChange('confirmPassword', text)}
                   secureTextEntry
+                  textContentType="none"
+                  autoComplete="off"
                   placeholderTextColor="rgba(255, 255, 255, 0.7)"
                 />
                 {errors.confirmPassword && (
