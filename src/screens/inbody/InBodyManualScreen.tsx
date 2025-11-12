@@ -10,12 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import InBodyManualForm from "../../components/common/InBodyManualForm";
-import {
-  postInBody,
-  patchInBody,
-  InBodyPayload,
-  getInBodyList,
-} from "../../utils/inbodyApi";
+import { postInBody, patchInBody, InBodyPayload } from "../../utils/inbodyApi";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -39,47 +34,28 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
   );
 
   const loadInBodyDates = useCallback(async () => {
-    try {
-      const response = await getInBodyList();
-      const list =
-        response?.data ||
-        response?.inBodyList ||
-        response?.inBodies ||
-        (Array.isArray(response) ? response : []);
+    const dateSet = new Set<string>();
 
-      const dateSet = new Set<string>();
-
-      if (Array.isArray(list)) {
-        list
-          .map((item: any) => item?.measurementDate || item?.date)
-          .filter((date: string | undefined) => !!date)
-          .map((date: string) => normalizeDate(date))
+    // 원격 API는 호출하지 않고, 로컬 저장된 수기 기록만 사용
+    const manualBaseKey = await getManualBaseKey();
+    const manualDatesKey = `${manualBaseKey}:dates`;
+    const manualDatesRaw = await AsyncStorage.getItem(manualDatesKey);
+    if (manualDatesRaw) {
+      try {
+        const manualDates: string[] = JSON.parse(manualDatesRaw);
+        manualDates
+          .map((date) => normalizeDate(date))
           .forEach((date) => dateSet.add(date));
+      } catch (error) {
+        console.error(
+          "[INBODY MANUAL] 수기 날짜 목록 파싱 실패:",
+          manualDatesRaw,
+          error
+        );
       }
-
-      // 수기 저장된 날짜 병합
-      const manualBaseKey = await getManualBaseKey();
-      const manualDatesKey = `${manualBaseKey}:dates`;
-      const manualDatesRaw = await AsyncStorage.getItem(manualDatesKey);
-      if (manualDatesRaw) {
-        try {
-          const manualDates: string[] = JSON.parse(manualDatesRaw);
-          manualDates
-            .map((date) => normalizeDate(date))
-            .forEach((date) => dateSet.add(date));
-        } catch (error) {
-          console.error(
-            "[INBODY MANUAL] 수기 날짜 목록 파싱 실패:",
-            manualDatesRaw,
-            error
-          );
-        }
-      }
-
-      setInBodyDates(Array.from(dateSet).sort());
-    } catch (error) {
-      console.error("[INBODY MANUAL] 인바디 날짜 목록 불러오기 실패:", error);
     }
+
+    setInBodyDates(Array.from(dateSet).sort());
   }, [getManualBaseKey, normalizeDate]);
 
   const storeManualPayload = useCallback(
