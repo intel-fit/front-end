@@ -260,6 +260,57 @@ const ExerciseScreen = ({ navigation }: any) => {
 
   const getProgressPercentage = () => {
     if (!goalData) return 0;
+    
+    // 실제 allActivities에서 이번 주 완료된 운동 개수 확인
+    const now = new Date();
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const thisWeekStart = new Date(now);
+    thisWeekStart.setDate(now.getDate() - now.getDay()); // 일요일로 설정
+    thisWeekStart.setHours(0, 0, 0, 0);
+    
+    // 이번 주 완료된 운동 개수 (정확한 날짜 필터링)
+    const todayEndCopy2 = new Date(todayEnd);
+    const actualCompletedThisWeek = allActivities.filter((activity) => {
+      if (!activity || !activity.date || !activity.isCompleted) return false;
+      try {
+        const activityDate = new Date(activity.date);
+        if (isNaN(activityDate.getTime())) return false;
+        const activityDateOnly = new Date(activityDate.getFullYear(), activityDate.getMonth(), activityDate.getDate());
+        const weekStartOnly = new Date(thisWeekStart.getFullYear(), thisWeekStart.getMonth(), thisWeekStart.getDate());
+        const todayEndOnly = new Date(todayEndCopy2.getFullYear(), todayEndCopy2.getMonth(), todayEndCopy2.getDate());
+        return activityDateOnly >= weekStartOnly && activityDateOnly <= todayEndOnly;
+      } catch {
+        return false;
+      }
+    }).length;
+    
+    // weeklyProgress에서 이번 주 데이터만 필터링하여 칼로리 계산
+    // todayEnd를 복사해서 사용 (원본 수정 방지)
+    const todayEndCopy = new Date(todayEnd);
+    const thisWeekCalories = weeklyProgress
+      .filter((item) => {
+        if (!item || !item.date) return false;
+        try {
+          const itemDate = new Date(item.date);
+          if (isNaN(itemDate.getTime())) return false;
+          const itemDateOnly = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate());
+          const weekStartOnly = new Date(thisWeekStart.getFullYear(), thisWeekStart.getMonth(), thisWeekStart.getDate());
+          const todayEndOnly = new Date(todayEndCopy.getFullYear(), todayEndCopy.getMonth(), todayEndCopy.getDate());
+          return itemDateOnly >= weekStartOnly && itemDateOnly <= todayEndOnly;
+        } catch {
+          return false;
+        }
+      })
+      .reduce((sum, item) => {
+        const calorie = Number(item?.totalCalorie || 0);
+        return sum + (isNaN(calorie) ? 0 : calorie);
+      }, 0);
+    
+    // 이번 주에 운동 기록이 전혀 없으면 0% 반환
+    if (actualCompletedThisWeek === 0 && thisWeekCalories === 0) {
+      return 0;
+    }
+    
     const frequencyValue = goalData.weeklyFrequency
       ? parseInt(goalData.weeklyFrequency.replace(/[^0-9]/g, ""), 10)
       : NaN;
@@ -267,7 +318,7 @@ const ExerciseScreen = ({ navigation }: any) => {
       1,
       Number.isNaN(frequencyValue) || frequencyValue <= 0 ? 1 : frequencyValue
     );
-    const countRate = Math.min(1, Math.max(0, completedThisWeek / countTarget));
+    const countRate = Math.min(1, Math.max(0, actualCompletedThisWeek / countTarget));
     const calorieTarget = Math.max(
       1,
       goalData.weeklyCalorieGoal && goalData.weeklyCalorieGoal > 0
@@ -276,19 +327,29 @@ const ExerciseScreen = ({ navigation }: any) => {
     );
     const calorieRate = Math.min(
       1,
-      Math.max(0, weeklyCalories / calorieTarget)
+      Math.max(0, thisWeekCalories / calorieTarget)
     );
-    const metrics: number[] = [];
-    metrics.push(countRate);
-    if (weeklyCalories > 0 || goalData.weeklyCalorieGoal) {
-      metrics.push(calorieRate);
-    }
-    if (metrics.length === 0) {
+    // 이번 주에 운동 기록이 전혀 없으면 0% 반환 (재확인)
+    if (actualCompletedThisWeek === 0 && thisWeekCalories === 0) {
       return 0;
     }
-    const avgRate =
-      metrics.reduce((sum, rate) => sum + rate, 0) / metrics.length;
-    return Math.round(avgRate * 100);
+    
+    // 운동 횟수 목표를 모두 완료했으면 100% 반환 (먼저 체크)
+    if (actualCompletedThisWeek >= countTarget) {
+      return 100;
+    }
+    
+    // 운동 목표 설정 진행률은 운동 횟수만으로 계산 (칼로리 제외)
+    const frequencyProgress = countRate;
+    
+    // 실제 진행률이 0이면 0% 반환
+    if (frequencyProgress === 0) {
+      return 0;
+    }
+    
+    // 운동 횟수 진행률을 그대로 표시 (0~100%)
+    const actualProgress = Math.round(frequencyProgress * 100);
+    return Math.min(100, actualProgress);
   };
 
   const handleAddWorkout = () => {
@@ -575,12 +636,38 @@ const ExerciseScreen = ({ navigation }: any) => {
             console.error("[WORKOUT][DELETE][FAIL]", e);
           } finally {
             const target = allActivities.find((a) => a.id === workoutId);
-            if (target?.isCompleted) {
-              setCompletedCountPersist(Math.max(0, completedThisWeek - 1));
-            }
-            setAllActivities(
-              allActivities.filter((activity) => activity.id !== workoutId)
+            const updatedActivities = allActivities.filter(
+              (activity) => activity.id !== workoutId
             );
+            setAllActivities(updatedActivities);
+            
+            // 이번 주에 완료된 운동 개수 다시 계산
+            const today = new Date();
+            const thisWeekStart = new Date(today);
+            thisWeekStart.setDate(today.getDate() - today.getDay()); // 일요일로 설정
+            thisWeekStart.setHours(0, 0, 0, 0);
+            
+            const thisWeekCompleted = updatedActivities.filter((activity) => {
+              const activityDate = new Date(activity.date);
+              activityDate.setHours(0, 0, 0, 0);
+              return (
+                activity.isCompleted &&
+                activityDate >= thisWeekStart &&
+                activityDate <= today
+              );
+            }).length;
+            
+            // 완료 횟수와 칼로리를 즉시 업데이트
+            setCompletedCountPersist(thisWeekCompleted);
+            // 주간 칼로리 다시 계산 (비동기이므로 await)
+            (async () => {
+              try {
+                await loadWeeklyCalories();
+              } catch (error) {
+                console.error("[WORKOUT][DELETE] 주간 칼로리 재계산 실패:", error);
+              }
+            })();
+            
             eventBus.emit("workoutSessionDeleted", {
               sessionId,
               exerciseName: target?.name,
