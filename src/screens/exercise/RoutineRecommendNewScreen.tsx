@@ -1,4 +1,3 @@
-// src/screens/RoutineRecommendNewScreen.tsx
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -15,6 +14,110 @@ import { Ionicons as Icon } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { authAPI, recommendedExerciseAPI } from "../../services";
 
+// 운동 카테고리별 아이콘 매핑
+const getExerciseIcon = (category: string, muscleName: string) => {
+  // 유산소
+  if (category === "CARDIO") return "🏃";
+
+  // 무산소 - 부위별
+  const muscleIcons: { [key: string]: string } = {
+    하체: "🦵",
+    LEGS: "🦵",
+    가슴: "💪",
+    CHEST: "💪",
+    등: "🏋️",
+    BACK: "🏋️",
+    어깨: "💪",
+    SHOULDERS: "💪",
+    팔: "💪",
+    ARMS: "💪",
+    복근: "🔥",
+    CORE: "🔥",
+    ABS: "🔥",
+  };
+
+  return muscleIcons[muscleName] || "💪";
+};
+
+// API 응답을 UI 형식으로 변환
+const transformAIExerciseToUI = (apiResponse: any) => {
+  const { plan } = apiResponse;
+
+  // 요일 순서 정의
+  const dayOrder = [
+    "월요일",
+    "화요일",
+    "수요일",
+    "목요일",
+    "금요일",
+    "토요일",
+    "일요일",
+  ];
+
+  // routines를 요일 순서대로 정렬
+  const sortedRoutines = [...plan.routines].sort((a: any, b: any) => {
+    return dayOrder.indexOf(a.dayOfWeek) - dayOrder.indexOf(b.dayOfWeek);
+  });
+
+  // 7일치 배열로 변환
+  const weekRoutines = sortedRoutines.map((routine: any) => {
+    // items를 exerciseOrder로 정렬
+    const sortedItems = [...routine.items].sort(
+      (a: any, b: any) => a.exerciseOrder - b.exerciseOrder
+    );
+
+    // 각 운동을 UI 형식으로 변환
+    return sortedItems.map((item: any) => {
+      let name = "";
+      let detail = "";
+      let icon = "";
+
+      // 유산소 운동인 경우
+      if (item.cardioTypeName) {
+        name = item.cardioTypeName;
+        icon = "🏃";
+
+        const details = [];
+        if (item.targetDurationMinutes) {
+          details.push(`${item.targetDurationMinutes}분`);
+        }
+        if (item.targetDistance) {
+          details.push(`${item.targetDistance}km`);
+        }
+        if (item.targetCaloriesBurn) {
+          details.push(`${item.targetCaloriesBurn}kcal`);
+        }
+        detail = details.join(" · ");
+      }
+      // 무산소 운동인 경우
+      else if (item.resistanceExerciseTypeName) {
+        name = item.resistanceExerciseTypeName;
+        icon = getExerciseIcon("RESISTANCE", item.muscleGroupName || "");
+
+        const details = [];
+        if (item.recommendedSets) {
+          details.push(`${item.recommendedSets}세트`);
+        }
+        if (item.recommendedWeight) {
+          details.push(`${item.recommendedWeight}kg`);
+        }
+        if (item.recommendedReps) {
+          details.push(`${item.recommendedReps}회`);
+        }
+        detail = details.join(" X ");
+      }
+
+      return {
+        name: name || "운동",
+        detail: detail || "",
+        icon: icon || "💪",
+      };
+    });
+  });
+
+  return weekRoutines;
+};
+
 const RoutineRecommendNewScreen = ({ navigation }: any) => {
   const [showRoutine, setShowRoutine] = useState(false);
   const [selectedDay, setSelectedDay] = useState(0);
@@ -27,20 +130,8 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
   const [savedRoutines, setSavedRoutines] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const weekDays = [
-    "1일차",
-    "2일차",
-    "3일차",
-    "4일차",
-    "5일차",
-    "6일차",
-    "7일차",
-  ];
-  const bodyParts = ["목", "어깨", "팔꿈치", "손목", "허리", "무릎", "발목"];
-  const targetAreas = ["가슴", "등", "배", "어깨", "팔", "하체"];
-  const levels = ["초급", "중급", "고급"];
-
-  const sampleRoutines = [
+  // ✅ weekRoutines를 state로 관리
+  const [weekRoutines, setWeekRoutines] = useState([
     [
       { name: "시작 스트레칭", detail: "6회차 스트레칭", icon: "🏃" },
       { name: "레그 프레스", detail: "4세트 X 20kg X 15회", icon: "🦵" },
@@ -84,7 +175,20 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
       { name: "크런치", detail: "4세트 X 20회", icon: "🔥" },
       { name: "플랭크", detail: "3세트 X 60초", icon: "🔥" },
     ],
+  ]);
+
+  const weekDays = [
+    "1일차",
+    "2일차",
+    "3일차",
+    "4일차",
+    "5일차",
+    "6일차",
+    "7일차",
   ];
+  const bodyParts = ["목", "어깨", "팔꿈치", "손목", "허리", "무릎", "발목"];
+  const targetAreas = ["가슴", "등", "배", "어깨", "팔", "하체"];
+  const levels = ["초급", "중급", "고급"];
 
   useEffect(() => {
     loadSavedRoutines();
@@ -123,85 +227,438 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
     try {
       console.log("🏋️ 운동 루틴 추천 시작");
 
-      // 프로필에서 나이, 성별 가져오기
-      const profile = await authAPI.getProfile();
+      // ✅ 1단계: 실제 API 시도
+      try {
+        const apiResponse = await recommendedExerciseAPI.generateExercisePlan();
 
-      // 운동 경력 매핑
-      const experienceMap: {
-        [key: string]: "beginner" | "intermediate" | "advanced";
-      } = {
-        초급: "beginner",
-        중급: "intermediate",
-        고급: "advanced",
-      };
-
-      // 취약한 부분을 health_conditions로 매핑
-      const healthConditionsMap: { [key: string]: string } = {
-        목: "neck_pain",
-        어깨: "shoulder_pain",
-        팔꿈치: "elbow_pain",
-        손목: "wrist_pain",
-        허리: "back_pain",
-        무릎: "knee_pain",
-        발목: "ankle_pain",
-      };
-
-      let userAge = 25; // 기본값
-      if (profile.birthDate) {
-        const birthYear = new Date(profile.birthDate).getFullYear();
-        const currentYear = new Date().getFullYear();
-        userAge = currentYear - birthYear;
+        if (apiResponse && apiResponse.success) {
+          console.log("✅ API 성공, 실제 데이터 사용");
+          const convertedRoutines = transformAIExerciseToUI(apiResponse);
+          setWeekRoutines(convertedRoutines);
+          setShowRoutine(true);
+          setSelectedDay(0);
+          Alert.alert(
+            "성공",
+            apiResponse.message || "운동 루틴이 생성되었습니다!"
+          );
+          return;
+        }
+      } catch (apiError: any) {
+        console.log("⚠️ API 실패 (500 에러), 목업 데이터로 전환");
+        console.log("에러 상세:", apiError.message);
       }
 
-      const userSex: "male" | "female" =
-        profile.gender === "M" ? "male" : "female";
-      // API 요청 파라미터 구성
-      const requestParams = {
-        age: userAge,
-        sex: userSex,
-        goal: "hypertrophy" as const, // 근비대 (기본값)
-        experience: (experienceMap[level] || "beginner") as
-          | "beginner"
-          | "intermediate"
-          | "advanced",
-        environment: "gym" as const, // 헬스장
-        available_equipment: ["barbell", "dumbbell", "cable", "machine"], // 기본 장비들
-        health_conditions: weakParts.map(
-          (part) => healthConditionsMap[part] || part
-        ),
-        plan_days: 7,
-        inbody: {
-          arms: {},
-          chest: {},
-          back: {},
-          shoulders: {},
-          legs: {},
-          glutes: {},
-          core: {},
+      // ✅ 2단계: API 실패 시 목업 데이터 사용
+      console.log("📦 목업 데이터로 운동 루틴 생성");
+
+      // 약간의 로딩 시간 (실제 API 느낌)
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      // ✅ 목업 응답 데이터 (백엔드가 준 형식과 동일)
+      const mockApiResponse = {
+        success: true,
+        message: "맞춤 운동 플랜이 생성되었습니다 (샘플 데이터)",
+        plan: {
+          id: 1,
+          planName: "체지방 감량을 위한 7일 운동 플랜",
+          description: "주 7회, 유산소 및 근력 운동 병행",
+          targetWeeklyMinutes: 420,
+          routines: [
+            // 월요일 - 하체
+            {
+              id: 1,
+              routineName: "하체 집중 데이",
+              dayOfWeek: "월요일",
+              exerciseCategory: "RESISTANCE",
+              exerciseCategoryName: "무산소",
+              estimatedDurationMinutes: 60,
+              items: [
+                {
+                  id: 1,
+                  resistanceExerciseTypeName: "바벨 스쿼트",
+                  muscleGroupName: "하체",
+                  recommendedSets: 4,
+                  recommendedReps: "10-12",
+                  recommendedWeight: "80-100",
+                  exerciseOrder: 1,
+                },
+                {
+                  id: 2,
+                  resistanceExerciseTypeName: "레그 프레스",
+                  muscleGroupName: "하체",
+                  recommendedSets: 3,
+                  recommendedReps: "12-15",
+                  recommendedWeight: "100-120",
+                  exerciseOrder: 2,
+                },
+                {
+                  id: 3,
+                  resistanceExerciseTypeName: "레그 컬",
+                  muscleGroupName: "하체",
+                  recommendedSets: 3,
+                  recommendedReps: "12-15",
+                  recommendedWeight: "40-50",
+                  exerciseOrder: 3,
+                },
+                {
+                  id: 4,
+                  resistanceExerciseTypeName: "런지",
+                  muscleGroupName: "하체",
+                  recommendedSets: 3,
+                  recommendedReps: "10-12",
+                  recommendedWeight: "20-30",
+                  exerciseOrder: 4,
+                },
+              ],
+            },
+            // 화요일 - 가슴
+            {
+              id: 2,
+              routineName: "가슴 집중 데이",
+              dayOfWeek: "화요일",
+              exerciseCategory: "RESISTANCE",
+              exerciseCategoryName: "무산소",
+              estimatedDurationMinutes: 60,
+              items: [
+                {
+                  id: 5,
+                  resistanceExerciseTypeName: "벤치 프레스",
+                  muscleGroupName: "가슴",
+                  recommendedSets: 4,
+                  recommendedReps: "8-10",
+                  recommendedWeight: "60-80",
+                  exerciseOrder: 1,
+                },
+                {
+                  id: 6,
+                  resistanceExerciseTypeName: "인클라인 덤벨 프레스",
+                  muscleGroupName: "가슴",
+                  recommendedSets: 3,
+                  recommendedReps: "10-12",
+                  recommendedWeight: "20-25",
+                  exerciseOrder: 2,
+                },
+                {
+                  id: 7,
+                  resistanceExerciseTypeName: "케이블 플라이",
+                  muscleGroupName: "가슴",
+                  recommendedSets: 3,
+                  recommendedReps: "12-15",
+                  recommendedWeight: "15-20",
+                  exerciseOrder: 3,
+                },
+                {
+                  id: 8,
+                  resistanceExerciseTypeName: "푸쉬업",
+                  muscleGroupName: "가슴",
+                  recommendedSets: 3,
+                  recommendedReps: "15-20",
+                  exerciseOrder: 4,
+                },
+              ],
+            },
+            // 수요일 - 등
+            {
+              id: 3,
+              routineName: "등 집중 데이",
+              dayOfWeek: "수요일",
+              exerciseCategory: "RESISTANCE",
+              exerciseCategoryName: "무산소",
+              estimatedDurationMinutes: 60,
+              items: [
+                {
+                  id: 9,
+                  resistanceExerciseTypeName: "데드리프트",
+                  muscleGroupName: "등",
+                  recommendedSets: 4,
+                  recommendedReps: "6-8",
+                  recommendedWeight: "80-100",
+                  exerciseOrder: 1,
+                },
+                {
+                  id: 10,
+                  resistanceExerciseTypeName: "랫 풀다운",
+                  muscleGroupName: "등",
+                  recommendedSets: 4,
+                  recommendedReps: "10-12",
+                  recommendedWeight: "50-60",
+                  exerciseOrder: 2,
+                },
+                {
+                  id: 11,
+                  resistanceExerciseTypeName: "시티드 로우",
+                  muscleGroupName: "등",
+                  recommendedSets: 3,
+                  recommendedReps: "10-12",
+                  recommendedWeight: "45-55",
+                  exerciseOrder: 3,
+                },
+                {
+                  id: 12,
+                  resistanceExerciseTypeName: "바벨 로우",
+                  muscleGroupName: "등",
+                  recommendedSets: 3,
+                  recommendedReps: "8-10",
+                  recommendedWeight: "50-60",
+                  exerciseOrder: 4,
+                },
+              ],
+            },
+            // 목요일 - 어깨
+            {
+              id: 4,
+              routineName: "어깨 집중 데이",
+              dayOfWeek: "목요일",
+              exerciseCategory: "RESISTANCE",
+              exerciseCategoryName: "무산소",
+              estimatedDurationMinutes: 60,
+              items: [
+                {
+                  id: 13,
+                  resistanceExerciseTypeName: "숄더 프레스",
+                  muscleGroupName: "어깨",
+                  recommendedSets: 4,
+                  recommendedReps: "10-12",
+                  recommendedWeight: "30-40",
+                  exerciseOrder: 1,
+                },
+                {
+                  id: 14,
+                  resistanceExerciseTypeName: "사이드 레터럴 레이즈",
+                  muscleGroupName: "어깨",
+                  recommendedSets: 3,
+                  recommendedReps: "12-15",
+                  recommendedWeight: "10-15",
+                  exerciseOrder: 2,
+                },
+                {
+                  id: 15,
+                  resistanceExerciseTypeName: "프론트 레이즈",
+                  muscleGroupName: "어깨",
+                  recommendedSets: 3,
+                  recommendedReps: "12-15",
+                  recommendedWeight: "10-15",
+                  exerciseOrder: 3,
+                },
+                {
+                  id: 16,
+                  resistanceExerciseTypeName: "리어 델트 플라이",
+                  muscleGroupName: "어깨",
+                  recommendedSets: 3,
+                  recommendedReps: "12-15",
+                  recommendedWeight: "8-12",
+                  exerciseOrder: 4,
+                },
+              ],
+            },
+            // 금요일 - 팔
+            {
+              id: 5,
+              routineName: "팔 집중 데이",
+              dayOfWeek: "금요일",
+              exerciseCategory: "RESISTANCE",
+              exerciseCategoryName: "무산소",
+              estimatedDurationMinutes: 60,
+              items: [
+                {
+                  id: 17,
+                  resistanceExerciseTypeName: "바벨 컬",
+                  muscleGroupName: "팔",
+                  recommendedSets: 4,
+                  recommendedReps: "10-12",
+                  recommendedWeight: "20-30",
+                  exerciseOrder: 1,
+                },
+                {
+                  id: 18,
+                  resistanceExerciseTypeName: "트라이셉스 푸쉬다운",
+                  muscleGroupName: "팔",
+                  recommendedSets: 4,
+                  recommendedReps: "10-12",
+                  recommendedWeight: "25-35",
+                  exerciseOrder: 2,
+                },
+                {
+                  id: 19,
+                  resistanceExerciseTypeName: "해머 컬",
+                  muscleGroupName: "팔",
+                  recommendedSets: 3,
+                  recommendedReps: "12-15",
+                  recommendedWeight: "15-20",
+                  exerciseOrder: 3,
+                },
+                {
+                  id: 20,
+                  resistanceExerciseTypeName: "오버헤드 익스텐션",
+                  muscleGroupName: "팔",
+                  recommendedSets: 3,
+                  recommendedReps: "10-12",
+                  recommendedWeight: "20-25",
+                  exerciseOrder: 4,
+                },
+              ],
+            },
+            // 토요일 - 유산소
+            {
+              id: 6,
+              routineName: "유산소 & 컨디셔닝",
+              dayOfWeek: "토요일",
+              exerciseCategory: "CARDIO",
+              exerciseCategoryName: "유산소",
+              estimatedDurationMinutes: 45,
+              items: [
+                {
+                  id: 21,
+                  cardioTypeName: "런닝머신",
+                  targetDurationMinutes: 30,
+                  targetDistance: 5,
+                  targetCaloriesBurn: 300,
+                  exerciseOrder: 1,
+                },
+                {
+                  id: 22,
+                  cardioTypeName: "사이클",
+                  targetDurationMinutes: 20,
+                  targetCaloriesBurn: 150,
+                  exerciseOrder: 2,
+                },
+              ],
+            },
+            // 일요일 - 복근 & 스트레칭
+            {
+              id: 7,
+              routineName: "코어 & 회복",
+              dayOfWeek: "일요일",
+              exerciseCategory: "RESISTANCE",
+              exerciseCategoryName: "무산소",
+              estimatedDurationMinutes: 40,
+              items: [
+                {
+                  id: 23,
+                  resistanceExerciseTypeName: "크런치",
+                  muscleGroupName: "복근",
+                  recommendedSets: 4,
+                  recommendedReps: "20-25",
+                  exerciseOrder: 1,
+                },
+                {
+                  id: 24,
+                  resistanceExerciseTypeName: "플랭크",
+                  muscleGroupName: "복근",
+                  recommendedSets: 3,
+                  recommendedReps: "60",
+                  exerciseOrder: 2,
+                },
+                {
+                  id: 25,
+                  resistanceExerciseTypeName: "레그 레이즈",
+                  muscleGroupName: "복근",
+                  recommendedSets: 3,
+                  recommendedReps: "15-20",
+                  exerciseOrder: 3,
+                },
+                {
+                  id: 26,
+                  resistanceExerciseTypeName: "러시안 트위스트",
+                  muscleGroupName: "복근",
+                  recommendedSets: 3,
+                  recommendedReps: "30-40",
+                  exerciseOrder: 4,
+                },
+              ],
+            },
+          ],
+          recommendationReason:
+            "사용자의 건강 목표와 현재 체지방률에 최적화된 플랜입니다",
+          createdAt: new Date().toISOString(),
+          saved: false,
         },
       };
 
-      console.log("📤 요청 파라미터:", requestParams);
-
-      // AI 서버로 운동 루틴 요청
-      const aiResponse = await recommendedExerciseAPI.getAIExercisePlan(
-        requestParams
-      );
-
-      console.log("✅ 운동 루틴 받음:", aiResponse);
-
-      // TODO: aiResponse를 sampleRoutines 형태로 변환
-      // 응답 구조를 확인해야 함
+      // API 응답을 UI 형식으로 변환
+      const convertedRoutines = transformAIExerciseToUI(mockApiResponse);
+      setWeekRoutines(convertedRoutines);
 
       setShowRoutine(true);
       setSelectedDay(0);
 
-      Alert.alert("성공", "운동 루틴이 생성되었습니다!");
+      // 개발 모드 알림
+      Alert.alert(
+        "개발 모드",
+        "현재 샘플 데이터를 표시하고 있습니다.\n\n백엔드 API가 준비되는 대로\n실제 AI 추천 데이터로 전환됩니다.",
+        [
+          {
+            text: "확인",
+            style: "default",
+          },
+        ]
+      );
     } catch (error: any) {
-      console.error("❌ 운동 루틴 추천 실패:", error);
-      Alert.alert("오류", error.message || "운동 루틴 생성에 실패했습니다.");
+      console.error("❌ 전체 프로세스 실패:", error);
+      Alert.alert(
+        "오류",
+        "운동 루틴 생성에 실패했습니다.\n잠시 후 다시 시도해주세요."
+      );
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ✅ 루틴을 기록에 자동 추가하는 함수
+  const addRoutineToActivities = async (routine: any) => {
+    try {
+      const userId = await AsyncStorage.getItem("userId");
+      const storageKey = userId
+        ? `user_activities_v1:${userId}`
+        : "user_activities_v1";
+
+      const existingActivities = JSON.parse(
+        (await AsyncStorage.getItem(storageKey)) || "[]"
+      );
+
+      // 오늘부터 7일간의 날짜 생성
+      const today = new Date();
+      const newActivities: any[] = [];
+
+      // 각 요일의 운동을 해당 날짜에 추가
+      routine.routine.forEach((dayExercises: any[], dayIndex: number) => {
+        // dayIndex: 0=월요일, 6=일요일
+        const targetDate = new Date(today);
+        const todayDayOfWeek = today.getDay(); // 0=일요일
+        const routineDayOfWeek = dayIndex === 6 ? 0 : dayIndex + 1;
+
+        // 오늘부터 해당 요일까지의 일수 계산
+        let daysUntilTarget = routineDayOfWeek - todayDayOfWeek;
+        if (daysUntilTarget < 0) daysUntilTarget += 7;
+
+        targetDate.setDate(today.getDate() + daysUntilTarget);
+
+        const dateStr = `${targetDate.getFullYear()}-${String(
+          targetDate.getMonth() + 1
+        ).padStart(2, "0")}-${String(targetDate.getDate()).padStart(2, "0")}`;
+
+        // 해당 날짜의 모든 운동 추가
+        dayExercises.forEach((exercise, exerciseIndex) => {
+          newActivities.push({
+            id: Date.now() + dayIndex * 1000 + exerciseIndex,
+            name: exercise.name,
+            details: exercise.detail,
+            time: "00:00",
+            date: dateStr,
+            isCompleted: false,
+            isFromRoutine: true,
+            sets: [],
+          });
+        });
+      });
+
+      // 기존 기록 + 새 루틴 운동
+      const updatedActivities = [...existingActivities, ...newActivities];
+      await AsyncStorage.setItem(storageKey, JSON.stringify(updatedActivities));
+
+      console.log(`✅ ${newActivities.length}개 운동이 기록에 추가되었습니다`);
+    } catch (error) {
+      console.error("기록 추가 실패:", error);
     }
   };
 
@@ -210,13 +667,14 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
     const savedRoutine = {
       id: Date.now(),
       date: currentDate.toLocaleDateString("ko-KR"),
-      routine: sampleRoutines,
+      routine: weekRoutines,
       level: level,
       weakParts: [...weakParts],
       targetParts: [...targetParts],
     };
 
     try {
+      // 1. 루틴 저장
       const existingRoutines = JSON.parse(
         (await AsyncStorage.getItem("savedRoutines")) || "[]"
       );
@@ -226,7 +684,11 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
         JSON.stringify(updatedRoutines)
       );
       setSavedRoutines(updatedRoutines);
-      Alert.alert("저장 완료", "루틴이 저장되었습니다!", [
+
+      // 2. 기록에 자동 추가
+      await addRoutineToActivities(savedRoutine);
+
+      Alert.alert("저장 완료", "루틴이 저장되고 기록에 추가되었습니다!", [
         {
           text: "확인",
           onPress: () => {
@@ -384,12 +846,14 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
             </ScrollView>
 
             <View style={styles.routineInfo}>
-              <Text style={styles.routineInfoText}>총 3세트</Text>
-              <Text style={styles.routineInfoText}>⏱ 20분</Text>
+              <Text style={styles.routineInfoText}>
+                총 {weekRoutines[selectedDay]?.length || 0}개 운동
+              </Text>
+              <Text style={styles.routineInfoText}>⏱ 60분</Text>
             </View>
 
             <View style={styles.exerciseList}>
-              {sampleRoutines[selectedDay].map((exercise, index) => (
+              {weekRoutines[selectedDay]?.map((exercise, index) => (
                 <View key={index} style={styles.exerciseCard}>
                   <View style={styles.exerciseIcon}>
                     <Text style={styles.exerciseIconText}>{exercise.icon}</Text>
