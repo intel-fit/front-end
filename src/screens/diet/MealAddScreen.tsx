@@ -21,7 +21,7 @@ import FoodEditModal from '../../components/modals/FoodEditModal';
 import {mealAPI} from '../../services';
 import {useDate} from '../../contexts/DateContext';
 import {fetchDateProgress, fetchTodayProgress} from '../../utils/exerciseApi';
-import type {AddMealRequest, AddMealFoodRequest, DailyMeal, DailyMealsResponse, NutritionGoal, SearchFoodResponse} from '../../types';
+import type {AddMealRequest, AddMealFoodRequest, DailyMeal, DailyMealsResponse, NutritionGoal, SearchFoodResponse, DailyProgressWeekItem} from '../../types';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Platform } from 'react-native';
 
@@ -42,7 +42,25 @@ const MealAddScreen = ({navigation, route}: any) => {
   const isEditMode = !!mealData;
   
   // 날짜 우선순위: route에서 전달받은 날짜 > context의 선택 날짜 > 오늘 날짜
-  const initialDate = routeSelectedDate || contextSelectedDate || new Date();
+  // 시간은 항상 현재 시간으로 설정 (또는 기존 시간 유지)
+  const getInitialDate = (): Date => {
+    const now = new Date();
+    const baseDate = routeSelectedDate || contextSelectedDate;
+    
+    if (baseDate) {
+      // 기존 날짜를 사용하되, 시간은 현재 시간으로 설정
+      const date = new Date(baseDate);
+      date.setHours(now.getHours());
+      date.setMinutes(now.getMinutes());
+      date.setSeconds(0);
+      date.setMilliseconds(0);
+      return date;
+    }
+    
+    return now;
+  };
+  
+  const initialDate = getInitialDate();
   
   const [mealName, setMealName] = useState('');
   const [mealType, setMealType] = useState<'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'OTHER'>('BREAKFAST');
@@ -52,10 +70,9 @@ const MealAddScreen = ({navigation, route}: any) => {
   const [isFoodEditModalOpen, setIsFoodEditModalOpen] = useState(false);
   const [selectedFood, setSelectedFood] = useState<Food | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showDateTimeModal, setShowDateTimeModal] = useState(false);
+  const [tempDateTime, setTempDateTime] = useState(initialDate);
   const [selectedDateTime, setSelectedDateTime] = useState(initialDate);
-  const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date');
   const [nutritionGoal, setNutritionGoal] = useState<NutritionGoal | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [dailyMealsData, setDailyMealsData] = useState<DailyMealsResponse | null>(null);
@@ -151,6 +168,15 @@ const MealAddScreen = ({navigation, route}: any) => {
           const createdDate = new Date(mealData.createdAt);
           date.setHours(createdDate.getHours());
           date.setMinutes(createdDate.getMinutes());
+          date.setSeconds(0);
+          date.setMilliseconds(0);
+        } else {
+          // createdAt이 없으면 현재 시간 사용
+          const now = new Date();
+          date.setHours(now.getHours());
+          date.setMinutes(now.getMinutes());
+          date.setSeconds(0);
+          date.setMilliseconds(0);
         }
         setSelectedDateTime(date);
       }
@@ -167,76 +193,116 @@ const MealAddScreen = ({navigation, route}: any) => {
       setFoods(convertedFoods);
     } else if (routeSelectedDate && !mealData) {
       // route에서 날짜를 받았을 때 날짜 설정 (수정 모드가 아닐 때)
-      setSelectedDateTime(new Date(routeSelectedDate));
+      // 날짜는 유지하고 시간은 현재 시간으로 설정
+      const now = new Date();
+      const date = new Date(routeSelectedDate);
+      date.setHours(now.getHours());
+      date.setMinutes(now.getMinutes());
+      date.setSeconds(0);
+      date.setMilliseconds(0);
+      setSelectedDateTime(date);
     }
   }, [mealData, routeSelectedDate]);
 
-  // 날짜 선택 핸들러
-const onChangeDate = (event: any, date?: Date) => {
-  if (Platform.OS === 'android') {
-    setShowDatePicker(false);
-    // 취소한 경우
-    if (event.type === 'dismissed') {
-      return;
-    }
-  }
-  if (date) {
-    setSelectedDateTime(prev => {
-      const newDate = new Date(date);
-      newDate.setHours(prev.getHours());
-      newDate.setMinutes(prev.getMinutes());
-      return newDate;
-    });
-    // Android에서는 날짜 선택 후 시간 선택기 표시
-    if (Platform.OS === 'android' && event.type !== 'dismissed') {
-      setTimeout(() => setShowTimePicker(true), 100);
-    }
-  }
-  // iOS에서는 날짜 선택 후 시간 선택기로 이동
-  if (Platform.OS === 'ios') {
-    if (event.type === 'set') {
-      setShowDatePicker(false);
-      setShowTimePicker(true);
-    } else if (event.type === 'dismissed') {
-      setShowDatePicker(false);
-    }
-  }
-};
-
-// 시간 선택 핸들러
-const onChangeTime = (event: any, time?: Date) => {
-  if (Platform.OS === 'android') {
-    setShowTimePicker(false);
-    // 취소한 경우
-    if (event.type === 'dismissed') {
-      return;
-    }
-  }
-  if (time && event.type !== 'dismissed') {
-    setSelectedDateTime(prev => {
-      const newDate = new Date(prev);
-      newDate.setHours(time.getHours());
-      newDate.setMinutes(time.getMinutes());
-      return newDate;
-    });
-  }
-  // iOS 처리
-  if (Platform.OS === 'ios') {
-    if (event.type === 'set' || event.type === 'dismissed') {
-      setShowTimePicker(false);
-    }
-  }
-};
-
-  // 날짜/시간 선택 버튼 핸들러
+  // 날짜 선택 모달 열기
   const handleDateTimePress = () => {
-    if (Platform.OS === 'ios') {
-      // iOS는 날짜부터 시작
-      setShowDatePicker(true);
+    // 현재 선택된 날짜를 정확히 복사 (새로운 객체 생성)
+    const currentDateTime = new Date(selectedDateTime);
+    setTempDateTime(new Date(currentDateTime));
+    setShowDateTimeModal(true);
+  };
+
+  // 날짜 선택 핸들러
+  const onChangeDate = (event: any, date?: Date) => {
+    if (Platform.OS === 'android') {
+      if (event.type === 'dismissed') {
+        setShowDateTimeModal(false);
+        return;
+      }
+      if (date) {
+        // 날짜만 변경하고 시간은 현재 시간으로 유지
+        const newDate = new Date(date);
+        const now = new Date();
+        newDate.setHours(now.getHours());
+        newDate.setMinutes(now.getMinutes());
+        newDate.setSeconds(0);
+        newDate.setMilliseconds(0);
+        setTempDateTime(newDate);
+        // 날짜 선택 후 바로 적용
+        setSelectedDateTime(newDate);
+        setShowDateTimeModal(false);
+      }
     } else {
-      // Android는 날짜부터 시작
-      setShowDatePicker(true);
+      // iOS - 날짜가 변경될 때마다 tempDateTime 업데이트
+      if (date) {
+        const newDate = new Date(date);
+        const now = new Date();
+        newDate.setHours(now.getHours());
+        newDate.setMinutes(now.getMinutes());
+        newDate.setSeconds(0);
+        newDate.setMilliseconds(0);
+        setTempDateTime(newDate);
+        // iOS에서는 확인 버튼을 눌러야 적용
+      }
+      if (event.type === 'dismissed') {
+        setShowDateTimeModal(false);
+      }
     }
+  };
+
+  // 시간 선택 핸들러
+  const onChangeTime = (event: any, time?: Date) => {
+    if (Platform.OS === 'android') {
+      if (event.type === 'dismissed') {
+        setShowDateTimeModal(false);
+        return;
+      }
+      if (time) {
+        // 시간만 변경하고 날짜는 유지
+        const newDate = new Date(tempDateTime);
+        newDate.setHours(time.getHours());
+        newDate.setMinutes(time.getMinutes());
+        newDate.setSeconds(0);
+        newDate.setMilliseconds(0);
+        setTempDateTime(newDate);
+        setShowDateTimeModal(false);
+        setSelectedDateTime(newDate);
+      }
+    } else {
+      // iOS - 시간이 변경될 때마다 tempDateTime 업데이트 (실시간 반영)
+      // iOS에서는 onChange가 사용자가 값을 변경할 때마다 호출됨
+      if (time) {
+        // 새로운 Date 객체를 생성하여 업데이트
+        const newDate = new Date(tempDateTime);
+        newDate.setHours(time.getHours());
+        newDate.setMinutes(time.getMinutes());
+        newDate.setSeconds(0);
+        newDate.setMilliseconds(0);
+        // 새로운 객체를 생성하여 React가 변경을 감지하도록 함
+        setTempDateTime(new Date(newDate));
+        console.log('시간 변경:', newDate.toLocaleTimeString());
+      }
+      // iOS에서는 dismissed 이벤트가 발생하지 않을 수 있으므로 확인 버튼으로만 닫기
+    }
+  };
+
+  // 모달에서 확인 버튼 클릭
+  const handleDateTimeConfirm = () => {
+    // 날짜만 적용하고 시간은 현재 시간으로 설정
+    const now = new Date();
+    const finalDate = new Date(tempDateTime);
+    finalDate.setHours(now.getHours());
+    finalDate.setMinutes(now.getMinutes());
+    finalDate.setSeconds(0);
+    finalDate.setMilliseconds(0);
+    setSelectedDateTime(finalDate);
+    setShowDateTimeModal(false);
+  };
+
+  // 모달에서 취소 버튼 클릭
+  const handleDateTimeCancel = () => {
+    setTempDateTime(selectedDateTime);
+    setShowDateTimeModal(false);
   };
 
   // route에서 전달받은 음식 추가
@@ -273,29 +339,15 @@ const onChangeTime = (event: any, time?: Date) => {
     return typeMap[type] || '저녁';
   };
 
-  // 선택된 날짜/시간 표시 포맷
+  // 선택된 날짜 표시 포맷 (25.11.02 형식)
   const formatSelectedDateTime = (): string => {
-    const now = new Date();
     const selected = selectedDateTime;
     
-    // 오늘인지 확인
-    const isToday = 
-      selected.getFullYear() === now.getFullYear() &&
-      selected.getMonth() === now.getMonth() &&
-      selected.getDate() === now.getDate();
+    const year = String(selected.getFullYear()).slice(-2); // 연도 마지막 2자리
+    const month = String(selected.getMonth() + 1).padStart(2, '0'); // 월 (2자리)
+    const day = String(selected.getDate()).padStart(2, '0'); // 일 (2자리)
     
-    const hours = selected.getHours();
-    const minutes = String(selected.getMinutes()).padStart(2, '0');
-    const ampm = hours >= 12 ? 'pm' : 'am';
-    const displayHours = hours % 12 || 12;
-    
-    if (isToday) {
-      return `today, ${displayHours}:${minutes} ${ampm}`;
-    } else {
-      const month = selected.getMonth() + 1;
-      const day = selected.getDate();
-      return `${month}/${day}, ${displayHours}:${minutes} ${ampm}`;
-    }
+    return `${year}.${month}.${day}`;
   };
 
   // API 데이터를 UI 형식으로 변환 (목표가 없으면 0)
@@ -544,16 +596,22 @@ const onChangeTime = (event: any, time?: Date) => {
             text: '확인',
             onPress: async () => {
               // 해당 날짜의 진행률 가져오기
+              let dateProgress: DailyProgressWeekItem | null = null;
               try {
                 if (isToday) {
-                  await fetchTodayProgress();
+                  dateProgress = await fetchTodayProgress();
                 } else {
-                  await fetchDateProgress(mealDate);
+                  dateProgress = await fetchDateProgress(mealDate);
                 }
               } catch (error) {
                 console.error('진행률 조회 실패:', error);
               }
-              navigation.goBack();
+              // StatsScreen으로 돌아가기 (탭바 유지)
+              navigation.navigate('Stats', { 
+                activeTab: 1, // 식단기록 탭 활성화
+                updatedProgress: dateProgress,
+                updatedDate: mealDate 
+              });
             },
           },
         ]);
@@ -565,16 +623,22 @@ const onChangeTime = (event: any, time?: Date) => {
             text: '확인',
             onPress: async () => {
               // 해당 날짜의 진행률 가져오기
+              let dateProgress: DailyProgressWeekItem | null = null;
               try {
                 if (isToday) {
-                  await fetchTodayProgress();
+                  dateProgress = await fetchTodayProgress();
                 } else {
-                  await fetchDateProgress(mealDate);
+                  dateProgress = await fetchDateProgress(mealDate);
                 }
               } catch (error) {
                 console.error('진행률 조회 실패:', error);
               }
-              navigation.goBack();
+              // StatsScreen으로 돌아가기 (탭바 유지)
+              navigation.navigate('Stats', { 
+                activeTab: 1, // 식단기록 탭 활성화
+                updatedProgress: dateProgress,
+                updatedDate: mealDate 
+              });
             },
           },
         ]);
@@ -654,28 +718,46 @@ const onChangeTime = (event: any, time?: Date) => {
       
       console.log('업로드 응답:', JSON.stringify(response, null, 2));
       
-      // ai_result 객체가 있는 경우 (사진 업로드 응답)
+      // ai_result가 있는 경우 (사진 업로드 응답)
       if (response.ai_result) {
-        const item = response.ai_result;
+        // ai_result가 배열인 경우 첫 번째 항목 사용
+        const aiResult = Array.isArray(response.ai_result) 
+          ? response.ai_result[0] 
+          : response.ai_result;
         
-        // 숫자 타입 보장 및 검증
-        const calories = typeof item.calories === 'number' ? item.calories : parseFloat(String(item.calories || 0)) || 0;
-        const carbs = typeof item.carbs === 'number' ? item.carbs : parseFloat(String(item.carbs || 0)) || 0;
-        const protein = typeof item.protein === 'number' ? item.protein : parseFloat(String(item.protein || 0)) || 0;
-        const fat = typeof item.fat === 'number' ? item.fat : parseFloat(String(item.fat || 0)) || 0;
-        const weight = typeof item.weight === 'number' ? item.weight : parseFloat(String(item.weight || 100)) || 100;
-        
-        foodData = {
-          id: item.id || Date.now(),
-          name: item.name || '음식',
-          calories: Math.max(0, calories),
-          carbs: Math.max(0, carbs),
-          protein: Math.max(0, protein),
-          fat: Math.max(0, fat),
-          weight: Math.max(1, weight), // weight는 최소 1
-        };
-        
-        console.log('사진 업로드로 변환된 음식 데이터:', foodData);
+        if (aiResult) {
+          // 숫자 타입 보장 및 검증
+          const calories = typeof aiResult.calories === 'number' 
+            ? aiResult.calories 
+            : parseFloat(String(aiResult.calories || 0)) || 0;
+          const carbs = typeof aiResult.carbs === 'number' 
+            ? aiResult.carbs 
+            : parseFloat(String(aiResult.carbs || 0)) || 0;
+          const protein = typeof aiResult.protein === 'number' 
+            ? aiResult.protein 
+            : parseFloat(String(aiResult.protein || 0)) || 0;
+          const fat = typeof aiResult.fat === 'number' 
+            ? aiResult.fat 
+            : parseFloat(String(aiResult.fat || 0)) || 0;
+          const weight = typeof aiResult.weight === 'number' 
+            ? aiResult.weight 
+            : parseFloat(String(aiResult.weight || 100)) || 100;
+          
+          // 이름은 한국어 우선, 없으면 영어
+          const name = aiResult.name_ko || aiResult.name_en || aiResult.name || '음식';
+          
+          foodData = {
+            id: aiResult.id || Date.now(),
+            name: name,
+            calories: Math.max(0, calories),
+            carbs: Math.max(0, carbs),
+            protein: Math.max(0, protein),
+            fat: Math.max(0, fat),
+            weight: Math.max(1, weight), // weight는 최소 1
+          };
+          
+          console.log('사진 업로드로 변환된 음식 데이터:', foodData);
+        }
       } else if (Array.isArray(response)) {
         // 배열인 경우 첫 번째 음식 사용
         if (response.length > 0) {
@@ -913,28 +995,39 @@ const onChangeTime = (event: any, time?: Date) => {
         </Modal>
       )}
 
-      {/* 날짜 선택기 */}
-      {showDatePicker && (
-        <DateTimePicker
-          value={selectedDateTime}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={onChangeDate}
-          maximumDate={new Date()}
-          minimumDate={new Date(2020, 0, 1)}
-        />
-      )}
-
-      {/* 시간 선택기 */}
-      {showTimePicker && (
-        <DateTimePicker
-          value={selectedDateTime}
-          mode="time"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={onChangeTime}
-          is24Hour={false}
-        />
-      )}
+      {/* 날짜/시간 선택 모달 */}
+      <Modal
+        visible={showDateTimeModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={handleDateTimeCancel}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={handleDateTimeCancel}>
+          <View style={styles.dateTimeModalContainer} onStartShouldSetResponder={() => true}>
+            <View style={styles.dateTimeModalHeader}>
+              <TouchableOpacity onPress={handleDateTimeCancel}>
+                <Text style={styles.modalCancelText}>취소</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>날짜 선택</Text>
+              <TouchableOpacity onPress={handleDateTimeConfirm}>
+                <Text style={styles.modalConfirmText}>확인</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.dateTimePickerContainer}>
+              <DateTimePicker
+                value={tempDateTime}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={onChangeDate}
+                minimumDate={new Date(2020, 0, 1)}
+                maximumDate={new Date(2100, 11, 31)}
+              />
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* 식사 타입 선택 모달 */}
       <Modal
@@ -1285,6 +1378,51 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#ffffff',
+  },
+  dateTimeModalContainer: {
+    backgroundColor: '#252525',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    maxHeight: '70%',
+  },
+  dateTimeModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#404040',
+  },
+  dateTimePickerContainer: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  dateTimeConfirmButton: {
+    marginTop: 20,
+    backgroundColor: '#e3ff7c',
+    paddingVertical: 12,
+    paddingHorizontal: 40,
+    borderRadius: 10,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  dateTimeConfirmButtonText: {
+    color: '#000000',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  modalCancelText: {
+    color: '#999999',
+    fontSize: 16,
+    fontWeight: '400',
+  },
+  modalConfirmText: {
+    color: '#e3ff7c',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

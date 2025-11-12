@@ -1,4 +1,5 @@
 import { request } from './apiConfig';
+import * as ImageManipulator from 'expo-image-manipulator';
 import type { 
   DailyMealsResponse, 
   AddMealRequest, 
@@ -96,22 +97,61 @@ export const mealAPI = {
   },
 
   //사진으로 음식 업로드
+  // POST /food/upload_food - Azure + Gemini 기반 AI 음식 인식
+  // 큰 이미지 자동 리사이즈 (800px 기준), 동일 이미지 해시로 캐싱
   uploadFood: async (imageUri: string): Promise<any> => {
-    // 사진 업로드 API는 8000 포트를 사용
-    const formData = new FormData();
-    
-    // 파일명 추출
-    const filename = imageUri.split('/').pop() || 'photo.jpg';
-    const match = /\.(\w+)$/.exec(filename);
-    const type = match ? `image/${match[1]}` : 'image/jpeg';
-    
-    formData.append('file', {
-      uri: imageUri,
-      name: filename,
-      type: type,
-    } as any);
-
     try {
+      // 이미지 리사이즈 (800px 기준)
+      const manipResult = await ImageManipulator.manipulateAsync(
+        imageUri,
+        [{ resize: { width: 800 } }], // 800px 기준으로 리사이즈
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+      );
+      
+      const resizedUri = manipResult.uri;
+      
+      // FormData 생성
+      const formData = new FormData();
+      
+      // 파일명 추출 (안전하게 처리)
+      const filename = resizedUri.split('/').pop() || 'photo.jpg';
+      // 확장자 확인 및 타입 설정
+      let fileExtension = 'jpg';
+      const match = /\.(\w+)$/.exec(filename.toLowerCase());
+      if (match) {
+        fileExtension = match[1];
+      }
+      
+      // MIME 타입 설정
+      const mimeTypes: Record<string, string> = {
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        png: 'image/png',
+        gif: 'image/gif',
+        webp: 'image/webp',
+      };
+      const type = mimeTypes[fileExtension] || 'image/jpeg';
+      
+      // 파일명 정리 (특수문자 제거)
+      const cleanFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_') || 'photo.jpg';
+      
+      // multipart/form-data로 file 필드 추가
+      // React Native에서는 uri, name, type이 필요
+      formData.append('file', {
+        uri: resizedUri,
+        name: cleanFilename,
+        type: type,
+      } as any);
+
+      console.log('음식 이미지 업로드 요청:', {
+        originalUri: imageUri,
+        resizedUri: resizedUri,
+        filename: cleanFilename,
+        type,
+        fileExtension,
+      });
+
+      // API 호출
       const response = await fetch('http://43.200.40.140:8000/food/upload_food', {
         method: 'POST',
         headers: {
@@ -120,12 +160,20 @@ export const mealAPI = {
         body: formData,
       });
       
+      // 에러 응답 처리
       if (!response.ok) {
         let errorData: any = {};
+        let errorText = '';
         try {
-          const text = await response.text();
-          if (text) {
-            errorData = JSON.parse(text);
+          errorText = await response.text();
+          console.error('에러 응답 원본:', errorText);
+          if (errorText) {
+            try {
+              errorData = JSON.parse(errorText);
+            } catch (parseError) {
+              // JSON이 아닌 경우 텍스트 그대로 사용
+              errorData = { message: errorText };
+            }
           }
         } catch (parseError) {
           console.error('에러 응답 파싱 실패:', parseError);
@@ -133,7 +181,24 @@ export const mealAPI = {
         
         let errorMessage = `HTTP error! status: ${response.status}`;
         
-        if (errorData.detail) {
+        // 400 Bad Request 처리
+        if (response.status === 400) {
+          if (errorData.detail) {
+            if (Array.isArray(errorData.detail)) {
+              errorMessage = errorData.detail.map((err: any) => err.msg || JSON.stringify(err)).join(', ');
+            } else if (typeof errorData.detail === 'string') {
+              errorMessage = errorData.detail;
+            }
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (errorText) {
+            errorMessage = errorText;
+          } else {
+            errorMessage = '잘못된 요청입니다. 파일 형식을 확인해주세요.';
+          }
+        }
+        // 422 Validation Error 처리
+        else if (response.status === 422 && errorData.detail) {
           if (Array.isArray(errorData.detail)) {
             errorMessage = errorData.detail.map((err: any) => err.msg || JSON.stringify(err)).join(', ');
           } else if (typeof errorData.detail === 'string') {
@@ -143,38 +208,96 @@ export const mealAPI = {
           errorMessage = errorData.message;
         }
         
+        console.error('에러 상세:', {
+          status: response.status,
+          errorData,
+          errorText,
+          errorMessage,
+        });
+        
         throw new Error(errorMessage);
       }
       
-      // 응답 본문 파싱
-      const responseText = await response.text();
-      console.log('업로드 응답 원본:', responseText);
+      // 성공 응답 파싱 (application/json)
+      const jsonData = await response.json();
+      console.log('업로드 응답 파싱 성공:', jsonData);
+      return jsonData;
       
-      if (!responseText || responseText.trim() === '') {
-        throw new Error('서버에서 빈 응답을 받았습니다.');
-      }
-      
-      try {
-        const jsonData = JSON.parse(responseText);
-        console.log('업로드 응답 파싱 성공:', jsonData);
-        return jsonData;
-      } catch (parseError: any) {
-        console.error('JSON 파싱 오류:', parseError);
-        console.error('파싱 실패한 응답:', responseText);
-        
-        // Gemini 파싱 에러인 경우 특별 처리
-        if (responseText.includes('Gemini') || responseText.includes('gemini')) {
-          throw new Error('이미지 분석에 실패했습니다. 다른 사진을 시도해주세요.');
-        }
-        
-        throw new Error(`서버 응답을 파싱할 수 없습니다: ${parseError.message}`);
-      }
     } catch (error: any) {
       console.error('사진 업로드 API 오류:', error);
       
       // 네트워크 에러인 경우
       if (error.message && error.message.includes('Network request failed')) {
         throw new Error('네트워크 연결에 실패했습니다. 인터넷 연결을 확인해주세요.');
+      }
+      
+      // 이미지 리사이즈 에러이거나 400 에러인 경우 원본 이미지로 재시도
+      const isImageManipulatorError = error.message && error.message.includes('ImageManipulator');
+      const is400Error = error.message && error.message.includes('status: 400');
+      
+      if (isImageManipulatorError || is400Error) {
+        console.warn('이미지 리사이즈 실패 또는 400 에러, 원본 이미지로 재시도');
+        try {
+          const formData = new FormData();
+          const originalFilename = imageUri.split('/').pop() || 'photo.jpg';
+          
+          // 확장자 확인 및 타입 설정
+          let fileExtension = 'jpg';
+          const match = /\.(\w+)$/.exec(originalFilename.toLowerCase());
+          if (match) {
+            fileExtension = match[1];
+          }
+          
+          const mimeTypes: Record<string, string> = {
+            jpg: 'image/jpeg',
+            jpeg: 'image/jpeg',
+            png: 'image/png',
+            gif: 'image/gif',
+            webp: 'image/webp',
+          };
+          const type = mimeTypes[fileExtension] || 'image/jpeg';
+          
+          const cleanFilename = originalFilename.replace(/[^a-zA-Z0-9._-]/g, '_') || 'photo.jpg';
+          
+          formData.append('file', {
+            uri: imageUri,
+            name: cleanFilename,
+            type: type,
+          } as any);
+
+          console.log('원본 이미지로 재시도:', {
+            uri: imageUri,
+            filename: cleanFilename,
+            type,
+          });
+
+          const response = await fetch('http://43.200.40.140:8000/food/upload_food', {
+            method: 'POST',
+            headers: {
+              'accept': 'application/json',
+            },
+            body: formData,
+          });
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('재시도 실패 응답:', errorText);
+            let errorData: any = {};
+            try {
+              errorData = JSON.parse(errorText);
+            } catch (e) {
+              errorData = { message: errorText };
+            }
+            throw new Error(errorData.message || errorData.detail || `HTTP error! status: ${response.status}`);
+          }
+          
+          const jsonData = await response.json();
+          console.log('원본 이미지 업로드 성공:', jsonData);
+          return jsonData;
+        } catch (retryError: any) {
+          console.error('원본 이미지 재시도 실패:', retryError);
+          throw new Error(retryError.message || '사진 업로드에 실패했습니다. 다시 시도해주세요.');
+        }
       }
       
       // 이미 에러 메시지가 있는 경우 그대로 전달

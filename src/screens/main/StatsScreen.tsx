@@ -65,6 +65,14 @@ const StatsScreen = ({navigation, route}: any) => {
     }
   }, [route?.params?.exerciseGoal, navigation, storageKey]);
 
+  // route params에서 activeTab 받아서 설정
+  useEffect(() => {
+    if (route?.params?.activeTab !== undefined) {
+      setActiveTab(route.params.activeTab);
+      navigation.setParams({activeTab: undefined});
+    }
+  }, [route?.params?.activeTab, navigation]);
+
   const tabs = ['운동기록', '식단기록'];
 
   const renderTabContent = () => {
@@ -72,7 +80,7 @@ const StatsScreen = ({navigation, route}: any) => {
       case 0:
         return <ExerciseScreen navigation={navigation} />;
       case 1:
-        return <DietScreen navigation={navigation} />;
+        return <DietScreen navigation={navigation} route={route} />;
       default:
         return null;
     }

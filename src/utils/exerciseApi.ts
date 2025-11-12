@@ -244,8 +244,34 @@ export const fetchWeeklyProgress = async (): Promise<DailyProgressWeekItem[]> =>
     });
     console.log('주간 진행률 API 응답 상태:', response.status);
     console.log('주간 진행률 API 응답 데이터:', JSON.stringify(response.data, null, 2));
-    const data = (response.data as DailyProgressWeekItem[]) || [];
-    console.log('주간 진행률 파싱된 데이터:', data);
+    
+    // 응답이 객체로 감싸져 있는 경우 처리
+    let rawData = response.data;
+    if (rawData && typeof rawData === 'object' && !Array.isArray(rawData)) {
+      // data 필드가 있으면 사용
+      if (rawData.data && Array.isArray(rawData.data)) {
+        rawData = rawData.data;
+      }
+      // results 필드가 있으면 사용
+      else if (rawData.results && Array.isArray(rawData.results)) {
+        rawData = rawData.results;
+      }
+    }
+    
+    // 배열이 아니면 빈 배열 반환
+    if (!Array.isArray(rawData)) {
+      console.warn('주간 진행률 응답이 배열이 아닙니다:', rawData);
+      return [];
+    }
+    
+    // 필드명 변환 (totalCalories -> totalCalorie 등)
+    const data = rawData.map((item: any) => ({
+      date: item.date || item.mealDate || item.exerciseDate || '',
+      exerciseRate: item.exerciseRate ?? item.exercise_rate ?? item.rate ?? 0,
+      totalCalorie: item.totalCalorie ?? item.totalCalories ?? item.calorie ?? item.total_calorie ?? item.total_calories ?? 0,
+    })) as DailyProgressWeekItem[];
+    
+    console.log('주간 진행률 파싱된 데이터:', JSON.stringify(data, null, 2));
     return data;
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
@@ -277,8 +303,34 @@ export const fetchMonthlyProgress = async (yearMonth: string): Promise<DailyProg
     });
     console.log('월별 진행률 API 응답 상태:', response.status);
     console.log('월별 진행률 API 응답 데이터:', JSON.stringify(response.data, null, 2));
-    const data = (response.data as DailyProgressWeekItem[]) || [];
-    console.log('월별 진행률 파싱된 데이터:', data);
+    
+    // 응답이 객체로 감싸져 있는 경우 처리
+    let rawData = response.data;
+    if (rawData && typeof rawData === 'object' && !Array.isArray(rawData)) {
+      // data 필드가 있으면 사용
+      if (rawData.data && Array.isArray(rawData.data)) {
+        rawData = rawData.data;
+      }
+      // results 필드가 있으면 사용
+      else if (rawData.results && Array.isArray(rawData.results)) {
+        rawData = rawData.results;
+      }
+    }
+    
+    // 배열이 아니면 빈 배열 반환
+    if (!Array.isArray(rawData)) {
+      console.warn('월별 진행률 응답이 배열이 아닙니다:', rawData);
+      return [];
+    }
+    
+    // 필드명 변환 (totalCalories -> totalCalorie 등)
+    const data = rawData.map((item: any) => ({
+      date: item.date || item.mealDate || item.exerciseDate || '',
+      exerciseRate: item.exerciseRate ?? item.exercise_rate ?? item.rate ?? 0,
+      totalCalorie: item.totalCalorie ?? item.totalCalories ?? item.calorie ?? item.total_calorie ?? item.total_calories ?? 0,
+    })) as DailyProgressWeekItem[];
+    
+    console.log('월별 진행률 파싱된 데이터:', JSON.stringify(data, null, 2));
     return data;
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
