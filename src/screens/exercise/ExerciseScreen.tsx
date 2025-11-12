@@ -743,7 +743,7 @@ const ExerciseScreen = ({ navigation }: any) => {
                                   !isCurrentMonth && styles.monthMuted,
                                 ]}
                               >
-                                {`${Math.round(calories)}k`}
+                                {calories > 0 ? `${Math.round(calories)}k` : ''}
                               </Text>
                               <Text
                                 style={[
@@ -751,7 +751,7 @@ const ExerciseScreen = ({ navigation }: any) => {
                                   !isCurrentMonth && styles.monthMuted,
                                 ]}
                               >
-                                {`${Math.round(rate)}%`}
+                                {rate > 0 ? `${Math.round(rate)}%` : ''}
                               </Text>
                             </>
                           );
@@ -827,10 +827,10 @@ const ExerciseScreen = ({ navigation }: any) => {
                         return (
                           <>
                             <Text style={styles.calendarCalories}>
-                              {`${Math.round(calories)}k`}
+                              {calories > 0 ? `${Math.round(calories)}k` : ''}
                             </Text>
                             <Text style={styles.calendarPercentage}>
-                              {`${Math.round(rate)}%`}
+                              {rate > 0 ? `${Math.round(rate)}%` : ''}
                             </Text>
                           </>
                         );

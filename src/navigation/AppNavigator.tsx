@@ -1,10 +1,8 @@
-import React, {useEffect, useState} from 'react';
+import React from 'react';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {Ionicons as Icon} from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import {View, ActivityIndicator, StyleSheet} from 'react-native';
 
 import {RootStackParamList, MainTabParamList} from './types';
 import {ROUTES} from '../constants/routes';
@@ -100,39 +98,11 @@ function MainTabs() {
 }
 
 export default function AppNavigator() {
-  const [isReady, setIsReady] = useState(false);
-  const [initialRoute, setInitialRoute] = useState<string>(ROUTES.ONBOARDING);
-
-  useEffect(() => {
-    const checkOnboarding = async () => {
-      try {
-        const onboardingCompleted = await AsyncStorage.getItem('onboarding_completed');
-        if (onboardingCompleted === 'true') {
-          setInitialRoute(ROUTES.LOGIN);
-        }
-      } catch (error) {
-        console.error('Error checking onboarding status:', error);
-      } finally {
-        setIsReady(true);
-      }
-    };
-
-    checkOnboarding();
-  }, []);
-
-  if (!isReady) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6C5CE7" />
-      </View>
-    );
-  }
-
   return (
     <DateProvider>
       <NavigationContainer>
         <Stack.Navigator
-          initialRouteName={initialRoute as any}
+          initialRouteName={ROUTES.ONBOARDING}
           screenOptions={{
             headerShown: false,
           }}>
@@ -183,13 +153,4 @@ export default function AppNavigator() {
     </DateProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#1a1a1a',
-  },
-});
 
