@@ -7,6 +7,10 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Modal,
+  Image,
+  FlatList,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
@@ -21,6 +25,7 @@ import {
   fetchMonthlyProgress,
   fetchDateProgress,
   fetchTodayProgress,
+  fetchExercises,
 } from "../../utils/exerciseApi";
 import { getExerciseGoalSummary } from "../../utils/exerciseGoalApi";
 import { eventBus } from "../../utils/eventBus";
@@ -66,10 +71,20 @@ const ExerciseScreen = ({ navigation }: any) => {
   const [goalData, setGoalData] = useState<ExerciseGoalInfo | null>(null);
   const [completedThisWeek, setCompletedThisWeek] = useState(0);
   const [weeklyCalories, setWeeklyCalories] = useState(0);
-  const [weeklyProgress, setWeeklyProgress] = useState<DailyProgressWeekItem[]>([]);
-  const [monthlyProgress, setMonthlyProgress] = useState<DailyProgressWeekItem[]>([]);
+  const [weeklyProgress, setWeeklyProgress] = useState<DailyProgressWeekItem[]>(
+    []
+  );
+  const [monthlyProgress, setMonthlyProgress] = useState<
+    DailyProgressWeekItem[]
+  >([]);
   const [showMonthView, setShowMonthView] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isIntroVisible, setIsIntroVisible] = useState(false);
+  const [introStage, setIntroStage] = useState<"intro" | "stretch">("intro");
+  const [stretchOptions, setStretchOptions] = useState<any[]>([]);
+  const [stretchLoading, setStretchLoading] = useState(false);
+  const [stretchError, setStretchError] = useState<string | null>(null);
+  const [selectedStretchIds, setSelectedStretchIds] = useState<string[]>([]);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
   const [selectedExercise, setSelectedExercise] = useState<Activity | null>(
     null
@@ -154,14 +169,11 @@ const ExerciseScreen = ({ navigation }: any) => {
       const data = await fetchWeeklyProgress();
       setWeeklyProgress(Array.isArray(data) ? data : []);
       const sum = Array.isArray(data)
-        ? data.reduce(
-            (s: number, d) => s + Number(d?.totalCalorie || 0),
-            0
-          )
+        ? data.reduce((s: number, d) => s + Number(d?.totalCalorie || 0), 0)
         : 0;
       setWeeklyCalories(sum);
     } catch (e) {
-      console.error('주간 칼로리 로드 실패:', e);
+      console.error("주간 칼로리 로드 실패:", e);
       setWeeklyCalories(0);
       setWeeklyProgress([]);
     }
@@ -180,8 +192,8 @@ const ExerciseScreen = ({ navigation }: any) => {
   // 날짜를 yyyy-MM-dd 형식으로 변환
   const formatDateToString = (date: Date): string => {
     const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   };
 
@@ -189,18 +201,20 @@ const ExerciseScreen = ({ navigation }: any) => {
   const getDayProgress = (date: Date): DailyProgressWeekItem | undefined => {
     const dateStr = formatDateToString(date);
     // 먼저 월별 데이터에서 찾고, 없으면 주간 데이터에서 찾기
-    return monthlyProgress.find(item => item.date === dateStr) 
-      || weeklyProgress.find(item => item.date === dateStr);
+    return (
+      monthlyProgress.find((item) => item.date === dateStr) ||
+      weeklyProgress.find((item) => item.date === dateStr)
+    );
   };
 
   // 월별 데이터 로드
   const loadMonthlyProgress = async (year: number, month: number) => {
     try {
-      const yearMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
+      const yearMonth = `${year}-${String(month + 1).padStart(2, "0")}`;
       const data = await fetchMonthlyProgress(yearMonth);
       setMonthlyProgress(Array.isArray(data) ? data : []);
     } catch (e) {
-      console.error('월별 진행률 로드 실패:', e);
+      console.error("월별 진행률 로드 실패:", e);
       setMonthlyProgress([]);
     }
   };
@@ -260,14 +274,22 @@ const ExerciseScreen = ({ navigation }: any) => {
 
   const getProgressPercentage = () => {
     if (!goalData) return 0;
-    
+
     // 실제 allActivities에서 이번 주 완료된 운동 개수 확인
     const now = new Date();
-    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const todayEnd = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      23,
+      59,
+      59,
+      999
+    );
     const thisWeekStart = new Date(now);
     thisWeekStart.setDate(now.getDate() - now.getDay()); // 일요일로 설정
     thisWeekStart.setHours(0, 0, 0, 0);
-    
+
     // 이번 주 완료된 운동 개수 (정확한 날짜 필터링)
     const todayEndCopy2 = new Date(todayEnd);
     const actualCompletedThisWeek = allActivities.filter((activity) => {
@@ -275,15 +297,29 @@ const ExerciseScreen = ({ navigation }: any) => {
       try {
         const activityDate = new Date(activity.date);
         if (isNaN(activityDate.getTime())) return false;
-        const activityDateOnly = new Date(activityDate.getFullYear(), activityDate.getMonth(), activityDate.getDate());
-        const weekStartOnly = new Date(thisWeekStart.getFullYear(), thisWeekStart.getMonth(), thisWeekStart.getDate());
-        const todayEndOnly = new Date(todayEndCopy2.getFullYear(), todayEndCopy2.getMonth(), todayEndCopy2.getDate());
-        return activityDateOnly >= weekStartOnly && activityDateOnly <= todayEndOnly;
+        const activityDateOnly = new Date(
+          activityDate.getFullYear(),
+          activityDate.getMonth(),
+          activityDate.getDate()
+        );
+        const weekStartOnly = new Date(
+          thisWeekStart.getFullYear(),
+          thisWeekStart.getMonth(),
+          thisWeekStart.getDate()
+        );
+        const todayEndOnly = new Date(
+          todayEndCopy2.getFullYear(),
+          todayEndCopy2.getMonth(),
+          todayEndCopy2.getDate()
+        );
+        return (
+          activityDateOnly >= weekStartOnly && activityDateOnly <= todayEndOnly
+        );
       } catch {
         return false;
       }
     }).length;
-    
+
     // weeklyProgress에서 이번 주 데이터만 필터링하여 칼로리 계산
     // todayEnd를 복사해서 사용 (원본 수정 방지)
     const todayEndCopy = new Date(todayEnd);
@@ -293,9 +329,21 @@ const ExerciseScreen = ({ navigation }: any) => {
         try {
           const itemDate = new Date(item.date);
           if (isNaN(itemDate.getTime())) return false;
-          const itemDateOnly = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate());
-          const weekStartOnly = new Date(thisWeekStart.getFullYear(), thisWeekStart.getMonth(), thisWeekStart.getDate());
-          const todayEndOnly = new Date(todayEndCopy.getFullYear(), todayEndCopy.getMonth(), todayEndCopy.getDate());
+          const itemDateOnly = new Date(
+            itemDate.getFullYear(),
+            itemDate.getMonth(),
+            itemDate.getDate()
+          );
+          const weekStartOnly = new Date(
+            thisWeekStart.getFullYear(),
+            thisWeekStart.getMonth(),
+            thisWeekStart.getDate()
+          );
+          const todayEndOnly = new Date(
+            todayEndCopy.getFullYear(),
+            todayEndCopy.getMonth(),
+            todayEndCopy.getDate()
+          );
           return itemDateOnly >= weekStartOnly && itemDateOnly <= todayEndOnly;
         } catch {
           return false;
@@ -305,12 +353,12 @@ const ExerciseScreen = ({ navigation }: any) => {
         const calorie = Number(item?.totalCalorie || 0);
         return sum + (isNaN(calorie) ? 0 : calorie);
       }, 0);
-    
+
     // 이번 주에 운동 기록이 전혀 없으면 0% 반환
     if (actualCompletedThisWeek === 0 && thisWeekCalories === 0) {
       return 0;
     }
-    
+
     const frequencyValue = goalData.weeklyFrequency
       ? parseInt(goalData.weeklyFrequency.replace(/[^0-9]/g, ""), 10)
       : NaN;
@@ -318,7 +366,10 @@ const ExerciseScreen = ({ navigation }: any) => {
       1,
       Number.isNaN(frequencyValue) || frequencyValue <= 0 ? 1 : frequencyValue
     );
-    const countRate = Math.min(1, Math.max(0, actualCompletedThisWeek / countTarget));
+    const countRate = Math.min(
+      1,
+      Math.max(0, actualCompletedThisWeek / countTarget)
+    );
     const calorieTarget = Math.max(
       1,
       goalData.weeklyCalorieGoal && goalData.weeklyCalorieGoal > 0
@@ -333,29 +384,137 @@ const ExerciseScreen = ({ navigation }: any) => {
     if (actualCompletedThisWeek === 0 && thisWeekCalories === 0) {
       return 0;
     }
-    
+
     // 운동 횟수 목표를 모두 완료했으면 100% 반환 (먼저 체크)
     if (actualCompletedThisWeek >= countTarget) {
       return 100;
     }
-    
+
     // 운동 목표 설정 진행률은 운동 횟수만으로 계산 (칼로리 제외)
     const frequencyProgress = countRate;
-    
+
     // 실제 진행률이 0이면 0% 반환
     if (frequencyProgress === 0) {
       return 0;
     }
-    
+
     // 운동 횟수 진행률을 그대로 표시 (0~100%)
     const actualProgress = Math.round(frequencyProgress * 100);
     return Math.min(100, actualProgress);
   };
 
   const handleAddWorkout = () => {
-    setModalMode("add");
-    setSelectedExercise(null);
-    setIsModalOpen(true);
+    setIntroStage("intro");
+    setIsIntroVisible(true);
+  };
+
+  const loadStretchExercises = React.useCallback(async () => {
+    setStretchLoading(true);
+    setStretchError(null);
+    try {
+      const response = await fetchExercises({
+        keyword: "스트레칭",
+        size: 30,
+        page: 0,
+      });
+      const list = response?.content || [];
+      setStretchOptions(list);
+    } catch (error) {
+      console.error("[EXERCISE] 스트레칭 목록 로드 실패:", error);
+      setStretchError("스트레칭 목록을 불러오지 못했습니다.");
+      setStretchOptions([]);
+    } finally {
+      setStretchLoading(false);
+    }
+  }, []);
+
+  const getStretchIdentifier = React.useCallback((option: any): string => {
+    if (!option) return "";
+    const candidates = [
+      option.externalId,
+      option.id,
+      option.exerciseId,
+      option.code,
+      option.name,
+    ];
+    for (const candidate of candidates) {
+      if (candidate && typeof candidate === "string") {
+        return candidate;
+      }
+      if (typeof candidate === "number") {
+        return String(candidate);
+      }
+    }
+    return "";
+  }, []);
+
+  const handleStretchToggle = (option: any) => {
+    const id = getStretchIdentifier(option);
+    if (!id) return;
+    setSelectedStretchIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleStretchSkip = () => {
+    setSelectedStretchIds([]);
+    setIntroStage("intro");
+    setIsIntroVisible(false);
+  };
+
+  const handleStretchConfirm = () => {
+    if (selectedStretchIds.length === 0) {
+      handleStretchSkip();
+      return;
+    }
+    const selectedItems = stretchOptions.filter((option) =>
+      selectedStretchIds.includes(getStretchIdentifier(option))
+    );
+    if (selectedItems.length === 0) {
+      handleStretchSkip();
+      return;
+    }
+    const baseDate = selectedDate || new Date();
+    const dateStr = formatDateToString(baseDate);
+    const now = new Date();
+    const newActivities: Activity[] = selectedItems.map((option, index) => {
+      const baseName = option?.name || option?.exerciseName || "스트레칭 루틴";
+      const detailParts = [option?.bodyPart, option?.targetMuscle].filter(
+        Boolean
+      );
+      const details =
+        detailParts.length > 0
+          ? `${detailParts.join(" · ")} 스트레칭`
+          : "스트레칭 루틴";
+      const time = new Date(now);
+      time.setMinutes(now.getMinutes() + index);
+      const timeStr = `${String(time.getHours()).padStart(2, "0")}:${String(
+        time.getMinutes()
+      ).padStart(2, "0")}`;
+      return {
+        id: Date.now() + index,
+        name: baseName,
+        details,
+        time: timeStr,
+        date: dateStr,
+        isCompleted: false,
+        sets: [],
+      };
+    });
+    setAllActivities((prev) => [...prev, ...newActivities]);
+    setSelectedStretchIds([]);
+    setIntroStage("intro");
+    setIsIntroVisible(false);
+  };
+
+  const handleIntroStart = () => {
+    setIntroStage("stretch");
+    loadStretchExercises();
+  };
+
+  const handleIntroSkip = () => {
+    setIsIntroVisible(false);
+    setIntroStage("intro");
   };
 
   // 운동 기록 영속화: 페이지 전환해도 유지되도록 저장/복원
@@ -416,7 +575,9 @@ const ExerciseScreen = ({ navigation }: any) => {
     const trimmedComment =
       comment && typeof comment === "string" ? comment.trim() : "";
     const commentToSave =
-      allSetsCompleted && trimmedComment.length > 0 ? trimmedComment : undefined;
+      allSetsCompleted && trimmedComment.length > 0
+        ? trimmedComment
+        : undefined;
 
     // userId 가져오기
     const userIdStr = await AsyncStorage.getItem("userId");
@@ -458,15 +619,15 @@ const ExerciseScreen = ({ navigation }: any) => {
       const serverSessionId =
         (res && (res.sessionId || res.data?.sessionId)) ||
         sessionPayload.sessionId;
-      
+
       // 운동 저장 후 해당 날짜의 진행률 다시 가져오기
       const activeDateStr = formatDateToString(activeDate);
       const today = new Date();
-      const isToday = 
+      const isToday =
         activeDate.getFullYear() === today.getFullYear() &&
         activeDate.getMonth() === today.getMonth() &&
         activeDate.getDate() === today.getDate();
-      
+
       try {
         let dateProgress: DailyProgressWeekItem;
         if (isToday) {
@@ -474,10 +635,10 @@ const ExerciseScreen = ({ navigation }: any) => {
         } else {
           dateProgress = await fetchDateProgress(activeDateStr);
         }
-        
+
         // 주간 진행률 업데이트
-        setWeeklyProgress(prev => {
-          const index = prev.findIndex(item => item.date === activeDateStr);
+        setWeeklyProgress((prev) => {
+          const index = prev.findIndex((item) => item.date === activeDateStr);
           if (index >= 0) {
             const updated = [...prev];
             updated[index] = dateProgress;
@@ -487,10 +648,10 @@ const ExerciseScreen = ({ navigation }: any) => {
             return prev;
           }
         });
-        
+
         // 월별 진행률 업데이트
-        setMonthlyProgress(prev => {
-          const index = prev.findIndex(item => item.date === activeDateStr);
+        setMonthlyProgress((prev) => {
+          const index = prev.findIndex((item) => item.date === activeDateStr);
           if (index >= 0) {
             const updated = [...prev];
             updated[index] = dateProgress;
@@ -500,13 +661,13 @@ const ExerciseScreen = ({ navigation }: any) => {
             return [...prev, dateProgress];
           }
         });
-        
+
         // 해당 달의 월별 데이터 전체 다시 가져오기
         loadMonthlyProgress(activeDate.getFullYear(), activeDate.getMonth());
       } catch (progressError) {
-        console.error('진행률 조회 실패:', progressError);
+        console.error("진행률 조회 실패:", progressError);
       }
-      
+
       // POST 성공 시 활동 항목에 sessionId 저장 및 세트 내역 보존
       if (modalMode === "edit" && selectedExercise) {
         // 이전 완료 상태와 비교하여 카운트 조정
@@ -581,32 +742,34 @@ const ExerciseScreen = ({ navigation }: any) => {
           try {
             const target = allActivities.find((a) => a.id === workoutId);
             const targetDate = target?.date;
-            
+
             if (sessionId) {
               const res = await deleteWorkoutSession(sessionId);
               console.log("[WORKOUT][DELETE][OK]", res);
             }
-            
+
             // 운동 삭제 후 해당 날짜의 진행률 다시 가져오기
             if (targetDate) {
               try {
                 const today = new Date();
                 const targetDateObj = new Date(targetDate);
-                const isToday = 
+                const isToday =
                   targetDateObj.getFullYear() === today.getFullYear() &&
                   targetDateObj.getMonth() === today.getMonth() &&
                   targetDateObj.getDate() === today.getDate();
-                
+
                 let dateProgress: DailyProgressWeekItem;
                 if (isToday) {
                   dateProgress = await fetchTodayProgress();
                 } else {
                   dateProgress = await fetchDateProgress(targetDate);
                 }
-                
+
                 // 주간 진행률 업데이트
-                setWeeklyProgress(prev => {
-                  const index = prev.findIndex(item => item.date === targetDate);
+                setWeeklyProgress((prev) => {
+                  const index = prev.findIndex(
+                    (item) => item.date === targetDate
+                  );
                   if (index >= 0) {
                     const updated = [...prev];
                     updated[index] = dateProgress;
@@ -614,10 +777,12 @@ const ExerciseScreen = ({ navigation }: any) => {
                   }
                   return prev;
                 });
-                
+
                 // 월별 진행률 업데이트
-                setMonthlyProgress(prev => {
-                  const index = prev.findIndex(item => item.date === targetDate);
+                setMonthlyProgress((prev) => {
+                  const index = prev.findIndex(
+                    (item) => item.date === targetDate
+                  );
                   if (index >= 0) {
                     const updated = [...prev];
                     updated[index] = dateProgress;
@@ -625,11 +790,14 @@ const ExerciseScreen = ({ navigation }: any) => {
                   }
                   return prev;
                 });
-                
+
                 // 해당 달의 월별 데이터 전체 다시 가져오기
-                loadMonthlyProgress(targetDateObj.getFullYear(), targetDateObj.getMonth());
+                loadMonthlyProgress(
+                  targetDateObj.getFullYear(),
+                  targetDateObj.getMonth()
+                );
               } catch (progressError) {
-                console.error('진행률 조회 실패:', progressError);
+                console.error("진행률 조회 실패:", progressError);
               }
             }
           } catch (e) {
@@ -640,13 +808,13 @@ const ExerciseScreen = ({ navigation }: any) => {
               (activity) => activity.id !== workoutId
             );
             setAllActivities(updatedActivities);
-            
+
             // 이번 주에 완료된 운동 개수 다시 계산
             const today = new Date();
             const thisWeekStart = new Date(today);
             thisWeekStart.setDate(today.getDate() - today.getDay()); // 일요일로 설정
             thisWeekStart.setHours(0, 0, 0, 0);
-            
+
             const thisWeekCompleted = updatedActivities.filter((activity) => {
               const activityDate = new Date(activity.date);
               activityDate.setHours(0, 0, 0, 0);
@@ -656,7 +824,7 @@ const ExerciseScreen = ({ navigation }: any) => {
                 activityDate <= today
               );
             }).length;
-            
+
             // 완료 횟수와 칼로리를 즉시 업데이트
             setCompletedCountPersist(thisWeekCompleted);
             // 주간 칼로리 다시 계산 (비동기이므로 await)
@@ -664,10 +832,13 @@ const ExerciseScreen = ({ navigation }: any) => {
               try {
                 await loadWeeklyCalories();
               } catch (error) {
-                console.error("[WORKOUT][DELETE] 주간 칼로리 재계산 실패:", error);
+                console.error(
+                  "[WORKOUT][DELETE] 주간 칼로리 재계산 실패:",
+                  error
+                );
               }
             })();
-            
+
             eventBus.emit("workoutSessionDeleted", {
               sessionId,
               exerciseName: target?.name,
@@ -830,7 +1001,7 @@ const ExerciseScreen = ({ navigation }: any) => {
                                   !isCurrentMonth && styles.monthMuted,
                                 ]}
                               >
-                                {calories > 0 ? `${Math.round(calories)}k` : ''}
+                                {calories > 0 ? `${Math.round(calories)}k` : ""}
                               </Text>
                               <Text
                                 style={[
@@ -838,7 +1009,7 @@ const ExerciseScreen = ({ navigation }: any) => {
                                   !isCurrentMonth && styles.monthMuted,
                                 ]}
                               >
-                                {rate > 0 ? `${Math.round(rate)}%` : ''}
+                                {rate > 0 ? `${Math.round(rate)}%` : ""}
                               </Text>
                             </>
                           );
@@ -914,10 +1085,10 @@ const ExerciseScreen = ({ navigation }: any) => {
                         return (
                           <>
                             <Text style={styles.calendarCalories}>
-                              {calories > 0 ? `${Math.round(calories)}k` : ''}
+                              {calories > 0 ? `${Math.round(calories)}k` : ""}
                             </Text>
                             <Text style={styles.calendarPercentage}>
-                              {rate > 0 ? `${Math.round(rate)}%` : ''}
+                              {rate > 0 ? `${Math.round(rate)}%` : ""}
                             </Text>
                           </>
                         );
@@ -1018,6 +1189,23 @@ const ExerciseScreen = ({ navigation }: any) => {
         mode={modalMode}
         exerciseData={selectedExercise}
         onSave={handleExerciseSave}
+      />
+      <WorkoutIntroModal
+        visible={isIntroVisible}
+        stage={introStage}
+        onStart={handleIntroStart}
+        onSkip={handleStretchSkip}
+        stretchProps={{
+          loading: stretchLoading,
+          options: stretchOptions,
+          error: stretchError,
+          selectedIds: selectedStretchIds,
+          onToggle: handleStretchToggle,
+          onConfirm: handleStretchConfirm,
+          onSkip: handleStretchSkip,
+          onRetry: loadStretchExercises,
+        }}
+        identifierResolver={getStretchIdentifier}
       />
     </ContainerComponent>
   );
@@ -1330,6 +1518,526 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.black,
   },
+  stretchModalWrapper: {
+    flex: 1,
+    backgroundColor: "#0c0c0c",
+    paddingHorizontal: 20,
+    paddingTop: 66,
+    paddingBottom: 32,
+  },
+  stretchContentWrapper: {
+    flex: 1,
+  },
+  stretchModalHeader: {
+    marginBottom: 20,
+    alignItems: "center",
+  },
+  stretchModalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#ffffff",
+    marginBottom: 10,
+  },
+  stretchModalSubtitle: {
+    fontSize: 14,
+    color: "#d6d6d6",
+    textAlign: "center",
+  },
+  stretchCardContainer: {
+    flex: 1,
+    backgroundColor: "#ffffff",
+    borderRadius: 28,
+    paddingVertical: 24,
+    paddingHorizontal: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 18,
+    elevation: 14,
+    marginHorizontal: 16,
+  },
+  stretchListContent: {
+    paddingHorizontal: 2,
+    paddingBottom: 22,
+  },
+  stretchColumn: {
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  stretchCard: {
+    flex: 1,
+    marginHorizontal: 4,
+    backgroundColor: "#f5f5f5",
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#ececec",
+  },
+  stretchCardSelected: {
+    backgroundColor: "#e3ff4b",
+    borderColor: "#cde43c",
+  },
+  stretchCardImageWrap: {
+    width: 110,
+    height: 100,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
+  stretchCardImage: {
+    width: 86,
+    height: 86,
+    resizeMode: "contain",
+  },
+  stretchCardName: {
+    fontSize: 14,
+    color: "#3a3a3a",
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  stretchCardNameSelected: {
+    color: "#111111",
+  },
+  stretchStateWrapper: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  stretchErrorText: {
+    fontSize: 14,
+    color: "#ff8686",
+    textAlign: "center",
+    paddingHorizontal: 24,
+  },
+  stretchRetryBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: "#1f1f1f",
+  },
+  stretchRetryText: {
+    color: "#ffffff",
+    fontWeight: "600",
+  },
+  stretchEmptyText: {
+    fontSize: 14,
+    color: "#666666",
+    textAlign: "center",
+    paddingHorizontal: 24,
+  },
+  stretchModalButtons: {
+    marginTop: 22,
+    gap: 12,
+  },
+  stretchConfirmBtn: {
+    backgroundColor: "#d6ff4b",
+    borderRadius: 18,
+    paddingVertical: 18,
+    alignItems: "center",
+    shadowColor: "#d6ff4b",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  stretchConfirmBtnDisabled: {
+    backgroundColor: "#b7c08f",
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  stretchConfirmText: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#101010",
+  },
+  stretchConfirmTextDisabled: {
+    color: "#f4f4f4",
+  },
+  stretchSkipBtn: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#f1f1f1",
+  },
+  stretchSkipText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#111111",
+  },
+  introModalWrapper: {
+    flex: 1,
+    backgroundColor: "#101010",
+  },
+  introScreen: {
+    flex: 1,
+    backgroundColor: "#101010",
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    paddingBottom: 32,
+  },
+  introDecorCircle: {
+    position: "absolute",
+    borderWidth: 1,
+    borderColor: "rgba(214,255,75,0.2)",
+    borderStyle: "dashed",
+    borderRadius: 999,
+  },
+  introCircleLarge: {
+    width: 220,
+    height: 220,
+    top: 90,
+    left: -80,
+  },
+  introCircleSmall: {
+    width: 140,
+    height: 140,
+    bottom: 120,
+    right: -40,
+  },
+  introIllustrationWrap: {
+    alignItems: "center",
+    marginTop: 20,
+    marginBottom: 48,
+  },
+  introIllustration: {
+    width: 240,
+    height: 320,
+    resizeMode: "contain",
+  },
+  introGreeting: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#ffffff",
+    textAlign: "center",
+    marginBottom: 12,
+  },
+  introDescription: {
+    fontSize: 15,
+    color: "#d6d6d6",
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  introActionArea: {
+    marginTop: "auto",
+    gap: 12,
+    marginBottom: 30,
+  },
+  introPrimaryBtn: {
+    backgroundColor: "#d6ff4b",
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+  introPrimaryText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#101010",
+  },
+  introSecondaryBtn: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+  introSecondaryText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111111",
+  },
+  introBackBtn: {
+    position: "absolute",
+    top: 8,
+    left: 0,
+    padding: 8,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: 999,
+    zIndex: 10,
+  },
+  introDecorDot: {
+    position: "absolute",
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#d6ff4b",
+    opacity: 0.7,
+  },
+  introDotTopLeft: {
+    top: 120,
+    left: 12,
+  },
+  introDotBottomRight: {
+    bottom: 140,
+    right: 24,
+  },
+  introDecorBeam: {
+    position: "absolute",
+    width: 80,
+    height: 2,
+    backgroundColor: "rgba(214,255,75,0.4)",
+  },
+  introBeamLeft: {
+    top: 200,
+    left: -10,
+    transform: [{ rotate: "-30deg" }],
+  },
+  introBeamRight: {
+    bottom: 110,
+    right: -20,
+    transform: [{ rotate: "25deg" }],
+  },
+  introGlow: {
+    position: "absolute",
+    width: 200,
+    height: 200,
+    backgroundColor: "rgba(214,255,75,0.15)",
+    borderRadius: 120,
+    alignSelf: "center",
+    top: 240,
+    shadowColor: "#d6ff4b",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 40,
+    elevation: 12,
+  },
 });
+
+interface StretchSelectionContentProps {
+  loading: boolean;
+  options: any[];
+  error: string | null;
+  selectedIds: string[];
+  onToggle: (option: any) => void;
+  onConfirm: () => void;
+  onSkip: () => void;
+  onRetry: () => void | Promise<void>;
+  identifierResolver: (option: any) => string;
+}
+
+interface WorkoutIntroModalProps {
+  visible: boolean;
+  stage: "intro" | "stretch";
+  onStart: () => void;
+  onSkip: () => void;
+  stretchProps: Omit<StretchSelectionContentProps, "identifierResolver">;
+  identifierResolver: (option: any) => string;
+}
+
+const STRETCHING_ILLUSTRATION = require("../../assets/images/stretch_intro.png.png");
+
+const StretchSelectionContent = ({
+  loading,
+  options,
+  error,
+  selectedIds,
+  onToggle,
+  onConfirm,
+  onSkip,
+  onRetry,
+  identifierResolver,
+}: StretchSelectionContentProps) => {
+  const renderItem = ({ item }: { item: any }) => {
+    const id = identifierResolver(item);
+    const isSelected = selectedIds.includes(id);
+    const rawImage =
+      item?.imageUrl ||
+      item?.image ||
+      item?.imgUrl ||
+      item?.photoUrl ||
+      item?.thumbnailUrl;
+    const imageSource =
+      typeof rawImage === "string" && rawImage.length > 0
+        ? { uri: rawImage }
+        : STRETCHING_ILLUSTRATION;
+    const displayName = item?.name || item?.exerciseName || "스트레칭";
+    return (
+      <TouchableOpacity
+        style={[styles.stretchCard, isSelected && styles.stretchCardSelected]}
+        activeOpacity={0.85}
+        onPress={() => onToggle(item)}
+      >
+        <View style={styles.stretchCardImageWrap}>
+          <Image source={imageSource} style={styles.stretchCardImage} />
+        </View>
+        <Text
+          style={[
+            styles.stretchCardName,
+            isSelected && styles.stretchCardNameSelected,
+          ]}
+          numberOfLines={1}
+        >
+          {displayName}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <View style={styles.stretchStateWrapper}>
+          <ActivityIndicator size="large" color="#d6ff4b" />
+          <Text style={styles.stretchEmptyText}>스트레칭을 불러오는 중...</Text>
+        </View>
+      );
+    }
+
+    if (error) {
+      return (
+        <View style={styles.stretchStateWrapper}>
+          <Text style={styles.stretchErrorText}>{error}</Text>
+          <TouchableOpacity style={styles.stretchRetryBtn} onPress={onRetry}>
+            <Text style={styles.stretchRetryText}>다시 시도</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (!options || options.length === 0) {
+      return (
+        <View style={styles.stretchStateWrapper}>
+          <Text style={styles.stretchEmptyText}>
+            표시할 스트레칭 종목이 없습니다.
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <FlatList
+        data={options}
+        renderItem={renderItem}
+        keyExtractor={(item, index) =>
+          identifierResolver(item) || `stretch-${index}`
+        }
+        numColumns={2}
+        columnWrapperStyle={styles.stretchColumn}
+        contentContainerStyle={styles.stretchListContent}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      />
+    );
+  };
+
+  const hasSelection = selectedIds.length > 0;
+
+  return (
+    <View style={styles.stretchContentWrapper}>
+      <View style={styles.stretchModalHeader}>
+        <Text style={styles.stretchModalTitle}>스트레칭을 선택해보세요!</Text>
+        <Text style={styles.stretchModalSubtitle}>
+          여러 개를 선택해 한 번에 루틴에 추가할 수 있어요.
+        </Text>
+      </View>
+      <View style={styles.stretchCardContainer}>{renderContent()}</View>
+      <View style={styles.stretchModalButtons}>
+        <TouchableOpacity
+          style={[
+            styles.stretchConfirmBtn,
+            !hasSelection && styles.stretchConfirmBtnDisabled,
+          ]}
+          activeOpacity={hasSelection ? 0.85 : 1}
+          onPress={hasSelection ? onConfirm : undefined}
+        >
+          <Text
+            style={[
+              styles.stretchConfirmText,
+              !hasSelection && styles.stretchConfirmTextDisabled,
+            ]}
+          >
+            {hasSelection
+              ? `${selectedIds.length}개 선택 완료`
+              : "스트레칭 선택"}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.stretchSkipBtn}
+          onPress={onSkip}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.stretchSkipText}>건너뛰기</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
+const WorkoutIntroModal = ({
+  visible,
+  stage,
+  onStart,
+  onSkip,
+  stretchProps,
+  identifierResolver,
+}: WorkoutIntroModalProps) => {
+  return (
+    <Modal
+      visible={visible}
+      animationType="none"
+      presentationStyle="fullScreen"
+      onRequestClose={onSkip}
+    >
+      <SafeAreaView
+        style={
+          stage === "stretch"
+            ? styles.stretchModalWrapper
+            : styles.introModalWrapper
+        }
+      >
+        {stage === "intro" ? (
+          <View style={styles.introScreen}>
+            <TouchableOpacity
+              style={styles.introBackBtn}
+              onPress={onSkip}
+              activeOpacity={0.7}
+            >
+              <Icon name="chevron-back" size={22} color="#d6ff4b" />
+            </TouchableOpacity>
+            <View style={[styles.introDecorCircle, styles.introCircleLarge]} />
+            <View style={[styles.introDecorCircle, styles.introCircleSmall]} />
+            <View style={[styles.introDecorDot, styles.introDotTopLeft]} />
+            <View style={[styles.introDecorDot, styles.introDotBottomRight]} />
+            <View style={[styles.introDecorBeam, styles.introBeamLeft]} />
+            <View style={[styles.introDecorBeam, styles.introBeamRight]} />
+            <View style={styles.introGlow} />
+            <View style={styles.introIllustrationWrap}>
+              <Image
+                source={STRETCHING_ILLUSTRATION}
+                style={styles.introIllustration}
+              />
+            </View>
+            <Text style={styles.introGreeting}>안녕하세요 회원님!</Text>
+            <Text style={styles.introDescription}>
+              무리 없이 스트레칭으로 웜업부터 해봐요!
+            </Text>
+            <View style={styles.introActionArea}>
+              <TouchableOpacity
+                style={styles.introPrimaryBtn}
+                onPress={onStart}
+              >
+                <Text style={styles.introPrimaryText}>스트레칭 시작하기</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.introSecondaryBtn}
+                onPress={onSkip}
+              >
+                <Text style={styles.introSecondaryText}>건너뛰기</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <StretchSelectionContent
+            {...stretchProps}
+            identifierResolver={identifierResolver}
+          />
+        )}
+      </SafeAreaView>
+    </Modal>
+  );
+};
 
 export default ExerciseScreen;
