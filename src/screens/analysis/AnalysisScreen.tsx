@@ -56,6 +56,96 @@ interface MacroRatio {
 
 const ACTIVITY_STORAGE_BASE_KEY = "user_activities_v1";
 
+const HANGUL_TOKEN_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/바벨/gi, "Barbell"],
+  [/덤벨/gi, "Dumbbell"],
+  [/디클라인/gi, "Decline"],
+  [/인클라인/gi, "Incline"],
+  [/클로즈/gi, "Close"],
+  [/와이드/gi, "Wide"],
+  [/그립/gi, "Grip"],
+  [/투/gi, "To"],
+  [/프레스/gi, "Press"],
+  [/스컬/gi, "Skull"],
+  [/컬/gi, "Curl"],
+  [/로우/gi, "Row"],
+  [/풀다운/gi, "Pulldown"],
+  [/익스텐션/gi, "Extension"],
+  [/익스텐/gi, "Extension"],
+  [/익스프레션/gi, "Extension"],
+  [/스쿼트/gi, "Squat"],
+  [/백/gi, "Back"],
+  [/레그/gi, "Leg"],
+  [/스탠딩/gi, "Standing"],
+  [/시티드/gi, "Seated"],
+  [/라잉/gi, "Lying"],
+  [/케이블/gi, "Cable"],
+  [/머신/gi, "Machine"],
+  [/숄더/gi, "Shoulder"],
+  [/사이드/gi, "Side"],
+  [/레터럴/gi, "Lateral"],
+  [/브이업/gi, "V Up"],
+  [/업라이트/gi, "Upright"],
+  [/데드리프트/gi, "Deadlift"],
+  [/크런치/gi, "Crunch"],
+  [/플라이/gi, "Fly"],
+  [/풀오버/gi, "Pullover"],
+  [/드롭/gi, "Drop"],
+  [/슈러그/gi, "Shrug"],
+  [/버터플라이/gi, "Butterfly"],
+  [/캡틴/gi, "Captain"],
+  [/스티프/gi, "Stiff"],
+];
+
+const hasHangul = (value: string): boolean => /[가-힣]/.test(value);
+
+const transliterateKoreanExerciseName = (value?: string | null): string | null => {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!hasHangul(trimmed)) return null;
+  let result = trimmed;
+  HANGUL_TOKEN_REPLACEMENTS.forEach(([pattern, replacement]) => {
+    result = result.replace(pattern, ` ${replacement} `);
+  });
+  result = result.replace(/\s+/g, " ").trim();
+  if (!result || result === trimmed) {
+    return null;
+  }
+  // ensure at least one ASCII letter after replacement
+  if (!/[A-Za-z]/.test(result)) {
+    return null;
+  }
+  return result;
+};
+
+const generateSearchKeywords = (name?: string | null): string[] => {
+  if (!name) return [];
+  const normalized = name.replace(/\s+/g, " ").trim();
+  if (!normalized) return [];
+  const variants = new Set<string>();
+  variants.add(normalized);
+  variants.add(normalized.toLowerCase());
+
+  const asciiOnly = normalized.replace(/[^\x00-\x7F]/g, " ").replace(/\s+/g, " ").trim();
+  if (asciiOnly) {
+    variants.add(asciiOnly);
+    variants.add(asciiOnly.toLowerCase());
+  }
+
+  const transliterated = transliterateKoreanExerciseName(normalized);
+  if (transliterated) {
+    variants.add(transliterated);
+    variants.add(transliterated.toLowerCase());
+    variants.add(transliterated.replace(/\s+/g, " "));
+    variants.add(transliterated.replace(/\s+/g, " ").toLowerCase());
+  }
+
+  return Array.from(variants)
+    .map((keyword) => keyword.trim())
+    .filter((keyword) => keyword.length > 0);
+};
+
 const AnalysisScreen = ({ navigation }: any) => {
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
@@ -251,6 +341,29 @@ const AnalysisScreen = ({ navigation }: any) => {
     [workoutHistory, isSessionCompleted]
   );
 
+  const resolveExerciseIdentifier = useCallback(
+    (session: WorkoutSession | null | undefined): string | undefined => {
+      if (!session) return undefined;
+      const candidates = [
+        session.exerciseId,
+        (session as any)?.externalId,
+        (session as any)?.exercise?.externalId,
+        (session as any)?.exercise?.id,
+        (session as any)?.exercise?.code,
+        (session as any)?.exerciseCode,
+      ];
+      for (const candidate of candidates) {
+        if (candidate === undefined || candidate === null) continue;
+        const normalized = String(candidate).trim();
+        if (normalized) {
+          return normalized;
+        }
+      }
+      return undefined;
+    },
+    []
+  );
+
   const exercises = useMemo(() => {
     if (completedWorkoutHistory.length === 0) return [];
 
@@ -311,6 +424,8 @@ const AnalysisScreen = ({ navigation }: any) => {
           }
         }
 
+        const canonicalExerciseId = resolveExerciseIdentifier(latest);
+
         recentExercises.push({
           id: latest.sessionId,
           name,
@@ -318,7 +433,7 @@ const AnalysisScreen = ({ navigation }: any) => {
           changeType,
           rm: oneRM,
           recordCount: recent.length,
-          exerciseId: latest.exerciseId,
+          exerciseId: canonicalExerciseId,
           imageUrl:
             latest.imageUrl ||
             latest.exerciseImageUrl ||
@@ -341,7 +456,7 @@ const AnalysisScreen = ({ navigation }: any) => {
         );
       })
       .slice(0, 8); // 최대 8개
-  }, [completedWorkoutHistory]);
+  }, [completedWorkoutHistory, resolveExerciseIdentifier]);
 
   const [exerciseImages, setExerciseImages] = useState<Record<string, string>>(
     {}
@@ -351,16 +466,20 @@ const AnalysisScreen = ({ navigation }: any) => {
   >({});
   const fetchedImageIdsRef = useRef<Set<string>>(new Set());
   const fetchedNameRef = useRef<Set<string>>(new Set());
+  const failedImageIdsRef = useRef<Set<string>>(new Set());
+  const [failedImageLookupTick, setFailedImageLookupTick] = useState(0);
 
   useEffect(() => {
     const missingIds = exercises
       .map((ex) => ({
         id: ex.exerciseId,
+        name: ex.name,
         fallbackUrl: ex.imageUrl,
       }))
       .filter((item) => {
         if (!item.id) return false;
         if (exerciseImages[item.id]) return false;
+        if (failedImageIdsRef.current.has(item.id)) return false;
         if (fetchedImageIdsRef.current.has(item.id)) return false;
         return true;
       });
@@ -368,6 +487,13 @@ const AnalysisScreen = ({ navigation }: any) => {
     if (missingIds.length === 0) return;
 
     let cancelled = false;
+
+    const trackFailure = (id?: string) => {
+      if (!id) return;
+      if (failedImageIdsRef.current.has(id)) return;
+      failedImageIdsRef.current.add(id);
+      setFailedImageLookupTick((tick) => tick + 1);
+    };
 
     const loadImages = async () => {
       for (const { id } of missingIds) {
@@ -385,6 +511,8 @@ const AnalysisScreen = ({ navigation }: any) => {
               ...prev,
               [id]: url,
             }));
+          } else if (!cancelled) {
+            trackFailure(id);
           }
         } catch (error) {
           if (__DEV__) {
@@ -392,6 +520,9 @@ const AnalysisScreen = ({ navigation }: any) => {
               id,
               message: (error as Error)?.message,
             });
+          }
+          if (!cancelled) {
+            trackFailure(id);
           }
         }
       }
@@ -408,44 +539,73 @@ const AnalysisScreen = ({ navigation }: any) => {
     const missingByName = exercises
       .filter(
         (ex) =>
-          !ex.exerciseId &&
-          !ex.imageUrl &&
           ex.name &&
+          !ex.imageUrl &&
           !exerciseImagesByName[ex.name.toLowerCase()] &&
-          !fetchedNameRef.current.has(ex.name.toLowerCase())
+          !fetchedNameRef.current.has(ex.name.toLowerCase()) &&
+          (!ex.exerciseId ||
+            failedImageIdsRef.current.has(String(ex.exerciseId)))
       )
-      .map((ex) => ex.name as string);
+      .map((ex) => ({
+        rawName: ex.name as string,
+        keywords: generateSearchKeywords(ex.name),
+      }));
 
     if (missingByName.length === 0) return;
 
     let cancelled = false;
 
     const loadByName = async () => {
-      for (const rawName of missingByName) {
-        const key = rawName.toLowerCase();
-        fetchedNameRef.current.add(key);
-        try {
-          const response = await fetchExercises({
-            keyword: rawName,
-            size: 1,
-            page: 0,
-          });
-          const first = response?.content?.[0];
-          const url =
-            first?.imageUrl || first?.image || first?.imgUrl || first?.photoUrl;
-          if (url && !cancelled) {
-            setExerciseImagesByName((prev) => ({
-              ...prev,
-              [key]: url,
-            }));
-          }
-        } catch (error) {
-          if (__DEV__) {
-            console.warn("[ANALYSIS] 운동 이미지 검색 실패:", {
-              name: rawName,
-              message: (error as Error)?.message,
+      for (const { rawName, keywords } of missingByName) {
+        const baseKey = rawName.toLowerCase();
+        fetchedNameRef.current.add(baseKey);
+        const keywordList =
+          keywords && keywords.length > 0 ? keywords : [rawName];
+        let resolved = false;
+
+        for (const keyword of keywordList) {
+          const keywordKey = keyword.toLowerCase();
+          try {
+            const response = await fetchExercises({
+              keyword,
+              size: 1,
+              page: 0,
             });
+            const first = response?.content?.[0];
+            const url =
+              first?.imageUrl ||
+              first?.image ||
+              first?.imgUrl ||
+              first?.photoUrl;
+            if (url && !cancelled) {
+              setExerciseImagesByName((prev) => {
+                const next = { ...prev };
+                next[baseKey] = url;
+                keywordList.forEach((kw) => {
+                  const kwKey = kw.toLowerCase();
+                  next[kwKey] = url;
+                });
+                return next;
+              });
+              resolved = true;
+              break;
+            }
+          } catch (error) {
+            if (__DEV__) {
+              console.warn("[ANALYSIS] 운동 이미지 검색 실패:", {
+                name: rawName,
+                keyword,
+                message: (error as Error)?.message,
+              });
+            }
           }
+        }
+
+        if (!resolved && __DEV__) {
+          console.warn("[ANALYSIS] 운동 이미지 검색 실패 - 모든 키워드 시도", {
+            name: rawName,
+            keywords: keywordList,
+          });
         }
       }
     };
@@ -455,7 +615,12 @@ const AnalysisScreen = ({ navigation }: any) => {
     return () => {
       cancelled = true;
     };
-  }, [exercises, exerciseImagesByName]);
+  }, [
+    exercises,
+    exerciseImagesByName,
+    failedImageLookupTick,
+    generateSearchKeywords,
+  ]);
 
   // 운동 기록 조회
   const loadLocalCompletions = useCallback(async () => {
