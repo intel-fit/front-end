@@ -129,7 +129,13 @@ export default function AppNavigator() {
         <Stack.Screen name={ROUTES.FOOD_ADD_OPTIONS} component={FoodAddOptionsScreen} />
 
         {/* Exercise Stack */}
-        <Stack.Screen name={ROUTES.EXERCISE} component={ExerciseScreen} />
+        <Stack.Screen 
+          name={ROUTES.EXERCISE} 
+          component={ExerciseScreen}
+          options={{
+            headerLeft: () => null,
+          }}
+        />
         <Stack.Screen name={ROUTES.EXERCISE_DETAIL} component={ExerciseDetailScreen} />
         <Stack.Screen name={ROUTES.ROUTINE_RECOMMEND} component={RoutineRecommendScreen} />
         <Stack.Screen
