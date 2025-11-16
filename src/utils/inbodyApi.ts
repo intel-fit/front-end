@@ -302,3 +302,82 @@ export const getInBodyByDate = async (date: string): Promise<any> => {
 
   throw new Error("모든 날짜 형식 시도 실패");
 };
+
+/**
+ * 인바디 이미지 업로드
+ * @param file 이미지 파일 (expo-image-picker의 Asset 타입)
+ */
+export interface InBodyUploadResponse {
+  success: boolean;
+  message: string;
+  imageUrl?: string;
+  draftData?: InBodyPayload;
+}
+
+export const uploadInBodyImage = async (
+  file: any
+): Promise<InBodyUploadResponse> => {
+  try {
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const url = `${INBODY_API_URL}/upload`;
+
+    console.log("[INBODY][UPLOAD] 업로드 시작:", {
+      url,
+      fileUri: file.uri,
+      fileName: file.fileName,
+      fileType: file.type,
+      fileSize: file.fileSize,
+      hasToken: !!token,
+    });
+
+    // FormData 생성
+    const formData = new FormData();
+    
+    // 파일 추가
+    const fileData = {
+      uri: file.uri,
+      type: file.type || "image/jpeg",
+      name: file.fileName || "inbody.jpg",
+    } as any;
+    
+    formData.append("file", fileData);
+    
+    console.log("[INBODY][UPLOAD] FormData 생성 완료:", {
+      fileUri: fileData.uri,
+      fileType: fileData.type,
+      fileName: fileData.name,
+    });
+
+    console.log("[INBODY][UPLOAD] API 요청 전송 중...");
+    const response = await axios.post(url, formData, {
+      headers: {
+        Authorization: `Bearer ${token || ""}`,
+        "Content-Type": "multipart/form-data",
+        Accept: "application/json",
+      },
+    });
+
+    console.log("[INBODY][UPLOAD] API 응답 받음:", {
+      status: response.status,
+      success: response.data?.success,
+      message: response.data?.message,
+      hasImageUrl: !!response.data?.imageUrl,
+      hasDraftData: !!response.data?.draftData,
+    });
+
+    return response.data;
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      console.error("[INBODY][UPLOAD] API 에러:", {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        url: error.config?.url,
+      });
+    } else {
+      console.error("[INBODY][UPLOAD] 예상치 못한 에러:", error);
+    }
+    throw error;
+  }
+};
