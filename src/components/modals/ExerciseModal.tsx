@@ -83,6 +83,12 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   const [instructionImageUrl, setInstructionImageUrl] = useState<string>("");
   const [comment, setComment] = useState<string>("");
   const [userName, setUserName] = useState<string>("Member");
+  // 기록 모드: "sets" (세트) 또는 "time" (시간)
+  const [recordMode, setRecordMode] = useState<"sets" | "time">("sets");
+  // 시간 모드일 때의 시간 (분)
+  const [duration, setDuration] = useState<number>(30);
+  // 시간 모드일 때 완료 여부
+  const [isTimeCompleted, setIsTimeCompleted] = useState<boolean>(false);
   // 추가한 모든 운동 리스트 관리
   const [addedExercises, setAddedExercises] = useState<Array<{
     exercise: any;
@@ -94,8 +100,8 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   // 현재 보고 있는 운동의 인덱스 (-1이면 새로 선택한 운동, 0 이상이면 추가한 운동 중 하나)
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState<number>(-1);
   const allSetsCompleted = useMemo(
-    () => sets.length > 0 && sets.every((set) => set.isCompleted),
-    [sets]
+    () => recordMode === "time" ? isTimeCompleted : (sets.length > 0 && sets.every((set) => set.isCompleted)),
+    [sets, recordMode, isTimeCompleted]
   );
 
   useEffect(() => {
@@ -573,6 +579,8 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
       { id: 3, order: 3, weight: 20, reps: 12, isCompleted: false },
     ]);
     setComment("");
+    setIsTimeCompleted(false);
+    setRecordMode("sets");
     // 상세 정보 미리 로드 시도 (설명 표시를 위한 사전 로딩)
     if (exercise?.externalId) {
       setInstructionLoading(true);
@@ -663,7 +671,11 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
             allSetsCompleted && comment.trim().length > 0
               ? comment.trim()
               : undefined;
-          onSave(sets, currentName, meta, trimmedComment);
+          // 시간 모드일 때는 weight를 시간(분)으로 사용
+          const setsToSave = recordMode === "time" 
+            ? [{ id: 1, order: 1, weight: duration, reps: 0, isCompleted: isTimeCompleted }]
+            : sets;
+          onSave(setsToSave, currentName, meta, trimmedComment);
         }
       }
     }
@@ -698,7 +710,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
                     <Icon name="arrow-back" size={24} color="#ffffff" />
                   </TouchableOpacity>
                   <Text style={styles.fullScreenTitle}>
-                    {userName}! 어떤 운동을 진행할까요?
+                    {userName}님! 어떤 운동을 진행할까요?
                   </Text>
                 </View>
               )}
@@ -870,6 +882,8 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
                         setInstructionText(prevExercise.instructionText);
                         setInstructionImageUrl(prevExercise.instructionImageUrl);
                         setCurrentExerciseIndex(prevIndex);
+                        setIsTimeCompleted(false);
+                        setRecordMode("sets");
                         // 운동 상세 정보 다시 로드
                         if (prevExercise.exercise?.externalId) {
                           setInstructionLoading(true);
@@ -984,6 +998,8 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
                         setInstructionText(prevExercise.instructionText);
                         setInstructionImageUrl(prevExercise.instructionImageUrl);
                         setCurrentExerciseIndex(prevIndex);
+                        setIsTimeCompleted(false);
+                        setRecordMode("sets");
                         // 운동 상세 정보 다시 로드
                         if (prevExercise.exercise?.externalId) {
                           setInstructionLoading(true);
@@ -1026,6 +1042,8 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
                         setInstructionText(nextExercise.instructionText);
                         setInstructionImageUrl(nextExercise.instructionImageUrl);
                         setCurrentExerciseIndex(nextIndex);
+                        setIsTimeCompleted(false);
+                        setRecordMode("sets");
                         // 운동 상세 정보 다시 로드
                         if (nextExercise.exercise?.externalId) {
                           setInstructionLoading(true);
@@ -1105,141 +1123,327 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
                 </View>
 
                 <View style={styles.setsContainer}>
-                  {/* 세트 리스트 */}
-                  <View style={styles.setsList}>
-                    {sets.map((set) => (
-                      <ExerciseSetItem
-                        key={set.id}
-                        order={set.order}
-                        weight={set.weight}
-                        reps={set.reps}
-                        isCompleted={set.isCompleted}
-                        onToggleComplete={() => handleSetComplete(set.id)}
-                        onPressRemove={() => {
-                          if (sets.length > 1) {
-                            handleRemoveSet(set.id);
-                          }
-                        }}
-                        onOrderChange={(order) =>
-                          handleOrderChange(set.id, order)
-                        }
-                        onWeightChange={(weight) =>
-                          handleSetChange(set.id, "weight", weight)
-                        }
-                        onRepsChange={(reps) =>
-                          handleSetChange(set.id, "reps", reps)
-                        }
-                      />
-                    ))}
-                  </View>
-
-                  {/* 모든 세트 완료 시 피드백 섹션 */}
-                  {allSetsCompleted && (
-                    <View style={styles.feedbackSection}>
-                      <Text style={styles.feedbackTitle}>이 운동 어땠나요?</Text>
-                      <View style={styles.feedbackButtonsRow}>
-                        <TouchableOpacity style={styles.feedbackButton}>
-                          <Text style={styles.feedbackButtonText}>버튼 1</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.feedbackButton}>
-                          <Text style={styles.feedbackButtonText}>버튼 2</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.feedbackButton}>
-                          <Text style={styles.feedbackButtonText}>버튼 3</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.feedbackButton}>
-                          <Text style={styles.feedbackButtonText}>버튼 4</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-
-                  {/* 세트 추가, 종목 추가 버튼 */}
-                  <View style={styles.addButtonsRow}>
+                  {/* 세트/시간 전환 버튼 */}
+                  <View style={styles.recordModeToggle}>
                     <TouchableOpacity
-                      style={styles.addSetButton}
-                      onPress={handleAddSet}
-                    >
-                      <Text style={styles.addSetButtonText}>세트 추가</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.addExerciseButton}
+                      style={[
+                        styles.recordModeButton,
+                        recordMode === "sets" && styles.recordModeButtonActive,
+                      ]}
                       onPress={() => {
-                        // 현재 운동을 리스트에 추가 또는 업데이트
-                        const currentEx = selectedExercise || exerciseData;
-                        if (currentEx) {
-                          let newIndex = currentExerciseIndex;
-                          if (currentExerciseIndex === -1 || currentExerciseIndex >= addedExercises.length) {
-                            // 리스트에 없으면 추가
-                            newIndex = addedExercises.length;
-                            setAddedExercises((prev) => [
-                              ...prev,
-                              {
-                                exercise: currentEx,
-                                sets: [...sets],
-                                comment: comment,
-                                instructionText: instructionText,
-                                instructionImageUrl: instructionImageUrl,
-                              },
-                            ]);
-                          } else {
-                            // 리스트에 있으면 업데이트
-                            setAddedExercises((prev) => {
-                              const updated = [...prev];
-                              updated[currentExerciseIndex] = {
-                                exercise: currentEx,
-                                sets: [...sets],
-                                comment: comment,
-                                instructionText: instructionText,
-                                instructionImageUrl: instructionImageUrl,
-                              };
-                              return updated;
-                            });
-                            newIndex = currentExerciseIndex;
-                          }
-                          setCurrentExerciseIndex(newIndex);
-                        }
-                        
-                        // 먼저 상태를 변경하여 모달이 닫히지 않도록 함
-                        const exerciseName = onSave ? getExerciseDisplayName(currentEx || { name: "운동" }) : "";
-                        const meta = currentEx?.externalId
-                          ? { 
-                              externalId: currentEx.externalId, 
-                              category: currentEx.category || currentEx.bodyPart || currentEx.targetMuscle 
-                            }
-                          : undefined;
-                        const trimmedComment =
-                          allSetsCompleted && comment.trim().length > 0
-                            ? comment.trim()
-                            : undefined;
-                        
-                        // 상태를 먼저 변경
-                        setCurrentMode("add");
-                        setSelectedExercise(null);
-                        setSearchTerm("");
-                        setSelectedCategory("전체");
-                        setSets([
-                          { id: 1, order: 1, weight: 20, reps: 15, isCompleted: false },
-                          { id: 2, order: 2, weight: 20, reps: 12, isCompleted: false },
-                          { id: 3, order: 3, weight: 20, reps: 12, isCompleted: false },
-                        ]);
-                        setComment("");
-                        setInstructionText("");
-                        setInstructionImageUrl("");
-                        setShowInstructions(false);
-                        
-                        // 그 다음 저장 (keepModalOpen 옵션으로 모달을 닫지 않음)
-                        if (onSave && currentEx) {
-                          // 상태 변경 후 저장 (비동기로 처리하여 모달이 닫히지 않도록)
-                          requestAnimationFrame(() => {
-                            onSave(sets, exerciseName, meta, trimmedComment, { keepModalOpen: true });
-                          });
+                        setRecordMode("sets");
+                        if (sets.length === 0) {
+                          setSets([
+                            { id: 1, order: 1, weight: 20, reps: 15, isCompleted: false },
+                            { id: 2, order: 2, weight: 20, reps: 12, isCompleted: false },
+                            { id: 3, order: 3, weight: 20, reps: 12, isCompleted: false },
+                          ]);
                         }
                       }}
                     >
-                      <Text style={styles.addExerciseButtonText}>종목 추가</Text>
+                      <Text
+                        style={[
+                          styles.recordModeButtonText,
+                          recordMode === "sets" && styles.recordModeButtonTextActive,
+                        ]}
+                      >
+                        세트 수로 기록
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.recordModeButton,
+                        recordMode === "time" && styles.recordModeButtonActive,
+                      ]}
+                      onPress={() => {
+                        setRecordMode("time");
+                        setIsTimeCompleted(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.recordModeButtonText,
+                          recordMode === "time" && styles.recordModeButtonTextActive,
+                        ]}
+                      >
+                        시간으로 기록
+                      </Text>
                     </TouchableOpacity>
                   </View>
+
+                  {recordMode === "sets" ? (
+                    <>
+                      <View style={styles.setsList}>
+                        {sets.map((set) => (
+                          <ExerciseSetItem
+                            key={set.id}
+                            order={set.order}
+                            weight={set.weight}
+                            reps={set.reps}
+                            isCompleted={set.isCompleted}
+                            onToggleComplete={() => handleSetComplete(set.id)}
+                            onPressRemove={() => {
+                              if (sets.length > 1) {
+                                handleRemoveSet(set.id);
+                              }
+                            }}
+                            onOrderChange={(order) =>
+                              handleOrderChange(set.id, order)
+                            }
+                            onWeightChange={(weight) =>
+                              handleSetChange(set.id, "weight", weight)
+                            }
+                            onRepsChange={(reps) =>
+                              handleSetChange(set.id, "reps", reps)
+                            }
+                          />
+                        ))}
+                      </View>
+
+                      {allSetsCompleted && (
+                        <View style={styles.feedbackSection}>
+                          <Text style={styles.feedbackTitle}>이 운동 어땠나요?</Text>
+                          <View style={styles.feedbackButtonsRow}>
+                            <TouchableOpacity style={styles.feedbackButton}>
+                              <Text style={styles.feedbackButtonText}>버튼 1</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.feedbackButton}>
+                              <Text style={styles.feedbackButtonText}>버튼 2</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.feedbackButton}>
+                              <Text style={styles.feedbackButtonText}>버튼 3</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.feedbackButton}>
+                              <Text style={styles.feedbackButtonText}>버튼 4</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+
+                      <View style={styles.addButtonsRow}>
+                        <TouchableOpacity
+                          style={styles.addSetButton}
+                          onPress={handleAddSet}
+                        >
+                          <Text style={styles.addSetButtonText}>세트 추가</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.addExerciseButton}
+                          onPress={() => {
+                            const currentEx = selectedExercise || exerciseData;
+                            if (currentEx) {
+                              let newIndex = currentExerciseIndex;
+                              if (currentExerciseIndex === -1 || currentExerciseIndex >= addedExercises.length) {
+                                newIndex = addedExercises.length;
+                                setAddedExercises((prev) => [
+                                  ...prev,
+                                  {
+                                    exercise: currentEx,
+                                    sets: [...sets],
+                                    comment: comment,
+                                    instructionText: instructionText,
+                                    instructionImageUrl: instructionImageUrl,
+                                  },
+                                ]);
+                              } else {
+                                setAddedExercises((prev) => {
+                                  const updated = [...prev];
+                                  updated[currentExerciseIndex] = {
+                                    exercise: currentEx,
+                                    sets: [...sets],
+                                    comment: comment,
+                                    instructionText: instructionText,
+                                    instructionImageUrl: instructionImageUrl,
+                                  };
+                                  return updated;
+                                });
+                                newIndex = currentExerciseIndex;
+                              }
+                              setCurrentExerciseIndex(newIndex);
+                            }
+                            
+                            const exerciseName = onSave ? getExerciseDisplayName(currentEx || { name: "운동" }) : "";
+                            const meta = currentEx?.externalId
+                              ? { 
+                                  externalId: currentEx.externalId, 
+                                  category: currentEx.category || currentEx.bodyPart || currentEx.targetMuscle 
+                                }
+                              : undefined;
+                            const trimmedComment =
+                              allSetsCompleted && comment.trim().length > 0
+                                ? comment.trim()
+                                : undefined;
+                            
+                            setCurrentMode("add");
+                            setSelectedExercise(null);
+                            setSearchTerm("");
+                            setSelectedCategory("전체");
+                            setSets([
+                              { id: 1, order: 1, weight: 20, reps: 15, isCompleted: false },
+                              { id: 2, order: 2, weight: 20, reps: 12, isCompleted: false },
+                              { id: 3, order: 3, weight: 20, reps: 12, isCompleted: false },
+                            ]);
+                            setComment("");
+                            setInstructionText("");
+                            setInstructionImageUrl("");
+                            setShowInstructions(false);
+                            
+                            if (onSave && currentEx) {
+                              requestAnimationFrame(() => {
+                                onSave(sets, exerciseName, meta, trimmedComment, { keepModalOpen: true });
+                              });
+                            }
+                          }}
+                        >
+                          <Text style={styles.addExerciseButtonText}>종목 추가</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.timeInputContainer}>
+                        <View style={styles.timeInputRow}>
+                          <Text style={styles.timeInputLabel}>운동 시간</Text>
+                          <View style={styles.timeInputWrapper}>
+                            <TextInput
+                              style={styles.timeInput}
+                              value={duration.toString()}
+                              onChangeText={(text) => {
+                                const num = parseInt(text, 10);
+                                if (!isNaN(num) && num >= 0) {
+                                  setDuration(num);
+                                } else if (text === "") {
+                                  setDuration(0);
+                                }
+                              }}
+                              keyboardType="numeric"
+                              placeholder="0"
+                            />
+                            <Text style={styles.timeInputUnit}>분</Text>
+                          </View>
+                        </View>
+                        <TouchableOpacity
+                          style={[
+                            styles.timeCompleteButton,
+                            isTimeCompleted && styles.timeCompleteButtonActive,
+                          ]}
+                          onPress={() => setIsTimeCompleted(!isTimeCompleted)}
+                        >
+                          <Icon
+                            name={isTimeCompleted ? "checkmark-circle" : "checkmark-circle-outline"}
+                            size={24}
+                            color={isTimeCompleted ? "#4CAF50" : "#666666"}
+                          />
+                          <Text
+                            style={[
+                              styles.timeCompleteButtonText,
+                              isTimeCompleted && styles.timeCompleteButtonTextActive,
+                            ]}
+                          >
+                            {isTimeCompleted ? "완료" : "완료하기"}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {isTimeCompleted && (
+                        <View style={styles.feedbackSection}>
+                          <Text style={styles.feedbackTitle}>이 운동 어땠나요?</Text>
+                          <View style={styles.feedbackButtonsRow}>
+                            <TouchableOpacity style={styles.feedbackButton}>
+                              <Text style={styles.feedbackButtonText}>버튼 1</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.feedbackButton}>
+                              <Text style={styles.feedbackButtonText}>버튼 2</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.feedbackButton}>
+                              <Text style={styles.feedbackButtonText}>버튼 3</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.feedbackButton}>
+                              <Text style={styles.feedbackButtonText}>버튼 4</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+
+                      <View style={styles.addButtonsRow}>
+                        <TouchableOpacity
+                          style={styles.addExerciseButton}
+                          onPress={() => {
+                            const currentEx = selectedExercise || exerciseData;
+                            if (currentEx) {
+                              let newIndex = currentExerciseIndex;
+                              if (currentExerciseIndex === -1 || currentExerciseIndex >= addedExercises.length) {
+                                newIndex = addedExercises.length;
+                                setAddedExercises((prev) => [
+                                  ...prev,
+                                  {
+                                    exercise: currentEx,
+                                    sets: [{ id: 1, order: 1, weight: duration, reps: 0, isCompleted: isTimeCompleted }],
+                                    comment: comment,
+                                    instructionText: instructionText,
+                                    instructionImageUrl: instructionImageUrl,
+                                  },
+                                ]);
+                              } else {
+                                setAddedExercises((prev) => {
+                                  const updated = [...prev];
+                                  updated[currentExerciseIndex] = {
+                                    exercise: currentEx,
+                                    sets: [{ id: 1, order: 1, weight: duration, reps: 0, isCompleted: isTimeCompleted }],
+                                    comment: comment,
+                                    instructionText: instructionText,
+                                    instructionImageUrl: instructionImageUrl,
+                                  };
+                                  return updated;
+                                });
+                                newIndex = currentExerciseIndex;
+                              }
+                              setCurrentExerciseIndex(newIndex);
+                            }
+                            
+                            const exerciseName = onSave ? getExerciseDisplayName(currentEx || { name: "운동" }) : "";
+                            const meta = currentEx?.externalId
+                              ? { 
+                                  externalId: currentEx.externalId, 
+                                  category: currentEx.category || currentEx.bodyPart || currentEx.targetMuscle 
+                                }
+                              : undefined;
+                            const trimmedComment =
+                              isTimeCompleted && comment.trim().length > 0
+                                ? comment.trim()
+                                : undefined;
+                            
+                            const timeSets = [{ id: 1, order: 1, weight: duration, reps: 0, isCompleted: isTimeCompleted }];
+                            
+                            setCurrentMode("add");
+                            setSelectedExercise(null);
+                            setSearchTerm("");
+                            setSelectedCategory("전체");
+                            setDuration(30);
+                            setIsTimeCompleted(false);
+                            setRecordMode("sets");
+                            setSets([
+                              { id: 1, order: 1, weight: 20, reps: 15, isCompleted: false },
+                              { id: 2, order: 2, weight: 20, reps: 12, isCompleted: false },
+                              { id: 3, order: 3, weight: 20, reps: 12, isCompleted: false },
+                            ]);
+                            setComment("");
+                            setInstructionText("");
+                            setInstructionImageUrl("");
+                            setShowInstructions(false);
+                            
+                            if (onSave && currentEx) {
+                              requestAnimationFrame(() => {
+                                onSave(timeSets, exerciseName, meta, trimmedComment, { keepModalOpen: true });
+                              });
+                            }
+                          }}
+                        >
+                          <Text style={styles.addExerciseButtonText}>종목 추가</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
                 </View>
                 </ScrollView>
               </KeyboardAvoidingView>
@@ -1496,141 +1700,327 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
                 </View>
 
                 <View style={styles.setsContainer}>
-                  {/* 세트 리스트 */}
-                  <View style={styles.setsList}>
-                    {sets.map((set) => (
-                      <ExerciseSetItem
-                        key={set.id}
-                        order={set.order}
-                        weight={set.weight}
-                        reps={set.reps}
-                        isCompleted={set.isCompleted}
-                        onToggleComplete={() => handleSetComplete(set.id)}
-                        onPressRemove={() => {
-                          if (sets.length > 1) {
-                            handleRemoveSet(set.id);
-                          }
-                        }}
-                        onOrderChange={(order) =>
-                          handleOrderChange(set.id, order)
-                        }
-                        onWeightChange={(weight) =>
-                          handleSetChange(set.id, "weight", weight)
-                        }
-                        onRepsChange={(reps) =>
-                          handleSetChange(set.id, "reps", reps)
-                        }
-                      />
-                    ))}
-                  </View>
-
-                  {/* 모든 세트 완료 시 피드백 섹션 */}
-                  {allSetsCompleted && (
-                    <View style={styles.feedbackSection}>
-                      <Text style={styles.feedbackTitle}>이 운동 어땠나요?</Text>
-                      <View style={styles.feedbackButtonsRow}>
-                        <TouchableOpacity style={styles.feedbackButton}>
-                          <Text style={styles.feedbackButtonText}>버튼 1</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.feedbackButton}>
-                          <Text style={styles.feedbackButtonText}>버튼 2</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.feedbackButton}>
-                          <Text style={styles.feedbackButtonText}>버튼 3</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.feedbackButton}>
-                          <Text style={styles.feedbackButtonText}>버튼 4</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-
-                  {/* 세트 추가, 종목 추가 버튼 */}
-                  <View style={styles.addButtonsRow}>
+                  {/* 세트/시간 전환 버튼 */}
+                  <View style={styles.recordModeToggle}>
                     <TouchableOpacity
-                      style={styles.addSetButton}
-                      onPress={handleAddSet}
-                    >
-                      <Text style={styles.addSetButtonText}>세트 추가</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.addExerciseButton}
+                      style={[
+                        styles.recordModeButton,
+                        recordMode === "sets" && styles.recordModeButtonActive,
+                      ]}
                       onPress={() => {
-                        // 현재 운동을 리스트에 추가 또는 업데이트
-                        const currentEx = selectedExercise || exerciseData;
-                        if (currentEx) {
-                          let newIndex = currentExerciseIndex;
-                          if (currentExerciseIndex === -1 || currentExerciseIndex >= addedExercises.length) {
-                            // 리스트에 없으면 추가
-                            newIndex = addedExercises.length;
-                            setAddedExercises((prev) => [
-                              ...prev,
-                              {
-                                exercise: currentEx,
-                                sets: [...sets],
-                                comment: comment,
-                                instructionText: instructionText,
-                                instructionImageUrl: instructionImageUrl,
-                              },
-                            ]);
-                          } else {
-                            // 리스트에 있으면 업데이트
-                            setAddedExercises((prev) => {
-                              const updated = [...prev];
-                              updated[currentExerciseIndex] = {
-                                exercise: currentEx,
-                                sets: [...sets],
-                                comment: comment,
-                                instructionText: instructionText,
-                                instructionImageUrl: instructionImageUrl,
-                              };
-                              return updated;
-                            });
-                            newIndex = currentExerciseIndex;
-                          }
-                          setCurrentExerciseIndex(newIndex);
-                        }
-                        
-                        // 먼저 상태를 변경하여 모달이 닫히지 않도록 함
-                        const exerciseName = onSave ? getExerciseDisplayName(currentEx || { name: "운동" }) : "";
-                        const meta = currentEx?.externalId
-                          ? { 
-                              externalId: currentEx.externalId, 
-                              category: currentEx.category || currentEx.bodyPart || currentEx.targetMuscle 
-                            }
-                          : undefined;
-                        const trimmedComment =
-                          allSetsCompleted && comment.trim().length > 0
-                            ? comment.trim()
-                            : undefined;
-                        
-                        // 상태를 먼저 변경
-                        setCurrentMode("add");
-                        setSelectedExercise(null);
-                        setSearchTerm("");
-                        setSelectedCategory("전체");
-                        setSets([
-                          { id: 1, order: 1, weight: 20, reps: 15, isCompleted: false },
-                          { id: 2, order: 2, weight: 20, reps: 12, isCompleted: false },
-                          { id: 3, order: 3, weight: 20, reps: 12, isCompleted: false },
-                        ]);
-                        setComment("");
-                        setInstructionText("");
-                        setInstructionImageUrl("");
-                        setShowInstructions(false);
-                        
-                        // 그 다음 저장 (keepModalOpen 옵션으로 모달을 닫지 않음)
-                        if (onSave && currentEx) {
-                          // 상태 변경 후 저장 (비동기로 처리하여 모달이 닫히지 않도록)
-                          requestAnimationFrame(() => {
-                            onSave(sets, exerciseName, meta, trimmedComment, { keepModalOpen: true });
-                          });
+                        setRecordMode("sets");
+                        if (sets.length === 0) {
+                          setSets([
+                            { id: 1, order: 1, weight: 20, reps: 15, isCompleted: false },
+                            { id: 2, order: 2, weight: 20, reps: 12, isCompleted: false },
+                            { id: 3, order: 3, weight: 20, reps: 12, isCompleted: false },
+                          ]);
                         }
                       }}
                     >
-                      <Text style={styles.addExerciseButtonText}>종목 추가</Text>
+                      <Text
+                        style={[
+                          styles.recordModeButtonText,
+                          recordMode === "sets" && styles.recordModeButtonTextActive,
+                        ]}
+                      >
+                        세트 수로 기록
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.recordModeButton,
+                        recordMode === "time" && styles.recordModeButtonActive,
+                      ]}
+                      onPress={() => {
+                        setRecordMode("time");
+                        setIsTimeCompleted(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.recordModeButtonText,
+                          recordMode === "time" && styles.recordModeButtonTextActive,
+                        ]}
+                      >
+                        시간으로 기록
+                      </Text>
                     </TouchableOpacity>
                   </View>
+
+                  {recordMode === "sets" ? (
+                    <>
+                      <View style={styles.setsList}>
+                        {sets.map((set) => (
+                          <ExerciseSetItem
+                            key={set.id}
+                            order={set.order}
+                            weight={set.weight}
+                            reps={set.reps}
+                            isCompleted={set.isCompleted}
+                            onToggleComplete={() => handleSetComplete(set.id)}
+                            onPressRemove={() => {
+                              if (sets.length > 1) {
+                                handleRemoveSet(set.id);
+                              }
+                            }}
+                            onOrderChange={(order) =>
+                              handleOrderChange(set.id, order)
+                            }
+                            onWeightChange={(weight) =>
+                              handleSetChange(set.id, "weight", weight)
+                            }
+                            onRepsChange={(reps) =>
+                              handleSetChange(set.id, "reps", reps)
+                            }
+                          />
+                        ))}
+                      </View>
+
+                      {allSetsCompleted && (
+                        <View style={styles.feedbackSection}>
+                          <Text style={styles.feedbackTitle}>이 운동 어땠나요?</Text>
+                          <View style={styles.feedbackButtonsRow}>
+                            <TouchableOpacity style={styles.feedbackButton}>
+                              <Text style={styles.feedbackButtonText}>버튼 1</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.feedbackButton}>
+                              <Text style={styles.feedbackButtonText}>버튼 2</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.feedbackButton}>
+                              <Text style={styles.feedbackButtonText}>버튼 3</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.feedbackButton}>
+                              <Text style={styles.feedbackButtonText}>버튼 4</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+
+                      <View style={styles.addButtonsRow}>
+                        <TouchableOpacity
+                          style={styles.addSetButton}
+                          onPress={handleAddSet}
+                        >
+                          <Text style={styles.addSetButtonText}>세트 추가</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.addExerciseButton}
+                          onPress={() => {
+                            const currentEx = selectedExercise || exerciseData;
+                            if (currentEx) {
+                              let newIndex = currentExerciseIndex;
+                              if (currentExerciseIndex === -1 || currentExerciseIndex >= addedExercises.length) {
+                                newIndex = addedExercises.length;
+                                setAddedExercises((prev) => [
+                                  ...prev,
+                                  {
+                                    exercise: currentEx,
+                                    sets: [...sets],
+                                    comment: comment,
+                                    instructionText: instructionText,
+                                    instructionImageUrl: instructionImageUrl,
+                                  },
+                                ]);
+                              } else {
+                                setAddedExercises((prev) => {
+                                  const updated = [...prev];
+                                  updated[currentExerciseIndex] = {
+                                    exercise: currentEx,
+                                    sets: [...sets],
+                                    comment: comment,
+                                    instructionText: instructionText,
+                                    instructionImageUrl: instructionImageUrl,
+                                  };
+                                  return updated;
+                                });
+                                newIndex = currentExerciseIndex;
+                              }
+                              setCurrentExerciseIndex(newIndex);
+                            }
+                            
+                            const exerciseName = onSave ? getExerciseDisplayName(currentEx || { name: "운동" }) : "";
+                            const meta = currentEx?.externalId
+                              ? { 
+                                  externalId: currentEx.externalId, 
+                                  category: currentEx.category || currentEx.bodyPart || currentEx.targetMuscle 
+                                }
+                              : undefined;
+                            const trimmedComment =
+                              allSetsCompleted && comment.trim().length > 0
+                                ? comment.trim()
+                                : undefined;
+                            
+                            setCurrentMode("add");
+                            setSelectedExercise(null);
+                            setSearchTerm("");
+                            setSelectedCategory("전체");
+                            setSets([
+                              { id: 1, order: 1, weight: 20, reps: 15, isCompleted: false },
+                              { id: 2, order: 2, weight: 20, reps: 12, isCompleted: false },
+                              { id: 3, order: 3, weight: 20, reps: 12, isCompleted: false },
+                            ]);
+                            setComment("");
+                            setInstructionText("");
+                            setInstructionImageUrl("");
+                            setShowInstructions(false);
+                            
+                            if (onSave && currentEx) {
+                              requestAnimationFrame(() => {
+                                onSave(sets, exerciseName, meta, trimmedComment, { keepModalOpen: true });
+                              });
+                            }
+                          }}
+                        >
+                          <Text style={styles.addExerciseButtonText}>종목 추가</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.timeInputContainer}>
+                        <View style={styles.timeInputRow}>
+                          <Text style={styles.timeInputLabel}>운동 시간</Text>
+                          <View style={styles.timeInputWrapper}>
+                            <TextInput
+                              style={styles.timeInput}
+                              value={duration.toString()}
+                              onChangeText={(text) => {
+                                const num = parseInt(text, 10);
+                                if (!isNaN(num) && num >= 0) {
+                                  setDuration(num);
+                                } else if (text === "") {
+                                  setDuration(0);
+                                }
+                              }}
+                              keyboardType="numeric"
+                              placeholder="0"
+                            />
+                            <Text style={styles.timeInputUnit}>분</Text>
+                          </View>
+                        </View>
+                        <TouchableOpacity
+                          style={[
+                            styles.timeCompleteButton,
+                            isTimeCompleted && styles.timeCompleteButtonActive,
+                          ]}
+                          onPress={() => setIsTimeCompleted(!isTimeCompleted)}
+                        >
+                          <Icon
+                            name={isTimeCompleted ? "checkmark-circle" : "checkmark-circle-outline"}
+                            size={24}
+                            color={isTimeCompleted ? "#4CAF50" : "#666666"}
+                          />
+                          <Text
+                            style={[
+                              styles.timeCompleteButtonText,
+                              isTimeCompleted && styles.timeCompleteButtonTextActive,
+                            ]}
+                          >
+                            {isTimeCompleted ? "완료" : "완료하기"}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {isTimeCompleted && (
+                        <View style={styles.feedbackSection}>
+                          <Text style={styles.feedbackTitle}>이 운동 어땠나요?</Text>
+                          <View style={styles.feedbackButtonsRow}>
+                            <TouchableOpacity style={styles.feedbackButton}>
+                              <Text style={styles.feedbackButtonText}>버튼 1</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.feedbackButton}>
+                              <Text style={styles.feedbackButtonText}>버튼 2</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.feedbackButton}>
+                              <Text style={styles.feedbackButtonText}>버튼 3</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.feedbackButton}>
+                              <Text style={styles.feedbackButtonText}>버튼 4</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+
+                      <View style={styles.addButtonsRow}>
+                        <TouchableOpacity
+                          style={styles.addExerciseButton}
+                          onPress={() => {
+                            const currentEx = selectedExercise || exerciseData;
+                            if (currentEx) {
+                              let newIndex = currentExerciseIndex;
+                              if (currentExerciseIndex === -1 || currentExerciseIndex >= addedExercises.length) {
+                                newIndex = addedExercises.length;
+                                setAddedExercises((prev) => [
+                                  ...prev,
+                                  {
+                                    exercise: currentEx,
+                                    sets: [{ id: 1, order: 1, weight: duration, reps: 0, isCompleted: isTimeCompleted }],
+                                    comment: comment,
+                                    instructionText: instructionText,
+                                    instructionImageUrl: instructionImageUrl,
+                                  },
+                                ]);
+                              } else {
+                                setAddedExercises((prev) => {
+                                  const updated = [...prev];
+                                  updated[currentExerciseIndex] = {
+                                    exercise: currentEx,
+                                    sets: [{ id: 1, order: 1, weight: duration, reps: 0, isCompleted: isTimeCompleted }],
+                                    comment: comment,
+                                    instructionText: instructionText,
+                                    instructionImageUrl: instructionImageUrl,
+                                  };
+                                  return updated;
+                                });
+                                newIndex = currentExerciseIndex;
+                              }
+                              setCurrentExerciseIndex(newIndex);
+                            }
+                            
+                            const exerciseName = onSave ? getExerciseDisplayName(currentEx || { name: "운동" }) : "";
+                            const meta = currentEx?.externalId
+                              ? { 
+                                  externalId: currentEx.externalId, 
+                                  category: currentEx.category || currentEx.bodyPart || currentEx.targetMuscle 
+                                }
+                              : undefined;
+                            const trimmedComment =
+                              isTimeCompleted && comment.trim().length > 0
+                                ? comment.trim()
+                                : undefined;
+                            
+                            const timeSets = [{ id: 1, order: 1, weight: duration, reps: 0, isCompleted: isTimeCompleted }];
+                            
+                            setCurrentMode("add");
+                            setSelectedExercise(null);
+                            setSearchTerm("");
+                            setSelectedCategory("전체");
+                            setDuration(30);
+                            setIsTimeCompleted(false);
+                            setRecordMode("sets");
+                            setSets([
+                              { id: 1, order: 1, weight: 20, reps: 15, isCompleted: false },
+                              { id: 2, order: 2, weight: 20, reps: 12, isCompleted: false },
+                              { id: 3, order: 3, weight: 20, reps: 12, isCompleted: false },
+                            ]);
+                            setComment("");
+                            setInstructionText("");
+                            setInstructionImageUrl("");
+                            setShowInstructions(false);
+                            
+                            if (onSave && currentEx) {
+                              requestAnimationFrame(() => {
+                                onSave(timeSets, exerciseName, meta, trimmedComment, { keepModalOpen: true });
+                              });
+                            }
+                          }}
+                        >
+                          <Text style={styles.addExerciseButtonText}>종목 추가</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
                 </View>
                 </ScrollView>
               </KeyboardAvoidingView>
@@ -2127,6 +2517,98 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     flex: 1,
     minHeight: 0,
+  },
+  recordModeToggle: {
+    flexDirection: "row",
+    marginBottom: 20,
+    marginTop: 20,
+    backgroundColor: "#1a1a1a",
+    borderRadius: 8,
+    padding: 4,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: "#333333",
+  },
+  recordModeButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+  },
+  recordModeButtonActive: {
+    backgroundColor: "#d6ff4b",
+  },
+  recordModeButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#999999",
+  },
+  recordModeButtonTextActive: {
+    color: "#000000",
+    fontWeight: "700",
+  },
+  timeInputContainer: {
+    marginTop: 0,
+    paddingTop: 0,
+    paddingBottom: 12,
+  },
+  timeInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  timeInputLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#ffffff",
+  },
+  timeInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minWidth: 120,
+  },
+  timeInput: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#000000",
+    textAlign: "right",
+    flex: 1,
+    padding: 0,
+  },
+  timeInputUnit: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#666666",
+    marginLeft: 8,
+  },
+  timeCompleteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#2a2a2a",
+    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  timeCompleteButtonActive: {
+    backgroundColor: "#d6ff4b",
+  },
+  timeCompleteButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#999999",
+  },
+  timeCompleteButtonTextActive: {
+    color: "#000000",
   },
   setsHeader: {
     flexDirection: "row",
