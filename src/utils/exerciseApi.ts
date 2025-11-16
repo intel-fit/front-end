@@ -230,6 +230,35 @@ export const deleteWorkoutSession = async (sessionId: string): Promise<any> => {
   }
 };
 
+// 운동 기록 세션 완료 상태 토글
+export const toggleWorkoutSession = async (sessionId: string): Promise<any> => {
+  try {
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const url = `${WORKOUTS_API_URL}/${encodeURIComponent(sessionId)}/toggle`;
+    console.log('[WORKOUT][TOGGLE] 토글 요청:', url);
+    const response = await axios.patch(url, {}, {
+      headers: {
+        Authorization: `Bearer ${token || ''}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+    });
+    console.log('[WORKOUT][TOGGLE] 토글 응답:', response.data);
+    return response.data;
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      console.error('[WORKOUT][TOGGLE] 토글 에러:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+    } else {
+      console.error('[WORKOUT][TOGGLE] 토글 예외:', error);
+    }
+    throw error;
+  }
+};
+
 // 이번 주(일~토) 운동 달성률 및 칼로리 목록 조회
 export const fetchWeeklyProgress = async (): Promise<DailyProgressWeekItem[]> => {
   try {

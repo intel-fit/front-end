@@ -19,6 +19,7 @@ import { colors } from "../../theme/colors";
 import {
   fetchExercises as fetchExerciseApi,
   fetchExerciseDetail,
+  toggleWorkoutSession,
 } from "../../utils/exerciseApi";
 import ExerciseSetItem from "../ExerciseSetItem";
 
@@ -46,7 +47,7 @@ interface ExerciseModalProps {
     options?: {
       keepModalOpen?: boolean;
     }
-  ) => void;
+  ) => Promise<string | undefined> | void; // sessionId 반환 가능
   onWorkoutComplete?: (exercises: Array<{
     name: string;
     targetMuscle?: string;
@@ -96,6 +97,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
     comment: string;
     instructionText: string;
     instructionImageUrl: string;
+    sessionId?: string; // 서버에서 받은 세션 ID
   }>>([]);
   // 현재 보고 있는 운동의 인덱스 (-1이면 새로 선택한 운동, 0 이상이면 추가한 운동 중 하나)
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState<number>(-1);
@@ -462,12 +464,33 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
     );
   };
 
-  const handleSetComplete = (setId: number) => {
-    setSets((prev) =>
-      prev.map((set) =>
-        set.id === setId ? { ...set, isCompleted: !set.isCompleted } : set
-      )
+  const handleSetComplete = async (setId: number) => {
+    // 로컬 state 먼저 업데이트
+    const newSets = sets.map((set) =>
+      set.id === setId ? { ...set, isCompleted: !set.isCompleted } : set
     );
+    setSets(newSets);
+
+    // 현재 운동의 sessionId 찾기
+    const currentEx = selectedExercise || exerciseData;
+    if (currentEx && currentExerciseIndex >= 0) {
+      // 추가된 운동 목록에 있는 경우
+      const exercise = addedExercises[currentExerciseIndex];
+      if (exercise?.sessionId) {
+        try {
+          console.log('[EXERCISE][TOGGLE] 세션 토글 시작:', exercise.sessionId);
+          await toggleWorkoutSession(exercise.sessionId);
+          console.log('[EXERCISE][TOGGLE] 세션 토글 성공');
+        } catch (error) {
+          console.error('[EXERCISE][TOGGLE] 세션 토글 실패:', error);
+          // 실패 시 로컬 state 롤백
+          setSets(sets);
+        }
+      }
+    } else if (currentEx) {
+      // 새로 선택한 운동인 경우, 아직 저장되지 않았을 수 있음
+      // 로컬 state만 업데이트 (이미 위에서 업데이트됨)
+    }
   };
 
   const handleAddSet = () => {
@@ -641,7 +664,23 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
           item.sets.every((s) => s.isCompleted) && item.comment?.trim().length > 0
             ? item.comment.trim()
             : undefined;
-        onSave(item.sets, exerciseName, meta, trimmedComment);
+        const saveResult = onSave(item.sets, exerciseName, meta, trimmedComment);
+        // sessionId 저장 (Promise인 경우 await)
+        if (saveResult instanceof Promise) {
+          saveResult.then((sessionId) => {
+            if (sessionId) {
+              setAddedExercises((prev) =>
+                prev.map((ex, idx) =>
+                  idx === addedExercises.indexOf(item)
+                    ? { ...ex, sessionId }
+                    : ex
+                )
+              );
+            }
+          }).catch((error) => {
+            console.error('[EXERCISE][SAVE] 세션 ID 저장 실패:', error);
+          });
+        }
       }
     });
     
@@ -675,7 +714,23 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
           const setsToSave = recordMode === "time" 
             ? [{ id: 1, order: 1, weight: duration, reps: 0, isCompleted: isTimeCompleted }]
             : sets;
-          onSave(setsToSave, currentName, meta, trimmedComment);
+          const saveResult = onSave(setsToSave, currentName, meta, trimmedComment);
+          // sessionId 저장 (Promise인 경우 await)
+          if (saveResult instanceof Promise) {
+            saveResult.then((sessionId) => {
+              if (sessionId) {
+                // 현재 운동이 addedExercises에 있으면 sessionId 업데이트
+                setAddedExercises((prev) =>
+                  prev.map((ex, idx) => {
+                    const exName = getExerciseDisplayName(ex.exercise);
+                    return exName === currentName ? { ...ex, sessionId } : ex;
+                  })
+                );
+              }
+            }).catch((error) => {
+              console.error('[EXERCISE][SAVE] 현재 운동 세션 ID 저장 실패:', error);
+            });
+          }
         }
       }
     }

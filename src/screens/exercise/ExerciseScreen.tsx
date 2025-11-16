@@ -1021,10 +1021,11 @@ const ExerciseScreen = ({ navigation }: any) => {
     );
 
     // 실제 저장 API 호출
+    let serverSessionId: string | undefined;
     try {
       const res = await postWorkoutSession(sessionPayload as any);
       console.log("[WORKOUT][POST][OK]", res);
-      const serverSessionId =
+      serverSessionId =
         (res && (res.sessionId || res.data?.sessionId)) ||
         sessionPayload.sessionId;
 
@@ -1136,7 +1137,9 @@ const ExerciseScreen = ({ navigation }: any) => {
         "운동 기록 저장 실패",
         e?.response?.data?.message || e?.message || "알 수 없는 오류"
       );
+      return undefined; // 에러 시 undefined 반환
     }
+    
     // 운동 선택 화면에서 저장한 경우 WorkoutIntroModal 닫기
     if (options?.keepModalOpen) {
       // "종목 추가" 버튼을 눌렀을 때는 모달을 닫지 않고 종목 검색 페이지로 돌아감
@@ -1147,6 +1150,9 @@ const ExerciseScreen = ({ navigation }: any) => {
     } else {
       handleModalClose();
     }
+    
+    // sessionId 반환 (ExerciseModal에서 사용)
+    return serverSessionId;
   };
 
   const handleDeleteWorkout = (workoutId: number, sessionId?: string) => {
