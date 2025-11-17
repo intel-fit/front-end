@@ -6,10 +6,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {Ionicons as Icon} from '@expo/vector-icons';
 import {colors} from '../../theme/colors';
+import {uploadInBodyImage} from '../../utils/inbodyApi';
 
 interface InBodyPhotoModalProps {
   isOpen: boolean;
@@ -36,6 +38,7 @@ const InBodyPhotoModal: React.FC<InBodyPhotoModalProps> = ({
   const handleCameraPress = async () => {
     const hasPermission = await requestPermissions();
     if (!hasPermission) {
+      Alert.alert('권한 필요', '카메라 및 갤러리 접근 권한이 필요합니다.');
       return;
     }
 
@@ -46,26 +49,85 @@ const InBodyPhotoModal: React.FC<InBodyPhotoModalProps> = ({
     });
 
     if (!result.canceled && result.assets[0]) {
-      setSelectedFile(result.assets[0]);
+      const selectedAsset = result.assets[0];
+      console.log('[INBODY][CAMERA] 사진 선택됨:', {
+        uri: selectedAsset.uri,
+        fileName: selectedAsset.fileName,
+        fileSize: selectedAsset.fileSize,
+        type: selectedAsset.type,
+        width: selectedAsset.width,
+        height: selectedAsset.height,
+      });
+
+      setSelectedFile(selectedAsset);
       setIsProcessing(true);
 
-      setTimeout(() => {
-        if (onSave) {
-          onSave({
-            file: result.assets[0],
-            fileName: result.assets[0].fileName || 'photo.jpg',
-            fileSize: result.assets[0].fileSize || 0,
-          });
+      try {
+        console.log('[INBODY][CAMERA] 이미지 업로드 시작...');
+        const response = await uploadInBodyImage(selectedAsset);
+        
+        console.log('[INBODY][CAMERA] 업로드 응답:', {
+          success: response.success,
+          message: response.message,
+          imageUrl: response.imageUrl,
+          draftData: response.draftData ? {
+            measurementDate: response.draftData.measurementDate,
+            weight: response.draftData.weight,
+            bodyFatPercentage: response.draftData.bodyFatPercentage,
+            muscleMass: response.draftData.muscleMass,
+            skeletalMuscleMass: response.draftData.skeletalMuscleMass,
+            // 전체 데이터는 아래에서 로그
+          } : null,
+        });
+
+        if (response.draftData) {
+          console.log('[INBODY][CAMERA] 추출된 인바디 데이터 (전체):', JSON.stringify(response.draftData, null, 2));
         }
+        
+        if (response.success && onSave) {
+          const saveData = {
+            success: true,
+            message: response.message,
+            imageUrl: response.imageUrl,
+            draftData: response.draftData,
+            file: selectedAsset,
+          };
+          console.log('[INBODY][CAMERA] onSave 콜백 호출:', {
+            success: saveData.success,
+            message: saveData.message,
+            imageUrl: saveData.imageUrl,
+            hasDraftData: !!saveData.draftData,
+          });
+          onSave(saveData);
+        } else {
+          console.warn('[INBODY][CAMERA] 업로드 실패:', response.message);
+          Alert.alert('업로드 실패', response.message || '인바디 이미지 업로드에 실패했습니다.');
+        }
+      } catch (error: any) {
+        console.error('[INBODY][CAMERA] 업로드 에러:', {
+          message: error.message,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          stack: error.stack,
+        });
+        Alert.alert(
+          '업로드 실패',
+          error.response?.data?.message || error.message || '인바디 이미지 업로드에 실패했습니다.'
+        );
+      } finally {
         setIsProcessing(false);
         onClose();
-      }, 2000);
+      }
+    } else {
+      console.log('[INBODY][CAMERA] 사진 선택 취소됨');
     }
   };
 
   const handleGalleryPress = async () => {
     const hasPermission = await requestPermissions();
     if (!hasPermission) {
+      Alert.alert('권한 필요', '카메라 및 갤러리 접근 권한이 필요합니다.');
       return;
     }
 
@@ -76,20 +138,78 @@ const InBodyPhotoModal: React.FC<InBodyPhotoModalProps> = ({
     });
 
     if (!result.canceled && result.assets[0]) {
-      setSelectedFile(result.assets[0]);
+      const selectedAsset = result.assets[0];
+      console.log('[INBODY][GALLERY] 사진 선택됨:', {
+        uri: selectedAsset.uri,
+        fileName: selectedAsset.fileName,
+        fileSize: selectedAsset.fileSize,
+        type: selectedAsset.type,
+        width: selectedAsset.width,
+        height: selectedAsset.height,
+      });
+
+      setSelectedFile(selectedAsset);
       setIsProcessing(true);
 
-      setTimeout(() => {
-        if (onSave) {
-          onSave({
-            file: result.assets[0],
-            fileName: result.assets[0].fileName || 'photo.jpg',
-            fileSize: result.assets[0].fileSize || 0,
-          });
+      try {
+        console.log('[INBODY][GALLERY] 이미지 업로드 시작...');
+        const response = await uploadInBodyImage(selectedAsset);
+        
+        console.log('[INBODY][GALLERY] 업로드 응답:', {
+          success: response.success,
+          message: response.message,
+          imageUrl: response.imageUrl,
+          draftData: response.draftData ? {
+            measurementDate: response.draftData.measurementDate,
+            weight: response.draftData.weight,
+            bodyFatPercentage: response.draftData.bodyFatPercentage,
+            muscleMass: response.draftData.muscleMass,
+            skeletalMuscleMass: response.draftData.skeletalMuscleMass,
+            // 전체 데이터는 아래에서 로그
+          } : null,
+        });
+
+        if (response.draftData) {
+          console.log('[INBODY][GALLERY] 추출된 인바디 데이터 (전체):', JSON.stringify(response.draftData, null, 2));
         }
+        
+        if (response.success && onSave) {
+          const saveData = {
+            success: true,
+            message: response.message,
+            imageUrl: response.imageUrl,
+            draftData: response.draftData,
+            file: selectedAsset,
+          };
+          console.log('[INBODY][GALLERY] onSave 콜백 호출:', {
+            success: saveData.success,
+            message: saveData.message,
+            imageUrl: saveData.imageUrl,
+            hasDraftData: !!saveData.draftData,
+          });
+          onSave(saveData);
+        } else {
+          console.warn('[INBODY][GALLERY] 업로드 실패:', response.message);
+          Alert.alert('업로드 실패', response.message || '인바디 이미지 업로드에 실패했습니다.');
+        }
+      } catch (error: any) {
+        console.error('[INBODY][GALLERY] 업로드 에러:', {
+          message: error.message,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          stack: error.stack,
+        });
+        Alert.alert(
+          '업로드 실패',
+          error.response?.data?.message || error.message || '인바디 이미지 업로드에 실패했습니다.'
+        );
+      } finally {
         setIsProcessing(false);
         onClose();
-      }, 2000);
+      }
+    } else {
+      console.log('[INBODY][GALLERY] 사진 선택 취소됨');
     }
   };
 
