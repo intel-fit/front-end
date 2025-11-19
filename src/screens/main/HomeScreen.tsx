@@ -5,8 +5,10 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {MaterialIcons, Ionicons} from '@expo/vector-icons';
 import {colors} from '../../theme/colors';
 import {ROUTES} from '../../constants/routes';
 import {useDate} from '../../contexts/DateContext';
@@ -105,38 +107,10 @@ const HomeScreen = ({navigation}: any) => {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>홈</Text>
+        <Text style={styles.logoText}>INTEL FIT</Text>
       </View>
       <View style={styles.divider} />
       <ScrollView style={styles.content}>
-        {/* 인사말 섹션 */}
-        <View style={styles.greetingSection}>
-          <View style={styles.profileGroup}>
-            <View style={styles.profileImage}>
-              <Text style={styles.profilePlaceholder}>👤</Text>
-            </View>
-            <Text style={styles.greetingText}>
-              {homeData?.userSummary?.name || ''}님 어서오세요😊
-            </Text>
-          </View>
-          <View style={styles.messageContainer}>
-            {homeData?.todayMeal?.message && (
-              <View style={styles.messageBubble}>
-                <Text style={styles.messageText}>
-                  {homeData.todayMeal.message}
-                </Text>
-              </View>
-            )}
-            {homeData?.todayExercise?.message && (
-              <View style={styles.messageBubble}>
-                <Text style={styles.messageText}>
-                  {homeData.todayExercise.message}
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-
         {/* 맞춤형 추천 섹션 */}
         <View style={styles.recommendationCard}>
           <Text style={styles.recommendationCardTitle}>
@@ -268,6 +242,70 @@ const HomeScreen = ({navigation}: any) => {
           </View>
         </View>
 
+        {/* 운동 루틴 카드 */}
+        <View style={styles.routineCard}>
+          <Text style={styles.routineTitle}>Day 1 하체</Text>
+          <View style={styles.routineStats}>
+            <View style={styles.routineStatItem}>
+              <Ionicons name="barbell" size={45} color="#ffffff" />
+              <Text style={styles.routineStatText}>4가지 운동</Text>
+            </View>
+            <View style={styles.routineStatItem}>
+              <Ionicons name="stopwatch-outline" size={45} color="#ffffff" />
+              <Text style={styles.routineStatText}>13세트</Text>
+            </View>
+            <View style={styles.routineStatItem}>
+              <MaterialIcons name="local-fire-department" size={45} color="#ffffff" />
+              <Text style={styles.routineStatText}>229 kcal</Text>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.routineButton}>
+            <Text style={styles.routineButtonText}>오늘 운동 시작하기</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* 운동 통계 카드 */}
+        <View style={styles.exerciseStatsCard}>
+          <View style={styles.exerciseStatsContent}>
+            <View style={styles.exerciseStatColumn}>
+              <Text style={styles.exerciseStatLabel}>운동 시간</Text>
+              <Text style={styles.exerciseStatValue}>00:28:48</Text>
+            </View>
+            <View style={styles.exerciseStatDivider} />
+            <View style={styles.exerciseStatColumn}>
+              <Text style={styles.exerciseStatLabel}>소모 칼로리</Text>
+              <View style={styles.exerciseStatValueRow}>
+                <Text style={styles.exerciseStatValue}>2,198</Text>
+                <Text style={styles.exerciseStatUnit}>kcal</Text>
+              </View>
+            </View>
+            <View style={styles.exerciseStatDivider} />
+            <View style={styles.exerciseStatColumn}>
+              <Text style={styles.exerciseStatLabel}>완료 운동</Text>
+              <View style={styles.exerciseStatValueRow}>
+                <Text style={styles.exerciseStatValue}>7/10</Text>
+                <Text style={styles.exerciseStatUnit}>개</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* 체중/골격근량/체지방량 카드 */}
+        <View style={styles.bodyStatsContainer}>
+          <View style={styles.bodyStatCard}>
+            <Text style={styles.bodyStatLabel}>체중</Text>
+            <Text style={styles.bodyStatValue}>52kg</Text>
+          </View>
+          <View style={styles.bodyStatCard}>
+            <Text style={styles.bodyStatLabel}>골격근량</Text>
+            <Text style={styles.bodyStatValue}>17.3kg</Text>
+          </View>
+          <View style={styles.bodyStatCard}>
+            <Text style={styles.bodyStatLabel}>체지방량</Text>
+            <Text style={styles.bodyStatValue}>21.4%</Text>
+          </View>
+        </View>
+
         {/* 식단 추천 섹션 */}
         <View style={styles.dietRecommendationSection}>
           <View style={styles.recommendationContent}>
@@ -302,7 +340,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: colors.background,
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -315,6 +353,14 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
   },
+  logoText: {
+    fontSize: 24,
+    fontWeight: '800',
+    fontStyle: 'italic',
+    color: '#e3ff7c',
+    textAlign: 'center',
+    letterSpacing: 0,
+  },
   divider: {
     height: 1,
     backgroundColor: colors.border,
@@ -325,59 +371,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
-  greetingSection: {
-    marginBottom: 20,
-  },
-  profileGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 15,
-  },
-  profileImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#333',
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  profilePlaceholder: {
-    width: '100%',
-    height: '100%',
-    fontSize: 24,
-    backgroundColor: '#555',
-    textAlign: 'center',
-    lineHeight: 50,
-  },
-  greetingText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  messageContainer: {
-    marginTop: 12,
-    paddingHorizontal: 4,
-    gap: 8,
-  },
-  messageBubble: {
-    backgroundColor: '#555',
-    borderRadius: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    alignSelf: 'flex-start',
-    maxWidth: '90%',
-  },
-  messageText: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: colors.text,
-    lineHeight: 20,
-  },
   exerciseProgressSection: {
     backgroundColor: colors.cardBackground,
     borderRadius: 20,
-    paddingVertical: 15,
+    paddingVertical: 12,
     paddingHorizontal: 14,
     marginBottom: 20,
   },
@@ -389,22 +386,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 0,
-    height: 79,
+    height: 60,
     marginVertical: 6,
   },
   calendarItem: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: 6,
-    minHeight: 79,
+    justifyContent: 'center',
+    gap: 4,
+    minHeight: 60,
   },
   calendarNumber: {
     minHeight: 30,
     minWidth: 30,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
   },
   calendarNumberText: {
     fontSize: 16,
@@ -431,7 +427,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
     height: 15,
-    lineHeight: 14.52,
+    lineHeight: 14.5,
   },
   calendarPercentage: {
     fontSize: 12,
@@ -439,19 +435,19 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
     height: 15,
-    lineHeight: 14.52,
+    lineHeight: 14.5,
   },
   calorieSection: {
     backgroundColor: colors.cardBackground,
     borderRadius: 20,
-    padding: 20,
+    padding: 16,
     marginBottom: 20,
   },
   calorieHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 10,
   },
   calorieLeft: {
     flexDirection: 'row',
@@ -464,7 +460,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   calorieGoal: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '400',
     color: colors.text,
   },
@@ -474,15 +470,15 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   calorieProgressBar: {
-    height: 30,
+    height: 16,
     backgroundColor: '#555',
-    borderRadius: 10,
+    borderRadius: 8,
     overflow: 'hidden',
   },
   calorieProgressFill: {
     height: '100%',
     backgroundColor: '#e3ff7c',
-    borderRadius: 10,
+    borderRadius: 8,
   },
   recommendationCard: {
     backgroundColor: '#393a38',
@@ -491,11 +487,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   recommendationCardTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: '#ffffff',
     marginBottom: 20,
-    lineHeight: 24,
+    lineHeight: 20,
   },
   recommendationButtons: {
     gap: 10,
@@ -510,7 +506,7 @@ const styles = StyleSheet.create({
     height: 40,
   },
   recommendationButtonText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     color: '#000000',
   },
@@ -524,13 +520,13 @@ const styles = StyleSheet.create({
     maxWidth: 249,
   },
   recommendationTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: '#e3ff7c',
     marginBottom: 5,
   },
   recommendationSubtitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: colors.text,
     marginBottom: 10,
@@ -549,13 +545,133 @@ const styles = StyleSheet.create({
   },
   foodItemText: {
     color: '#000000',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
   },
   recommendationQuestion: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: colors.text,
+  },
+  routineCard: {
+    backgroundColor: '#393a38',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+  },
+  routineTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginBottom: 20,
+    lineHeight: 19,
+  },
+  routineStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    paddingHorizontal: 4,
+  },
+  routineStatItem: {
+    alignItems: 'center',
+    width: 74,
+    gap: 8,
+  },
+  routineStatText: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#ffffff',
+    textAlign: 'center',
+    lineHeight: 14.5,
+  },
+  routineButton: {
+    backgroundColor: '#e3ff7c',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 40,
+  },
+  routineButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#000000',
+    lineHeight: 16,
+  },
+  exerciseStatsCard: {
+    backgroundColor: '#393a38',
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  exerciseStatsContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    height: 60,
+  },
+  exerciseStatColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  exerciseStatLabel: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#ffffff',
+    marginBottom: 8,
+    lineHeight: 14.5,
+  },
+  exerciseStatValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+    lineHeight: 19,
+  },
+  exerciseStatValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  exerciseStatUnit: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#ffffff',
+    lineHeight: 14.5,
+  },
+  exerciseStatDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: '#ffffff',
+    marginHorizontal: 10,
+  },
+  bodyStatsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 20,
+  },
+  bodyStatCard: {
+    flex: 1,
+    backgroundColor: '#393a38',
+    borderRadius: 20,
+    padding: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 70,
+  },
+  bodyStatLabel: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#ffffff',
+    marginBottom: 8,
+    lineHeight: 14.5,
+  },
+  bodyStatValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#e3ff7c',
+    lineHeight: 24,
   },
   additionalMenuSection: {
     marginBottom: 20,
