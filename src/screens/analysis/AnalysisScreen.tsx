@@ -13,12 +13,14 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
+  Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
 import InBodyPhotoModal from "../../components/modals/InBodyPhotoModal";
 import axios from "axios";
+import Svg, { Circle } from "react-native-svg";
 import {
   fetchExerciseDetail,
   fetchExercises,
@@ -30,7 +32,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ACCESS_TOKEN_KEY } from "../../services/apiConfig";
 import MacroDonut from "../../components/charts/MacroDonut";
 import { authAPI } from "../../services";
-import { getLatestInBody, postInBody, InBodyPayload } from "../../utils/inbodyApi";
+import {
+  getLatestInBody,
+  postInBody,
+  InBodyPayload,
+} from "../../utils/inbodyApi";
 import { eventBus } from "../../utils/eventBus";
 
 interface MealComparison {
@@ -99,7 +105,9 @@ const HANGUL_TOKEN_REPLACEMENTS: Array<[RegExp, string]> = [
 
 const hasHangul = (value: string): boolean => /[가-힣]/.test(value);
 
-const transliterateKoreanExerciseName = (value?: string | null): string | null => {
+const transliterateKoreanExerciseName = (
+  value?: string | null
+): string | null => {
   if (!value) return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -127,7 +135,10 @@ const generateSearchKeywords = (name?: string | null): string[] => {
   variants.add(normalized);
   variants.add(normalized.toLowerCase());
 
-  const asciiOnly = normalized.replace(/[^\x00-\x7F]/g, " ").replace(/\s+/g, " ").trim();
+  const asciiOnly = normalized
+    .replace(/[^\x00-\x7F]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   if (asciiOnly) {
     variants.add(asciiOnly);
     variants.add(asciiOnly.toLowerCase());
@@ -144,6 +155,67 @@ const generateSearchKeywords = (name?: string | null): string[] => {
   return Array.from(variants)
     .map((keyword) => keyword.trim())
     .filter((keyword) => keyword.length > 0);
+};
+
+const HealthScoreCircle = ({
+  score,
+  size = 100,
+}: {
+  score: number;
+  size?: number;
+}) => {
+  const animatedValue = useRef(new Animated.Value(0)).current;
+  const strokeWidth = 8;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+
+  useEffect(() => {
+    Animated.timing(animatedValue, {
+      toValue: score,
+      duration: 1500,
+      useNativeDriver: true,
+    }).start();
+  }, [score]);
+
+  const strokeDashoffset = animatedValue.interpolate({
+    inputRange: [0, 100],
+    outputRange: [circumference, 0],
+  });
+
+  return (
+    <View style={styles.healthScoreCircleContainer}>
+      <Svg
+        width={size}
+        height={size}
+        style={{ transform: [{ rotate: "-90deg" }] }}
+      >
+        {/* 배경 원 */}
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="#333333"
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        {/* 프로그레스 원 */}
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="#E3FF7C"
+          strokeWidth={strokeWidth}
+          fill="none"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference - (circumference * score) / 100}
+          strokeLinecap="round"
+        />
+      </Svg>
+      <View style={styles.healthScoreTextContainer}>
+        <Text style={styles.healthScoreNumber}>{score}</Text>
+      </View>
+    </View>
+  );
 };
 
 const AnalysisScreen = ({ navigation }: any) => {
@@ -165,6 +237,9 @@ const AnalysisScreen = ({ navigation }: any) => {
   const [localCompletionByNameDate, setLocalCompletionByNameDate] = useState<
     Record<string, boolean>
   >({});
+
+  // 건강점수 state (추후 API 연결)
+  const [healthScore] = useState(90);
 
   const displayName = useMemo(
     () => (userName ? `${userName}님` : "회원님"),
@@ -985,24 +1060,29 @@ const AnalysisScreen = ({ navigation }: any) => {
   };
 
   const handlePhotoSave = async (data: any) => {
-    console.log('[ANALYSIS][INBODY] handlePhotoSave 호출됨');
-    console.log('[ANALYSIS][INBODY] 받은 데이터:', {
+    console.log("[ANALYSIS][INBODY] handlePhotoSave 호출됨");
+    console.log("[ANALYSIS][INBODY] 받은 데이터:", {
       success: data?.success,
       message: data?.message,
       imageUrl: data?.imageUrl,
       hasDraftData: !!data?.draftData,
       hasFile: !!data?.file,
-      fileInfo: data?.file ? {
-        uri: data.file.uri,
-        fileName: data.file.fileName,
-        fileSize: data.file.fileSize,
-        type: data.file.type,
-      } : null,
+      fileInfo: data?.file
+        ? {
+            uri: data.file.uri,
+            fileName: data.file.fileName,
+            fileSize: data.file.fileSize,
+            type: data.file.type,
+          }
+        : null,
     });
 
     if (data?.draftData) {
-      console.log('[ANALYSIS][INBODY] 추출된 인바디 초안 데이터:', JSON.stringify(data.draftData, null, 2));
-      console.log('[ANALYSIS][INBODY] 주요 데이터:', {
+      console.log(
+        "[ANALYSIS][INBODY] 추출된 인바디 초안 데이터:",
+        JSON.stringify(data.draftData, null, 2)
+      );
+      console.log("[ANALYSIS][INBODY] 주요 데이터:", {
         measurementDate: data.draftData.measurementDate,
         weight: data.draftData.weight,
         bodyFatPercentage: data.draftData.bodyFatPercentage,
@@ -1016,7 +1096,7 @@ const AnalysisScreen = ({ navigation }: any) => {
 
       // draftData를 사용해서 인바디 정보 저장
       try {
-        console.log('[ANALYSIS][INBODY] 인바디 정보 저장 시작...');
+        console.log("[ANALYSIS][INBODY] 인바디 정보 저장 시작...");
         const payload: InBodyPayload = {
           measurementDate: data.draftData.measurementDate,
           weight: data.draftData.weight,
@@ -1046,31 +1126,41 @@ const AnalysisScreen = ({ navigation }: any) => {
 
         // undefined 값 제거
         const cleanPayload: InBodyPayload = Object.fromEntries(
-          Object.entries(payload).filter(([_, v]) => v !== null && v !== undefined)
+          Object.entries(payload).filter(
+            ([_, v]) => v !== null && v !== undefined
+          )
         ) as InBodyPayload;
 
-        console.log('[ANALYSIS][INBODY] 저장할 페이로드:', JSON.stringify(cleanPayload, null, 2));
+        console.log(
+          "[ANALYSIS][INBODY] 저장할 페이로드:",
+          JSON.stringify(cleanPayload, null, 2)
+        );
 
         const response = await postInBody(cleanPayload);
-        
+
         if (response.success) {
-          console.log('[ANALYSIS][INBODY] 인바디 정보 저장 성공:', {
+          console.log("[ANALYSIS][INBODY] 인바디 정보 저장 성공:", {
             inBodyId: response.inBody?.id,
             message: response.message,
           });
-          
+
           // 최신 인바디 날짜 업데이트
           await loadLatestInBodyDate();
-          
+
           // 이벤트 버스로 인바디 업데이트 알림
-          eventBus.emit('inbodyUpdated');
-          
-          console.log('[ANALYSIS][INBODY] 인바디 정보가 성공적으로 저장되었습니다.');
+          eventBus.emit("inbodyUpdated");
+
+          console.log(
+            "[ANALYSIS][INBODY] 인바디 정보가 성공적으로 저장되었습니다."
+          );
         } else {
-          console.warn('[ANALYSIS][INBODY] 인바디 정보 저장 실패:', response.message);
+          console.warn(
+            "[ANALYSIS][INBODY] 인바디 정보 저장 실패:",
+            response.message
+          );
         }
       } catch (error: any) {
-        console.error('[ANALYSIS][INBODY] 인바디 정보 저장 에러:', {
+        console.error("[ANALYSIS][INBODY] 인바디 정보 저장 에러:", {
           message: error.message,
           status: error.response?.status,
           statusText: error.response?.statusText,
@@ -1080,7 +1170,7 @@ const AnalysisScreen = ({ navigation }: any) => {
     }
 
     if (data?.imageUrl) {
-      console.log('[ANALYSIS][INBODY] 업로드된 이미지 URL:', data.imageUrl);
+      console.log("[ANALYSIS][INBODY] 업로드된 이미지 URL:", data.imageUrl);
     }
   };
 
@@ -1107,6 +1197,26 @@ const AnalysisScreen = ({ navigation }: any) => {
           <Text style={styles.greetingMessage}>
             <Text style={styles.greetingHighlight}>{displayName}</Text>
             {` ${greetingSummary}`}
+          </Text>
+        </View>
+
+        {/* 건강점수 섹션 - 새로 추가 */}
+        <View style={styles.healthScoreSection}>
+          <View style={styles.healthScoreContent}>
+            <HealthScoreCircle score={healthScore} size={100} />
+            <View style={styles.healthScoreTextArea}>
+              <Text style={styles.healthScoreLabel}>
+                {userName || "회원"}님의
+              </Text>
+              <Text style={styles.healthScoreTitle}>건강점수</Text>
+              <View style={styles.healthScoreBadge}>
+                <Icon name="trophy" size={14} color="#E3FF7C" />
+                <Text style={styles.healthScoreBadgeText}>상위 10%</Text>
+              </View>
+            </View>
+          </View>
+          <Text style={styles.healthScoreHint}>
+            꾸준한 기록으로 건강점수를 높여보세요!
           </Text>
         </View>
 
@@ -1137,7 +1247,7 @@ const AnalysisScreen = ({ navigation }: any) => {
             onPress={handleInBodyClick}
           >
             <Icon name="bar-chart-outline" size={18} color="#000000" />
-            <Text style={styles.analysisBtnText}>정보/분석</Text>
+            <Text style={styles.analysisBtnText}>인바디 정보</Text>
           </TouchableOpacity>
         </View>
 
@@ -1503,6 +1613,81 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#E3FF7C",
   },
+  // ===== 건강점수 섹션 스타일 =====
+  healthScoreSection: {
+    backgroundColor: "#2a2a2a",
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 16,
+    elevation: 6,
+  },
+  healthScoreContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 20,
+    marginBottom: 16,
+  },
+  healthScoreCircleContainer: {
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  healthScoreTextContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  healthScoreNumber: {
+    fontSize: 32,
+    fontWeight: "700",
+    color: "#E3FF7C",
+    letterSpacing: -0.5,
+  },
+  healthScoreTextArea: {
+    flex: 1,
+    justifyContent: "center",
+    gap: 4,
+  },
+  healthScoreLabel: {
+    fontSize: 14,
+    color: "#aaaaaa",
+    fontWeight: "500",
+    letterSpacing: 0.3,
+  },
+  healthScoreTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#ffffff",
+    letterSpacing: 0.3,
+    marginBottom: 4,
+  },
+  healthScoreBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(227, 255, 124, 0.15)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: "flex-start",
+  },
+  healthScoreBadgeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#E3FF7C",
+    letterSpacing: 0.3,
+  },
+  healthScoreHint: {
+    fontSize: 12,
+    color: "#888888",
+    textAlign: "center",
+    letterSpacing: 0.2,
+  },
+  // ===== 기존 스타일 유지 =====
   inbodySection: {
     backgroundColor: "#2a2a2a",
     borderRadius: 12,

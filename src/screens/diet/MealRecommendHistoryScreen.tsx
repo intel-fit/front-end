@@ -7,65 +7,83 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { recommendedMealAPI } from "../../services";
 
 type DayMealFood = {
-  name?: string;
-  calories?: number;
-  carbs?: number;
-  protein?: number;
-  fat?: number;
+  name: string;
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
 };
 
 type DayMealBlock = {
-  calories?: number;
-  meals?: DayMealFood[];
+  calories: number;
+  meals: DayMealFood[];
 };
 
 type DayMeal = {
-  // 총합
-  totalCalories?: number;
-  carbs?: number;
-  protein?: number;
-  fat?: number;
-  // 끼니별
+  totalCalories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
   breakfast?: DayMealBlock;
   lunch?: DayMealBlock;
   dinner?: DayMealBlock;
 };
 
-type SavedMeal = {
-  id: number | string;
-  date?: string; // "YYYY.MM.DD" 등
-  // 7일치 배열
+type SavedBundle = {
+  bundleId: string;
+  planName: string;
+  description?: string;
+  totalCalories: number;
+  mealCount: number;
+  createdAt: string;
+  planDate: string;
+  isServerMeal: boolean;
+  // 7일치 상세 데이터 (로드 후 채워짐)
+  days?: DayMeal[];
+};
+
+type LocalMeal = {
+  id: string;
+  bundleId: string;
+  planName: string;
+  description?: string;
+  date?: string;
   meals?: DayMeal[];
+  isServerMeal: false;
 };
 
 const LOCAL_KEYS = ["savedMeals", "savedMealPlans"] as const;
 
 const MealRecommendHistoryScreen = ({ navigation }: any) => {
-  const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
-  const [selectedMeal, setSelectedMeal] = useState<SavedMeal | null>(null);
+  const [bundles, setBundles] = useState<SavedBundle[]>([]);
+  const [selectedBundle, setSelectedBundle] = useState<SavedBundle | null>(
+    null
+  );
   const [selectedDay, setSelectedDay] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false); // ✅ 편집 모드
+  const [selectedBundleIds, setSelectedBundleIds] = useState<string[]>([]); // ✅ 선택된 번들
 
-  // ---------- Normalizers ----------
+  // ========== Normalizers ==========
   const toNumber = (v: any, def = 0) =>
     typeof v === "number" && !Number.isNaN(v) ? v : Number(v ?? def) || def;
 
-  /** 끼니 블록 표준화 */
   const normalizeMealBlock = (raw: any): DayMealBlock | undefined => {
     if (!raw) return undefined;
-    const calories = toNumber(raw.calories);
-    // 아이템 배열 호환: foods, items, meals 등으로 들어왔을 수 있음
-    const rawItems =
-      raw.meals || raw.items || raw.foods || raw.list || raw.entries || [];
+    const calories = toNumber(raw.totalCalories || raw.calories);
+    const rawItems = raw.foods || raw.meals || raw.items || [];
     const meals: DayMealFood[] = Array.isArray(rawItems)
       ? rawItems.map((it: any) => ({
-          name: String(it?.name ?? it?.foodName ?? it?.title ?? ""),
+          name: String(it?.foodName || it?.name || ""),
           calories: toNumber(it?.calories),
           carbs: toNumber(it?.carbs),
           protein: toNumber(it?.protein),
@@ -75,168 +93,327 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
     return { calories, meals };
   };
 
-  /** 하루 식단 표준화 */
   const normalizeDay = (raw: any): DayMeal => {
-    // 총합
-    const totalCalories = toNumber(
-      raw?.totalCalories ?? raw?.calories ?? raw?.kcal
-    );
-    const carbs = toNumber(raw?.carbs ?? raw?.totalCarbs);
-    const protein = toNumber(raw?.protein ?? raw?.totalProtein);
-    const fat = toNumber(raw?.fat ?? raw?.totalFat);
+    const totalCalories = toNumber(raw?.totalCalories);
+    const carbs = toNumber(raw?.totalCarbs || raw?.carbs);
+    const protein = toNumber(raw?.totalProtein || raw?.protein);
+    const fat = toNumber(raw?.totalFat || raw?.fat);
 
-    // 끼니별: 다양한 키 네이밍을 호환
-    const breakfast =
-      normalizeMealBlock(
-        raw?.breakfast ??
-          raw?.morning ??
-          raw?.am ??
-          raw?.B ??
-          raw?.아침 ??
-          raw?.["1"]
-      ) || undefined;
-    const lunch =
-      normalizeMealBlock(
-        raw?.lunch ?? raw?.noon ?? raw?.pm1 ?? raw?.L ?? raw?.점심 ?? raw?.["2"]
-      ) || undefined;
-    const dinner =
-      normalizeMealBlock(
-        raw?.dinner ??
-          raw?.evening ??
-          raw?.pm2 ??
-          raw?.D ??
-          raw?.저녁 ??
-          raw?.["3"]
-      ) || undefined;
+    const breakfast = normalizeMealBlock(
+      raw?.meals?.find((m: any) => m.mealType === "BREAKFAST")
+    );
+    const lunch = normalizeMealBlock(
+      raw?.meals?.find((m: any) => m.mealType === "LUNCH")
+    );
+    const dinner = normalizeMealBlock(
+      raw?.meals?.find((m: any) => m.mealType === "DINNER")
+    );
 
     return { totalCalories, carbs, protein, fat, breakfast, lunch, dinner };
   };
 
-  /** 저장 객체 표준화 */
-  const normalizeLocalMeal = (raw: any): SavedMeal | null => {
-    if (!raw) return null;
-    const id =
-      raw?.id ?? raw?.mealId ?? `local-${raw?.createdAt ?? Date.now()}`;
-    const date =
-      raw?.date ||
-      (raw?.createdAt
-        ? new Date(raw.createdAt).toLocaleDateString("ko-KR")
-        : undefined);
-
-    // 7일 배열 다양한 키 호환
-    let days: any[] =
-      raw?.meals || raw?.days || raw?.week || raw?.plan || raw?.schedule || [];
-
-    // 어떤 포맷은 day1..day7로 저장된 경우
-    if (!Array.isArray(days) || days.length === 0) {
-      const candidates = [
-        raw?.day1,
-        raw?.day2,
-        raw?.day3,
-        raw?.day4,
-        raw?.day5,
-        raw?.day6,
-        raw?.day7,
-      ].filter(Boolean);
-      if (candidates.length) days = candidates;
-    }
-
-    // 하루 객체가 "total"과 끼니가 분리돼 있지 않은 단순 포맷일 경우 대응
-    const meals: DayMeal[] = Array.isArray(days)
-      ? days.map((d) => normalizeDay(d))
-      : [];
-
-    return { id, date, meals };
-  };
-
-  /** 배열 표준화 */
-  const normalizeLocalArray = (arr: any[]): SavedMeal[] => {
-    return arr
-      .map(normalizeLocalMeal)
-      .filter((x): x is SavedMeal => !!x && !!x.id);
-  };
-
-  /** 로컬에서 여러 키를 읽어 병합 */
-  const loadMealsFromLocal = async (): Promise<SavedMeal[]> => {
-    const buckets: SavedMeal[][] = [];
+  // ========== 로컬 스토리지 ==========
+  const loadLocalMeals = async (): Promise<LocalMeal[]> => {
+    const results: LocalMeal[] = [];
     for (const key of LOCAL_KEYS) {
       try {
         const json = await AsyncStorage.getItem(key);
         if (!json) continue;
         const parsed = JSON.parse(json);
-        if (Array.isArray(parsed)) {
-          buckets.push(normalizeLocalArray(parsed));
-        }
-      } catch (e) {
-        // 무시하고 다음 키로
+        if (!Array.isArray(parsed)) continue;
+
+        parsed.forEach((item: any) => {
+          if (!item?.id) return;
+
+          const localMeal: LocalMeal = {
+            id: String(item.id),
+            bundleId: `local_${item.id}`,
+            planName: item.planName || "로컬 식단",
+            description: item.description || "",
+            date: item.date || item.createdAt,
+            meals: Array.isArray(item.meals)
+              ? item.meals.map((m: any) => normalizeDay(m))
+              : [],
+            isServerMeal: false,
+          };
+
+          results.push(localMeal);
+        });
+      } catch (error) {
+        console.error(`로컬 스토리지 읽기 실패 (${key}):`, error);
       }
     }
-    // 병합 + 중복 제거(id) + 최신순(date/createdAt 추정)
-    const map = new Map<string | number, SavedMeal>();
-    buckets.flat().forEach((m) => {
-      if (!map.has(m.id)) map.set(m.id, m);
-    });
-    const merged = Array.from(map.values()).sort((a, b) => {
-      const ad = a.date ? new Date(a.date).getTime() : 0;
-      const bd = b.date ? new Date(b.date).getTime() : 0;
-      return bd - ad;
-    });
-    return merged;
+    return results;
   };
 
-  // ---------- Storage I/O ----------
-  const loadMeals = async () => {
-    const merged = await loadMealsFromLocal();
-    setSavedMeals(merged);
+  // ========== 서버 API ==========
+  const loadServerBundles = async (): Promise<SavedBundle[]> => {
+    try {
+      const plans = await recommendedMealAPI.getSavedMealPlans();
+
+      // bundleId로 그룹화
+      const bundleMap = new Map<string, SavedBundle>();
+
+      plans.forEach((plan) => {
+        if (!bundleMap.has(plan.bundleId)) {
+          bundleMap.set(plan.bundleId, {
+            bundleId: plan.bundleId,
+            planName: plan.planName,
+            totalCalories: plan.totalCalories,
+            mealCount: plan.mealCount,
+            createdAt: plan.createdAt,
+            planDate: plan.planDate,
+            isServerMeal: true,
+          });
+        }
+      });
+
+      return Array.from(bundleMap.values());
+    } catch (error) {
+      console.error("서버 번들 불러오기 실패:", error);
+      return [];
+    }
+  };
+
+  const loadBundleDetail = async (
+    bundleId: string
+  ): Promise<DayMeal[] | null> => {
+    try {
+      const days = await recommendedMealAPI.getBundleDetail(bundleId);
+      return days.map((day) => normalizeDay(day));
+    } catch (error) {
+      console.error("번들 상세 불러오기 실패:", error);
+      return null;
+    }
+  };
+
+  // ========== 통합 로드 ==========
+  const loadAllBundles = async () => {
+    try {
+      setLoading(true);
+
+      const [localMeals, serverBundles] = await Promise.all([
+        loadLocalMeals(),
+        loadServerBundles(),
+      ]);
+
+      // 로컬 식단을 번들 형식으로 변환
+      const localBundles: SavedBundle[] = localMeals.map((meal) => ({
+        bundleId: meal.bundleId,
+        planName: meal.planName,
+        description: meal.description,
+        totalCalories: meal.meals?.[0]?.totalCalories || 0,
+        mealCount: meal.meals?.length || 0,
+        createdAt: meal.date || "",
+        planDate: meal.date || "",
+        isServerMeal: false,
+        days: meal.meals, // 이미 로드됨
+      }));
+
+      // 병합 및 정렬
+      const allBundles = [...serverBundles, ...localBundles].sort((a, b) => {
+        const dateA = new Date(a.createdAt || 0).getTime();
+        const dateB = new Date(b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
+
+      console.log("📦 전체 번들:", allBundles.length);
+      setBundles(allBundles);
+    } catch (error) {
+      console.error("번들 불러오기 실패:", error);
+      Alert.alert("오류", "식단을 불러오는데 실패했습니다.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useFocusEffect(
     React.useCallback(() => {
-      loadMeals();
+      loadAllBundles();
+      setIsEditMode(false);
+      setSelectedBundleIds([]);
     }, [])
   );
 
-  const handleMealClick = (meal: SavedMeal) => {
-    setSelectedMeal(meal);
-    setSelectedDay(0);
+  // ========== 상세보기 ==========
+  const handleBundleClick = async (bundle: SavedBundle) => {
+    if (isEditMode) {
+      // 편집 모드: 선택/해제
+      toggleBundleSelection(bundle.bundleId);
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      let days = bundle.days;
+
+      // 서버 번들이고 상세 데이터가 없으면 API 호출
+      if (bundle.isServerMeal && !days) {
+        days = await loadBundleDetail(bundle.bundleId);
+        if (!days) {
+          Alert.alert("오류", "식단 상세 정보를 불러오지 못했습니다.");
+          return;
+        }
+        // 캐시 저장
+        bundle.days = days;
+      }
+
+      setSelectedBundle(bundle);
+      setSelectedDay(0);
+    } catch (error: any) {
+      console.error("번들 클릭 실패:", error);
+      Alert.alert("오류", error.message || "식단을 불러오는데 실패했습니다.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleBack = () => {
-    setSelectedMeal(null);
+    setSelectedBundle(null);
     setSelectedDay(0);
   };
 
-  const deleteFromAllKeys = async (mealId: SavedMeal["id"]) => {
+  // ========== 삭제 ==========
+  const deleteLocalBundle = async (bundleId: string) => {
     for (const key of LOCAL_KEYS) {
       const json = await AsyncStorage.getItem(key);
       if (!json) continue;
       const arr = JSON.parse(json);
       if (!Array.isArray(arr)) continue;
-      const filtered = arr.filter((m: any) => (m?.id ?? m?.mealId) !== mealId);
+      const filtered = arr.filter(
+        (m: any) => `local_${m.id}` !== bundleId && m.id !== bundleId
+      );
       await AsyncStorage.setItem(key, JSON.stringify(filtered));
     }
   };
 
-  const handleDelete = async (mealId: SavedMeal["id"]) => {
-    Alert.alert("삭제", "이 식단을 삭제하시겠습니까?", [
-      { text: "취소", style: "cancel" },
-      {
-        text: "삭제",
-        style: "destructive",
-        onPress: async () => {
-          await deleteFromAllKeys(mealId);
-          const updated = savedMeals.filter((m) => m.id !== mealId);
-          setSavedMeals(updated);
-          if (selectedMeal && selectedMeal.id === mealId) {
-            setSelectedMeal(null);
-            setSelectedDay(0);
-          }
+  const handleDelete = async (bundle: SavedBundle) => {
+    Alert.alert(
+      "삭제",
+      `"${bundle.planName}" 식단을 삭제하시겠습니까?\n(${
+        bundle.days?.length || 0
+      }일치)`,
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "삭제",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setLoading(true);
+
+              if (bundle.isServerMeal) {
+                await recommendedMealAPI.deleteBundle(bundle.bundleId);
+              } else {
+                await deleteLocalBundle(bundle.bundleId);
+              }
+
+              // 목록에서 제거
+              setBundles((prev) =>
+                prev.filter((b) => b.bundleId !== bundle.bundleId)
+              );
+
+              if (selectedBundle?.bundleId === bundle.bundleId) {
+                setSelectedBundle(null);
+              }
+
+              Alert.alert("성공", "식단이 삭제되었습니다.");
+            } catch (error: any) {
+              console.error("삭제 실패:", error);
+              Alert.alert("오류", error.message || "삭제에 실패했습니다.");
+            } finally {
+              setLoading(false);
+            }
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
 
-  const currentDayMeal = selectedMeal?.meals?.[selectedDay];
+  // ========== 일괄 삭제 ==========
+  const toggleBundleSelection = (bundleId: string) => {
+    setSelectedBundleIds((prev) =>
+      prev.includes(bundleId)
+        ? prev.filter((id) => id !== bundleId)
+        : [...prev, bundleId]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedBundleIds.length === bundles.length) {
+      setSelectedBundleIds([]);
+    } else {
+      setSelectedBundleIds(bundles.map((b) => b.bundleId));
+    }
+  };
+  const handleBulkDelete = async () => {
+    if (selectedBundleIds.length === 0) {
+      Alert.alert("알림", "삭제할 식단을 선택해주세요.");
+      return;
+    }
+
+    Alert.alert(
+      "일괄 삭제",
+      `선택한 ${selectedBundleIds.length}개의 식단을 삭제하시겠습니까?`,
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "삭제",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setLoading(true);
+
+              const serverBundleIds: string[] = [];
+              const localBundleIds: string[] = [];
+
+              selectedBundleIds.forEach((id) => {
+                const bundle = bundles.find((b) => b.bundleId === id);
+                if (!bundle) return;
+
+                if (bundle.isServerMeal) {
+                  serverBundleIds.push(id);
+                } else {
+                  localBundleIds.push(id);
+                }
+              });
+
+              // 서버 일괄 삭제
+              if (serverBundleIds.length > 0) {
+                await recommendedMealAPI.deleteBulk(serverBundleIds);
+              }
+
+              // 로컬 삭제
+              for (const bundleId of localBundleIds) {
+                await deleteLocalBundle(bundleId);
+              }
+
+              // UI 업데이트
+              setBundles((prev) =>
+                prev.filter((b) => !selectedBundleIds.includes(b.bundleId))
+              );
+
+              setSelectedBundleIds([]);
+              setIsEditMode(false);
+
+              Alert.alert(
+                "성공",
+                `${selectedBundleIds.length}개의 식단이 삭제되었습니다.`
+              );
+            } catch (error: any) {
+              console.error("일괄 삭제 실패:", error);
+              Alert.alert("오류", error.message || "삭제에 실패했습니다.");
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const currentDayMeal = selectedBundle?.days?.[selectedDay];
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -245,15 +422,37 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
           <Icon name="chevron-back" size={28} color="#ffffff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {selectedMeal ? "식단 상세보기" : "식단 추천 내역"}
+          {selectedBundle ? "식단 상세보기" : "식단 추천 내역"}
         </Text>
-        <View style={{ width: 28 }} />
+        {!selectedBundle && bundles.length > 0 && (
+          <TouchableOpacity
+            onPress={() => {
+              if (isEditMode) {
+                setIsEditMode(false);
+                setSelectedBundleIds([]);
+              } else {
+                setIsEditMode(true);
+              }
+            }}
+          >
+            <Text style={styles.editBtn}>{isEditMode ? "완료" : "편집"}</Text>
+          </TouchableOpacity>
+        )}
+        {!bundles.length && <View style={{ width: 28 }} />}
       </View>
 
+      {loading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#e3ff7c" />
+          <Text style={styles.loadingText}>불러오는 중...</Text>
+        </View>
+      )}
+
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {!selectedMeal ? (
-          savedMeals.length === 0 ? (
+        {!selectedBundle ? (
+          bundles.length === 0 ? (
             <View style={styles.emptyState}>
+              <Icon name="restaurant-outline" size={80} color="#666666" />
               <Text style={styles.emptyText}>저장된 식단이 없습니다.</Text>
               <Text style={styles.emptySubtitle}>
                 식단 추천을 받고 저장해보세요!
@@ -269,92 +468,173 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
             </View>
           ) : (
             <View style={styles.list}>
-              <TouchableOpacity
-                style={styles.newRecommendBtn}
-                onPress={() => navigation.navigate("MealRecommend")}
-              >
-                <Text style={styles.newRecommendBtnText}>새 식단 추천받기</Text>
-              </TouchableOpacity>
+              {/* ✅ 편집 모드 툴바 */}
+              {isEditMode && (
+                <View style={styles.editToolbar}>
+                  <TouchableOpacity
+                    style={styles.selectAllBtn}
+                    onPress={toggleSelectAll}
+                  >
+                    <Icon
+                      name={
+                        selectedBundleIds.length === bundles.length
+                          ? "checkbox"
+                          : "square-outline"
+                      }
+                      size={24}
+                      color="#e3ff7c"
+                    />
+                    <Text style={styles.selectAllText}>
+                      전체 선택 ({selectedBundleIds.length}/{bundles.length})
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.bulkDeleteBtn,
+                      selectedBundleIds.length === 0 &&
+                        styles.bulkDeleteBtnDisabled,
+                    ]}
+                    onPress={handleBulkDelete}
+                    disabled={selectedBundleIds.length === 0}
+                  >
+                    <Icon name="trash" size={20} color="#ffffff" />
+                    <Text style={styles.bulkDeleteText}>삭제</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
-              {savedMeals.map((meal) => (
+              {!isEditMode && (
                 <TouchableOpacity
-                  key={meal.id}
-                  style={styles.card}
-                  onPress={() => handleMealClick(meal)}
+                  style={styles.newRecommendBtn}
+                  onPress={() => navigation.navigate("MealRecommend")}
+                >
+                  <Text style={styles.newRecommendBtnText}>
+                    새 식단 추천받기
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {bundles.map((bundle) => (
+                <TouchableOpacity
+                  key={bundle.bundleId}
+                  style={[
+                    styles.card,
+                    isEditMode &&
+                      selectedBundleIds.includes(bundle.bundleId) &&
+                      styles.cardSelected,
+                  ]}
+                  onPress={() => handleBundleClick(bundle)}
                   activeOpacity={0.98}
                 >
+                  {isEditMode && (
+                    <View style={styles.checkbox}>
+                      <Icon
+                        name={
+                          selectedBundleIds.includes(bundle.bundleId)
+                            ? "checkbox"
+                            : "square-outline"
+                        }
+                        size={28}
+                        color="#e3ff7c"
+                      />
+                    </View>
+                  )}
+
                   <View style={styles.cardHeader}>
                     <View style={styles.dateContainer}>
-                      <Text style={styles.dateIcon}>🍽️</Text>
-                      <Text style={styles.date}>
-                        {meal.date || "저장일 미상"}
+                      <Text style={styles.dateIcon}>
+                        {bundle.isServerMeal ? "☁️" : "📱"}
                       </Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => handleDelete(meal.id)}
-                      style={styles.deleteBtn}
-                      activeOpacity={0.9}
-                    >
-                      <Text style={styles.deleteBtnText}>🗑️</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <View style={styles.cardBody}>
-                    <View style={styles.summary}>
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>📅 7일 식단</Text>
-                      </View>
-                      <View style={[styles.badge, styles.caloriesBadge]}>
-                        <Text style={styles.caloriesBadgeText}>
-                          {meal.meals?.[0]?.totalCalories ?? 0} kcal/일
+                      <View>
+                        <Text style={styles.planName}>{bundle.planName}</Text>
+                        <Text style={styles.date}>
+                          {new Date(bundle.createdAt).toLocaleDateString(
+                            "ko-KR"
+                          )}
                         </Text>
                       </View>
                     </View>
-
-                    {meal.meals?.[0] && (
-                      <View style={styles.nutritionSummary}>
-                        <Text style={styles.nutritionText}>
-                          탄 {meal.meals[0].carbs ?? 0}g
-                        </Text>
-                        <Text style={styles.nutritionText}>
-                          단 {meal.meals[0].protein ?? 0}g
-                        </Text>
-                        <Text style={styles.nutritionText}>
-                          지 {meal.meals[0].fat ?? 0}g
-                        </Text>
-                      </View>
+                    {!isEditMode && (
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDelete(bundle);
+                        }}
+                        style={styles.deleteBtn}
+                      >
+                        <Icon name="trash-outline" size={20} color="#ef4444" />
+                      </TouchableOpacity>
                     )}
                   </View>
 
-                  <View style={styles.cardFooter}>
-                    <Text style={styles.viewDetail}>자세히 보기 →</Text>
+                  <View style={styles.cardBody}>
+                    {bundle.description && (
+                      <Text style={styles.description} numberOfLines={2}>
+                        {bundle.description}
+                      </Text>
+                    )}
+
+                    <View style={styles.summary}>
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>
+                          📅 {bundle.days?.length || bundle.mealCount}일 식단
+                        </Text>
+                      </View>
+                      <View style={[styles.badge, styles.caloriesBadge]}>
+                        <Text style={styles.caloriesBadgeText}>
+                          {bundle.totalCalories} kcal/일
+                        </Text>
+                      </View>
+                      {bundle.isServerMeal && (
+                        <View style={[styles.badge, styles.serverBadge]}>
+                          <Text style={styles.serverBadgeText}>☁️ 서버</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
+
+                  {!isEditMode && (
+                    <View style={styles.cardFooter}>
+                      <Text style={styles.viewDetail}>자세히 보기 →</Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
               ))}
             </View>
           )
         ) : (
           <View style={styles.detail}>
-            <TouchableOpacity
-              style={styles.backBtn}
-              onPress={handleBack}
-              activeOpacity={0.95}
-            >
+            <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
               <Text style={styles.backBtnText}>← 목록으로</Text>
             </TouchableOpacity>
 
             <View style={styles.detailInfo}>
-              <Text style={styles.detailDate}>
-                {selectedMeal.date || "저장일 미상"}
-              </Text>
-              <View style={styles.detailSummary}>
-                <View style={styles.detailBadge}>
-                  <Text style={styles.detailBadgeText}>7일 식단</Text>
+              <View style={styles.detailHeader}>
+                <View>
+                  <Text style={styles.detailPlanName}>
+                    {selectedBundle.planName}
+                  </Text>
+                  <Text style={styles.detailDate}>
+                    {new Date(selectedBundle.createdAt).toLocaleDateString(
+                      "ko-KR"
+                    )}
+                  </Text>
                 </View>
+                {selectedBundle.isServerMeal && (
+                  <View style={[styles.badge, styles.serverBadge]}>
+                    <Text style={styles.serverBadgeText}>☁️ 서버</Text>
+                  </View>
+                )}
               </View>
+
+              {selectedBundle.description && (
+                <Text style={styles.detailDescription}>
+                  {selectedBundle.description}
+                </Text>
+              )}
             </View>
 
-            {selectedMeal.meals && selectedMeal.meals.length > 0 && (
+            {selectedBundle.days && selectedBundle.days.length > 0 && (
               <>
                 <ScrollView
                   horizontal
@@ -362,7 +642,7 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
                   style={styles.dayTabsContainer}
                   contentContainerStyle={styles.dayTabs}
                 >
-                  {selectedMeal.meals.map((_: any, index: number) => (
+                  {selectedBundle.days.map((_: any, index: number) => (
                     <TouchableOpacity
                       key={index}
                       style={[
@@ -370,7 +650,6 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
                         selectedDay === index && styles.dayTabActive,
                       ]}
                       onPress={() => setSelectedDay(index)}
-                      activeOpacity={0.8}
                     >
                       <Text
                         style={[
@@ -386,125 +665,115 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
 
                 {currentDayMeal && (
                   <>
-                    {/* 영양소 카드 */}
                     <View style={styles.nutritionCard}>
                       <Text style={styles.caloriesTotal}>
-                        {currentDayMeal.totalCalories ?? 0} kcal
+                        {currentDayMeal.totalCalories} kcal
                       </Text>
                       <View style={styles.nutritionGrid}>
                         <View style={styles.nutritionItem}>
                           <Text style={styles.nutritionLabel}>탄수화물</Text>
                           <Text style={styles.nutritionValue}>
-                            {currentDayMeal.carbs ?? 0}g
+                            {currentDayMeal.carbs}g
                           </Text>
                         </View>
                         <View style={styles.nutritionItem}>
                           <Text style={styles.nutritionLabel}>단백질</Text>
                           <Text style={styles.nutritionValue}>
-                            {currentDayMeal.protein ?? 0}g
+                            {currentDayMeal.protein}g
                           </Text>
                         </View>
                         <View style={styles.nutritionItem}>
                           <Text style={styles.nutritionLabel}>지방</Text>
                           <Text style={styles.nutritionValue}>
-                            {currentDayMeal.fat ?? 0}g
+                            {currentDayMeal.fat}g
                           </Text>
                         </View>
                       </View>
                     </View>
 
-                    {/* 아침 */}
                     {currentDayMeal.breakfast && (
                       <View style={styles.mealSection}>
                         <View style={styles.mealSectionHeader}>
                           <Text style={styles.mealSectionTitle}>🌅 아침</Text>
                           <Text style={styles.mealSectionCalories}>
-                            {currentDayMeal.breakfast.calories ?? 0} kcal
+                            {currentDayMeal.breakfast.calories} kcal
                           </Text>
                         </View>
                         <View style={styles.mealItems}>
-                          {currentDayMeal.breakfast.meals?.map(
-                            (item: any, index: number) => (
-                              <View key={index} style={styles.mealItemDetail}>
-                                <Text style={styles.mealItemName}>
-                                  {item.name}
+                          {currentDayMeal.breakfast.meals.map((item, index) => (
+                            <View key={index} style={styles.mealItemDetail}>
+                              <Text style={styles.mealItemName}>
+                                {item.name}
+                              </Text>
+                              <View style={styles.mealItemNutrition}>
+                                <Text style={styles.mealItemCalories}>
+                                  {item.calories}kcal
                                 </Text>
-                                <View style={styles.mealItemNutrition}>
-                                  <Text style={styles.mealItemCalories}>
-                                    {item.calories ?? 0}kcal
-                                  </Text>
-                                  <Text style={styles.mealItemMacros}>
-                                    탄{item.carbs ?? 0}g · 단{item.protein ?? 0}
-                                    g · 지{item.fat ?? 0}g
-                                  </Text>
-                                </View>
+                                <Text style={styles.mealItemMacros}>
+                                  탄{item.carbs}g · 단{item.protein}g · 지
+                                  {item.fat}g
+                                </Text>
                               </View>
-                            )
-                          )}
+                            </View>
+                          ))}
                         </View>
                       </View>
                     )}
 
-                    {/* 점심 */}
                     {currentDayMeal.lunch && (
                       <View style={styles.mealSection}>
                         <View style={styles.mealSectionHeader}>
                           <Text style={styles.mealSectionTitle}>☀️ 점심</Text>
                           <Text style={styles.mealSectionCalories}>
-                            {currentDayMeal.lunch.calories ?? 0} kcal
+                            {currentDayMeal.lunch.calories} kcal
                           </Text>
                         </View>
                         <View style={styles.mealItems}>
-                          {currentDayMeal.lunch.meals?.map(
-                            (item: any, index: number) => (
-                              <View key={index} style={styles.mealItemDetail}>
-                                <Text style={styles.mealItemName}>
-                                  {item.name}
+                          {currentDayMeal.lunch.meals.map((item, index) => (
+                            <View key={index} style={styles.mealItemDetail}>
+                              <Text style={styles.mealItemName}>
+                                {item.name}
+                              </Text>
+                              <View style={styles.mealItemNutrition}>
+                                <Text style={styles.mealItemCalories}>
+                                  {item.calories}kcal
                                 </Text>
-                                <View style={styles.mealItemNutrition}>
-                                  <Text style={styles.mealItemCalories}>
-                                    {item.calories ?? 0}kcal
-                                  </Text>
-                                  <Text style={styles.mealItemMacros}>
-                                    탄{item.carbs ?? 0}g · 단{item.protein ?? 0}
-                                    g · 지{item.fat ?? 0}g
-                                  </Text>
-                                </View>
+                                <Text style={styles.mealItemMacros}>
+                                  탄{item.carbs}g · 단{item.protein}g · 지
+                                  {item.fat}g
+                                </Text>
                               </View>
-                            )
-                          )}
+                            </View>
+                          ))}
                         </View>
                       </View>
                     )}
 
-                    {/* 저녁 */}
                     {currentDayMeal.dinner && (
                       <View style={styles.mealSection}>
                         <View style={styles.mealSectionHeader}>
                           <Text style={styles.mealSectionTitle}>🌙 저녁</Text>
                           <Text style={styles.mealSectionCalories}>
-                            {currentDayMeal.dinner.calories ?? 0} kcal
+                            {currentDayMeal.dinner.calories} kcal
                           </Text>
                         </View>
                         <View style={styles.mealItems}>
-                          {currentDayMeal.dinner.meals?.map(
-                            (item: any, index: number) => (
-                              <View key={index} style={styles.mealItemDetail}>
-                                <Text style={styles.mealItemName}>
-                                  {item.name}
+                          {currentDayMeal.dinner.meals.map((item, index) => (
+                            <View key={index} style={styles.mealItemDetail}>
+                              <Text style={styles.mealItemName}>
+                                {item.name}
+                              </Text>
+                              <View style={styles.mealItemNutrition}>
+                                <Text style={styles.mealItemCalories}>
+                                  {item.calories}kcal
                                 </Text>
-                                <View style={styles.mealItemNutrition}>
-                                  <Text style={styles.mealItemCalories}>
-                                    {item.calories ?? 0}kcal
-                                  </Text>
-                                  <Text style={styles.mealItemMacros}>
-                                    탄{item.carbs ?? 0}g · 단{item.protein ?? 0}
-                                    g · 지{item.fat ?? 0}g
-                                  </Text>
-                                </View>
+                                <Text style={styles.mealItemMacros}>
+                                  탄{item.carbs}g · 단{item.protein}g · 지
+                                  {item.fat}g
+                                </Text>
                               </View>
-                            )
-                          )}
+                            </View>
+                          ))}
                         </View>
                       </View>
                     )}
@@ -530,7 +799,31 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#333333",
   },
-  headerTitle: { fontSize: 20, fontWeight: "700", color: "#ffffff" },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#ffffff",
+    flex: 1,
+    textAlign: "center",
+  },
+  editBtn: { fontSize: 16, fontWeight: "600", color: "#e3ff7c" },
+  loadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 999,
+  },
+  loadingText: {
+    color: "#ffffff",
+    fontSize: 16,
+    marginTop: 12,
+    fontWeight: "600",
+  },
   content: { flex: 1, padding: 20 },
   emptyState: {
     alignItems: "center",
@@ -541,6 +834,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#999999",
     textAlign: "center",
+    marginTop: 20,
     marginBottom: 10,
   },
   emptySubtitle: {
@@ -558,6 +852,29 @@ const styles = StyleSheet.create({
   },
   goToRecommendBtnText: { fontSize: 15, fontWeight: "600", color: "#111111" },
   list: { gap: 16 },
+  // ✅ 편집 모드 툴바
+  editToolbar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#222222",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  selectAllBtn: { flexDirection: "row", alignItems: "center", gap: 8 },
+  selectAllText: { fontSize: 14, fontWeight: "600", color: "#ffffff" },
+  bulkDeleteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#ef4444",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  bulkDeleteBtnDisabled: { backgroundColor: "#666666", opacity: 0.5 },
+  bulkDeleteText: { fontSize: 14, fontWeight: "600", color: "#ffffff" },
   newRecommendBtn: {
     backgroundColor: "#e3ff7c",
     paddingVertical: 10,
@@ -574,19 +891,32 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "transparent",
   },
+  cardSelected: { borderColor: "#e3ff7c", backgroundColor: "#2a2a1a" },
+  checkbox: { position: "absolute", top: 12, left: 12, zIndex: 10 },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 12,
   },
-  dateContainer: { flexDirection: "row", alignItems: "center", gap: 8 },
-  dateIcon: { fontSize: 18 },
-  date: { fontSize: 16, fontWeight: "600", color: "#ffffff" },
+  dateContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  dateIcon: { fontSize: 24 },
+  planName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#ffffff",
+    marginBottom: 2,
+  },
+  date: { fontSize: 13, fontWeight: "500", color: "#999999" },
   deleteBtn: { padding: 4 },
-  deleteBtnText: { fontSize: 18 },
-  cardBody: { marginBottom: 12 },
-  summary: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 8 },
+  cardBody: { marginBottom: 12, gap: 8 },
+  description: { fontSize: 14, color: "#cccccc", lineHeight: 20 },
+  summary: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   badge: {
     paddingVertical: 4,
     paddingHorizontal: 10,
@@ -594,10 +924,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#4a90e2",
   },
   caloriesBadge: { backgroundColor: "#e3ff7c" },
+  serverBadge: { backgroundColor: "#8b5cf6" },
   badgeText: { fontSize: 12, fontWeight: "500", color: "#ffffff" },
   caloriesBadgeText: { fontSize: 12, fontWeight: "500", color: "#111111" },
-  nutritionSummary: { flexDirection: "row", gap: 12 },
-  nutritionText: { fontSize: 13, color: "#999999" },
+  serverBadgeText: { fontSize: 12, fontWeight: "500", color: "#ffffff" },
   cardFooter: { alignItems: "flex-end" },
   viewDetail: { fontSize: 14, color: "#e3ff7c", fontWeight: "500" },
   detail: { gap: 20 },
@@ -610,20 +940,25 @@ const styles = StyleSheet.create({
   },
   backBtnText: { fontSize: 14, fontWeight: "500", color: "#ffffff" },
   detailInfo: { backgroundColor: "#222222", padding: 16, borderRadius: 12 },
-  detailDate: {
-    fontSize: 18,
+  detailHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
+  detailPlanName: {
+    fontSize: 20,
     fontWeight: "700",
     color: "#ffffff",
-    marginBottom: 12,
+    marginBottom: 4,
   },
-  detailSummary: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  detailBadge: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: "#e3ff7c",
+  detailDate: { fontSize: 14, fontWeight: "500", color: "#999999" },
+  detailDescription: {
+    fontSize: 14,
+    color: "#cccccc",
+    lineHeight: 20,
+    marginTop: 8,
   },
-  detailBadgeText: { fontSize: 13, fontWeight: "500", color: "#111111" },
   dayTabsContainer: { marginVertical: 8 },
   dayTabs: { gap: 8, paddingBottom: 8 },
   dayTab: {
