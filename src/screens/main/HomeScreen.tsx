@@ -430,6 +430,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     letterSpacing: 0,
   },
+
   divider: {
     height: 1,
     backgroundColor: colors.border,
