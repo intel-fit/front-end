@@ -11,6 +11,7 @@ import {
   Image,
   FlatList,
   ActivityIndicator,
+  TextInput,
 } from "react-native";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
@@ -192,6 +193,7 @@ const ExerciseScreen = ({ navigation }: any) => {
   const [stretchDetailsLoading, setStretchDetailsLoading] = useState<
     Record<string, boolean>
   >({});
+  const [stretchTimer, setStretchTimer] = useState(30);
   // 완료된 스트레칭 ID 목록 (검정색으로 표시하기 위함)
   const [completedStretchIds, setCompletedStretchIds] = useState<Set<string>>(
     new Set()
@@ -213,6 +215,7 @@ const ExerciseScreen = ({ navigation }: any) => {
       externalId?: string;
     }>
   >([]);
+  const [completionSummaryTitle, setCompletionSummaryTitle] = useState("");
   // 운동 이미지 로딩 상태 (분석하기 페이지와 동일한 방식)
   const [exerciseImages, setExerciseImages] = useState<Record<string, string>>(
     {}
@@ -223,6 +226,15 @@ const ExerciseScreen = ({ navigation }: any) => {
   const fetchedImageIdsRef = useRef<Set<string>>(new Set());
   const fetchedNameRef = useRef<Set<string>>(new Set());
   const failedImageIdsRef = useRef<Set<string>>(new Set());
+  const prefetchedImageUrlsRef = useRef<Set<string>>(new Set());
+  const prefetchImage = React.useCallback((url?: string) => {
+    if (!url) return;
+    if (prefetchedImageUrlsRef.current.has(url)) return;
+    prefetchedImageUrlsRef.current.add(url);
+    Image.prefetch(url).catch(() => {
+      prefetchedImageUrlsRef.current.delete(url);
+    });
+  }, []);
 
   const goalSummaryText = React.useMemo(() => {
     if (!goalData) {
@@ -290,6 +302,7 @@ const ExerciseScreen = ({ navigation }: any) => {
             detail?.imgUrl ||
             detail?.photoUrl;
           if (url && !cancelled) {
+            prefetchImage(url);
             setExerciseImages((prev) => ({
               ...prev,
               [id]: url,
@@ -316,7 +329,7 @@ const ExerciseScreen = ({ navigation }: any) => {
     return () => {
       cancelled = true;
     };
-  }, [showCompletionModal, completedExercises, exerciseImages]);
+  }, [showCompletionModal, completedExercises, exerciseImages, prefetchImage]);
 
   useEffect(() => {
     if (!showCompletionModal) return;
@@ -381,6 +394,7 @@ const ExerciseScreen = ({ navigation }: any) => {
               first?.imgUrl ||
               first?.photoUrl;
             if (url && !cancelled) {
+              prefetchImage(url);
               setExerciseImagesByName((prev) => {
                 const next = { ...prev };
                 next[baseKey] = url;
@@ -423,6 +437,7 @@ const ExerciseScreen = ({ navigation }: any) => {
     completedExercises,
     allActivities,
     exerciseImagesByName,
+    prefetchImage,
   ]);
 
   const COMPLETED_COUNT_KEY_BASE = "workoutCompletedThisWeek";
@@ -727,11 +742,6 @@ const ExerciseScreen = ({ navigation }: any) => {
     return Math.min(100, actualProgress);
   };
 
-  const handleAddWorkout = () => {
-    setIntroStage("intro");
-    setIsIntroVisible(true);
-  };
-
   const loadStretchExercises = React.useCallback(async () => {
     setStretchLoading(true);
     setStretchError(null);
@@ -751,6 +761,34 @@ const ExerciseScreen = ({ navigation }: any) => {
       setStretchLoading(false);
     }
   }, []);
+
+  const resetStretchFlowState = () => {
+    setSelectedStretchIds([]);
+    setSelectedStretches([]);
+    setStretchDetailIndex(0);
+    setStretchDetails({});
+    setStretchDetailsLoading({});
+  };
+
+  const openExerciseEntry = () => {
+    resetStretchFlowState();
+    setIntroStage("intro");
+    setIsIntroVisible(false);
+    setModalMode("add");
+    setSelectedExercise(null);
+    setIsModalOpen(true);
+  };
+
+  const handleStretchButtonPress = () => {
+    resetStretchFlowState();
+    setIntroStage("stretch");
+    setIsIntroVisible(true);
+    loadStretchExercises();
+  };
+
+  const handleWorkoutStartPress = () => {
+    openExerciseEntry();
+  };
 
   const getStretchIdentifier = React.useCallback((option: any): string => {
     if (!option) return "";
@@ -781,18 +819,9 @@ const ExerciseScreen = ({ navigation }: any) => {
   };
 
   const handleStretchSkip = () => {
-    setSelectedStretchIds([]);
-    setSelectedStretches([]);
-    setStretchDetailIndex(0);
-    setStretchDetails({});
-    setStretchDetailsLoading({});
+    resetStretchFlowState();
     setIntroStage("intro");
     setIsIntroVisible(false);
-
-    // 운동 종목 검색 모달 열기
-    setModalMode("add");
-    setSelectedExercise(null);
-    setIsModalOpen(true);
   };
 
   const handleStretchConfirm = async () => {
@@ -896,8 +925,9 @@ const ExerciseScreen = ({ navigation }: any) => {
     setStretchDetails({});
     setStretchDetailsLoading({});
 
-    // 같은 모달 내에서 운동 선택 화면으로 전환
-    setIntroStage("exercise");
+    // 스트레칭 완료 후 기록 화면으로 복귀
+    setIntroStage("intro");
+    setIsIntroVisible(false);
   };
 
   const handleStretchDetailNext = () => {
@@ -911,6 +941,26 @@ const ExerciseScreen = ({ navigation }: any) => {
       setStretchDetailIndex(stretchDetailIndex - 1);
     }
   };
+
+  useEffect(() => {
+    if (introStage !== "detail") {
+      setStretchTimer(30);
+      return;
+    }
+
+    setStretchTimer(30);
+    const intervalId = setInterval(() => {
+      setStretchTimer((prev) => {
+        if (prev <= 1) {
+          clearInterval(intervalId);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [introStage, stretchDetailIndex]);
 
   const handleIntroStart = () => {
     setIntroStage("stretch");
@@ -970,7 +1020,7 @@ const ExerciseScreen = ({ navigation }: any) => {
   const handleExerciseSave = async (
     sets: any[],
     exerciseName: string,
-    meta?: { externalId?: string; category?: string },
+    meta?: { externalId?: string; category?: string; imageUrl?: string },
     comment?: string,
     options?: { keepModalOpen?: boolean }
   ) => {
@@ -1087,9 +1137,10 @@ const ExerciseScreen = ({ navigation }: any) => {
           const delta = nextCompleted ? 1 : -1;
           setCompletedCountPersist(Math.max(0, completedThisWeek + delta));
         }
-        setAllActivities(
-          allActivities.map((activity) =>
-            activity.id === selectedExercise.id
+        const targetId = selectedExercise.id;
+        setAllActivities((prevActivities) =>
+          prevActivities.map((activity) =>
+            activity.id === targetId
               ? {
                   ...activity,
                   name: exerciseName,
@@ -1097,6 +1148,7 @@ const ExerciseScreen = ({ navigation }: any) => {
                   isCompleted: nextCompleted,
                   sessionId: serverSessionId,
                   sets,
+                  imageUrl: meta?.imageUrl || activity.imageUrl,
                   comment:
                     nextCompleted && commentToSave !== undefined
                       ? commentToSave
@@ -1123,10 +1175,11 @@ const ExerciseScreen = ({ navigation }: any) => {
           date: selectedDateStr,
           isCompleted: allSetsCompleted,
           sessionId: serverSessionId,
+          imageUrl: meta?.imageUrl,
           sets,
           comment: commentToSave,
         };
-        setAllActivities([...allActivities, newWorkout]);
+        setAllActivities((prevActivities) => [...prevActivities, newWorkout]);
         if (allSetsCompleted) {
           setCompletedCountPersist(completedThisWeek + 1);
         }
@@ -1139,7 +1192,7 @@ const ExerciseScreen = ({ navigation }: any) => {
       );
       return undefined; // 에러 시 undefined 반환
     }
-    
+
     // 운동 선택 화면에서 저장한 경우 WorkoutIntroModal 닫기
     if (options?.keepModalOpen) {
       // "종목 추가" 버튼을 눌렀을 때는 모달을 닫지 않고 종목 검색 페이지로 돌아감
@@ -1150,7 +1203,7 @@ const ExerciseScreen = ({ navigation }: any) => {
     } else {
       handleModalClose();
     }
-    
+
     // sessionId 반환 (ExerciseModal에서 사용)
     return serverSessionId;
   };
@@ -1532,7 +1585,7 @@ const ExerciseScreen = ({ navigation }: any) => {
           onPress={() => navigation.navigate("Goal")}
         >
           <View style={styles.goalContent}>
-            <Text style={styles.goalTitle}>운동 목표 설정</Text>
+            <Text style={styles.goalTitle}>주간 운동 목표 설정</Text>
             <Text style={styles.goalDescription}>{goalSummaryText}</Text>
             <View style={styles.progressContainer}>
               <View style={styles.progressBar}>
@@ -1609,10 +1662,18 @@ const ExerciseScreen = ({ navigation }: any) => {
             ))}
             <View style={styles.addItem}>
               <TouchableOpacity
-                style={styles.addBtn}
-                onPress={handleAddWorkout}
+                style={[styles.actionBtn, styles.stretchActionBtn]}
+                onPress={handleStretchButtonPress}
               >
-                <Text style={styles.addBtnText}>운동 추가하기</Text>
+                <Text style={styles.actionBtnText}>스트레칭</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.workoutActionBtn]}
+                onPress={handleWorkoutStartPress}
+              >
+                <Text style={[styles.actionBtnText, styles.workoutActionText]}>
+                  운동 시작하기
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1629,6 +1690,7 @@ const ExerciseScreen = ({ navigation }: any) => {
         onSave={handleExerciseSave}
         onWorkoutComplete={(exercises) => {
           setCompletedExercises(exercises);
+          setCompletionSummaryTitle("오늘의 운동");
           setShowCompletionModal(true);
           handleModalClose();
         }}
@@ -1662,6 +1724,7 @@ const ExerciseScreen = ({ navigation }: any) => {
                 details: stretchDetails,
                 detailsLoading: stretchDetailsLoading,
                 identifierResolver: getStretchIdentifier,
+                timerSeconds: stretchTimer,
               }
             : undefined
         }
@@ -1705,6 +1768,17 @@ const ExerciseScreen = ({ navigation }: any) => {
             <Text style={styles.completionSubtitle}>
               오늘도 목표에 한 걸음 더 가까워졌어요!
             </Text>
+
+            <View style={styles.completedSummaryInputWrapper}>
+              <Text style={styles.completedSummaryLabel}>오늘 운동 제목</Text>
+              <TextInput
+                style={styles.completedSummaryInput}
+                value={completionSummaryTitle}
+                onChangeText={setCompletionSummaryTitle}
+                placeholder="예: 하체 불태우기 Day"
+                placeholderTextColor="#9a9a9a"
+              />
+            </View>
 
             {/* 완료된 운동 및 스트레칭 목록 */}
             <View style={styles.completedExercisesCard}>
@@ -1759,6 +1833,7 @@ const ExerciseScreen = ({ navigation }: any) => {
                       imageUrl: displayUrl,
                       time: activity.time,
                       isStretch: isStretch,
+                      activityId: activity.id,
                     };
                   });
 
@@ -1828,9 +1903,7 @@ const ExerciseScreen = ({ navigation }: any) => {
             {/* 확인 버튼 */}
             <TouchableOpacity
               style={styles.completionConfirmButton}
-              onPress={() => {
-                setShowCompletionModal(false);
-              }}
+              onPress={() => setShowCompletionModal(false)}
             >
               <Text style={styles.completionConfirmButtonText}>확인</Text>
             </TouchableOpacity>
@@ -2083,7 +2156,8 @@ const styles = StyleSheet.create({
   logCard: {
     flex: 1,
     borderRadius: 12,
-    padding: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -2135,28 +2209,33 @@ const styles = StyleSheet.create({
   },
   addItem: {
     flexDirection: "row",
-    alignItems: "center",
+    gap: 10,
+    marginTop: 12,
   },
-  timelineDotAdd: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: colors.grayLight,
-    marginRight: 12,
-  },
-  addBtn: {
+  actionBtn: {
     flex: 1,
-    backgroundColor: colors.white,
     borderRadius: 12,
-    padding: 16,
+    paddingVertical: 14,
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: colors.white,
-    borderStyle: "dashed",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.grayDark,
   },
-  addBtnText: {
-    fontSize: 16,
+  stretchActionBtn: {
+    backgroundColor: colors.grayDark,
+    borderColor: colors.grayLight,
+  },
+  workoutActionBtn: {
+    backgroundColor: "#E3FF7C",
+    borderColor: "#E3FF7C",
+  },
+  actionBtnText: {
+    fontSize: 15,
     fontWeight: "600",
+    color: colors.text,
+  },
+  workoutActionText: {
     color: colors.black,
   },
   stretchModalWrapper: {
@@ -2466,12 +2545,39 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 24,
   },
+  stretchDetailHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+    marginBottom: 16,
+    gap: 12,
+  },
   stretchDetailTitle: {
+    flex: 1,
     fontSize: 22,
     fontWeight: "700",
     color: "#ffffff",
-    textAlign: "center",
-    marginBottom: 20,
+  },
+  stretchDetailTimer: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#1a1a1a",
+    borderWidth: 1,
+    borderColor: "#333333",
+    alignItems: "center",
+    gap: 2,
+    minWidth: 100,
+  },
+  stretchDetailTimerLabel: {
+    fontSize: 11,
+    color: "#b5b5b5",
+  },
+  stretchDetailTimerValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#E3FF7C",
   },
   stretchDetailCard: {
     flex: 1,
@@ -2673,6 +2779,28 @@ const styles = StyleSheet.create({
     fontWeight: "400",
     color: "#666666",
   },
+  completedSummaryInputWrapper: {
+    width: "100%",
+    marginBottom: 16,
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 16,
+  },
+  completedSummaryLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#333333",
+    marginBottom: 8,
+  },
+  completedSummaryInput: {
+    borderWidth: 1,
+    borderColor: "#DDDDDD",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    color: "#000000",
+  },
   completionConfirmButton: {
     width: "100%",
     maxWidth: 400,
@@ -2718,6 +2846,7 @@ interface WorkoutIntroModalProps {
     details: Record<string, any>;
     detailsLoading: Record<string, boolean>;
     identifierResolver: (option: any) => string;
+    timerSeconds?: number;
   };
   exerciseModalProps?: {
     onClose: () => void;
@@ -2870,7 +2999,7 @@ const StretchSelectionContent = ({
           onPress={onSkip}
           activeOpacity={0.85}
         >
-          <Text style={styles.stretchSkipText}>건너뛰기</Text>
+          <Text style={styles.stretchSkipText}>뒤로가기</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -2886,6 +3015,7 @@ const StretchDetailContent = ({
   details,
   detailsLoading,
   identifierResolver,
+  timerSeconds = 30,
 }: {
   stretches: any[];
   currentIndex: number;
@@ -2895,6 +3025,7 @@ const StretchDetailContent = ({
   details: Record<string, any>;
   detailsLoading: Record<string, boolean>;
   identifierResolver: (option: any) => string;
+  timerSeconds?: number;
 }) => {
   if (stretches.length === 0 || currentIndex >= stretches.length) {
     return null;
@@ -2930,7 +3061,15 @@ const StretchDetailContent = ({
 
   return (
     <View style={styles.stretchDetailWrapper}>
-      <Text style={styles.stretchDetailTitle}>{displayName}</Text>
+      <View style={styles.stretchDetailHeaderRow}>
+        <Text style={styles.stretchDetailTitle}>{displayName}</Text>
+        <View style={styles.stretchDetailTimer}>
+          <Text style={styles.stretchDetailTimerLabel}>남은 시간</Text>
+          <Text style={styles.stretchDetailTimerValue}>
+            {String(Math.max(0, timerSeconds ?? 0)).padStart(2, "0")}s
+          </Text>
+        </View>
+      </View>
       <View style={styles.stretchDetailCard}>
         <View style={styles.stretchDetailImageContainer}>
           <Image source={imageSource} style={styles.stretchDetailImage} />
