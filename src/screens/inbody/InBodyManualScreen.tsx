@@ -11,6 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import InBodyManualForm from "../../components/common/InBodyManualForm";
 import { postInBody, patchInBody, InBodyPayload } from "../../utils/inbodyApi";
+import { eventBus } from "../../utils/eventBus";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -318,6 +319,7 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
       }
 
       if (response.success) {
+        eventBus.emit("inbodyUpdated");
         const inBodyId = response.inBody?.id ?? "N/A";
         await storeManualPayload(
           cleanPayload.measurementDate || measurementDate,
@@ -336,7 +338,7 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
           [
             {
               text: "확인",
-              onPress: () => navigation.goBack(),
+              onPress: () => navigation.navigate("InBody"),
             },
           ]
         );

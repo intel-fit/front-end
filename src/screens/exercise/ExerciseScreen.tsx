@@ -1755,159 +1755,162 @@ const ExerciseScreen = ({ navigation }: any) => {
         }}
       >
         <View style={styles.completionModalOverlay}>
-          <View style={styles.completionModalContent}>
-            {/* 체크마크 아이콘 */}
-            <View style={styles.completionIconContainer}>
-              <View style={styles.completionIcon}>
-                <Icon name="checkmark" size={64} color="#ffffff" />
+          <ScrollView
+            style={styles.completionModalScroll}
+            contentContainerStyle={styles.completionModalScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.completionModalContent}>
+              {/* 체크마크 아이콘 */}
+              <View style={styles.completionIconContainer}>
+                <View style={styles.completionIcon}>
+                  <Icon name="checkmark" size={64} color="#ffffff" />
+                </View>
               </View>
-            </View>
 
-            {/* 완료 메시지 */}
-            <Text style={styles.completionTitle}>운동 완료!</Text>
-            <Text style={styles.completionSubtitle}>
-              오늘도 목표에 한 걸음 더 가까워졌어요!
-            </Text>
-
-            <View style={styles.completedSummaryInputWrapper}>
-              <Text style={styles.completedSummaryLabel}>오늘 운동 제목</Text>
-              <TextInput
-                style={styles.completedSummaryInput}
-                value={completionSummaryTitle}
-                onChangeText={setCompletionSummaryTitle}
-                placeholder="예: 하체 불태우기 Day"
-                placeholderTextColor="#9a9a9a"
-              />
-            </View>
-
-            {/* 완료된 운동 및 스트레칭 목록 */}
-            <View style={styles.completedExercisesCard}>
-              <Text style={styles.completedExercisesDate}>
-                {new Date().getFullYear()}.
-                {String(new Date().getMonth() + 1).padStart(2, "0")}.
-                {String(new Date().getDate()).padStart(2, "0")}
+              {/* 완료 메시지 */}
+              <Text style={styles.completionTitle}>운동 완료!</Text>
+              <Text style={styles.completionSubtitle}>
+                오늘도 목표에 한 걸음 더 가까워졌어요!
               </Text>
-              <View style={styles.completedExercisesList}>
-                {/* 오늘 완료된 운동 및 스트레칭 모두 표시 */}
-                {(() => {
-                  const today = new Date();
-                  const todayStr = formatDateToString(today);
 
-                  // 오늘 완료된 모든 활동 (운동 + 스트레칭)
-                  const todayCompletedActivities = allActivities.filter(
-                    (activity) =>
-                      activity.date === todayStr && activity.isCompleted
-                  );
+              <View style={styles.completedSummaryInputWrapper}>
+                <Text style={styles.completedSummaryLabel}>오늘 운동 제목</Text>
+                <TextInput
+                  style={styles.completedSummaryInput}
+                  value={completionSummaryTitle}
+                  onChangeText={setCompletionSummaryTitle}
+                  placeholder="예: 하체 불태우기 Day"
+                  placeholderTextColor="#9a9a9a"
+                />
+              </View>
 
-                  // 운동은 completedExercises에서, 스트레칭은 allActivities에서 가져오기
-                  const exerciseMap = new Map<string, any>();
-                  completedExercises.forEach((ex) => {
-                    exerciseMap.set(ex.name, ex);
-                  });
+              {/* 완료된 운동 및 스트레칭 목록 */}
+              <View style={styles.completedExercisesCard}>
+                <Text style={styles.completedExercisesDate}>
+                  {new Date().getFullYear()}.
+                  {String(new Date().getMonth() + 1).padStart(2, "0")}.
+                  {String(new Date().getDate()).padStart(2, "0")}
+                </Text>
+                <View style={styles.completedExercisesList}>
+                  {/* 오늘 완료된 운동 및 스트레칭 모두 표시 */}
+                  {(() => {
+                    const today = new Date();
+                    const todayStr = formatDateToString(today);
 
-                  // allActivities에서 오늘 완료된 항목들을 시간순으로 정렬
-                  const allItems = todayCompletedActivities.map((activity) => {
-                    const isStretch =
-                      activity.details?.includes("스트레칭") ||
-                      activity.name?.includes("스트레칭");
-                    const exerciseData = exerciseMap.get(activity.name);
-                    const externalId =
-                      activity.externalId || exerciseData?.externalId;
-                    const idKey = externalId ? String(externalId) : undefined;
-                    const nameKey = activity.name
-                      ? activity.name.toLowerCase()
-                      : undefined;
+                    // 오늘 완료된 모든 활동 (운동 + 스트레칭)
+                    const todayCompletedActivities = allActivities.filter(
+                      (activity) =>
+                        activity.date === todayStr && activity.isCompleted
+                    );
 
-                    // 이미지 URL 우선순위: activity.imageUrl > exerciseData?.imageUrl > exerciseImages[externalId] > exerciseImagesByName[name]
-                    const displayUrl =
-                      activity.imageUrl ||
-                      exerciseData?.imageUrl ||
-                      (idKey ? exerciseImages[idKey] : undefined) ||
-                      (nameKey ? exerciseImagesByName[nameKey] : undefined);
+                    // 운동은 completedExercises에서, 스트레칭은 allActivities에서 가져오기
+                    const exerciseMap = new Map<string, any>();
+                    completedExercises.forEach((ex) => {
+                      exerciseMap.set(ex.name, ex);
+                    });
 
-                    return {
-                      name: activity.name,
-                      targetMuscle: isStretch
-                        ? activity.details?.replace(" 스트레칭", "") || ""
-                        : exerciseData?.targetMuscle || "",
-                      imageUrl: displayUrl,
-                      time: activity.time,
-                      isStretch: isStretch,
-                      activityId: activity.id,
-                    };
-                  });
+                    // allActivities에서 오늘 완료된 항목들을 시간순으로 정렬
+                    const allItems = todayCompletedActivities.map(
+                      (activity) => {
+                        const isStretch =
+                          activity.details?.includes("스트레칭") ||
+                          activity.name?.includes("스트레칭");
+                        const exerciseData = exerciseMap.get(activity.name);
+                        const externalId =
+                          activity.externalId || exerciseData?.externalId;
+                        const idKey = externalId
+                          ? String(externalId)
+                          : undefined;
+                        const nameKey = activity.name
+                          ? activity.name.toLowerCase()
+                          : undefined;
 
-                  // 시간순으로 정렬 (오래된 것부터)
-                  allItems.sort((a, b) => {
-                    if (!a.time || !b.time) return 0;
-                    // 오전/오후 형식 처리
-                    const parseTime = (timeStr: string): number => {
-                      const isAM = timeStr.includes("오전");
-                      const isPM = timeStr.includes("오후");
-                      const numbers = timeStr.match(/\d+/g);
-                      if (!numbers || numbers.length < 2) return 0;
-                      let hour = parseInt(numbers[0], 10);
-                      const minute = parseInt(numbers[1], 10);
-                      if (isPM && hour !== 12) hour += 12;
-                      if (isAM && hour === 12) hour = 0;
-                      return hour * 60 + minute;
-                    };
-                    return parseTime(a.time) - parseTime(b.time);
-                  });
+                        // 이미지 URL 우선순위: activity.imageUrl > exerciseData?.imageUrl > exerciseImages[externalId] > exerciseImagesByName[name]
+                        const displayUrl =
+                          activity.imageUrl ||
+                          exerciseData?.imageUrl ||
+                          (idKey ? exerciseImages[idKey] : undefined) ||
+                          (nameKey ? exerciseImagesByName[nameKey] : undefined);
 
-                  return allItems.map((item, index) => (
-                    <View
-                      key={index}
-                      style={[
-                        styles.completedExerciseItem,
-                        index === allItems.length - 1 &&
-                          styles.completedExerciseItemLast,
-                      ]}
-                    >
-                      <View style={styles.completedExerciseIcon}>
-                        {item.imageUrl ? (
-                          <Image
-                            source={{ uri: item.imageUrl }}
-                            style={styles.completedExerciseImage}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <Icon
-                            name={item.isStretch ? "fitness" : "barbell"}
-                            size={24}
-                            color="#666666"
-                          />
-                        )}
-                      </View>
-                      <View style={styles.completedExerciseInfo}>
-                        <View style={styles.completedExerciseNameRow}>
-                          <Text style={styles.completedExerciseName}>
-                            {item.name}
-                          </Text>
-                          {item.time && (
-                            <Text style={styles.completedExerciseTime}>
-                              {item.time}
-                            </Text>
+                        const setsCompleted = Array.isArray(activity.sets)
+                          ? activity.sets.filter((set: any) => set?.isCompleted)
+                              .length
+                          : exerciseData?.sets?.filter(
+                              (set: any) => set?.isCompleted
+                            ).length || 0;
+                        const totalSets = Array.isArray(activity.sets)
+                          ? activity.sets.length
+                          : exerciseData?.sets?.length || 0;
+
+                        return {
+                          name: activity.name,
+                          targetMuscle: isStretch
+                            ? activity.details?.replace(" 스트레칭", "") || ""
+                            : exerciseData?.targetMuscle || "",
+                          imageUrl: displayUrl,
+                          isStretch,
+                          activityId: activity.id,
+                          setsCompleted,
+                          totalSets,
+                        };
+                      }
+                    );
+
+                    return allItems.map((item, index) => (
+                      <View
+                        key={index}
+                        style={[
+                          styles.completedExerciseItem,
+                          index === allItems.length - 1 &&
+                            styles.completedExerciseItemLast,
+                        ]}
+                      >
+                        <View style={styles.completedExerciseIcon}>
+                          {item.imageUrl ? (
+                            <Image
+                              source={{ uri: item.imageUrl }}
+                              style={styles.completedExerciseImage}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <Icon
+                              name={item.isStretch ? "fitness" : "barbell"}
+                              size={24}
+                              color="#666666"
+                            />
                           )}
                         </View>
-                        <Text style={styles.completedExerciseMuscle}>
-                          {item.targetMuscle || ""}
-                        </Text>
+                        <View style={styles.completedExerciseInfo}>
+                          <View style={styles.completedExerciseNameRow}>
+                            <Text style={styles.completedExerciseName}>
+                              {item.name}
+                            </Text>
+                            {item.totalSets > 0 && (
+                              <Text style={styles.completedExerciseTime}>
+                                {item.setsCompleted}/{item.totalSets}세트
+                              </Text>
+                            )}
+                          </View>
+                          <Text style={styles.completedExerciseMuscle}>
+                            {item.targetMuscle || ""}
+                          </Text>
+                        </View>
                       </View>
-                    </View>
-                  ));
-                })()}
+                    ));
+                  })()}
+                </View>
               </View>
-            </View>
 
-            {/* 확인 버튼 */}
-            <TouchableOpacity
-              style={styles.completionConfirmButton}
-              onPress={() => setShowCompletionModal(false)}
-            >
-              <Text style={styles.completionConfirmButtonText}>확인</Text>
-            </TouchableOpacity>
-          </View>
+              {/* 확인 버튼 */}
+              <TouchableOpacity
+                style={styles.completionConfirmButton}
+                onPress={() => setShowCompletionModal(false)}
+              >
+                <Text style={styles.completionConfirmButtonText}>확인</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </View>
       </Modal>
     </ContainerComponent>
@@ -2673,6 +2676,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
     zIndex: 9999,
+  },
+  completionModalScroll: {
+    width: "100%",
+  },
+  completionModalScrollContent: {
+    flexGrow: 1,
+    justifyContent: "flex-start",
+    alignItems: "center",
+    paddingTop: 56,
+    paddingBottom: 48,
+    paddingHorizontal: 12,
   },
   completionModalContent: {
     width: "100%",
