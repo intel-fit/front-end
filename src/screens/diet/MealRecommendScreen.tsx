@@ -1,5 +1,4 @@
-// src/screens/MealRecommendScreen.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -9,25 +8,284 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Modal,
+  Animated,
+  Easing,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import { authAPI, recommendedMealAPI } from "../../services";
+import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 
-// 메인 서버 응답을 UI용으로 변환
+const { width } = Dimensions.get("window");
+
+const LOADING_MESSAGES = [
+  "입력하신 정보를 수집하는 중...",
+  "회원님께 최적화된 식단을 준비하는 중...",
+  "영양소 균형을 계산하는 중...",
+  "맛있는 조합을 찾는 중...",
+  "거의 다 됐어요! 조금만 기다려주세요...",
+];
+
+const LoadingOverlay = ({
+  visible,
+  messages = LOADING_MESSAGES,
+  onCancel,
+}: {
+  visible: boolean;
+  messages?: string[];
+  onCancel?: () => void;
+}) => {
+  const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!visible) {
+      setCurrentMessageIndex(0);
+      fadeAnim.setValue(1);
+      return;
+    }
+
+    Animated.loop(
+      Animated.timing(spinAnim, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+        easing: Easing.linear,
+      })
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(scaleAnim, {
+          toValue: 1.1,
+          duration: 1000,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease),
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease),
+        }),
+      ])
+    ).start();
+
+    fadeAnim.setValue(1);
+
+    const interval = setInterval(() => {
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.ease),
+      }).start(() => {
+        setCurrentMessageIndex((prev) => (prev + 1) % messages.length);
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+          easing: Easing.in(Easing.ease),
+        }).start();
+      });
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [visible, messages.length]);
+
+  const spin = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={onCancel}
+    >
+      <View style={loadingStyles.overlay}>
+        <LinearGradient
+          colors={[
+            "rgba(0,0,0,0.95)",
+            "rgba(17,24,39,0.95)",
+            "rgba(0,0,0,0.95)",
+          ]}
+          style={StyleSheet.absoluteFill}
+        />
+
+        <Animated.View
+          style={[
+            loadingStyles.container,
+            { transform: [{ scale: scaleAnim }] },
+          ]}
+        >
+          <Animated.View
+            style={[
+              loadingStyles.spinnerContainer,
+              { transform: [{ rotate: spin }] },
+            ]}
+          >
+            <View style={loadingStyles.spinnerOuter}>
+              <View style={loadingStyles.spinnerInner} />
+            </View>
+          </Animated.View>
+
+          <Animated.View
+            style={[{ opacity: fadeAnim }, loadingStyles.textContainer]}
+          >
+            <Text style={loadingStyles.message}>
+              {messages && messages.length > 0
+                ? messages[currentMessageIndex]
+                : "로딩 중..."}
+            </Text>
+          </Animated.View>
+
+          {onCancel && (
+            <TouchableOpacity
+              style={loadingStyles.cancelButton}
+              onPress={onCancel}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
+                style={loadingStyles.cancelButtonGradient}
+              >
+                <Text style={loadingStyles.cancelText}>요청 취소하기</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+};
+
+const loadingStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  container: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    paddingHorizontal: 20,
+  },
+  spinnerContainer: {
+    marginBottom: 40,
+  },
+  spinnerOuter: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 4,
+    borderColor: "rgba(227, 255, 124, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  spinnerInner: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 4,
+    borderColor: "#e3ff7c",
+    borderTopColor: "transparent",
+    borderRightColor: "transparent",
+  },
+  textContainer: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 70,
+  },
+  message: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#ffffff",
+    textAlign: "center",
+    lineHeight: 28,
+    letterSpacing: 0.5,
+  },
+  cancelButton: {
+    marginTop: 50,
+    borderRadius: 30,
+    overflow: "hidden",
+  },
+  cancelButtonGradient: {
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    borderRadius: 30,
+  },
+  cancelText: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
+});
+
 const transformApiResponseToUI = (apiData: any) => {
+  console.log("🔍 변환 전 API 데이터:", JSON.stringify(apiData, null, 2));
+
   const breakfast = apiData.meals.find((m: any) => m.mealType === "BREAKFAST");
   const lunch = apiData.meals.find((m: any) => m.mealType === "LUNCH");
   const dinner = apiData.meals.find((m: any) => m.mealType === "DINNER");
 
-  const today = new Date();
+  const planDate = apiData.planDate ? new Date(apiData.planDate) : new Date();
 
-  return {
+  // ✅ 실제 영양소 계산 (API 값 무시하고 실제 데이터로 계산)
+  const actualBreakfastCal = breakfast?.totalCalories || 0;
+  const actualLunchCal = lunch?.totalCalories || 0;
+  const actualDinnerCal = dinner?.totalCalories || 0;
+  const actualTotalCalories =
+    actualBreakfastCal + actualLunchCal + actualDinnerCal;
+
+  const actualBreakfastCarbs = breakfast?.totalCarbs || 0;
+  const actualLunchCarbs = lunch?.totalCarbs || 0;
+  const actualDinnerCarbs = dinner?.totalCarbs || 0;
+  const actualTotalCarbs =
+    actualBreakfastCarbs + actualLunchCarbs + actualDinnerCarbs;
+
+  const actualBreakfastProtein = breakfast?.totalProtein || 0;
+  const actualLunchProtein = lunch?.totalProtein || 0;
+  const actualDinnerProtein = dinner?.totalProtein || 0;
+  const actualTotalProtein =
+    actualBreakfastProtein + actualLunchProtein + actualDinnerProtein;
+
+  const actualBreakfastFat = breakfast?.totalFat || 0;
+  const actualLunchFat = lunch?.totalFat || 0;
+  const actualDinnerFat = dinner?.totalFat || 0;
+  const actualTotalFat = actualBreakfastFat + actualLunchFat + actualDinnerFat;
+
+  // ⚠️ API와 실제 값 비교 (디버깅용)
+  if (Math.abs(actualTotalCalories - apiData.totalCalories) > 50) {
+    console.warn("⚠️ 칼로리 불일치 감지!", {
+      "API totalCalories": apiData.totalCalories,
+      "실제 계산값": actualTotalCalories,
+      차이: apiData.totalCalories - actualTotalCalories,
+      "아침 칼로리": actualBreakfastCal,
+      "점심 칼로리": actualLunchCal,
+      "저녁 칼로리": actualDinnerCal,
+    });
+  }
+
+  const result = {
     day: 1,
-    date: `${today.getMonth() + 1}/${today.getDate()}`,
-    fullDate: today.toLocaleDateString("ko-KR", {
+    date: `${planDate.getMonth() + 1}/${planDate.getDate()}`,
+    fullDate: planDate.toLocaleDateString("ko-KR", {
       month: "long",
       day: "numeric",
       weekday: "short",
@@ -36,10 +294,19 @@ const transformApiResponseToUI = (apiData: any) => {
     planName: apiData.planName,
     description: apiData.description,
     recommendationReason: apiData.recommendationReason,
-    totalCalories: apiData.totalCalories,
-    carbs: apiData.totalCarbs,
-    protein: apiData.totalProtein,
-    fat: apiData.totalFat,
+
+    // ✅ 실제 계산된 값 사용
+    totalCalories: actualTotalCalories,
+    carbs: actualTotalCarbs,
+    protein: actualTotalProtein,
+    fat: actualTotalFat,
+
+    // 📊 API 원본 값도 보관 (디버깅용)
+    apiTotalCalories: apiData.totalCalories,
+    apiTotalCarbs: apiData.totalCarbs,
+    apiTotalProtein: apiData.totalProtein,
+    apiTotalFat: apiData.totalFat,
+
     isSaved: apiData.isSaved,
     breakfast: {
       meals:
@@ -84,9 +351,19 @@ const transformApiResponseToUI = (apiData: any) => {
       fat: dinner?.totalFat || 0,
     },
   };
+
+  console.log("✅ 변환 후 데이터:", {
+    planId: result.planId,
+    "실제 totalCalories": result.totalCalories,
+    "API totalCalories": result.apiTotalCalories,
+    아침: result.breakfast.calories,
+    점심: result.lunch.calories,
+    저녁: result.dinner.calories,
+  });
+
+  return result;
 };
 
-// AI 서버 응답을 UI용으로 변환
 const transformAIResponseToUI = (aiData: any) => {
   const meal1 = aiData.meals.find((m: any) => m.meal_type === "meal_1");
   const meal2 = aiData.meals.find((m: any) => m.meal_type === "meal_2");
@@ -107,7 +384,7 @@ const transformAIResponseToUI = (aiData: any) => {
       day: "numeric",
       weekday: "short",
     }),
-    planId: null, // AI 서버는 planId 없음
+    planId: null,
     planName: `${
       aiData.goal === "maintain"
         ? "유지"
@@ -189,6 +466,16 @@ const MealRecommendScreen = () => {
   const [currentPlanId, setCurrentPlanId] = useState<number | null>(null);
   const [loadingProgress, setLoadingProgress] = useState(0);
 
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  }, [screen]);
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -205,7 +492,6 @@ const MealRecommendScreen = () => {
     loadData();
   }, []);
 
-  // ✅ 저장된 식단 목록 불러오기 (서버 + 로컬) — 키 통일: savedMealPlans
   const loadSavedMeals = async () => {
     try {
       const serverMeals = await recommendedMealAPI.getSavedMealPlans();
@@ -213,11 +499,20 @@ const MealRecommendScreen = () => {
       const localStored = await AsyncStorage.getItem("savedMealPlans");
       const localMeals = localStored ? JSON.parse(localStored) : [];
 
-      const allMeals = [...localMeals, ...serverMeals];
+      // ✅ 필터링 추가: 실제로 저장 버튼을 눌러서 저장한 것만
+      const filteredServerMeals = serverMeals.filter((meal: any) => {
+        // 저장된 식단은 특정 조건을 만족해야 함
+        // 예: createdAt과 updatedAt이 다르면 저장된 것
+        // 또는 별도 savedAt 필드가 있으면 사용
+        return meal.isSaved === true && meal.savedAt; // savedAt 필드가 있다고 가정
+      });
+
+      const allMeals = [...localMeals, ...filteredServerMeals];
 
       console.log("📋 저장된 식단:", {
         로컬: localMeals.length,
-        서버: serverMeals.length,
+        서버: filteredServerMeals.length,
+        "필터 전 서버": serverMeals.length,
         합계: allMeals.length,
       });
 
@@ -227,102 +522,78 @@ const MealRecommendScreen = () => {
     }
   };
 
-  useEffect(() => {
-    const saveExcluded = async () => {
-      try {
-        await AsyncStorage.setItem(
-          "excludedIngredients",
-          JSON.stringify(excludedIngredients)
-        );
-      } catch (error) {
-        console.log("Failed to save excluded ingredients", error);
-      }
-    };
-    saveExcluded();
-  }, [excludedIngredients]);
+  const handleCancelLoading = () => {
+    Alert.alert("요청 취소", "식단 추천 요청을 취소하시겠습니까?", [
+      { text: "계속 기다리기", style: "cancel" },
+      {
+        text: "취소",
+        style: "destructive",
+        onPress: () => {
+          console.log("⚠️ 사용자가 로딩을 취소함");
+          setLoading(false);
+        },
+      },
+    ]);
+  };
 
   const handleGetRecommendation = async () => {
     setLoading(true);
     setLoadingProgress(0);
 
     try {
-      console.log("🍽️ 식단 추천 시작");
+      console.log("🍽️ 주간 식단 추천 시작");
 
-      // 프로필에서 userId와 goal 가져오기
-      const profile = await authAPI.getProfile();
-      const userId = String(profile.id);
+      const weeklyPlans = await recommendedMealAPI.getWeeklyMealPlan();
 
-      // healthGoal을 AI 서버 goal로 매핑
-      const goalMap: { [key: string]: "maintain" | "cut" | "bulk" } = {
-        "체중 감량": "cut",
-        "근육 증가": "bulk",
-        "체중 유지": "maintain",
-        "건강 유지": "maintain",
-      };
-      const goal = goalMap[profile.healthGoal] || "maintain";
+      if (!weeklyPlans || weeklyPlans.length === 0) {
+        throw new Error("식단 생성에 실패했습니다.");
+      }
 
-      console.log("👤 사용자 정보:", {
-        userId,
-        goal,
-        healthGoal: profile.healthGoal,
+      console.log(`✅ ${weeklyPlans.length}일치 식단 생성 완료`);
+      console.log("📦 전체 응답 데이터:", JSON.stringify(weeklyPlans, null, 2));
+
+      const weekData = weeklyPlans.map((apiResponse, index) => {
+        console.log(`🔄 ${index + 1}일차 변환 시작`);
+        const transformedData = transformApiResponseToUI(apiResponse);
+
+        const planDate = new Date(apiResponse.planDate);
+
+        const result = {
+          ...transformedData,
+          day: index + 1,
+          date: `${planDate.getMonth() + 1}/${planDate.getDate()}`,
+          fullDate: planDate.toLocaleDateString("ko-KR", {
+            month: "long",
+            day: "numeric",
+            weekday: "short",
+          }),
+          planId: apiResponse.id,
+          bundleId: apiResponse.bundleId,
+          bundleDay: apiResponse.bundleDay,
+        };
+
+        console.log(`✅ ${index + 1}일차 변환 완료:`, {
+          planId: result.planId,
+          totalCalories: result.totalCalories,
+          아침: result.breakfast.meals.map((m) => m.name),
+          점심: result.lunch.meals.map((m) => m.name),
+          저녁: result.dinner.meals.map((m) => m.name),
+        });
+
+        return result;
       });
 
-      // 🔄 7일치 식단을 각각 요청
-      const weekData: any[] = [];
-
-      for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
-        try {
-          console.log(`📅 ${dayIndex + 1}일차 식단 요청 중...`);
-          setLoadingProgress(((dayIndex + 1) / 7) * 100);
-
-          // 각 날짜마다 AI 서버로 요청
-          const aiResponse = await recommendedMealAPI.getAIDailyMealPlan(
-            userId,
-            goal,
-            3, // 하루 3끼
-            excludedIngredients // 금지 식재료 전달
-          );
-
-          // AI 응답을 UI 형식으로 변환
-          const transformedData = transformAIResponseToUI(aiResponse);
-
-          // 날짜 계산
-          const date = new Date();
-          date.setDate(date.getDate() + dayIndex);
-
-          weekData.push({
-            ...transformedData,
-            day: dayIndex + 1,
-            date: `${date.getMonth() + 1}/${date.getDate()}`,
-            fullDate: date.toLocaleDateString("ko-KR", {
-              month: "long",
-              day: "numeric",
-              weekday: "short",
-            }),
-          });
-
-          console.log(`✅ ${dayIndex + 1}일차 식단 완료`);
-
-          // API 과부하 방지를 위해 약간의 딜레이
-          if (dayIndex < 6) {
-            await new Promise((resolve) => setTimeout(resolve, 300));
-          }
-        } catch (dayError) {
-          console.error(`❌ ${dayIndex + 1}일차 식단 실패:`, dayError);
-          // 실패해도 계속 진행
-        }
-      }
-
-      if (weekData.length === 0) {
-        throw new Error("모든 식단 생성에 실패했습니다.");
-      }
-
-      console.log(`✅ 총 ${weekData.length}일치 식단 생성 완료`);
+      console.log("📊 최종 weekData:", weekData);
 
       setWeeklyMeals(weekData);
-      setCurrentPlanId(null); // AI는 planId 없음
+      setCurrentPlanId(weekData[0]?.planId || null);
       setScreen("meals");
       setCurrentDay(0);
+
+      Alert.alert(
+        "성공",
+        `${weekData.length}일치 맞춤 식단이 생성되었습니다! 🎉`
+      );
     } catch (error: any) {
       console.error("❌ 식단 추천 실패:", error);
       Alert.alert("오류", error.message || "식단을 불러오는데 실패했습니다.");
@@ -346,59 +617,116 @@ const MealRecommendScreen = () => {
     setExcludedIngredients(excludedIngredients.filter((i) => i !== ingredient));
   };
 
+  // ✅ 개선된 삭제 함수 - 항상 삭제 가능
   const handleDeleteMeal = (mealType: string, mealIndex: number) => {
+    const currentMeal = weeklyMeals[currentDay];
+    const mealData = currentMeal[mealType];
+
+    // 마지막 음식인 경우 확인
+    if (mealData.meals.length === 1) {
+      Alert.alert(
+        "음식 삭제",
+        `${
+          mealType === "breakfast"
+            ? "아침"
+            : mealType === "lunch"
+            ? "점심"
+            : "저녁"
+        }의 마지막 음식입니다. 삭제하시겠습니까?`,
+        [
+          { text: "취소", style: "cancel" },
+          {
+            text: "삭제",
+            style: "destructive",
+            onPress: () => deleteFood(mealType, mealIndex),
+          },
+        ]
+      );
+    } else {
+      deleteFood(mealType, mealIndex);
+    }
+  };
+
+  const deleteFood = (mealType: string, mealIndex: number) => {
     setWeeklyMeals((prev) => {
       const updated = [...prev];
-      const dayMeals = updated[currentDay];
+      const dayMeals = { ...updated[currentDay] };
       const mealArray = [...dayMeals[mealType].meals];
 
-      if (mealArray.length > 1) {
-        const removedMeal = mealArray[mealIndex];
-        mealArray.splice(mealIndex, 1);
+      const removedMeal = mealArray[mealIndex];
+      mealArray.splice(mealIndex, 1);
 
-        const newCalories = dayMeals[mealType].calories - removedMeal.calories;
-        const newCarbs = dayMeals[mealType].carbs - removedMeal.carbs;
-        const newProtein = dayMeals[mealType].protein - removedMeal.protein;
-        const newFat = dayMeals[mealType].fat - removedMeal.fat;
+      // ✅ 식사 시간대 영양소 재계산
+      const newMealCalories = Math.max(
+        0,
+        dayMeals[mealType].calories - removedMeal.calories
+      );
+      const newMealCarbs = Math.max(
+        0,
+        dayMeals[mealType].carbs - removedMeal.carbs
+      );
+      const newMealProtein = Math.max(
+        0,
+        dayMeals[mealType].protein - removedMeal.protein
+      );
+      const newMealFat = Math.max(0, dayMeals[mealType].fat - removedMeal.fat);
 
-        dayMeals[mealType] = {
-          meals: mealArray,
-          calories: newCalories,
-          carbs: newCarbs,
-          protein: newProtein,
-          fat: newFat,
-        };
+      dayMeals[mealType] = {
+        meals: mealArray,
+        calories: newMealCalories,
+        carbs: newMealCarbs,
+        protein: newMealProtein,
+        fat: newMealFat,
+      };
 
-        dayMeals.totalCalories = dayMeals.totalCalories - removedMeal.calories;
-        dayMeals.carbs = dayMeals.carbs - removedMeal.carbs;
-        dayMeals.protein = dayMeals.protein - removedMeal.protein;
-        dayMeals.fat = dayMeals.fat - removedMeal.fat;
+      // ✅ 총 영양소 재계산 (실제 값으로)
+      const newTotalCalories =
+        dayMeals.breakfast.calories +
+        dayMeals.lunch.calories +
+        dayMeals.dinner.calories;
+      const newTotalCarbs =
+        dayMeals.breakfast.carbs + dayMeals.lunch.carbs + dayMeals.dinner.carbs;
+      const newTotalProtein =
+        dayMeals.breakfast.protein +
+        dayMeals.lunch.protein +
+        dayMeals.dinner.protein;
+      const newTotalFat =
+        dayMeals.breakfast.fat + dayMeals.lunch.fat + dayMeals.dinner.fat;
 
-        updated[currentDay] = { ...dayMeals };
-      }
+      dayMeals.totalCalories = newTotalCalories;
+      dayMeals.carbs = newTotalCarbs;
+      dayMeals.protein = newTotalProtein;
+      dayMeals.fat = newTotalFat;
+
+      updated[currentDay] = dayMeals;
+
+      console.log("🔄 삭제 후 영양소:", {
+        totalCalories: newTotalCalories,
+        carbs: newTotalCarbs,
+        protein: newTotalProtein,
+        fat: newTotalFat,
+      });
 
       return updated;
     });
   };
 
-  // ✅ 로컬에 AI 식단 저장 — 키/포맷 통일: savedMealPlans + meals[]
   const handleSaveMealPlanLocally = async () => {
     try {
       setLoading(true);
 
-      // 히스토리 화면이 기대하는 포맷으로 변환 (meals[])
       const mealsForHistory = weeklyMeals.map((d) => ({
         totalCalories: d.totalCalories,
         carbs: d.carbs,
         protein: d.protein,
         fat: d.fat,
-        breakfast: d.breakfast, // { meals:[], calories, carbs, protein, fat }
+        breakfast: d.breakfast,
         lunch: d.lunch,
         dinner: d.dinner,
       }));
 
       const mealPlanToSave = {
-        id: `ai_${Date.now()}`, // 로컬 구분용
+        id: `ai_${Date.now()}`,
         date: new Date().toLocaleDateString("ko-KR"),
         planName: weeklyMeals[0]?.planName || "AI 식단",
         description: weeklyMeals[0]?.description || "AI가 생성한 식단",
@@ -407,7 +735,7 @@ const MealRecommendScreen = () => {
         totalProtein: weeklyMeals[0]?.protein || 0,
         totalFat: weeklyMeals[0]?.fat || 0,
         createdAt: new Date().toISOString(),
-        meals: mealsForHistory, // ✅ 히스토리가 읽는 필드
+        meals: mealsForHistory,
         isAIPlan: true,
       };
 
@@ -439,9 +767,7 @@ const MealRecommendScreen = () => {
     }
   };
 
-  // ✅ 식단 저장 (서버 or 로컬)
   const handleSaveMealPlan = async () => {
-    // AI 식단인 경우 로컬 저장
     if (!currentPlanId) {
       Alert.alert(
         "식단 저장",
@@ -457,7 +783,6 @@ const MealRecommendScreen = () => {
       return;
     }
 
-    // 서버 식단인 경우 서버에 저장
     try {
       setLoading(true);
       const response = await recommendedMealAPI.saveMealPlan(currentPlanId);
@@ -483,7 +808,6 @@ const MealRecommendScreen = () => {
     }
   };
 
-  // ✅ 저장된 식단 삭제 (서버 or 로컬) — 로컬 키: savedMealPlans
   const handleDeleteSavedMeal = async (meal: any) => {
     const isLocalMeal =
       typeof meal.id === "string" && meal.id.startsWith("ai_");
@@ -540,603 +864,966 @@ const MealRecommendScreen = () => {
 
   if (screen === "welcome") {
     return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Icon name="chevron-back" size={28} color="#ffffff" />
-          </TouchableOpacity>
-        </View>
-        <ScrollView
-          style={styles.contentWrapper}
-          contentContainerStyle={styles.contentContainer}
-        >
-          <View style={styles.welcomeHeader}>
-            <Text style={styles.welcomeTitle}>안녕하세요!</Text>
-            <Text style={styles.welcomeSubtitle}>
-              회원님께 최적화된 식단을 추천해드릴게요!
-            </Text>
+      <View style={styles.container}>
+        <LinearGradient
+          colors={["#0a0a0a", "#1a1a2e", "#16213e", "#0f3460"]}
+          style={StyleSheet.absoluteFill}
+        />
+
+        <SafeAreaView style={styles.safeArea} edges={["top"]}>
+          <LoadingOverlay
+            visible={loading}
+            messages={LOADING_MESSAGES}
+            onCancel={handleCancelLoading}
+          />
+
+          <View style={styles.header}>
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              <View style={styles.iconButton}>
+                <Icon name="chevron-back" size={24} color="#ffffff" />
+              </View>
+            </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            style={[styles.btn, styles.btnPrimary]}
-            onPress={handleGetRecommendation}
-            disabled={loading}
+          <ScrollView
+            style={styles.contentWrapper}
+            contentContainerStyle={styles.contentContainer}
+            showsVerticalScrollIndicator={false}
           >
-            {loading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator color="#111827" />
-                <Text style={styles.loadingText}>
-                  식단 생성 중... {Math.round(loadingProgress)}%
-                </Text>
+            <Animated.View
+              style={[styles.welcomeHeader, { opacity: fadeAnim }]}
+            >
+              <View style={styles.welcomeIconContainer}>
+                <LinearGradient
+                  colors={["#e3ff7c", "#a8e063"]}
+                  style={styles.welcomeIcon}
+                >
+                  <Text style={styles.welcomeEmoji}>🥗</Text>
+                </LinearGradient>
               </View>
-            ) : (
-              <Text style={styles.btnPrimaryText}>추천 식단 받기</Text>
-            )}
-          </TouchableOpacity>
+              <Text style={styles.welcomeTitle}>맞춤 식단 추천</Text>
+              <Text style={styles.welcomeSubtitle}>
+                AI가 당신만을 위한{"\n"}완벽한 식단을 설계합니다
+              </Text>
+            </Animated.View>
 
-          <TouchableOpacity
-            style={[styles.btn, styles.btnSecondary]}
-            onPress={() => setScreen("excludedIngredients")}
-          >
-            <Text style={styles.btnSecondaryText}>
-              금지 식재료 관리{" "}
-              {excludedIngredients.length > 0 &&
-                `(${excludedIngredients.length})`}
-            </Text>
-          </TouchableOpacity>
+            <View style={styles.mainActions}>
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={handleGetRecommendation}
+                disabled={loading}
+                activeOpacity={0.9}
+              >
+                <LinearGradient
+                  colors={["#e3ff7c", "#a8e063"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.primaryButtonGradient}
+                >
+                  <Icon
+                    name="sparkles"
+                    size={22}
+                    color="#111827"
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={styles.primaryButtonText}>추천 식단 받기</Text>
+                </LinearGradient>
+              </TouchableOpacity>
 
-          {excludedIngredients.length > 0 && (
-            <View style={styles.excludedPreview}>
-              <Text style={styles.excludedPreviewLabel}>현재 금지 식재료:</Text>
-              <View style={styles.tagList}>
-                {excludedIngredients.map((ingredient, index) => (
-                  <View key={index} style={[styles.tag, styles.tagExcluded]}>
-                    <Text style={styles.tagText}>{ingredient}</Text>
-                  </View>
-                ))}
-              </View>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => setScreen("excludedIngredients")}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
+                  style={styles.secondaryButtonGradient}
+                >
+                  <Icon
+                    name="remove-circle-outline"
+                    size={20}
+                    color="#ffffff"
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={styles.secondaryButtonText}>
+                    금지 식재료 관리
+                    {excludedIngredients.length > 0 &&
+                      ` (${excludedIngredients.length})`}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
-          )}
 
-          {savedMeals.length > 0 && (
-            <View style={styles.savedMealsSection}>
-              <Text style={styles.savedMealsTitle}>저장된 식단</Text>
-              {savedMeals.map((meal) => {
-                const isLocalMeal =
-                  typeof meal.id === "string" && meal.id.startsWith("ai_");
-
-                return (
-                  <TouchableOpacity
-                    key={meal.id}
-                    style={styles.savedMealItem}
-                    onPress={() => {
-                      if (isLocalMeal) {
-                        // 히스토리 포맷(meals[]) → 화면 포맷(weeklyMeals[]) 변환
-                        const weekly = (meal.meals || []).map(
-                          (m: any, idx: number) => ({
-                            day: idx + 1,
-                            date: "",
-                            fullDate: "",
-                            planId: null,
-                            planName: meal.planName || "AI 식단",
-                            description: meal.description || "",
-                            recommendationReason: "",
-                            totalCalories: m.totalCalories || 0,
-                            carbs: m.carbs || 0,
-                            protein: m.protein || 0,
-                            fat: m.fat || 0,
-                            isSaved: true,
-                            breakfast: m.breakfast,
-                            lunch: m.lunch,
-                            dinner: m.dinner,
-                          })
-                        );
-
-                        setWeeklyMeals(weekly);
-                        setCurrentPlanId(null);
-                        setScreen("meals");
-                        setCurrentDay(0);
-                      } else {
-                        // 서버 식단이면 히스토리 화면으로
-                        navigation.navigate("MealRecommendHistory" as never);
-                      }
-                    }}
-                  >
-                    <View style={styles.savedMealHeader}>
-                      <View style={styles.savedMealTitleRow}>
-                        <Text style={styles.savedMealDate}>
-                          {meal.planName || "식단 계획"}
-                        </Text>
-                        {isLocalMeal && (
-                          <View style={styles.localBadge}>
-                            <Text style={styles.localBadgeText}>📱 로컬</Text>
-                          </View>
-                        )}
+            {excludedIngredients.length > 0 && (
+              <View style={styles.excludedPreview}>
+                <View style={styles.glassCard}>
+                  <Text style={styles.excludedPreviewLabel}>제외된 식재료</Text>
+                  <View style={styles.tagList}>
+                    {excludedIngredients.map((ingredient, index) => (
+                      <View key={index} style={styles.tag}>
+                        <LinearGradient
+                          colors={[
+                            "rgba(239,68,68,0.2)",
+                            "rgba(239,68,68,0.1)",
+                          ]}
+                          style={styles.tagGradient}
+                        >
+                          <Text style={styles.tagText}>{ingredient}</Text>
+                        </LinearGradient>
                       </View>
-                      <TouchableOpacity
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          handleDeleteSavedMeal(meal);
-                        }}
-                        style={styles.btnIconSmall}
+                    ))}
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {savedMeals.length > 0 && (
+              <View style={styles.savedMealsSection}>
+                <Text style={styles.sectionTitle}>저장된 식단</Text>
+                {savedMeals.map((meal, index) => {
+                  const isLocalMeal =
+                    typeof meal.id === "string" && meal.id.startsWith("ai_");
+
+                  return (
+                    <TouchableOpacity
+                      key={meal.id}
+                      style={styles.savedMealItem}
+                      onPress={() => {
+                        if (isLocalMeal) {
+                          const weekly = (meal.meals || []).map(
+                            (m: any, idx: number) => ({
+                              day: idx + 1,
+                              date: "",
+                              fullDate: "",
+                              planId: null,
+                              planName: meal.planName || "AI 식단",
+                              description: meal.description || "",
+                              recommendationReason: "",
+                              totalCalories: m.totalCalories || 0,
+                              carbs: m.carbs || 0,
+                              protein: m.protein || 0,
+                              fat: m.fat || 0,
+                              isSaved: true,
+                              breakfast: m.breakfast,
+                              lunch: m.lunch,
+                              dinner: m.dinner,
+                            })
+                          );
+
+                          setWeeklyMeals(weekly);
+                          setCurrentPlanId(null);
+                          setScreen("meals");
+                          setCurrentDay(0);
+                        } else {
+                          navigation.navigate("MealRecommendHistory" as never);
+                        }
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <LinearGradient
+                        colors={[
+                          "rgba(255,255,255,0.08)",
+                          "rgba(255,255,255,0.04)",
+                        ]}
+                        style={styles.savedMealGradient}
                       >
-                        <Icon name="trash-outline" size={18} color="#ef4444" />
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={styles.savedMealInfo}>
-                      {meal.totalCalories || 0}kcal · {meal.description || ""}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
-        </ScrollView>
-      </SafeAreaView>
+                        <View style={styles.savedMealContent}>
+                          <View style={styles.savedMealLeft}>
+                            <View style={styles.savedMealTitleRow}>
+                              <Text style={styles.savedMealTitle}>
+                                {meal.planName || "식단 계획"}
+                              </Text>
+                              {isLocalMeal && (
+                                <View style={styles.localBadge}>
+                                  <LinearGradient
+                                    colors={["#e3ff7c", "#a8e063"]}
+                                    style={styles.localBadgeGradient}
+                                  >
+                                    <Icon
+                                      name="phone-portrait-outline"
+                                      size={12}
+                                      color="#111827"
+                                    />
+                                    <Text style={styles.localBadgeText}>
+                                      로컬
+                                    </Text>
+                                  </LinearGradient>
+                                </View>
+                              )}
+                            </View>
+                            <Text style={styles.savedMealInfo}>
+                              {meal.totalCalories || 0} kcal ·{" "}
+                              {meal.description || ""}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              handleDeleteSavedMeal(meal);
+                            }}
+                            style={styles.deleteButton}
+                          >
+                            <Icon
+                              name="trash-outline"
+                              size={18}
+                              color="#ef4444"
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </View>
     );
   }
 
   if (screen === "excludedIngredients") {
     return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => setScreen("welcome")}>
-            <Icon name="chevron-back" size={28} color="#ffffff" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>금지 식재료 관리</Text>
-          <View style={{ width: 28 }} />
-        </View>
+      <View style={styles.container}>
+        <LinearGradient
+          colors={["#0a0a0a", "#1a1a2e", "#16213e"]}
+          style={StyleSheet.absoluteFill}
+        />
 
-        <ScrollView
-          style={styles.excludedForm}
-          contentContainerStyle={styles.excludedFormContent}
-        >
-          <View style={styles.inputGroup}>
-            <TextInput
-              style={styles.textInput}
-              value={newIngredient}
-              onChangeText={setNewIngredient}
-              onSubmitEditing={handleAddExcludedIngredient}
-              placeholder="알러지 식재료를 입력하세요"
-              placeholderTextColor="#6b7280"
-            />
+        <SafeAreaView style={styles.safeArea} edges={["top"]}>
+          <View style={styles.header}>
             <TouchableOpacity
-              style={[styles.iconBtn, styles.btnAdd]}
-              onPress={handleAddExcludedIngredient}
+              onPress={() => setScreen("welcome")}
+              style={styles.backButton}
             >
-              <Text style={styles.iconAdd}>＋</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.excludedList}>
-            {excludedIngredients.map((ingredient, index) => (
-              <View key={index} style={styles.excludedItem}>
-                <Text style={styles.excludedItemText}>{ingredient}</Text>
-                <TouchableOpacity
-                  style={[styles.iconBtn, styles.btnDelete]}
-                  onPress={() => handleRemoveExcludedIngredient(ingredient)}
-                >
-                  <Text style={styles.iconDelete}>✕</Text>
-                </TouchableOpacity>
+              <View style={styles.iconButton}>
+                <Icon name="chevron-back" size={24} color="#ffffff" />
               </View>
-            ))}
-
-            {excludedIngredients.length === 0 && (
-              <Text style={styles.emptyMessage}>
-                등록된 금지 식재료가 없습니다
-              </Text>
-            )}
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>금지 식재료</Text>
+            <View style={{ width: 40 }} />
           </View>
 
-          <TouchableOpacity
-            style={[styles.btn, styles.btnPrimary, styles.btnComplete]}
-            onPress={() => setScreen("welcome")}
+          <ScrollView
+            style={styles.excludedForm}
+            contentContainerStyle={styles.excludedFormContent}
+            showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.btnPrimaryText}>완료</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </SafeAreaView>
+            <View style={styles.inputGroup}>
+              <View style={styles.inputWrapper}>
+                <LinearGradient
+                  colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
+                  style={styles.inputGradient}
+                >
+                  <Icon
+                    name="search"
+                    size={20}
+                    color="#6b7280"
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.textInput}
+                    value={newIngredient}
+                    onChangeText={setNewIngredient}
+                    onSubmitEditing={handleAddExcludedIngredient}
+                    placeholder="알러지 식재료를 입력하세요"
+                    placeholderTextColor="#6b7280"
+                  />
+                </LinearGradient>
+              </View>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={handleAddExcludedIngredient}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={["#e3ff7c", "#a8e063"]}
+                  style={styles.addButtonGradient}
+                >
+                  <Icon name="add" size={28} color="#111827" />
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.excludedList}>
+              {excludedIngredients.map((ingredient, index) => (
+                <Animated.View
+                  key={index}
+                  style={[styles.excludedItem, { opacity: fadeAnim }]}
+                >
+                  <LinearGradient
+                    colors={[
+                      "rgba(255,255,255,0.08)",
+                      "rgba(255,255,255,0.04)",
+                    ]}
+                    style={styles.excludedItemGradient}
+                  >
+                    <View style={styles.excludedItemLeft}>
+                      <View style={styles.excludedItemIcon}>
+                        <Icon name="ban" size={18} color="#ef4444" />
+                      </View>
+                      <Text style={styles.excludedItemText}>{ingredient}</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.removeButton}
+                      onPress={() => handleRemoveExcludedIngredient(ingredient)}
+                      activeOpacity={0.7}
+                    >
+                      <Icon name="close-circle" size={24} color="#ef4444" />
+                    </TouchableOpacity>
+                  </LinearGradient>
+                </Animated.View>
+              ))}
+
+              {excludedIngredients.length === 0 && (
+                <View style={styles.emptyState}>
+                  <Icon name="restaurant-outline" size={64} color="#374151" />
+                  <Text style={styles.emptyMessage}>
+                    등록된 금지 식재료가 없습니다
+                  </Text>
+                  <Text style={styles.emptySubtext}>
+                    알러지나 선호하지 않는 식재료를 추가하세요
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={styles.completeButton}
+              onPress={() => setScreen("welcome")}
+              activeOpacity={0.9}
+            >
+              <LinearGradient
+                colors={["#e3ff7c", "#a8e063"]}
+                style={styles.completeButtonGradient}
+              >
+                <Icon
+                  name="checkmark-circle"
+                  size={22}
+                  color="#111827"
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={styles.completeButtonText}>완료</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
+      </View>
     );
   }
 
-  // screen === "meals"
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => setScreen("welcome")}>
-          <Icon name="chevron-back" size={28} color="#ffffff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>식단 추천</Text>
-        <View style={{ width: 28 }} />
-      </View>
-      <ScrollView
-        style={styles.contentWrapper}
-        showsVerticalScrollIndicator={false}
-      >
-        {currentMeal && (
-          <View style={styles.mealDateContainer}>
-            <Text style={styles.mealDate}>{currentMeal.fullDate}</Text>
-          </View>
-        )}
+    <View style={styles.container}>
+      <LinearGradient
+        colors={["#0a0a0a", "#1a1a2e", "#16213e", "#0f3460"]}
+        style={StyleSheet.absoluteFill}
+      />
+
+      <SafeAreaView style={styles.safeArea} edges={["top"]}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => setScreen("welcome")}
+            style={styles.backButton}
+          >
+            <View style={styles.iconButton}>
+              <Icon name="chevron-back" size={24} color="#ffffff" />
+            </View>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>식단 추천</Text>
+          <View style={{ width: 40 }} />
+        </View>
 
         <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.dayTabs}
-          contentContainerStyle={styles.dayTabsContent}
+          style={styles.contentWrapper}
+          showsVerticalScrollIndicator={false}
         >
-          {weeklyMeals.map((_, index) => (
+          {currentMeal && (
+            <View style={styles.mealDateContainer}>
+              <LinearGradient
+                colors={["rgba(227,255,124,0.2)", "rgba(168,224,99,0.1)"]}
+                style={styles.dateBadge}
+              >
+                <Icon
+                  name="calendar-outline"
+                  size={16}
+                  color="#e3ff7c"
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={styles.mealDate}>{currentMeal.fullDate}</Text>
+              </LinearGradient>
+            </View>
+          )}
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.dayTabs}
+            contentContainerStyle={styles.dayTabsContent}
+          >
+            {weeklyMeals.map((_, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.dayTabContainer}
+                onPress={() => setCurrentDay(index)}
+                activeOpacity={0.8}
+              >
+                {currentDay === index ? (
+                  <LinearGradient
+                    colors={["#e3ff7c", "#a8e063"]}
+                    style={styles.dayTabActive}
+                  >
+                    <Text style={styles.dayTabTextActive}>{index + 1}일차</Text>
+                  </LinearGradient>
+                ) : (
+                  <View style={styles.dayTab}>
+                    <Text style={styles.dayTabText}>{index + 1}일차</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {currentMeal && (
+            <View style={styles.mealContent}>
+              <View style={styles.nutritionCardContainer}>
+                <LinearGradient
+                  colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
+                  style={styles.nutritionCard}
+                >
+                  <View style={styles.caloriesHeader}>
+                    <View>
+                      <Text style={styles.caloriesTotalLabel}>총 칼로리</Text>
+                      <View style={styles.caloriesTotalRow}>
+                        {/* ✅ 실제 계산된 값 표시 */}
+                        <Text style={styles.caloriesTotal}>
+                          {currentMeal.totalCalories}
+                        </Text>
+                        <Text style={styles.caloriesTotalUnit}>kcal</Text>
+                      </View>
+                      {/* 🐛 디버깅: API 불일치 표시 */}
+                      {currentMeal.apiTotalCalories &&
+                        Math.abs(
+                          currentMeal.totalCalories -
+                            currentMeal.apiTotalCalories
+                        ) > 50 && (
+                          <Text
+                            style={{
+                              color: "#ef4444",
+                              fontSize: 10,
+                              marginTop: 4,
+                            }}
+                          >
+                            (API: {currentMeal.apiTotalCalories}kcal - 불일치)
+                          </Text>
+                        )}
+                    </View>
+                    <View style={styles.caloriesIcon}>
+                      <LinearGradient
+                        colors={["#e3ff7c", "#a8e063"]}
+                        style={styles.caloriesIconGradient}
+                      >
+                        <Icon name="flame" size={28} color="#111827" />
+                      </LinearGradient>
+                    </View>
+                  </View>
+
+                  <View style={styles.nutritionDivider} />
+
+                  <View style={styles.nutritionInfo}>
+                    <View style={styles.nutritionItem}>
+                      <View style={styles.nutritionIconContainer}>
+                        <LinearGradient
+                          colors={[
+                            "rgba(59,130,246,0.3)",
+                            "rgba(59,130,246,0.1)",
+                          ]}
+                          style={styles.nutritionIcon}
+                        >
+                          <Icon
+                            name="analytics-outline"
+                            size={20}
+                            color="#3b82f6"
+                          />
+                        </LinearGradient>
+                      </View>
+                      <Text style={styles.nutritionLabel}>탄수화물</Text>
+                      <Text style={styles.nutritionValue}>
+                        {currentMeal.carbs}
+                        <Text style={styles.nutritionUnit}>g</Text>
+                      </Text>
+                    </View>
+
+                    <View style={styles.nutritionItem}>
+                      <View style={styles.nutritionIconContainer}>
+                        <LinearGradient
+                          colors={[
+                            "rgba(239,68,68,0.3)",
+                            "rgba(239,68,68,0.1)",
+                          ]}
+                          style={styles.nutritionIcon}
+                        >
+                          <Icon
+                            name="fitness-outline"
+                            size={20}
+                            color="#ef4444"
+                          />
+                        </LinearGradient>
+                      </View>
+                      <Text style={styles.nutritionLabel}>단백질</Text>
+                      <Text style={styles.nutritionValue}>
+                        {currentMeal.protein}
+                        <Text style={styles.nutritionUnit}>g</Text>
+                      </Text>
+                    </View>
+
+                    <View style={styles.nutritionItem}>
+                      <View style={styles.nutritionIconContainer}>
+                        <LinearGradient
+                          colors={[
+                            "rgba(234,179,8,0.3)",
+                            "rgba(234,179,8,0.1)",
+                          ]}
+                          style={styles.nutritionIcon}
+                        >
+                          <Icon
+                            name="water-outline"
+                            size={20}
+                            color="#eab308"
+                          />
+                        </LinearGradient>
+                      </View>
+                      <Text style={styles.nutritionLabel}>지방</Text>
+                      <Text style={styles.nutritionValue}>
+                        {currentMeal.fat}
+                        <Text style={styles.nutritionUnit}>g</Text>
+                      </Text>
+                    </View>
+                  </View>
+                </LinearGradient>
+              </View>
+
+              {/* 아침 */}
+              <View style={styles.mealCardContainer}>
+                <LinearGradient
+                  colors={["rgba(255,255,255,0.08)", "rgba(255,255,255,0.04)"]}
+                  style={styles.mealCard}
+                >
+                  <View style={styles.mealCardHeader}>
+                    <View style={styles.mealTitleRow}>
+                      <View style={styles.mealIconContainer}>
+                        <LinearGradient
+                          colors={[
+                            "rgba(251,191,36,0.3)",
+                            "rgba(251,191,36,0.1)",
+                          ]}
+                          style={styles.mealIcon}
+                        >
+                          <Text style={styles.mealEmoji}>🌅</Text>
+                        </LinearGradient>
+                      </View>
+                      <View>
+                        <Text style={styles.mealTitle}>아침</Text>
+                        <Text style={styles.mealTime}>07:00 - 09:00</Text>
+                      </View>
+                    </View>
+                    <View style={styles.mealCaloriesContainer}>
+                      <Text style={styles.mealCalories}>
+                        {currentMeal.breakfast.calories}
+                      </Text>
+                      <Text style={styles.mealCaloriesUnit}>kcal</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.mealNutritionMini}>
+                    <View style={styles.miniNutrient}>
+                      <Icon name="ellipse" size={8} color="#3b82f6" />
+                      <Text style={styles.mealNutritionText}>
+                        탄 {currentMeal.breakfast.carbs}g
+                      </Text>
+                    </View>
+                    <View style={styles.miniNutrient}>
+                      <Icon name="ellipse" size={8} color="#ef4444" />
+                      <Text style={styles.mealNutritionText}>
+                        단 {currentMeal.breakfast.protein}g
+                      </Text>
+                    </View>
+                    <View style={styles.miniNutrient}>
+                      <Icon name="ellipse" size={8} color="#eab308" />
+                      <Text style={styles.mealNutritionText}>
+                        지 {currentMeal.breakfast.fat}g
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.mealTags}>
+                    {currentMeal.breakfast.meals.length === 0 ? (
+                      <View style={styles.emptyMealState}>
+                        <Text style={styles.emptyMealText}>식사 없음</Text>
+                      </View>
+                    ) : (
+                      currentMeal.breakfast.meals.map(
+                        (meal: any, index: number) => (
+                          <View key={index} style={styles.mealTag}>
+                            <LinearGradient
+                              colors={[
+                                "rgba(227,255,124,0.2)",
+                                "rgba(168,224,99,0.1)",
+                              ]}
+                              style={styles.mealTagGradient}
+                            >
+                              <Text style={styles.mealName}>{meal.name}</Text>
+                              <Text style={styles.mealCal}>
+                                ({meal.calories}kcal)
+                              </Text>
+                              {/* ✅ 항상 삭제 버튼 표시 */}
+                              <TouchableOpacity
+                                style={styles.mealDeleteBtn}
+                                onPress={() =>
+                                  handleDeleteMeal("breakfast", index)
+                                }
+                                activeOpacity={0.7}
+                              >
+                                <Icon
+                                  name="close-circle"
+                                  size={18}
+                                  color="rgba(0,0,0,0.5)"
+                                />
+                              </TouchableOpacity>
+                            </LinearGradient>
+                          </View>
+                        )
+                      )
+                    )}
+                  </View>
+                </LinearGradient>
+              </View>
+
+              {/* 점심 */}
+              <View style={styles.mealCardContainer}>
+                <LinearGradient
+                  colors={["rgba(255,255,255,0.08)", "rgba(255,255,255,0.04)"]}
+                  style={styles.mealCard}
+                >
+                  <View style={styles.mealCardHeader}>
+                    <View style={styles.mealTitleRow}>
+                      <View style={styles.mealIconContainer}>
+                        <LinearGradient
+                          colors={[
+                            "rgba(251,146,60,0.3)",
+                            "rgba(251,146,60,0.1)",
+                          ]}
+                          style={styles.mealIcon}
+                        >
+                          <Text style={styles.mealEmoji}>☀️</Text>
+                        </LinearGradient>
+                      </View>
+                      <View>
+                        <Text style={styles.mealTitle}>점심</Text>
+                        <Text style={styles.mealTime}>12:00 - 14:00</Text>
+                      </View>
+                    </View>
+                    <View style={styles.mealCaloriesContainer}>
+                      <Text style={styles.mealCalories}>
+                        {currentMeal.lunch.calories}
+                      </Text>
+                      <Text style={styles.mealCaloriesUnit}>kcal</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.mealNutritionMini}>
+                    <View style={styles.miniNutrient}>
+                      <Icon name="ellipse" size={8} color="#3b82f6" />
+                      <Text style={styles.mealNutritionText}>
+                        탄 {currentMeal.lunch.carbs}g
+                      </Text>
+                    </View>
+                    <View style={styles.miniNutrient}>
+                      <Icon name="ellipse" size={8} color="#ef4444" />
+                      <Text style={styles.mealNutritionText}>
+                        단 {currentMeal.lunch.protein}g
+                      </Text>
+                    </View>
+                    <View style={styles.miniNutrient}>
+                      <Icon name="ellipse" size={8} color="#eab308" />
+                      <Text style={styles.mealNutritionText}>
+                        지 {currentMeal.lunch.fat}g
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.mealTags}>
+                    {currentMeal.lunch.meals.length === 0 ? (
+                      <View style={styles.emptyMealState}>
+                        <Text style={styles.emptyMealText}>식사 없음</Text>
+                      </View>
+                    ) : (
+                      currentMeal.lunch.meals.map(
+                        (meal: any, index: number) => (
+                          <View key={index} style={styles.mealTag}>
+                            <LinearGradient
+                              colors={[
+                                "rgba(227,255,124,0.2)",
+                                "rgba(168,224,99,0.1)",
+                              ]}
+                              style={styles.mealTagGradient}
+                            >
+                              <Text style={styles.mealName}>{meal.name}</Text>
+                              <Text style={styles.mealCal}>
+                                ({meal.calories}kcal)
+                              </Text>
+                              <TouchableOpacity
+                                style={styles.mealDeleteBtn}
+                                onPress={() => handleDeleteMeal("lunch", index)}
+                                activeOpacity={0.7}
+                              >
+                                <Icon
+                                  name="close-circle"
+                                  size={18}
+                                  color="rgba(0,0,0,0.5)"
+                                />
+                              </TouchableOpacity>
+                            </LinearGradient>
+                          </View>
+                        )
+                      )
+                    )}
+                  </View>
+                </LinearGradient>
+              </View>
+
+              {/* 저녁 */}
+              <View style={styles.mealCardContainer}>
+                <LinearGradient
+                  colors={["rgba(255,255,255,0.08)", "rgba(255,255,255,0.04)"]}
+                  style={styles.mealCard}
+                >
+                  <View style={styles.mealCardHeader}>
+                    <View style={styles.mealTitleRow}>
+                      <View style={styles.mealIconContainer}>
+                        <LinearGradient
+                          colors={[
+                            "rgba(139,92,246,0.3)",
+                            "rgba(139,92,246,0.1)",
+                          ]}
+                          style={styles.mealIcon}
+                        >
+                          <Text style={styles.mealEmoji}>🌙</Text>
+                        </LinearGradient>
+                      </View>
+                      <View>
+                        <Text style={styles.mealTitle}>저녁</Text>
+                        <Text style={styles.mealTime}>18:00 - 20:00</Text>
+                      </View>
+                    </View>
+                    <View style={styles.mealCaloriesContainer}>
+                      <Text style={styles.mealCalories}>
+                        {currentMeal.dinner.calories}
+                      </Text>
+                      <Text style={styles.mealCaloriesUnit}>kcal</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.mealNutritionMini}>
+                    <View style={styles.miniNutrient}>
+                      <Icon name="ellipse" size={8} color="#3b82f6" />
+                      <Text style={styles.mealNutritionText}>
+                        탄 {currentMeal.dinner.carbs}g
+                      </Text>
+                    </View>
+                    <View style={styles.miniNutrient}>
+                      <Icon name="ellipse" size={8} color="#ef4444" />
+                      <Text style={styles.mealNutritionText}>
+                        단 {currentMeal.dinner.protein}g
+                      </Text>
+                    </View>
+                    <View style={styles.miniNutrient}>
+                      <Icon name="ellipse" size={8} color="#eab308" />
+                      <Text style={styles.mealNutritionText}>
+                        지 {currentMeal.dinner.fat}g
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.mealTags}>
+                    {currentMeal.dinner.meals.length === 0 ? (
+                      <View style={styles.emptyMealState}>
+                        <Text style={styles.emptyMealText}>식사 없음</Text>
+                      </View>
+                    ) : (
+                      currentMeal.dinner.meals.map(
+                        (meal: any, index: number) => (
+                          <View key={index} style={styles.mealTag}>
+                            <LinearGradient
+                              colors={[
+                                "rgba(227,255,124,0.2)",
+                                "rgba(168,224,99,0.1)",
+                              ]}
+                              style={styles.mealTagGradient}
+                            >
+                              <Text style={styles.mealName}>{meal.name}</Text>
+                              <Text style={styles.mealCal}>
+                                ({meal.calories}kcal)
+                              </Text>
+                              <TouchableOpacity
+                                style={styles.mealDeleteBtn}
+                                onPress={() =>
+                                  handleDeleteMeal("dinner", index)
+                                }
+                                activeOpacity={0.7}
+                              >
+                                <Icon
+                                  name="close-circle"
+                                  size={18}
+                                  color="rgba(0,0,0,0.5)"
+                                />
+                              </TouchableOpacity>
+                            </LinearGradient>
+                          </View>
+                        )
+                      )
+                    )}
+                  </View>
+                </LinearGradient>
+              </View>
+
+              <View style={styles.actionButtons}>
+                <TouchableOpacity
+                  style={styles.saveButton}
+                  onPress={handleSaveMealPlan}
+                  disabled={loading}
+                  activeOpacity={0.9}
+                >
+                  <LinearGradient
+                    colors={["#e3ff7c", "#a8e063"]}
+                    style={styles.saveButtonGradient}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#111827" />
+                    ) : (
+                      <>
+                        <Icon
+                          name="bookmark"
+                          size={20}
+                          color="#111827"
+                          style={{ marginRight: 8 }}
+                        />
+                        <Text style={styles.saveButtonText}>식단 저장하기</Text>
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.refreshButton}
+                  onPress={handleGetRecommendation}
+                  disabled={loading}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
+                    style={styles.refreshButtonGradient}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#ffffff" />
+                    ) : (
+                      <>
+                        <Icon
+                          name="refresh"
+                          size={20}
+                          color="#ffffff"
+                          style={{ marginRight: 8 }}
+                        />
+                        <Text style={styles.refreshButtonText}>
+                          다시 추천받기
+                        </Text>
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          <View style={styles.navigation}>
             <TouchableOpacity
-              key={index}
-              style={[
-                styles.dayTab,
-                currentDay === index && styles.dayTabActive,
-              ]}
-              onPress={() => setCurrentDay(index)}
+              style={[styles.navBtn]}
+              onPress={() => setCurrentDay(Math.max(0, currentDay - 1))}
+              disabled={currentDay === 0}
+              activeOpacity={0.8}
             >
-              <Text
-                style={[
-                  styles.dayTabText,
-                  currentDay === index && styles.dayTabTextActive,
-                ]}
+              <LinearGradient
+                colors={
+                  currentDay === 0
+                    ? ["rgba(255,255,255,0.03)", "rgba(255,255,255,0.01)"]
+                    : ["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]
+                }
+                style={styles.navBtnGradient}
               >
-                {index + 1}일차
-              </Text>
+                <Icon
+                  name="chevron-back"
+                  size={24}
+                  color={currentDay === 0 ? "#374151" : "#ffffff"}
+                />
+              </LinearGradient>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
 
-        {currentMeal && (
-          <View style={styles.mealContent}>
-            <View style={styles.nutritionCard}>
-              <Text style={styles.caloriesTotal}>
-                {currentMeal.totalCalories}Kcal
+            <View style={styles.dayIndicator}>
+              <Text style={styles.dayIndicatorText}>
+                {currentDay + 1} / {weeklyMeals.length}
               </Text>
-              <View style={styles.nutritionInfo}>
-                <View style={styles.nutritionItem}>
-                  <Text style={styles.nutritionLabel}>탄수화물</Text>
-                  <Text style={styles.nutritionValue}>
-                    {currentMeal.carbs}g
-                  </Text>
-                </View>
-                <View style={styles.nutritionItem}>
-                  <Text style={styles.nutritionLabel}>단백질</Text>
-                  <Text style={styles.nutritionValue}>
-                    {currentMeal.protein}g
-                  </Text>
-                </View>
-                <View style={styles.nutritionItem}>
-                  <Text style={styles.nutritionLabel}>지방</Text>
-                  <Text style={styles.nutritionValue}>{currentMeal.fat}g</Text>
-                </View>
-              </View>
             </View>
 
-            <View style={styles.mealCard}>
-              <View style={styles.mealCardHeader}>
-                <Text style={styles.mealTitle}>🌅 아침</Text>
-                <View style={styles.mealCaloriesInfo}>
-                  <Text style={styles.mealCalories}>
-                    {currentMeal.breakfast.calories}{" "}
-                    <Text style={styles.kcalUnit}>kcal</Text>
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.mealNutritionMini}>
-                <Text style={styles.mealNutritionText}>
-                  탄 {currentMeal.breakfast.carbs}g
-                </Text>
-                <Text style={styles.mealNutritionText}>
-                  단 {currentMeal.breakfast.protein}g
-                </Text>
-                <Text style={styles.mealNutritionText}>
-                  지 {currentMeal.breakfast.fat}g
-                </Text>
-              </View>
-              <View style={styles.mealTags}>
-                {currentMeal.breakfast.meals.map((meal: any, index: number) => (
-                  <View key={index} style={styles.mealTag}>
-                    <Text style={styles.mealName}>{meal.name}</Text>
-                    <Text style={styles.mealCal}>({meal.calories}kcal)</Text>
-                    {currentMeal.breakfast.meals.length > 1 && (
-                      <TouchableOpacity
-                        style={styles.mealDeleteBtn}
-                        onPress={() => handleDeleteMeal("breakfast", index)}
-                      >
-                        <Text style={styles.iconSmall}>✕</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.mealCard}>
-              <View style={styles.mealCardHeader}>
-                <Text style={styles.mealTitle}>☀️ 점심</Text>
-                <View style={styles.mealCaloriesInfo}>
-                  <Text style={styles.mealCalories}>
-                    {currentMeal.lunch.calories}{" "}
-                    <Text style={styles.kcalUnit}>kcal</Text>
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.mealNutritionMini}>
-                <Text style={styles.mealNutritionText}>
-                  탄 {currentMeal.lunch.carbs}g
-                </Text>
-                <Text style={styles.mealNutritionText}>
-                  단 {currentMeal.lunch.protein}g
-                </Text>
-                <Text style={styles.mealNutritionText}>
-                  지 {currentMeal.lunch.fat}g
-                </Text>
-              </View>
-              <View style={styles.mealTags}>
-                {currentMeal.lunch.meals.map((meal: any, index: number) => (
-                  <View key={index} style={styles.mealTag}>
-                    <Text style={styles.mealName}>{meal.name}</Text>
-                    <Text style={styles.mealCal}>({meal.calories}kcal)</Text>
-                    {currentMeal.lunch.meals.length > 1 && (
-                      <TouchableOpacity
-                        style={styles.mealDeleteBtn}
-                        onPress={() => handleDeleteMeal("lunch", index)}
-                      >
-                        <Text style={styles.iconSmall}>✕</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.mealCard}>
-              <View style={styles.mealCardHeader}>
-                <Text style={styles.mealTitle}>🌙 저녁</Text>
-                <View style={styles.mealCaloriesInfo}>
-                  <Text style={styles.mealCalories}>
-                    {currentMeal.dinner.calories}{" "}
-                    <Text style={styles.kcalUnit}>kcal</Text>
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.mealNutritionMini}>
-                <Text style={styles.mealNutritionText}>
-                  탄 {currentMeal.dinner.carbs}g
-                </Text>
-                <Text style={styles.mealNutritionText}>
-                  단 {currentMeal.dinner.protein}g
-                </Text>
-                <Text style={styles.mealNutritionText}>
-                  지 {currentMeal.dinner.fat}g
-                </Text>
-              </View>
-              <View style={styles.mealTags}>
-                {currentMeal.dinner.meals.map((meal: any, index: number) => (
-                  <View key={index} style={styles.mealTag}>
-                    <Text style={styles.mealName}>{meal.name}</Text>
-                    <Text style={styles.mealCal}>({meal.calories}kcal)</Text>
-                    {currentMeal.dinner.meals.length > 1 && (
-                      <TouchableOpacity
-                        style={styles.mealDeleteBtn}
-                        onPress={() => handleDeleteMeal("dinner", index)}
-                      >
-                        <Text style={styles.iconSmall}>✕</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={[styles.btn, styles.btnPrimary]}
-                onPress={handleSaveMealPlan}
-                disabled={loading}
+            <TouchableOpacity
+              style={[styles.navBtn]}
+              onPress={() =>
+                setCurrentDay(Math.min(weeklyMeals.length - 1, currentDay + 1))
+              }
+              disabled={currentDay === weeklyMeals.length - 1}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={
+                  currentDay === weeklyMeals.length - 1
+                    ? ["rgba(255,255,255,0.03)", "rgba(255,255,255,0.01)"]
+                    : ["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]
+                }
+                style={styles.navBtnGradient}
               >
-                {loading ? (
-                  <ActivityIndicator color="#111827" />
-                ) : (
-                  <Text style={styles.btnPrimaryText}>💾 식단 저장하기</Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.btn, styles.btnSecondary]}
-                onPress={handleGetRecommendation}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#111827" />
-                ) : (
-                  <Text style={styles.btnSecondaryText}>
-                    🔄 식단 다시 추천받기
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
+                <Icon
+                  name="chevron-forward"
+                  size={24}
+                  color={
+                    currentDay === weeklyMeals.length - 1
+                      ? "#374151"
+                      : "#ffffff"
+                  }
+                />
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
-        )}
-
-        <View style={styles.navigation}>
-          <TouchableOpacity
-            style={[styles.navBtn, currentDay === 0 && styles.navBtnDisabled]}
-            onPress={() => setCurrentDay(Math.max(0, currentDay - 1))}
-            disabled={currentDay === 0}
-          >
-            <Text style={styles.icon}>←</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.navBtn,
-              currentDay === weeklyMeals.length - 1 && styles.navBtnDisabled,
-            ]}
-            onPress={() =>
-              setCurrentDay(Math.min(weeklyMeals.length - 1, currentDay + 1))
-            }
-            disabled={currentDay === weeklyMeals.length - 1}
-          >
-            <Text style={styles.icon}>→</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#111111",
+  },
+  safeArea: {
+    flex: 1,
   },
   contentWrapper: {
     flex: 1,
   },
   contentContainer: {
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: 20,
     paddingBottom: 40,
-  },
-  welcomeHeader: {
-    alignItems: "center",
-    marginTop: 140,
-    marginBottom: 40,
-  },
-  welcomeTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#ffffff",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  welcomeSubtitle: {
-    fontSize: 16,
-    color: "#ffffff",
-    textAlign: "center",
-  },
-  btn: {
-    width: "90%",
-    alignSelf: "center",
-    borderRadius: 10,
-    marginBottom: 10,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  btnPrimary: {
-    backgroundColor: "#e3ff7c",
-  },
-  btnSecondary: {
-    backgroundColor: "#e3ff7c",
-  },
-  btnPrimaryText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111827",
-  },
-  btnSecondaryText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111827",
-  },
-  loadingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  loadingText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#111827",
-  },
-  excludedPreview: {
-    backgroundColor: "#464646",
-    marginTop: 20,
-    borderRadius: 10,
-    padding: 16,
-    width: "90%",
-    alignSelf: "center",
-  },
-  excludedPreviewLabel: {
-    fontSize: 16,
-    color: "#ffffff",
-    marginBottom: 10,
-  },
-  tagList: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  tag: {
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-  },
-  tagExcluded: {
-    backgroundColor: "#666",
-  },
-  tagText: {
-    fontSize: 14,
-    color: "#ffffff",
-  },
-  savedMealsSection: {
-    width: "100%",
-    marginTop: 30,
-    padding: 20,
-  },
-  savedMealsTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#ffffff",
-    marginBottom: 15,
-  },
-  savedMealItem: {
-    backgroundColor: "#222222",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-  },
-  savedMealHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  savedMealTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    flex: 1,
-  },
-  savedMealDate: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#ffffff",
-  },
-  localBadge: {
-    backgroundColor: "#e3ff7c",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  localBadgeText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#111827",
-  },
-  savedMealInfo: {
-    fontSize: 14,
-    color: "#999999",
-  },
-  btnIconSmall: {
-    backgroundColor: "#464646",
-    padding: 8,
-    borderRadius: 6,
-  },
-  iconTiny: {
-    fontSize: 16,
-    color: "#ffffff",
   },
   header: {
     flexDirection: "row",
@@ -1144,19 +1831,216 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 16,
     paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#333333",
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: "700",
     color: "#ffffff",
+    letterSpacing: 0.5,
   },
-  mealDateContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
+  welcomeHeader: {
     alignItems: "center",
+    marginTop: 40,
+    marginBottom: 60,
+  },
+  welcomeIconContainer: {
+    marginBottom: 24,
+  },
+  welcomeIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#E3FF7C",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  welcomeEmoji: {
+    fontSize: 48,
+  },
+  welcomeTitle: {
+    fontSize: 32,
+    fontWeight: "bold",
+    color: "#ffffff",
+    marginBottom: 12,
+    textAlign: "center",
+    letterSpacing: 0.5,
+  },
+  welcomeSubtitle: {
+    fontSize: 16,
+    color: "#9ca3af",
+    textAlign: "center",
+    lineHeight: 24,
+    letterSpacing: 0.3,
+  },
+  mainActions: {
+    gap: 16,
+    marginBottom: 30,
+  },
+  primaryButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#E3FF7C",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  primaryButtonGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+  },
+  primaryButtonText: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#111827",
+    letterSpacing: 0.5,
+  },
+  secondaryButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  secondaryButtonGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    borderRadius: 16,
+  },
+  secondaryButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#ffffff",
+    letterSpacing: 0.3,
+  },
+  excludedPreview: {
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  glassCard: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  excludedPreviewLabel: {
+    fontSize: 15,
+    color: "#9ca3af",
+    marginBottom: 16,
+    fontWeight: "600",
+    letterSpacing: 0.3,
+  },
+  tagList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  tag: {
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  tagGradient: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+  },
+  tagText: {
+    fontSize: 14,
+    color: "#ffffff",
+    fontWeight: "500",
+  },
+  savedMealsSection: {
+    marginTop: 30,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#ffffff",
+    marginBottom: 16,
+    letterSpacing: 0.5,
+  },
+  savedMealItem: {
+    marginBottom: 12,
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  savedMealGradient: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  savedMealContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+  },
+  savedMealLeft: {
+    flex: 1,
+  },
+  savedMealTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 6,
+  },
+  savedMealTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#ffffff",
+    letterSpacing: 0.3,
+  },
+  localBadge: {
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  localBadgeGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  localBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#111827",
+    letterSpacing: 0.5,
+  },
+  savedMealInfo: {
+    fontSize: 14,
+    color: "#6b7280",
+    letterSpacing: 0.2,
+  },
+  deleteButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(239,68,68,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   excludedForm: {
     flex: 1,
@@ -1168,38 +2052,49 @@ const styles = StyleSheet.create({
   },
   inputGroup: {
     flexDirection: "row",
-    gap: 10,
+    gap: 12,
     marginBottom: 30,
+  },
+  inputWrapper: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  inputGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 16,
+  },
+  inputIcon: {
+    marginRight: 12,
   },
   textInput: {
     flex: 1,
-    height: 56,
-    backgroundColor: "#1f2937",
-    paddingHorizontal: 20,
+    height: 52,
     color: "#ffffff",
-    borderWidth: 2,
-    borderColor: "#374151",
-    borderRadius: 12,
     fontSize: 15,
+    letterSpacing: 0.3,
   },
-  iconBtn: {
+  addButton: {
     width: 56,
     height: 56,
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#E3FF7C",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  addButtonGradient: {
+    width: "100%",
+    height: "100%",
     alignItems: "center",
     justifyContent: "center",
-  },
-  btnAdd: {
-    width: 56,
-    height: 56,
-    backgroundColor: "#e3ff7c",
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconAdd: {
-    fontSize: 24,
-    fontWeight: "600",
-    color: "#111827",
   },
   excludedList: {
     gap: 12,
@@ -1207,208 +2102,462 @@ const styles = StyleSheet.create({
     minHeight: 200,
   },
   excludedItem: {
-    backgroundColor: "#1f2937",
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  excludedItemGradient: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: "#374151",
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 14,
+  },
+  excludedItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    gap: 12,
+  },
+  excludedItemIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(239,68,68,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   excludedItemText: {
     fontSize: 16,
     fontWeight: "500",
     color: "#ffffff",
     flex: 1,
+    letterSpacing: 0.3,
   },
-  btnDelete: {
-    backgroundColor: "transparent",
-    padding: 8,
+  removeButton: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  iconDelete: {
-    fontSize: 20,
-    color: "#ef4444",
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+    paddingHorizontal: 40,
   },
   emptyMessage: {
     textAlign: "center",
     color: "#6b7280",
-    fontSize: 15,
-    paddingVertical: 60,
-    paddingHorizontal: 20,
+    fontSize: 16,
+    fontWeight: "600",
+    marginTop: 16,
+    marginBottom: 8,
+    letterSpacing: 0.3,
   },
-  btnComplete: {
-    width: "100%",
-    height: 56,
-    marginTop: 20,
+  emptySubtext: {
+    textAlign: "center",
+    color: "#4b5563",
+    fontSize: 14,
+    letterSpacing: 0.2,
+  },
+  completeButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#E3FF7C",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  completeButtonGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 18,
+  },
+  completeButtonText: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#111827",
+    letterSpacing: 0.5,
+  },
+  mealDateContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 16,
+    alignItems: "center",
+  },
+  dateBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(227,255,124,0.2)",
   },
   mealDate: {
     fontSize: 14,
-    color: "#999999",
-    textAlign: "center",
+    color: "#E3FF7C",
+    fontWeight: "600",
+    letterSpacing: 0.3,
   },
   dayTabs: {
-    marginVertical: 10,
+    marginVertical: 16,
   },
   dayTabsContent: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 20,
     gap: 10,
+  },
+  dayTabContainer: {
+    borderRadius: 24,
   },
   dayTab: {
-    borderRadius: 20,
-    backgroundColor: "#464646",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    marginLeft: 2,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
   },
   dayTabActive: {
-    backgroundColor: "#e3ff7c",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+    shadowColor: "#E3FF7C",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   dayTabText: {
-    fontSize: 13,
-    color: "#ffffff",
+    fontSize: 14,
+    color: "#9ca3af",
+    fontWeight: "500",
+    letterSpacing: 0.3,
   },
   dayTabTextActive: {
+    fontSize: 14,
     color: "#111827",
-    fontWeight: "600",
+    fontWeight: "700",
+    letterSpacing: 0.3,
   },
   mealContent: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 20,
     paddingBottom: 20,
-    gap: 10,
+  },
+  nutritionCardContainer: {
+    marginBottom: 20,
   },
   nutritionCard: {
-    marginLeft: 9,
-    width: "90%",
-    backgroundColor: "#1f2937",
-    padding: 10,
-    borderRadius: 10,
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  caloriesHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  caloriesTotalLabel: {
+    fontSize: 14,
+    color: "#9ca3af",
+    marginBottom: 6,
+    fontWeight: "500",
+    letterSpacing: 0.5,
+  },
+  caloriesTotalRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
   },
   caloriesTotal: {
-    marginTop: 5,
-    fontWeight: "bold",
+    fontSize: 42,
+    fontWeight: "800",
     color: "#ffffff",
-    fontSize: 36,
-    marginBottom: 10,
+    letterSpacing: -0.5,
+  },
+  caloriesTotalUnit: {
+    fontSize: 20,
+    color: "#6b7280",
+    marginLeft: 4,
+    fontWeight: "600",
+  },
+  caloriesIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    overflow: "hidden",
+  },
+  caloriesIconGradient: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  nutritionDivider: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    marginBottom: 20,
   },
   nutritionInfo: {
     flexDirection: "row",
     justifyContent: "space-between",
-    gap: 10,
+    gap: 12,
   },
   nutritionItem: {
     flex: 1,
-    padding: 10,
-    backgroundColor: "rgba(17, 24, 39, 0.5)",
-    borderRadius: 8,
     alignItems: "center",
   },
+  nutritionIconContainer: {
+    marginBottom: 10,
+  },
+  nutritionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   nutritionLabel: {
-    color: "#ffffff",
-    fontSize: 15,
-    marginBottom: 4,
+    color: "#9ca3af",
+    fontSize: 13,
+    marginBottom: 6,
+    fontWeight: "500",
+    letterSpacing: 0.3,
   },
   nutritionValue: {
-    fontWeight: "600",
+    fontWeight: "700",
+    fontSize: 20,
+    color: "#ffffff",
+    letterSpacing: 0.3,
+  },
+  nutritionUnit: {
     fontSize: 14,
-    color: "#e3ff7c",
+    color: "#6b7280",
+    fontWeight: "600",
+  },
+  mealCardContainer: {
+    marginBottom: 16,
   },
   mealCard: {
-    width: "90%",
-    marginLeft: 10,
-    backgroundColor: "#464646",
-    padding: 10,
-    borderRadius: 10,
+    borderRadius: 18,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
   },
   mealCardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 16,
+  },
+  mealTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  mealIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: "hidden",
+  },
+  mealIcon: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mealEmoji: {
+    fontSize: 24,
   },
   mealTitle: {
-    fontWeight: "bold",
-    fontSize: 16,
+    fontWeight: "700",
+    fontSize: 18,
     color: "#ffffff",
+    letterSpacing: 0.3,
   },
-  mealCaloriesInfo: {
-    alignItems: "flex-end",
+  mealTime: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginTop: 2,
+    fontWeight: "500",
+  },
+  mealCaloriesContainer: {
+    flexDirection: "row",
+    alignItems: "baseline",
   },
   mealCalories: {
-    fontWeight: "bold",
-    fontSize: 16,
+    fontWeight: "700",
+    fontSize: 20,
     color: "#ffffff",
+    letterSpacing: 0.3,
   },
-  kcalUnit: {
-    color: "#9ca3af",
+  mealCaloriesUnit: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginLeft: 2,
+    fontWeight: "600",
   },
   mealNutritionMini: {
     flexDirection: "row",
-    gap: 10,
-    marginBottom: 5,
-    paddingVertical: 5,
+    gap: 16,
+    marginBottom: 16,
+    paddingVertical: 8,
+  },
+  miniNutrient: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   mealNutritionText: {
-    fontSize: 14,
-    color: "#ffffff",
-    fontWeight: "500",
+    fontSize: 13,
+    color: "#9ca3af",
+    fontWeight: "600",
+    letterSpacing: 0.2,
   },
   mealTags: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
+    gap: 8,
   },
   mealTag: {
-    backgroundColor: "#e3ff7c",
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  mealTagGradient: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 10,
-    borderRadius: 15,
-    gap: 5,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: "rgba(227,255,124,0.2)",
+    borderRadius: 14,
   },
   mealName: {
-    color: "#000000",
+    color: "#ffffff",
     fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 0.2,
   },
   mealCal: {
-    color: "#000000",
+    color: "#9ca3af",
     fontSize: 12,
+    fontWeight: "500",
   },
   mealDeleteBtn: {
-    backgroundColor: "transparent",
-    padding: 4,
+    marginLeft: 4,
   },
-  iconSmall: {
+  // ✅ 빈 식사 상태 스타일 추가
+  emptyMealState: {
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
+    borderStyle: "dashed",
+    width: "100%",
+  },
+  emptyMealText: {
     fontSize: 14,
-    color: "#000000",
+    color: "#6b7280",
+    fontWeight: "500",
+    fontStyle: "italic",
   },
   actionButtons: {
+    marginTop: 24,
+    gap: 12,
+  },
+  saveButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#E3FF7C",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  saveButtonGradient: {
+    flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    marginTop: 10,
+    justifyContent: "center",
+    paddingVertical: 18,
+  },
+  saveButtonText: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#111827",
+    letterSpacing: 0.5,
+  },
+  refreshButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  refreshButtonGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    borderRadius: 16,
+  },
+  refreshButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#ffffff",
+    letterSpacing: 0.3,
   },
   navigation: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 15,
-    marginHorizontal: 10,
-    marginBottom: 20,
+    alignItems: "center",
+    marginTop: 20,
+    marginBottom: 40,
+    marginHorizontal: 20,
   },
   navBtn: {
-    backgroundColor: "#464646",
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 10,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    overflow: "hidden",
+  },
+  navBtnGradient: {
+    width: "100%",
+    height: "100%",
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 25,
   },
-  navBtnDisabled: {
-    opacity: 0.3,
+  dayIndicator: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
   },
-  icon: {
-    fontSize: 20,
-    color: "#ffffff",
+  dayIndicatorText: {
+    fontSize: 14,
+    color: "#9ca3af",
+    fontWeight: "600",
+    letterSpacing: 0.5,
   },
 });
 
