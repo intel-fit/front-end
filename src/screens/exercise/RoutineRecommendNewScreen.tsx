@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+// src/screens/RoutineRecommendNewScreen.tsx
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -8,18 +9,168 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
+  Animated,
+  Easing,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { authAPI, recommendedExerciseAPI } from "../../services";
+import { recommendedExerciseAPI } from "../../services";
+import { LinearGradient } from "expo-linear-gradient";
 
-// 운동 카테고리별 아이콘 매핑
+const { width } = Dimensions.get("window");
+
+const LOADING_MESSAGES = [
+  "입력하신 신체 정보를 분석하는 중...",
+  "회원님께 최적화된 루틴을 구성하는 중...",
+  "부위별 밸런스를 계산하는 중...",
+  "가장 효과적인 운동 조합을 찾는 중...",
+  "거의 다 됐어요! 득근할 준비 되셨나요?",
+];
+
+const LoadingOverlay = ({
+  visible,
+  messages = LOADING_MESSAGES,
+  onCancel,
+}: {
+  visible: boolean;
+  messages?: string[];
+  onCancel?: () => void;
+}) => {
+  const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!visible) {
+      setCurrentMessageIndex(0);
+      fadeAnim.setValue(1);
+      return;
+    }
+
+    Animated.loop(
+      Animated.timing(spinAnim, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+        easing: Easing.linear,
+      })
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(scaleAnim, {
+          toValue: 1.1,
+          duration: 1000,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease),
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease),
+        }),
+      ])
+    ).start();
+
+    fadeAnim.setValue(1);
+
+    const interval = setInterval(() => {
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.ease),
+      }).start(() => {
+        setCurrentMessageIndex((prev) => (prev + 1) % messages.length);
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+          easing: Easing.in(Easing.ease),
+        }).start();
+      });
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [visible, messages.length]);
+
+  const spin = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={onCancel}
+    >
+      <View style={loadingStyles.overlay}>
+        <LinearGradient
+          colors={[
+            "rgba(0,0,0,0.95)",
+            "rgba(17,24,39,0.95)",
+            "rgba(0,0,0,0.95)",
+          ]}
+          style={StyleSheet.absoluteFill}
+        />
+
+        <Animated.View
+          style={[
+            loadingStyles.container,
+            { transform: [{ scale: scaleAnim }] },
+          ]}
+        >
+          <Animated.View
+            style={[
+              loadingStyles.spinnerContainer,
+              { transform: [{ rotate: spin }] },
+            ]}
+          >
+            <View style={loadingStyles.spinnerOuter}>
+              <View style={loadingStyles.spinnerInner} />
+            </View>
+          </Animated.View>
+
+          <Animated.View
+            style={[{ opacity: fadeAnim }, loadingStyles.textContainer]}
+          >
+            <Text style={loadingStyles.message}>
+              {messages && messages.length > 0
+                ? messages[currentMessageIndex]
+                : "로딩 중..."}
+            </Text>
+          </Animated.View>
+
+          {onCancel && (
+            <TouchableOpacity
+              style={loadingStyles.cancelButton}
+              onPress={onCancel}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
+                style={loadingStyles.cancelButtonGradient}
+              >
+                <Text style={loadingStyles.cancelText}>요청 취소하기</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+};
+
 const getExerciseIcon = (category: string, muscleName: string) => {
-  // 유산소
   if (category === "CARDIO") return "🏃";
 
-  // 무산소 - 부위별
   const muscleIcons: { [key: string]: string } = {
     하체: "🦵",
     LEGS: "🦵",
@@ -39,11 +190,9 @@ const getExerciseIcon = (category: string, muscleName: string) => {
   return muscleIcons[muscleName] || "💪";
 };
 
-// API 응답을 UI 형식으로 변환
 const transformAIExerciseToUI = (apiResponse: any) => {
   const { plan } = apiResponse;
 
-  // 요일 순서 정의
   const dayOrder = [
     "월요일",
     "화요일",
@@ -54,64 +203,41 @@ const transformAIExerciseToUI = (apiResponse: any) => {
     "일요일",
   ];
 
-  // routines를 요일 순서대로 정렬
   const sortedRoutines = [...plan.routines].sort((a: any, b: any) => {
     return dayOrder.indexOf(a.dayOfWeek) - dayOrder.indexOf(b.dayOfWeek);
   });
 
-  // 7일치 배열로 변환
   const weekRoutines = sortedRoutines.map((routine: any) => {
-    // items를 exerciseOrder로 정렬
     const sortedItems = [...routine.items].sort(
       (a: any, b: any) => a.exerciseOrder - b.exerciseOrder
     );
 
-    // 각 운동을 UI 형식으로 변환
     return sortedItems.map((item: any) => {
       let name = "";
       let detail = "";
       let icon = "";
 
-      // 유산소 운동인 경우
       if (item.cardioTypeName) {
         name = item.cardioTypeName;
         icon = "🏃";
-
         const details = [];
-        if (item.targetDurationMinutes) {
+        if (item.targetDurationMinutes)
           details.push(`${item.targetDurationMinutes}분`);
-        }
-        if (item.targetDistance) {
-          details.push(`${item.targetDistance}km`);
-        }
-        if (item.targetCaloriesBurn) {
+        if (item.targetDistance) details.push(`${item.targetDistance}km`);
+        if (item.targetCaloriesBurn)
           details.push(`${item.targetCaloriesBurn}kcal`);
-        }
         detail = details.join(" · ");
-      }
-      // 무산소 운동인 경우
-      else if (item.resistanceExerciseTypeName) {
+      } else if (item.resistanceExerciseTypeName) {
         name = item.resistanceExerciseTypeName;
         icon = getExerciseIcon("RESISTANCE", item.muscleGroupName || "");
-
         const details = [];
-        if (item.recommendedSets) {
-          details.push(`${item.recommendedSets}세트`);
-        }
-        if (item.recommendedWeight) {
-          details.push(`${item.recommendedWeight}kg`);
-        }
-        if (item.recommendedReps) {
-          details.push(`${item.recommendedReps}회`);
-        }
+        if (item.recommendedSets) details.push(`${item.recommendedSets}세트`);
+        if (item.recommendedWeight) details.push(`${item.recommendedWeight}kg`);
+        if (item.recommendedReps) details.push(`${item.recommendedReps}회`);
         detail = details.join(" X ");
       }
 
-      return {
-        name: name || "운동",
-        detail: detail || "",
-        icon: icon || "💪",
-      };
+      return { name: name || "운동", detail: detail || "", icon: icon || "💪" };
     });
   });
 
@@ -129,53 +255,25 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
   const [targetParts, setTargetParts] = useState<string[]>([]);
   const [savedRoutines, setSavedRoutines] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [currentPlanId, setCurrentPlanId] = useState<number | null>(null);
 
-  // ✅ weekRoutines를 state로 관리
   const [weekRoutines, setWeekRoutines] = useState([
     [
       { name: "시작 스트레칭", detail: "6회차 스트레칭", icon: "🏃" },
       { name: "레그 프레스", detail: "4세트 X 20kg X 15회", icon: "🦵" },
       { name: "레그 컬", detail: "3세트 X 12kg X 15회", icon: "🦵" },
     ],
-    [
-      { name: "시작 스트레칭", detail: "6회차 스트레칭", icon: "🏃" },
-      { name: "벤치 프레스", detail: "4세트 X 40kg X 12회", icon: "💪" },
-      { name: "덤벨 플라이", detail: "3세트 X 15kg X 12회", icon: "💪" },
-    ],
-    [
-      { name: "시작 스트레칭", detail: "6회차 스트레칭", icon: "🏃" },
-      { name: "데드리프트", detail: "4세트 X 60kg X 10회", icon: "🏋️" },
-      { name: "랫 풀다운", detail: "3세트 X 45kg X 12회", icon: "🏋️" },
-    ],
-    [
-      { name: "시작 스트레칭", detail: "6회차 스트레칭", icon: "🏃" },
-      { name: "숄더 프레스", detail: "4세트 X 20kg X 12회", icon: "💪" },
-      {
-        name: "사이드 레터럴 레이즈",
-        detail: "3세트 X 10kg X 15회",
-        icon: "💪",
-      },
-    ],
-    [
-      { name: "시작 스트레칭", detail: "6회차 스트레칭", icon: "🏃" },
-      { name: "스쿼트", detail: "4세트 X 50kg X 12회", icon: "🦵" },
-      { name: "레그 익스텐션", detail: "3세트 X 30kg X 15회", icon: "🦵" },
-    ],
-    [
-      { name: "시작 스트레칭", detail: "6회차 스트레칭", icon: "🏃" },
-      { name: "바벨 컬", detail: "4세트 X 20kg X 12회", icon: "💪" },
-      {
-        name: "트라이셉스 익스텐션",
-        detail: "3세트 X 15kg X 12회",
-        icon: "💪",
-      },
-    ],
-    [
-      { name: "시작 스트레칭", detail: "6회차 스트레칭", icon: "🏃" },
-      { name: "크런치", detail: "4세트 X 20회", icon: "🔥" },
-      { name: "플랭크", detail: "3세트 X 60초", icon: "🔥" },
-    ],
   ]);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  }, [showRoutine]);
 
   const weekDays = [
     "1일차",
@@ -196,29 +294,56 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
 
   const loadSavedRoutines = async () => {
     try {
+      // 서버에서 불러오기
+      const serverResponse =
+        await recommendedExerciseAPI.getSavedExercisePlans();
+      const serverPlans = serverResponse.plans || [];
+
+      // 로컬에서 불러오기
       const stored = await AsyncStorage.getItem("savedRoutines");
-      if (stored) {
-        setSavedRoutines(JSON.parse(stored));
-      }
+      const localPlans = stored ? JSON.parse(stored) : [];
+
+      // 합치기
+      const allPlans = [...serverPlans, ...localPlans];
+
+      setSavedRoutines(allPlans);
+      console.log(`📋 총 ${allPlans.length}개 루틴 로드 완료`);
     } catch (error) {
-      console.log("Failed to load routines", error);
+      console.log("저장된 루틴 불러오기 실패:", error);
+      // 실패해도 로컬 데이터라도 보여주기
+      try {
+        const stored = await AsyncStorage.getItem("savedRoutines");
+        if (stored) setSavedRoutines(JSON.parse(stored));
+      } catch (e) {
+        console.error("로컬 데이터도 불러오기 실패:", e);
+      }
     }
   };
 
   const handleWeakPartToggle = (part: string) => {
-    if (weakParts.includes(part)) {
+    if (weakParts.includes(part))
       setWeakParts(weakParts.filter((p) => p !== part));
-    } else {
-      setWeakParts([...weakParts, part]);
-    }
+    else setWeakParts([...weakParts, part]);
   };
 
   const handleTargetPartToggle = (part: string) => {
-    if (targetParts.includes(part)) {
+    if (targetParts.includes(part))
       setTargetParts(targetParts.filter((p) => p !== part));
-    } else {
-      setTargetParts([...targetParts, part]);
-    }
+    else setTargetParts([...targetParts, part]);
+  };
+
+  const handleCancelLoading = () => {
+    Alert.alert("요청 취소", "운동 루틴 생성을 취소하시겠습니까?", [
+      { text: "계속 기다리기", style: "cancel" },
+      {
+        text: "취소",
+        style: "destructive",
+        onPress: () => {
+          console.log("⚠️ 사용자가 로딩을 취소함");
+          setLoading(false);
+        },
+      },
+    ]);
   };
 
   const handleGetRoutine = async () => {
@@ -227,384 +352,41 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
     try {
       console.log("🏋️ 운동 루틴 추천 시작");
 
-      // ✅ 1단계: 실제 API 시도
-      try {
-        const apiResponse = await recommendedExerciseAPI.generateExercisePlan();
+      const apiResponse = await recommendedExerciseAPI.generateExercisePlan();
 
-        if (apiResponse && apiResponse.success) {
-          console.log("✅ API 성공, 실제 데이터 사용");
-          const convertedRoutines = transformAIExerciseToUI(apiResponse);
-          setWeekRoutines(convertedRoutines);
-          setShowRoutine(true);
-          setSelectedDay(0);
-          Alert.alert(
-            "성공",
-            apiResponse.message || "운동 루틴이 생성되었습니다!"
-          );
-          return;
-        }
-      } catch (apiError: any) {
-        console.log("⚠️ API 실패 (500 에러), 목업 데이터로 전환");
-        console.log("에러 상세:", apiError.message);
+      if (apiResponse && apiResponse.success) {
+        console.log("✅ API 응답 성공:", apiResponse.message);
+
+        // planId 저장
+        const planId = apiResponse.plan?.id;
+        setCurrentPlanId(planId);
+
+        // UI 형식으로 변환
+        const convertedRoutines = transformAIExerciseToUI(apiResponse);
+
+        setWeekRoutines(convertedRoutines);
+        setShowRoutine(true);
+        setSelectedDay(0);
+
+        Alert.alert(
+          "성공",
+          apiResponse.message || "운동 루틴이 생성되었습니다!"
+        );
+        return;
       }
 
-      // ✅ 2단계: API 실패 시 목업 데이터 사용
-      console.log("📦 목업 데이터로 운동 루틴 생성");
-
-      // 약간의 로딩 시간 (실제 API 느낌)
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      // ✅ 목업 응답 데이터 (백엔드가 준 형식과 동일)
-      const mockApiResponse = {
-        success: true,
-        message: "맞춤 운동 플랜이 생성되었습니다 (샘플 데이터)",
-        plan: {
-          id: 1,
-          planName: "체지방 감량을 위한 7일 운동 플랜",
-          description: "주 7회, 유산소 및 근력 운동 병행",
-          targetWeeklyMinutes: 420,
-          routines: [
-            // 월요일 - 하체
-            {
-              id: 1,
-              routineName: "하체 집중 데이",
-              dayOfWeek: "월요일",
-              exerciseCategory: "RESISTANCE",
-              exerciseCategoryName: "무산소",
-              estimatedDurationMinutes: 60,
-              items: [
-                {
-                  id: 1,
-                  resistanceExerciseTypeName: "바벨 스쿼트",
-                  muscleGroupName: "하체",
-                  recommendedSets: 4,
-                  recommendedReps: "10-12",
-                  recommendedWeight: "80-100",
-                  exerciseOrder: 1,
-                },
-                {
-                  id: 2,
-                  resistanceExerciseTypeName: "레그 프레스",
-                  muscleGroupName: "하체",
-                  recommendedSets: 3,
-                  recommendedReps: "12-15",
-                  recommendedWeight: "100-120",
-                  exerciseOrder: 2,
-                },
-                {
-                  id: 3,
-                  resistanceExerciseTypeName: "레그 컬",
-                  muscleGroupName: "하체",
-                  recommendedSets: 3,
-                  recommendedReps: "12-15",
-                  recommendedWeight: "40-50",
-                  exerciseOrder: 3,
-                },
-                {
-                  id: 4,
-                  resistanceExerciseTypeName: "런지",
-                  muscleGroupName: "하체",
-                  recommendedSets: 3,
-                  recommendedReps: "10-12",
-                  recommendedWeight: "20-30",
-                  exerciseOrder: 4,
-                },
-              ],
-            },
-            // 화요일 - 가슴
-            {
-              id: 2,
-              routineName: "가슴 집중 데이",
-              dayOfWeek: "화요일",
-              exerciseCategory: "RESISTANCE",
-              exerciseCategoryName: "무산소",
-              estimatedDurationMinutes: 60,
-              items: [
-                {
-                  id: 5,
-                  resistanceExerciseTypeName: "벤치 프레스",
-                  muscleGroupName: "가슴",
-                  recommendedSets: 4,
-                  recommendedReps: "8-10",
-                  recommendedWeight: "60-80",
-                  exerciseOrder: 1,
-                },
-                {
-                  id: 6,
-                  resistanceExerciseTypeName: "인클라인 덤벨 프레스",
-                  muscleGroupName: "가슴",
-                  recommendedSets: 3,
-                  recommendedReps: "10-12",
-                  recommendedWeight: "20-25",
-                  exerciseOrder: 2,
-                },
-                {
-                  id: 7,
-                  resistanceExerciseTypeName: "케이블 플라이",
-                  muscleGroupName: "가슴",
-                  recommendedSets: 3,
-                  recommendedReps: "12-15",
-                  recommendedWeight: "15-20",
-                  exerciseOrder: 3,
-                },
-                {
-                  id: 8,
-                  resistanceExerciseTypeName: "푸쉬업",
-                  muscleGroupName: "가슴",
-                  recommendedSets: 3,
-                  recommendedReps: "15-20",
-                  exerciseOrder: 4,
-                },
-              ],
-            },
-            // 수요일 - 등
-            {
-              id: 3,
-              routineName: "등 집중 데이",
-              dayOfWeek: "수요일",
-              exerciseCategory: "RESISTANCE",
-              exerciseCategoryName: "무산소",
-              estimatedDurationMinutes: 60,
-              items: [
-                {
-                  id: 9,
-                  resistanceExerciseTypeName: "데드리프트",
-                  muscleGroupName: "등",
-                  recommendedSets: 4,
-                  recommendedReps: "6-8",
-                  recommendedWeight: "80-100",
-                  exerciseOrder: 1,
-                },
-                {
-                  id: 10,
-                  resistanceExerciseTypeName: "랫 풀다운",
-                  muscleGroupName: "등",
-                  recommendedSets: 4,
-                  recommendedReps: "10-12",
-                  recommendedWeight: "50-60",
-                  exerciseOrder: 2,
-                },
-                {
-                  id: 11,
-                  resistanceExerciseTypeName: "시티드 로우",
-                  muscleGroupName: "등",
-                  recommendedSets: 3,
-                  recommendedReps: "10-12",
-                  recommendedWeight: "45-55",
-                  exerciseOrder: 3,
-                },
-                {
-                  id: 12,
-                  resistanceExerciseTypeName: "바벨 로우",
-                  muscleGroupName: "등",
-                  recommendedSets: 3,
-                  recommendedReps: "8-10",
-                  recommendedWeight: "50-60",
-                  exerciseOrder: 4,
-                },
-              ],
-            },
-            // 목요일 - 어깨
-            {
-              id: 4,
-              routineName: "어깨 집중 데이",
-              dayOfWeek: "목요일",
-              exerciseCategory: "RESISTANCE",
-              exerciseCategoryName: "무산소",
-              estimatedDurationMinutes: 60,
-              items: [
-                {
-                  id: 13,
-                  resistanceExerciseTypeName: "숄더 프레스",
-                  muscleGroupName: "어깨",
-                  recommendedSets: 4,
-                  recommendedReps: "10-12",
-                  recommendedWeight: "30-40",
-                  exerciseOrder: 1,
-                },
-                {
-                  id: 14,
-                  resistanceExerciseTypeName: "사이드 레터럴 레이즈",
-                  muscleGroupName: "어깨",
-                  recommendedSets: 3,
-                  recommendedReps: "12-15",
-                  recommendedWeight: "10-15",
-                  exerciseOrder: 2,
-                },
-                {
-                  id: 15,
-                  resistanceExerciseTypeName: "프론트 레이즈",
-                  muscleGroupName: "어깨",
-                  recommendedSets: 3,
-                  recommendedReps: "12-15",
-                  recommendedWeight: "10-15",
-                  exerciseOrder: 3,
-                },
-                {
-                  id: 16,
-                  resistanceExerciseTypeName: "리어 델트 플라이",
-                  muscleGroupName: "어깨",
-                  recommendedSets: 3,
-                  recommendedReps: "12-15",
-                  recommendedWeight: "8-12",
-                  exerciseOrder: 4,
-                },
-              ],
-            },
-            // 금요일 - 팔
-            {
-              id: 5,
-              routineName: "팔 집중 데이",
-              dayOfWeek: "금요일",
-              exerciseCategory: "RESISTANCE",
-              exerciseCategoryName: "무산소",
-              estimatedDurationMinutes: 60,
-              items: [
-                {
-                  id: 17,
-                  resistanceExerciseTypeName: "바벨 컬",
-                  muscleGroupName: "팔",
-                  recommendedSets: 4,
-                  recommendedReps: "10-12",
-                  recommendedWeight: "20-30",
-                  exerciseOrder: 1,
-                },
-                {
-                  id: 18,
-                  resistanceExerciseTypeName: "트라이셉스 푸쉬다운",
-                  muscleGroupName: "팔",
-                  recommendedSets: 4,
-                  recommendedReps: "10-12",
-                  recommendedWeight: "25-35",
-                  exerciseOrder: 2,
-                },
-                {
-                  id: 19,
-                  resistanceExerciseTypeName: "해머 컬",
-                  muscleGroupName: "팔",
-                  recommendedSets: 3,
-                  recommendedReps: "12-15",
-                  recommendedWeight: "15-20",
-                  exerciseOrder: 3,
-                },
-                {
-                  id: 20,
-                  resistanceExerciseTypeName: "오버헤드 익스텐션",
-                  muscleGroupName: "팔",
-                  recommendedSets: 3,
-                  recommendedReps: "10-12",
-                  recommendedWeight: "20-25",
-                  exerciseOrder: 4,
-                },
-              ],
-            },
-            // 토요일 - 유산소
-            {
-              id: 6,
-              routineName: "유산소 & 컨디셔닝",
-              dayOfWeek: "토요일",
-              exerciseCategory: "CARDIO",
-              exerciseCategoryName: "유산소",
-              estimatedDurationMinutes: 45,
-              items: [
-                {
-                  id: 21,
-                  cardioTypeName: "런닝머신",
-                  targetDurationMinutes: 30,
-                  targetDistance: 5,
-                  targetCaloriesBurn: 300,
-                  exerciseOrder: 1,
-                },
-                {
-                  id: 22,
-                  cardioTypeName: "사이클",
-                  targetDurationMinutes: 20,
-                  targetCaloriesBurn: 150,
-                  exerciseOrder: 2,
-                },
-              ],
-            },
-            // 일요일 - 복근 & 스트레칭
-            {
-              id: 7,
-              routineName: "코어 & 회복",
-              dayOfWeek: "일요일",
-              exerciseCategory: "RESISTANCE",
-              exerciseCategoryName: "무산소",
-              estimatedDurationMinutes: 40,
-              items: [
-                {
-                  id: 23,
-                  resistanceExerciseTypeName: "크런치",
-                  muscleGroupName: "복근",
-                  recommendedSets: 4,
-                  recommendedReps: "20-25",
-                  exerciseOrder: 1,
-                },
-                {
-                  id: 24,
-                  resistanceExerciseTypeName: "플랭크",
-                  muscleGroupName: "복근",
-                  recommendedSets: 3,
-                  recommendedReps: "60",
-                  exerciseOrder: 2,
-                },
-                {
-                  id: 25,
-                  resistanceExerciseTypeName: "레그 레이즈",
-                  muscleGroupName: "복근",
-                  recommendedSets: 3,
-                  recommendedReps: "15-20",
-                  exerciseOrder: 3,
-                },
-                {
-                  id: 26,
-                  resistanceExerciseTypeName: "러시안 트위스트",
-                  muscleGroupName: "복근",
-                  recommendedSets: 3,
-                  recommendedReps: "30-40",
-                  exerciseOrder: 4,
-                },
-              ],
-            },
-          ],
-          recommendationReason:
-            "사용자의 건강 목표와 현재 체지방률에 최적화된 플랜입니다",
-          createdAt: new Date().toISOString(),
-          saved: false,
-        },
-      };
-
-      // API 응답을 UI 형식으로 변환
-      const convertedRoutines = transformAIExerciseToUI(mockApiResponse);
-      setWeekRoutines(convertedRoutines);
-
-      setShowRoutine(true);
-      setSelectedDay(0);
-
-      // 개발 모드 알림
-      Alert.alert(
-        "개발 모드",
-        "현재 샘플 데이터를 표시하고 있습니다.\n\n백엔드 API가 준비되는 대로\n실제 AI 추천 데이터로 전환됩니다.",
-        [
-          {
-            text: "확인",
-            style: "default",
-          },
-        ]
-      );
+      throw new Error(apiResponse.message || "운동 루틴 생성에 실패했습니다.");
     } catch (error: any) {
-      console.error("❌ 전체 프로세스 실패:", error);
+      console.error("❌ 운동 루틴 생성 실패:", error);
       Alert.alert(
         "오류",
-        "운동 루틴 생성에 실패했습니다.\n잠시 후 다시 시도해주세요."
+        error.message || "운동 루틴 생성에 실패했습니다. 다시 시도해주세요."
       );
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ 루틴을 기록에 자동 추가하는 함수
   const addRoutineToActivities = async (routine: any) => {
     try {
       const userId = await AsyncStorage.getItem("userId");
@@ -616,18 +398,14 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
         (await AsyncStorage.getItem(storageKey)) || "[]"
       );
 
-      // 오늘부터 7일간의 날짜 생성
       const today = new Date();
       const newActivities: any[] = [];
 
-      // 각 요일의 운동을 해당 날짜에 추가
       routine.routine.forEach((dayExercises: any[], dayIndex: number) => {
-        // dayIndex: 0=월요일, 6=일요일
         const targetDate = new Date(today);
-        const todayDayOfWeek = today.getDay(); // 0=일요일
+        const todayDayOfWeek = today.getDay();
         const routineDayOfWeek = dayIndex === 6 ? 0 : dayIndex + 1;
 
-        // 오늘부터 해당 요일까지의 일수 계산
         let daysUntilTarget = routineDayOfWeek - todayDayOfWeek;
         if (daysUntilTarget < 0) daysUntilTarget += 7;
 
@@ -637,7 +415,6 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
           targetDate.getMonth() + 1
         ).padStart(2, "0")}-${String(targetDate.getDate()).padStart(2, "0")}`;
 
-        // 해당 날짜의 모든 운동 추가
         dayExercises.forEach((exercise, exerciseIndex) => {
           newActivities.push({
             id: Date.now() + dayIndex * 1000 + exerciseIndex,
@@ -652,7 +429,6 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
         });
       });
 
-      // 기존 기록 + 새 루틴 운동
       const updatedActivities = [...existingActivities, ...newActivities];
       await AsyncStorage.setItem(storageKey, JSON.stringify(updatedActivities));
 
@@ -663,397 +439,842 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
   };
 
   const handleSaveRoutine = async () => {
-    const currentDate = new Date();
-    const savedRoutine = {
-      id: Date.now(),
-      date: currentDate.toLocaleDateString("ko-KR"),
-      routine: weekRoutines,
-      level: level,
-      weakParts: [...weakParts],
-      targetParts: [...targetParts],
-    };
+    // planId가 있으면 서버에 저장
+    if (currentPlanId) {
+      try {
+        setLoading(true);
 
-    try {
-      // 1. 루틴 저장
-      const existingRoutines = JSON.parse(
-        (await AsyncStorage.getItem("savedRoutines")) || "[]"
-      );
-      const updatedRoutines = [...existingRoutines, savedRoutine];
-      await AsyncStorage.setItem(
-        "savedRoutines",
-        JSON.stringify(updatedRoutines)
-      );
-      setSavedRoutines(updatedRoutines);
+        const response = await recommendedExerciseAPI.saveExercisePlan(
+          currentPlanId
+        );
 
-      // 2. 기록에 자동 추가
-      await addRoutineToActivities(savedRoutine);
+        if (response.success) {
+          Alert.alert(
+            "저장 완료",
+            response.message || "루틴이 저장되었습니다!",
+            [
+              {
+                text: "확인",
+                onPress: async () => {
+                  await loadSavedRoutines();
+                  navigation.navigate("RoutineRecommend");
+                },
+              },
+            ]
+          );
+          return;
+        }
+      } catch (error: any) {
+        console.error("❌ 서버 저장 실패:", error);
+        Alert.alert("오류", error.message || "저장에 실패했습니다.");
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // planId가 없으면 로컬에만 저장
+      const currentDate = new Date();
+      const savedRoutine = {
+        id: Date.now(),
+        date: currentDate.toLocaleDateString("ko-KR"),
+        routine: weekRoutines,
+        level: level,
+        weakParts: [...weakParts],
+        targetParts: [...targetParts],
+      };
 
-      Alert.alert("저장 완료", "루틴이 저장되고 기록에 추가되었습니다!", [
-        {
-          text: "확인",
-          onPress: () => {
-            navigation.navigate("RoutineRecommend");
+      try {
+        const existingRoutines = JSON.parse(
+          (await AsyncStorage.getItem("savedRoutines")) || "[]"
+        );
+        const updatedRoutines = [...existingRoutines, savedRoutine];
+        await AsyncStorage.setItem(
+          "savedRoutines",
+          JSON.stringify(updatedRoutines)
+        );
+        setSavedRoutines(updatedRoutines);
+
+        await addRoutineToActivities(savedRoutine);
+
+        Alert.alert("저장 완료", "루틴이 로컬에 저장되었습니다!", [
+          {
+            text: "확인",
+            onPress: () => navigation.navigate("RoutineRecommend"),
           },
-        },
-      ]);
-    } catch (error) {
-      console.log("Failed to save routine", error);
-      Alert.alert("오류", "루틴 저장에 실패했습니다.");
+        ]);
+      } catch (error) {
+        Alert.alert("오류", "저장 실패");
+      }
     }
   };
 
   const handleRecommendAgain = () => {
     setShowRoutine(false);
     setSelectedDay(0);
+    setCurrentPlanId(null);
+  };
+
+  const handleDeleteSavedRoutine = async (routine: any) => {
+    const isServerPlan = typeof routine.id === "number";
+
+    Alert.alert(
+      "삭제",
+      `이 루틴을 삭제하시겠습니까?${
+        isServerPlan ? "\n(서버에서도 삭제됩니다)" : "\n(로컬에서만 삭제됩니다)"
+      }`,
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "삭제",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              if (isServerPlan) {
+                await recommendedExerciseAPI.deleteExercisePlan(routine.id);
+                console.log("✅ 서버 플랜 삭제 성공");
+              } else {
+                const stored = await AsyncStorage.getItem("savedRoutines");
+                const localRoutines = stored ? JSON.parse(stored) : [];
+                const updated = localRoutines.filter(
+                  (r: any) => r.id !== routine.id
+                );
+                await AsyncStorage.setItem(
+                  "savedRoutines",
+                  JSON.stringify(updated)
+                );
+                console.log("✅ 로컬 플랜 삭제 성공");
+              }
+
+              await loadSavedRoutines();
+              Alert.alert("성공", "루틴이 삭제되었습니다.");
+            } catch (error: any) {
+              console.error("❌ 삭제 실패:", error);
+              Alert.alert("오류", error.message || "삭제에 실패했습니다.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Icon name="chevron-back" size={28} color="#ffffff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>운동 루틴 추천</Text>
-        <View style={{ width: 28 }} />
-      </View>
+    <View style={styles.container}>
+      <LinearGradient
+        colors={["#0a0a0a", "#1a1a2e", "#16213e", "#0f3460"]}
+        style={StyleSheet.absoluteFill}
+      />
 
-      {!showRoutine ? (
-        <ScrollView
-          style={styles.content}
-          contentContainerStyle={styles.contentContainer}
-        >
-          <View style={styles.mainContent}>
-            <Text style={styles.title}>
-              안녕하세요 - 회원님!{"\n"}최적화된 루틴을 추천해 드릴께요!
-            </Text>
+      <SafeAreaView style={styles.safeArea} edges={["top"]}>
+        <LoadingOverlay
+          visible={loading}
+          messages={LOADING_MESSAGES}
+          onCancel={handleCancelLoading}
+        />
 
-            <View style={styles.buttonGroup}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={handleGetRoutine}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#111111" />
-                ) : (
-                  <Text style={styles.actionButtonText}>추천 루틴 받기</Text>
-                )}
-              </TouchableOpacity>
-
-              <View>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => setShowWeakPanel(true)}
-                >
-                  <Text style={styles.actionButtonText}>취약한 부분</Text>
-                </TouchableOpacity>
-                {weakParts.length > 0 && (
-                  <Text style={styles.selectedInfo}>
-                    {weakParts.join(", ")}
-                  </Text>
-                )}
-              </View>
-
-              <View>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => setShowLevelPanel(true)}
-                >
-                  <Text style={styles.actionButtonText}>운동 경력</Text>
-                </TouchableOpacity>
-                {level && <Text style={styles.selectedInfo}>{level}</Text>}
-              </View>
-
-              <View>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => setShowTargetPanel(true)}
-                >
-                  <Text style={styles.actionButtonText}>
-                    보강하고 싶은 부위
-                  </Text>
-                </TouchableOpacity>
-                {targetParts.length > 0 && (
-                  <Text style={styles.selectedInfo}>
-                    {targetParts.join(", ")}
-                  </Text>
-                )}
-              </View>
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <View style={styles.iconButton}>
+              <Icon name="chevron-back" size={24} color="#ffffff" />
             </View>
-          </View>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>운동 루틴</Text>
+          <View style={{ width: 40 }} />
+        </View>
 
-          {savedRoutines.length > 0 && (
-            <View style={styles.savedRoutines}>
-              <Text style={styles.savedRoutinesTitle}>저장된 루틴</Text>
-              {savedRoutines.map((routine) => (
-                <TouchableOpacity
-                  key={routine.id}
-                  style={styles.savedRoutineItem}
-                  onPress={() => navigation.navigate("RoutineRecommend")}
+        {!showRoutine ? (
+          <ScrollView
+            style={styles.content}
+            contentContainerStyle={styles.contentContainer}
+            showsVerticalScrollIndicator={false}
+          >
+            <Animated.View style={[styles.mainContent, { opacity: fadeAnim }]}>
+              <View style={styles.welcomeIconContainer}>
+                <LinearGradient
+                  colors={["#e3ff7c", "#a8e063"]}
+                  style={styles.welcomeIcon}
                 >
-                  <View style={styles.savedRoutineHeader}>
-                    <Text style={styles.savedRoutineDate}>{routine.date}</Text>
-                    {routine.level && (
-                      <View style={styles.savedRoutineBadge}>
-                        <Text style={styles.savedRoutineBadgeText}>
-                          {routine.level}
+                  <Text style={styles.welcomeEmoji}>💪</Text>
+                </LinearGradient>
+              </View>
+
+              <Text style={styles.title}>맞춤 운동 루틴</Text>
+              <Text style={styles.subtitle}>
+                AI가 당신의 목표에 맞는{"\n"}완벽한 루틴을 설계합니다
+              </Text>
+
+              <View style={styles.buttonGroup}>
+                <TouchableOpacity
+                  style={styles.primaryButton}
+                  onPress={handleGetRoutine}
+                  disabled={loading}
+                  activeOpacity={0.9}
+                >
+                  <LinearGradient
+                    colors={["#e3ff7c", "#a8e063"]}
+                    style={styles.primaryButtonGradient}
+                  >
+                    <Icon
+                      name="flash"
+                      size={20}
+                      color="#111827"
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text style={styles.primaryButtonText}>추천 루틴 받기</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <View style={styles.optionCard}>
+                  <TouchableOpacity
+                    style={styles.optionButton}
+                    onPress={() => setShowWeakPanel(true)}
+                    activeOpacity={0.8}
+                  >
+                    <LinearGradient
+                      colors={[
+                        "rgba(255,255,255,0.1)",
+                        "rgba(255,255,255,0.05)",
+                      ]}
+                      style={styles.optionButtonGradient}
+                    >
+                      <View style={styles.optionButtonLeft}>
+                        <View style={styles.optionIconContainer}>
+                          <LinearGradient
+                            colors={[
+                              "rgba(239,68,68,0.3)",
+                              "rgba(239,68,68,0.1)",
+                            ]}
+                            style={styles.optionIcon}
+                          >
+                            <Icon name="medical" size={20} color="#ef4444" />
+                          </LinearGradient>
+                        </View>
+                        <Text style={styles.optionButtonText}>취약한 부분</Text>
+                      </View>
+                      <Icon name="chevron-forward" size={20} color="#6b7280" />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                  {weakParts.length > 0 && (
+                    <View style={styles.selectedTags}>
+                      {weakParts.map((part, index) => (
+                        <View key={index} style={styles.tag}>
+                          <LinearGradient
+                            colors={[
+                              "rgba(239,68,68,0.2)",
+                              "rgba(239,68,68,0.1)",
+                            ]}
+                            style={styles.tagGradient}
+                          >
+                            <Text style={styles.tagText}>{part}</Text>
+                          </LinearGradient>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.optionCard}>
+                  <TouchableOpacity
+                    style={styles.optionButton}
+                    onPress={() => setShowLevelPanel(true)}
+                    activeOpacity={0.8}
+                  >
+                    <LinearGradient
+                      colors={[
+                        "rgba(255,255,255,0.1)",
+                        "rgba(255,255,255,0.05)",
+                      ]}
+                      style={styles.optionButtonGradient}
+                    >
+                      <View style={styles.optionButtonLeft}>
+                        <View style={styles.optionIconContainer}>
+                          <LinearGradient
+                            colors={[
+                              "rgba(59,130,246,0.3)",
+                              "rgba(59,130,246,0.1)",
+                            ]}
+                            style={styles.optionIcon}
+                          >
+                            <Icon name="bar-chart" size={20} color="#3b82f6" />
+                          </LinearGradient>
+                        </View>
+                        <Text style={styles.optionButtonText}>운동 경력</Text>
+                      </View>
+                      <Icon name="chevron-forward" size={20} color="#6b7280" />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                  {level && (
+                    <View style={styles.selectedTags}>
+                      <View style={styles.tag}>
+                        <LinearGradient
+                          colors={[
+                            "rgba(59,130,246,0.2)",
+                            "rgba(59,130,246,0.1)",
+                          ]}
+                          style={styles.tagGradient}
+                        >
+                          <Text style={styles.tagText}>{level}</Text>
+                        </LinearGradient>
+                      </View>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.optionCard}>
+                  <TouchableOpacity
+                    style={styles.optionButton}
+                    onPress={() => setShowTargetPanel(true)}
+                    activeOpacity={0.8}
+                  >
+                    <LinearGradient
+                      colors={[
+                        "rgba(255,255,255,0.1)",
+                        "rgba(255,255,255,0.05)",
+                      ]}
+                      style={styles.optionButtonGradient}
+                    >
+                      <View style={styles.optionButtonLeft}>
+                        <View style={styles.optionIconContainer}>
+                          <LinearGradient
+                            colors={[
+                              "rgba(168,224,99,0.3)",
+                              "rgba(168,224,99,0.1)",
+                            ]}
+                            style={styles.optionIcon}
+                          >
+                            <Icon name="location" size={20} color="#a8e063" />
+                          </LinearGradient>
+                        </View>
+                        <Text style={styles.optionButtonText}>집중 부위</Text>
+                      </View>
+                      <Icon name="chevron-forward" size={20} color="#6b7280" />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                  {targetParts.length > 0 && (
+                    <View style={styles.selectedTags}>
+                      {targetParts.map((part, index) => (
+                        <View key={index} style={styles.tag}>
+                          <LinearGradient
+                            colors={[
+                              "rgba(168,224,99,0.2)",
+                              "rgba(168,224,99,0.1)",
+                            ]}
+                            style={styles.tagGradient}
+                          >
+                            <Text style={styles.tagText}>{part}</Text>
+                          </LinearGradient>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </View>
+            </Animated.View>
+
+            {savedRoutines.length > 0 && (
+              <View style={styles.savedRoutines}>
+                <Text style={styles.sectionTitle}>저장된 루틴</Text>
+                {savedRoutines.map((routine) => (
+                  <TouchableOpacity
+                    key={routine.id}
+                    style={styles.savedRoutineItem}
+                    onPress={() => {
+                      if (typeof routine.id === "number") {
+                        navigation.navigate("RoutineRecommend");
+                      } else {
+                        navigation.navigate("RoutineRecommend");
+                      }
+                    }}
+                    onLongPress={() => handleDeleteSavedRoutine(routine)}
+                    activeOpacity={0.8}
+                  >
+                    <LinearGradient
+                      colors={[
+                        "rgba(255,255,255,0.08)",
+                        "rgba(255,255,255,0.04)",
+                      ]}
+                      style={styles.savedRoutineGradient}
+                    >
+                      <View style={styles.savedRoutineHeader}>
+                        <View style={styles.savedRoutineTitleRow}>
+                          <Icon
+                            name="barbell-outline"
+                            size={20}
+                            color="#e3ff7c"
+                          />
+                          <Text style={styles.savedRoutineDate}>
+                            {routine.planName || routine.date}
+                          </Text>
+                        </View>
+                        {routine.level && (
+                          <View style={styles.levelBadge}>
+                            <LinearGradient
+                              colors={["#e3ff7c", "#a8e063"]}
+                              style={styles.levelBadgeGradient}
+                            >
+                              <Text style={styles.levelBadgeText}>
+                                {routine.level}
+                              </Text>
+                            </LinearGradient>
+                          </View>
+                        )}
+                      </View>
+                      {routine.targetParts?.length > 0 && (
+                        <Text style={styles.savedRoutineInfo}>
+                          집중 부위: {routine.targetParts.join(", ")}
                         </Text>
+                      )}
+                    </LinearGradient>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </ScrollView>
+        ) : (
+          <ScrollView
+            style={styles.content}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 30 }}
+          >
+            <View style={styles.routineView}>
+              <View style={styles.routineHeader}>
+                <View>
+                  <Text style={styles.routineTitle}>10월 2주차 루틴</Text>
+                  <Text style={styles.routineDate}>10/10 - 10/17</Text>
+                </View>
+                <View style={styles.routineHeaderIcon}>
+                  <LinearGradient
+                    colors={["rgba(227,255,124,0.2)", "rgba(168,224,99,0.1)"]}
+                    style={styles.routineHeaderIconGradient}
+                  >
+                    <Icon name="calendar" size={24} color="#e3ff7c" />
+                  </LinearGradient>
+                </View>
+              </View>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.dayTabsContainer}
+                contentContainerStyle={styles.dayTabs}
+              >
+                {weekDays.map((day, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.dayTabWrapper}
+                    onPress={() => setSelectedDay(index)}
+                    activeOpacity={0.8}
+                  >
+                    {selectedDay === index ? (
+                      <LinearGradient
+                        colors={["#e3ff7c", "#a8e063"]}
+                        style={styles.dayTabActive}
+                      >
+                        <Text style={styles.dayTabTextActive}>{day}</Text>
+                      </LinearGradient>
+                    ) : (
+                      <View style={styles.dayTab}>
+                        <Text style={styles.dayTabText}>{day}</Text>
                       </View>
                     )}
-                  </View>
-                  {routine.targetParts && routine.targetParts.length > 0 && (
-                    <Text style={styles.savedRoutineInfo}>
-                      집중: {routine.targetParts.join(", ")}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </ScrollView>
-      ) : (
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.routineView}>
-            <Text style={styles.routineTitle}>10월 2주차 루틴</Text>
-            <Text style={styles.routineDate}>10/10 - 10/17</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.dayTabsContainer}
-              contentContainerStyle={styles.dayTabs}
-            >
-              {weekDays.map((day, index) => (
+              <View style={styles.routineInfoCard}>
+                <LinearGradient
+                  colors={["rgba(255,255,255,0.08)", "rgba(255,255,255,0.04)"]}
+                  style={styles.routineInfoGradient}
+                >
+                  <View style={styles.routineInfoItem}>
+                    <View style={styles.routineInfoIconContainer}>
+                      <Icon name="list" size={18} color="#e3ff7c" />
+                    </View>
+                    <Text style={styles.routineInfoText}>
+                      {weekRoutines[selectedDay]?.length || 0}개 운동
+                    </Text>
+                  </View>
+                  <View style={styles.routineInfoDivider} />
+                  <View style={styles.routineInfoItem}>
+                    <View style={styles.routineInfoIconContainer}>
+                      <Icon name="time" size={18} color="#e3ff7c" />
+                    </View>
+                    <Text style={styles.routineInfoText}>60분</Text>
+                  </View>
+                </LinearGradient>
+              </View>
+
+              <View style={styles.exerciseList}>
+                {weekRoutines[selectedDay]?.map((exercise, index) => (
+                  <View key={index} style={styles.exerciseCardWrapper}>
+                    <LinearGradient
+                      colors={[
+                        "rgba(255,255,255,0.08)",
+                        "rgba(255,255,255,0.04)",
+                      ]}
+                      style={styles.exerciseCard}
+                    >
+                      <View style={styles.exerciseIconContainer}>
+                        <LinearGradient
+                          colors={[
+                            "rgba(227,255,124,0.2)",
+                            "rgba(168,224,99,0.1)",
+                          ]}
+                          style={styles.exerciseIconGradient}
+                        >
+                          <Text style={styles.exerciseIconText}>
+                            {exercise.icon}
+                          </Text>
+                        </LinearGradient>
+                      </View>
+                      <View style={styles.exerciseInfo}>
+                        <Text style={styles.exerciseName}>{exercise.name}</Text>
+                        <Text style={styles.exerciseDetail}>
+                          {exercise.detail}
+                        </Text>
+                      </View>
+                      <View style={styles.exerciseNumber}>
+                        <Text style={styles.exerciseNumberText}>
+                          {index + 1}
+                        </Text>
+                      </View>
+                    </LinearGradient>
+                  </View>
+                ))}
+              </View>
+
+              <View style={styles.routineButtons}>
                 <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.dayTab,
-                    selectedDay === index && styles.dayTabActive,
-                  ]}
-                  onPress={() => setSelectedDay(index)}
+                  style={styles.saveButton}
+                  onPress={handleSaveRoutine}
+                  activeOpacity={0.9}
+                >
+                  <LinearGradient
+                    colors={["#e3ff7c", "#a8e063"]}
+                    style={styles.saveButtonGradient}
+                  >
+                    <Icon
+                      name="bookmark"
+                      size={20}
+                      color="#111827"
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text style={styles.saveButtonText}>루틴 저장하기</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.refreshButton}
+                  onPress={handleRecommendAgain}
                   activeOpacity={0.8}
                 >
-                  <Text
-                    style={[
-                      styles.dayTabText,
-                      selectedDay === index && styles.dayTabTextActive,
-                    ]}
+                  <LinearGradient
+                    colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
+                    style={styles.refreshButtonGradient}
                   >
-                    {day}
-                  </Text>
+                    <Icon
+                      name="refresh"
+                      size={20}
+                      color="#ffffff"
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text style={styles.refreshButtonText}>다시 추천받기</Text>
+                  </LinearGradient>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <View style={styles.routineInfo}>
-              <Text style={styles.routineInfoText}>
-                총 {weekRoutines[selectedDay]?.length || 0}개 운동
-              </Text>
-              <Text style={styles.routineInfoText}>⏱ 60분</Text>
+              </View>
             </View>
+          </ScrollView>
+        )}
 
-            <View style={styles.exerciseList}>
-              {weekRoutines[selectedDay]?.map((exercise, index) => (
-                <View key={index} style={styles.exerciseCard}>
-                  <View style={styles.exerciseIcon}>
-                    <Text style={styles.exerciseIconText}>{exercise.icon}</Text>
+        {/* Modal Components */}
+        <Modal
+          visible={showWeakPanel}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowWeakPanel(false)}
+        >
+          <TouchableOpacity
+            style={styles.panelOverlay}
+            activeOpacity={1}
+            onPress={() => setShowWeakPanel(false)}
+          >
+            <View style={styles.bottomPanel}>
+              <LinearGradient
+                colors={["#1a1a2e", "#16213e"]}
+                style={styles.bottomPanelGradient}
+              >
+                <View style={styles.panelHandle} />
+                <Text style={styles.panelHeaderText}>취약한 부분 선택</Text>
+                <ScrollView
+                  style={styles.panelBody}
+                  showsVerticalScrollIndicator={false}
+                >
+                  <View style={styles.optionGrid}>
+                    {bodyParts.map((part) => (
+                      <TouchableOpacity
+                        key={part}
+                        style={styles.modalOptionWrapper}
+                        onPress={() => handleWeakPartToggle(part)}
+                        activeOpacity={0.8}
+                      >
+                        {weakParts.includes(part) ? (
+                          <LinearGradient
+                            colors={["#e3ff7c", "#a8e063"]}
+                            style={styles.modalOptionSelected}
+                          >
+                            <Icon
+                              name="checkmark-circle"
+                              size={18}
+                              color="#111827"
+                            />
+                            <Text style={styles.modalOptionTextSelected}>
+                              {part}
+                            </Text>
+                          </LinearGradient>
+                        ) : (
+                          <View style={styles.modalOption}>
+                            <Text style={styles.modalOptionText}>{part}</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    ))}
                   </View>
-                  <View style={styles.exerciseInfo}>
-                    <Text style={styles.exerciseName}>{exercise.name}</Text>
-                    <Text style={styles.exerciseDetail}>{exercise.detail}</Text>
+                  <TouchableOpacity
+                    style={styles.confirmButton}
+                    onPress={() => setShowWeakPanel(false)}
+                    activeOpacity={0.9}
+                  >
+                    <LinearGradient
+                      colors={["#e3ff7c", "#a8e063"]}
+                      style={styles.confirmButtonGradient}
+                    >
+                      <Text style={styles.confirmButtonText}>선택 완료</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </ScrollView>
+              </LinearGradient>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        <Modal
+          visible={showLevelPanel}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowLevelPanel(false)}
+        >
+          <TouchableOpacity
+            style={styles.panelOverlay}
+            activeOpacity={1}
+            onPress={() => setShowLevelPanel(false)}
+          >
+            <View style={styles.bottomPanel}>
+              <LinearGradient
+                colors={["#1a1a2e", "#16213e"]}
+                style={styles.bottomPanelGradient}
+              >
+                <View style={styles.panelHandle} />
+                <Text style={styles.panelHeaderText}>운동 경력 선택</Text>
+                <ScrollView
+                  style={styles.panelBody}
+                  showsVerticalScrollIndicator={false}
+                >
+                  <View style={styles.optionGrid}>
+                    {levels.map((lv) => (
+                      <TouchableOpacity
+                        key={lv}
+                        style={styles.modalOptionWrapper}
+                        onPress={() => setLevel(lv)}
+                        activeOpacity={0.8}
+                      >
+                        {level === lv ? (
+                          <LinearGradient
+                            colors={["#e3ff7c", "#a8e063"]}
+                            style={styles.modalOptionSelected}
+                          >
+                            <Icon
+                              name="checkmark-circle"
+                              size={18}
+                              color="#111827"
+                            />
+                            <Text style={styles.modalOptionTextSelected}>
+                              {lv}
+                            </Text>
+                          </LinearGradient>
+                        ) : (
+                          <View style={styles.modalOption}>
+                            <Text style={styles.modalOptionText}>{lv}</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    ))}
                   </View>
-                </View>
-              ))}
-            </View>
-
-            <View style={styles.routineButtons}>
-              <TouchableOpacity
-                style={styles.saveRoutineButton}
-                onPress={handleSaveRoutine}
-              >
-                <Text style={styles.saveRoutineButtonText}>루틴 저장하기</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.reRecommendButton}
-                onPress={handleRecommendAgain}
-              >
-                <Text style={styles.reRecommendButtonText}>
-                  루틴 다시 추천받기
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </ScrollView>
-      )}
-
-      {/* 취약한 부분 패널 */}
-      <Modal
-        visible={showWeakPanel}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowWeakPanel(false)}
-      >
-        <TouchableOpacity
-          style={styles.panelOverlay}
-          activeOpacity={1}
-          onPress={() => setShowWeakPanel(false)}
-        >
-          <View style={styles.bottomPanel}>
-            <View style={styles.panelHandle} />
-            <View style={styles.panelHeader}>
-              <Text style={styles.panelHeaderText}>취약한 부분 선택</Text>
-            </View>
-            <ScrollView style={styles.panelBody}>
-              <Text style={styles.panelDescription}>
-                과거 다치거나 불편한 몸 부위를 선택해주세요
-              </Text>
-              <View style={styles.optionGrid}>
-                {bodyParts.map((part) => (
                   <TouchableOpacity
-                    key={part}
-                    style={[
-                      styles.optionButton,
-                      weakParts.includes(part) && styles.optionButtonSelected,
-                    ]}
-                    onPress={() => handleWeakPartToggle(part)}
+                    style={styles.confirmButton}
+                    onPress={() => setShowLevelPanel(false)}
+                    activeOpacity={0.9}
                   >
-                    <Text
-                      style={[
-                        styles.optionButtonText,
-                        weakParts.includes(part) &&
-                          styles.optionButtonTextSelected,
-                      ]}
+                    <LinearGradient
+                      colors={["#e3ff7c", "#a8e063"]}
+                      style={styles.confirmButtonGradient}
                     >
-                      {part}
-                    </Text>
+                      <Text style={styles.confirmButtonText}>선택 완료</Text>
+                    </LinearGradient>
                   </TouchableOpacity>
-                ))}
-              </View>
-              <TouchableOpacity
-                style={styles.confirmButton}
-                onPress={() => setShowWeakPanel(false)}
-              >
-                <Text style={styles.confirmButtonText}>선택 완료</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* 운동 경력 패널 */}
-      <Modal
-        visible={showLevelPanel}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowLevelPanel(false)}
-      >
-        <TouchableOpacity
-          style={styles.panelOverlay}
-          activeOpacity={1}
-          onPress={() => setShowLevelPanel(false)}
-        >
-          <View style={styles.bottomPanel}>
-            <View style={styles.panelHandle} />
-            <View style={styles.panelHeader}>
-              <Text style={styles.panelHeaderText}>운동 경력 선택</Text>
+                </ScrollView>
+              </LinearGradient>
             </View>
-            <ScrollView style={styles.panelBody}>
-              <Text style={styles.panelDescription}>
-                현재 운동 수준을 선택해주세요
-              </Text>
-              <View style={styles.optionGrid}>
-                {levels.map((lv) => (
-                  <TouchableOpacity
-                    key={lv}
-                    style={[
-                      styles.optionButton,
-                      level === lv && styles.optionButtonSelected,
-                    ]}
-                    onPress={() => setLevel(lv)}
-                  >
-                    <Text
-                      style={[
-                        styles.optionButtonText,
-                        level === lv && styles.optionButtonTextSelected,
-                      ]}
-                    >
-                      {lv}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <TouchableOpacity
-                style={styles.confirmButton}
-                onPress={() => setShowLevelPanel(false)}
-              >
-                <Text style={styles.confirmButtonText}>선택 완료</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+          </TouchableOpacity>
+        </Modal>
 
-      {/* 보강하고 싶은 부위 패널 */}
-      <Modal
-        visible={showTargetPanel}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowTargetPanel(false)}
-      >
-        <TouchableOpacity
-          style={styles.panelOverlay}
-          activeOpacity={1}
-          onPress={() => setShowTargetPanel(false)}
+        <Modal
+          visible={showTargetPanel}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowTargetPanel(false)}
         >
-          <View style={styles.bottomPanel}>
-            <View style={styles.panelHandle} />
-            <View style={styles.panelHeader}>
-              <Text style={styles.panelHeaderText}>보강하고 싶은 부위</Text>
-            </View>
-            <ScrollView style={styles.panelBody}>
-              <Text style={styles.panelDescription}>
-                집중적으로 운동하고 싶은 부위를 선택해주세요
-              </Text>
-              <View style={styles.optionGrid}>
-                {targetAreas.map((area) => (
-                  <TouchableOpacity
-                    key={area}
-                    style={[
-                      styles.optionButton,
-                      targetParts.includes(area) && styles.optionButtonSelected,
-                    ]}
-                    onPress={() => handleTargetPartToggle(area)}
-                  >
-                    <Text
-                      style={[
-                        styles.optionButtonText,
-                        targetParts.includes(area) &&
-                          styles.optionButtonTextSelected,
-                      ]}
-                    >
-                      {area}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <TouchableOpacity
-                style={styles.confirmButton}
-                onPress={() => setShowTargetPanel(false)}
+          <TouchableOpacity
+            style={styles.panelOverlay}
+            activeOpacity={1}
+            onPress={() => setShowTargetPanel(false)}
+          >
+            <View style={styles.bottomPanel}>
+              <LinearGradient
+                colors={["#1a1a2e", "#16213e"]}
+                style={styles.bottomPanelGradient}
               >
-                <Text style={styles.confirmButtonText}>선택 완료</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-    </SafeAreaView>
+                <View style={styles.panelHandle} />
+                <Text style={styles.panelHeaderText}>보강하고 싶은 부위</Text>
+                <ScrollView
+                  style={styles.panelBody}
+                  showsVerticalScrollIndicator={false}
+                >
+                  <View style={styles.optionGrid}>
+                    {targetAreas.map((area) => (
+                      <TouchableOpacity
+                        key={area}
+                        style={styles.modalOptionWrapper}
+                        onPress={() => handleTargetPartToggle(area)}
+                        activeOpacity={0.8}
+                      >
+                        {targetParts.includes(area) ? (
+                          <LinearGradient
+                            colors={["#e3ff7c", "#a8e063"]}
+                            style={styles.modalOptionSelected}
+                          >
+                            <Icon
+                              name="checkmark-circle"
+                              size={18}
+                              color="#111827"
+                            />
+                            <Text style={styles.modalOptionTextSelected}>
+                              {area}
+                            </Text>
+                          </LinearGradient>
+                        ) : (
+                          <View style={styles.modalOption}>
+                            <Text style={styles.modalOptionText}>{area}</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TouchableOpacity
+                    style={styles.confirmButton}
+                    onPress={() => setShowTargetPanel(false)}
+                    activeOpacity={0.9}
+                  >
+                    <LinearGradient
+                      colors={["#e3ff7c", "#a8e063"]}
+                      style={styles.confirmButtonGradient}
+                    >
+                      <Text style={styles.confirmButtonText}>선택 완료</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </ScrollView>
+              </LinearGradient>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      </SafeAreaView>
+    </View>
   );
 };
+
+const loadingStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  container: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    paddingHorizontal: 20,
+  },
+  spinnerContainer: {
+    marginBottom: 40,
+  },
+  spinnerOuter: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 4,
+    borderColor: "rgba(227, 255, 124, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  spinnerInner: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 4,
+    borderColor: "#e3ff7c",
+    borderTopColor: "transparent",
+    borderRightColor: "transparent",
+  },
+  textContainer: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 70,
+  },
+  message: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#ffffff",
+    textAlign: "center",
+    lineHeight: 28,
+    letterSpacing: 0.5,
+  },
+  cancelButton: {
+    marginTop: 50,
+    borderRadius: 30,
+    overflow: "hidden",
+  },
+  cancelButtonGradient: {
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    borderRadius: 30,
+  },
+  cancelText: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
+});
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#111111",
+  },
+  safeArea: {
+    flex: 1,
   },
   header: {
     flexDirection: "row",
@@ -1061,75 +1282,180 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 16,
     paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#333333",
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: "700",
     color: "#ffffff",
+    letterSpacing: 0.5,
   },
   content: {
     flex: 1,
   },
   contentContainer: {
-    padding: 60,
-    paddingTop: 60,
     paddingHorizontal: 20,
-    alignItems: "center",
+    paddingTop: 40,
+    paddingBottom: 40,
   },
   mainContent: {
     alignItems: "center",
     width: "100%",
   },
+  welcomeIconContainer: {
+    marginBottom: 24,
+  },
+  welcomeIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#e3ff7c",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  welcomeEmoji: {
+    fontSize: 48,
+  },
   title: {
-    fontSize: 20,
-    fontWeight: "700",
+    fontSize: 32,
+    fontWeight: "bold",
     color: "#ffffff",
+    marginBottom: 12,
     textAlign: "center",
-    lineHeight: 28,
-    marginBottom: 80,
+    letterSpacing: 0.5,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: "#9ca3af",
+    textAlign: "center",
+    lineHeight: 24,
+    marginBottom: 40,
+    letterSpacing: 0.3,
   },
   buttonGroup: {
     width: "100%",
+    gap: 16,
+  },
+  primaryButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#e3ff7c",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  primaryButtonGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+  },
+  primaryButtonText: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#111827",
+    letterSpacing: 0.5,
+  },
+  optionCard: {
+    width: "100%",
+  },
+  optionButton: {
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  optionButtonGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 14,
+  },
+  optionButtonLeft: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
-  actionButton: {
-    width: "100%",
-    height: 56,
-    backgroundColor: "#e3ff7c",
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
+  optionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: "hidden",
   },
-  actionButtonText: {
+  optionIcon: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  optionButtonText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#111111",
+    color: "#ffffff",
+    letterSpacing: 0.3,
   },
-  selectedInfo: {
-    fontSize: 14,
-    color: "#999999",
-    marginTop: 8,
-    marginBottom: 4,
-    textAlign: "center",
+  selectedTags: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 12,
+    paddingHorizontal: 4,
+  },
+  tag: {
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  tagGradient: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  tagText: {
+    fontSize: 13,
+    color: "#ffffff",
+    fontWeight: "500",
+    letterSpacing: 0.3,
   },
   savedRoutines: {
     width: "100%",
-    marginTop: 30,
-    padding: 20,
+    marginTop: 40,
   },
-  savedRoutinesTitle: {
-    fontSize: 18,
+  sectionTitle: {
+    fontSize: 20,
     fontWeight: "700",
     color: "#ffffff",
-    marginBottom: 15,
+    marginBottom: 16,
+    letterSpacing: 0.5,
   },
   savedRoutineItem: {
-    backgroundColor: "#222222",
-    borderRadius: 12,
-    padding: 16,
     marginBottom: 12,
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  savedRoutineGradient: {
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 16,
   },
   savedRoutineHeader: {
     flexDirection: "row",
@@ -1137,100 +1463,181 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 8,
   },
+  savedRoutineTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   savedRoutineDate: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "600",
     color: "#ffffff",
+    letterSpacing: 0.3,
   },
-  savedRoutineBadge: {
-    backgroundColor: "#e3ff7c",
+  levelBadge: {
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  levelBadgeGradient: {
     paddingVertical: 4,
     paddingHorizontal: 10,
-    borderRadius: 12,
+    borderRadius: 8,
   },
-  savedRoutineBadgeText: {
+  levelBadgeText: {
     fontSize: 12,
-    fontWeight: "500",
-    color: "#111111",
+    fontWeight: "700",
+    color: "#111827",
+    letterSpacing: 0.5,
   },
   savedRoutineInfo: {
     fontSize: 14,
-    color: "#999999",
+    color: "#6b7280",
+    letterSpacing: 0.2,
   },
   routineView: {
     padding: 20,
   },
+  routineHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 24,
+  },
   routineTitle: {
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: "700",
     color: "#ffffff",
-    marginBottom: 5,
+    marginBottom: 6,
+    letterSpacing: 0.5,
   },
   routineDate: {
     fontSize: 14,
-    color: "#999999",
-    marginBottom: 20,
+    color: "#6b7280",
+    letterSpacing: 0.3,
+  },
+  routineHeaderIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    overflow: "hidden",
+  },
+  routineHeaderIconGradient: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
   },
   dayTabsContainer: {
     marginBottom: 20,
   },
   dayTabs: {
-    gap: 8,
+    gap: 10,
     paddingBottom: 8,
   },
+  dayTabWrapper: {
+    borderRadius: 24,
+  },
   dayTab: {
-    paddingVertical: 5,
-    paddingHorizontal: 16,
-    backgroundColor: "#222222",
-    borderRadius: 20,
-    marginRight: 8,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
   },
   dayTabActive: {
-    backgroundColor: "#e3ff7c",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+    shadowColor: "#e3ff7c",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   dayTabText: {
-    fontSize: 12,
+    fontSize: 14,
+    color: "#9ca3af",
     fontWeight: "500",
-    color: "#999999",
+    letterSpacing: 0.3,
   },
   dayTabTextActive: {
-    color: "#111111",
-    fontWeight: "600",
-  },
-  routineInfo: {
-    flexDirection: "row",
-    gap: 15,
-    marginBottom: 20,
     fontSize: 14,
-    color: "#999999",
+    color: "#111827",
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
+  routineInfoCard: {
+    marginBottom: 20,
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  routineInfoGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 14,
+  },
+  routineInfoItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  routineInfoIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(227,255,124,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   routineInfoText: {
     fontSize: 14,
-    color: "#999999",
+    color: "#ffffff",
+    fontWeight: "600",
+    letterSpacing: 0.3,
+  },
+  routineInfoDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    marginHorizontal: 8,
   },
   exerciseList: {
     gap: 12,
-    marginBottom: 30,
+    marginBottom: 24,
+  },
+  exerciseCardWrapper: {
+    borderRadius: 14,
+    overflow: "hidden",
   },
   exerciseCard: {
-    backgroundColor: "#464646",
-    borderRadius: 12,
-    padding: 16,
     flexDirection: "row",
     alignItems: "center",
-    gap: 15,
+    padding: 16,
+    gap: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 14,
   },
-  exerciseIcon: {
-    fontSize: 32,
-    width: 50,
-    height: 50,
-    justifyContent: "center",
+  exerciseIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  exerciseIconGradient: {
+    width: "100%",
+    height: "100%",
     alignItems: "center",
-    backgroundColor: "#333333",
-    borderRadius: 10,
+    justifyContent: "center",
   },
   exerciseIconText: {
-    fontSize: 32,
+    fontSize: 28,
   },
   exerciseInfo: {
     flex: 1,
@@ -1239,56 +1646,85 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#ffffff",
-    marginBottom: 5,
+    marginBottom: 6,
+    letterSpacing: 0.3,
   },
   exerciseDetail: {
-    fontSize: 14,
-    color: "#aaaaaa",
+    fontSize: 13,
+    color: "#9ca3af",
+    letterSpacing: 0.2,
+  },
+  exerciseNumber: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(227,255,124,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  exerciseNumberText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#e3ff7c",
   },
   routineButtons: {
     gap: 12,
   },
-  saveRoutineButton: {
-    width: "100%",
-    height: 52,
-    backgroundColor: "#e3ff7c",
-    borderRadius: 12,
-    justifyContent: "center",
+  saveButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#e3ff7c",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  saveButtonGradient: {
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 18,
   },
-  saveRoutineButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111111",
+  saveButtonText: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#111827",
+    letterSpacing: 0.5,
   },
-  reRecommendButton: {
-    width: "100%",
-    height: 52,
-    backgroundColor: "transparent",
+  refreshButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  refreshButtonGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
     borderWidth: 1,
-    borderColor: "#464646",
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
+    borderColor: "rgba(255,255,255,0.2)",
+    borderRadius: 16,
   },
-  reRecommendButtonText: {
+  refreshButtonText: {
     fontSize: 16,
     fontWeight: "600",
     color: "#ffffff",
+    letterSpacing: 0.3,
   },
   panelOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "flex-end",
   },
   bottomPanel: {
-    backgroundColor: "#1a1a1a",
-    borderRadius: 20,
-    width: "90%",
-    maxWidth: 390,
-    maxHeight: "70%",
-    paddingBottom: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: "hidden",
+    maxHeight: "80%",
+  },
+  bottomPanelGradient: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 30,
   },
   panelHandle: {
     width: 40,
@@ -1299,66 +1735,76 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 20,
   },
-  panelHeader: {
-    paddingHorizontal: 20,
-    marginBottom: 16,
-  },
   panelHeaderText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "700",
     color: "#ffffff",
+    marginBottom: 20,
+    paddingHorizontal: 20,
+    letterSpacing: 0.5,
   },
   panelBody: {
     paddingHorizontal: 20,
-  },
-  panelDescription: {
-    fontSize: 14,
-    color: "#999999",
-    marginBottom: 20,
-    lineHeight: 20,
   },
   optionGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 12,
     marginBottom: 24,
-    justifyContent: "space-between",
   },
-  optionButton: {
+  modalOptionWrapper: {
     width: "48%",
-    height: 50,
-    backgroundColor: "#2a2a2a",
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: "transparent",
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  modalOption: {
+    height: 56,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
     justifyContent: "center",
     alignItems: "center",
   },
-  optionButtonSelected: {
-    backgroundColor: "#e3ff7c",
-    borderColor: "#e3ff7c",
+  modalOptionSelected: {
+    height: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderRadius: 14,
   },
-  optionButtonText: {
+  modalOptionText: {
     fontSize: 15,
     fontWeight: "500",
     color: "#ffffff",
+    letterSpacing: 0.3,
   },
-  optionButtonTextSelected: {
-    color: "#111111",
-    fontWeight: "600",
+  modalOptionTextSelected: {
+    fontSize: 15,
+    color: "#111827",
+    fontWeight: "700",
+    letterSpacing: 0.3,
   },
   confirmButton: {
-    width: "100%",
-    height: 52,
-    backgroundColor: "#e3ff7c",
-    borderRadius: 12,
-    justifyContent: "center",
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#e3ff7c",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  confirmButtonGradient: {
+    paddingVertical: 18,
     alignItems: "center",
+    justifyContent: "center",
   },
   confirmButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111111",
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#111827",
+    letterSpacing: 0.5,
   },
 });
 
