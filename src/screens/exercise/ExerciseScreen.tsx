@@ -28,6 +28,7 @@ import {
   fetchTodayProgress,
   fetchExercises,
   fetchExerciseDetail,
+  getTodayWorkoutTime,
 } from "../../utils/exerciseApi";
 import { getExerciseGoalSummary } from "../../utils/exerciseGoalApi";
 import { eventBus } from "../../utils/eventBus";
@@ -216,6 +217,7 @@ const ExerciseScreen = ({ navigation }: any) => {
     }>
   >([]);
   const [completionSummaryTitle, setCompletionSummaryTitle] = useState("");
+  const [todayTotalWorkoutSeconds, setTodayTotalWorkoutSeconds] = useState(0);
   // 운동 이미지 로딩 상태 (분석하기 페이지와 동일한 방식)
   const [exerciseImages, setExerciseImages] = useState<Record<string, string>>(
     {}
@@ -501,6 +503,20 @@ const ExerciseScreen = ({ navigation }: any) => {
     }
   }, []);
 
+  // 오늘의 총 운동 시간 조회
+  const loadTodayWorkoutTime = React.useCallback(async () => {
+    if (!userId) return;
+    try {
+      const userIdNum = parseInt(userId, 10);
+      if (isNaN(userIdNum)) return;
+      const response = await getTodayWorkoutTime(userIdNum);
+      setTodayTotalWorkoutSeconds(response.totalSeconds || 0);
+    } catch (e) {
+      console.error("오늘 운동 시간 조회 실패:", e);
+      setTodayTotalWorkoutSeconds(0);
+    }
+  }, [userId]);
+
   React.useEffect(() => {
     if (!userIdLoaded) return;
     loadGoalData();
@@ -509,7 +525,15 @@ const ExerciseScreen = ({ navigation }: any) => {
     // 페이지 열 때 선택된 날짜의 달 데이터 가져오기
     const dateToFetch = selectedDate || new Date();
     loadMonthlyProgress(dateToFetch.getFullYear(), dateToFetch.getMonth());
-  }, [userIdLoaded, loadGoalData, loadWeeklyCalories, selectedDate]);
+    // 오늘의 총 운동 시간 조회
+    loadTodayWorkoutTime();
+  }, [
+    userIdLoaded,
+    loadGoalData,
+    loadWeeklyCalories,
+    selectedDate,
+    loadTodayWorkoutTime,
+  ]);
 
   // 날짜를 yyyy-MM-dd 형식으로 변환
   const formatDateToString = (date: Date): string => {
@@ -517,6 +541,20 @@ const ExerciseScreen = ({ navigation }: any) => {
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const day = String(date.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
+  };
+
+  // 운동 시간을 시:분:초 형식으로 변환
+  const formatWorkoutTime = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    if (hours > 0) {
+      return `${hours}시간 ${minutes}분 ${secs}초`;
+    } else if (minutes > 0) {
+      return `${minutes}분 ${secs}초`;
+    } else {
+      return `${secs}초`;
+    }
   };
 
   // 특정 날짜의 진행률 데이터 가져오기
@@ -1606,7 +1644,14 @@ const ExerciseScreen = ({ navigation }: any) => {
 
         {/* 운동 기록 섹션 */}
         <View style={styles.logSection}>
-          <Text style={styles.sectionTitle}>운동 기록하기</Text>
+          <View style={styles.sectionTitleRow}>
+            <Text style={styles.sectionTitle}>운동 기록하기</Text>
+            {todayTotalWorkoutSeconds > 0 && (
+              <Text style={styles.todayWorkoutTimeText}>
+                오늘 총 운동 시간: {formatWorkoutTime(todayTotalWorkoutSeconds)}
+              </Text>
+            )}
+          </View>
 
           <View style={styles.logTimeline}>
             {activities.map((activity, index) => (
@@ -1905,7 +1950,11 @@ const ExerciseScreen = ({ navigation }: any) => {
               {/* 확인 버튼 */}
               <TouchableOpacity
                 style={styles.completionConfirmButton}
-                onPress={() => setShowCompletionModal(false)}
+                onPress={() => {
+                  setShowCompletionModal(false);
+                  // 운동 완료 후 오늘의 총 운동 시간 다시 조회
+                  loadTodayWorkoutTime();
+                }}
               >
                 <Text style={styles.completionConfirmButtonText}>확인</Text>
               </TouchableOpacity>
@@ -2121,11 +2170,16 @@ const styles = StyleSheet.create({
   logSection: {
     marginBottom: 16,
   },
+  sectionTitleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "600",
     color: colors.text,
-    marginBottom: 16,
   },
   // 서버 기록 섹션 스타일 제거됨
   // (임시 API 테스트 버튼 스타일 제거)
@@ -2215,6 +2269,11 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 12,
   },
+  todayWorkoutTimeText: {
+    fontSize: 11,
+    color: colors.textLight,
+    opacity: 0.7,
+  },
   actionBtn: {
     flex: 1,
     borderRadius: 12,
@@ -2224,6 +2283,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.grayDark,
+    minWidth: 0,
   },
   stretchActionBtn: {
     backgroundColor: colors.grayDark,

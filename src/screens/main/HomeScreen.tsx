@@ -14,6 +14,8 @@ import { colors } from "../../theme/colors";
 import { ROUTES } from "../../constants/routes";
 import { useDate } from "../../contexts/DateContext";
 import { homeAPI } from "../../services";
+import { getTodayWorkoutTime } from "../../utils/exerciseApi";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { DailyProgressWeekItem, HomeResponse } from "../../types";
 
 const HomeScreen = ({ navigation }: any) => {
@@ -22,6 +24,7 @@ const HomeScreen = ({ navigation }: any) => {
     []
   );
   const [homeData, setHomeData] = useState<HomeResponse | null>(null);
+  const [todayWorkoutSeconds, setTodayWorkoutSeconds] = useState(0);
   const isLoadingRef = useRef(false);
 
   // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
@@ -30,6 +33,14 @@ const HomeScreen = ({ navigation }: any) => {
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const day = String(date.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
+  };
+
+  // 운동 시간을 시:분:초 형식으로 변환
+  const formatWorkoutTime = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   };
 
   // 주간 진행률 데이터 로드
@@ -80,6 +91,29 @@ const HomeScreen = ({ navigation }: any) => {
     }
   };
 
+  // 오늘의 총 운동 시간 조회
+  const loadTodayWorkoutTime = async () => {
+    try {
+      const userIdStr = await AsyncStorage.getItem("userId");
+      if (!userIdStr) return;
+      const userId = parseInt(userIdStr, 10);
+      if (isNaN(userId)) return;
+      const response = await getTodayWorkoutTime(userId);
+      setTodayWorkoutSeconds(response.totalSeconds || 0);
+    } catch (e: any) {
+      console.error("오늘 운동 시간 조회 실패:", e);
+      setTodayWorkoutSeconds(0);
+    }
+  };
+
+  // 운동 시간을 시:분:초 형식으로 변환
+  const formatWorkoutTime = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  };
+
   // 화면 포커스 시 데이터 로드
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
@@ -89,7 +123,11 @@ const HomeScreen = ({ navigation }: any) => {
       }
 
       isLoadingRef.current = true;
-      Promise.all([loadWeeklyProgress(), loadHomeData()]).finally(() => {
+      Promise.all([
+        loadWeeklyProgress(),
+        loadHomeData(),
+        loadTodayWorkoutTime(),
+      ]).finally(() => {
         isLoadingRef.current = false;
       });
     });
@@ -337,7 +375,9 @@ const HomeScreen = ({ navigation }: any) => {
           <View style={styles.exerciseStatsContent}>
             <View style={styles.exerciseStatColumn}>
               <Text style={styles.exerciseStatLabel}>운동 시간</Text>
-              <Text style={styles.exerciseStatValue}>00:28:48</Text>
+              <Text style={styles.exerciseStatValue}>
+                {formatWorkoutTime(todayWorkoutSeconds)}
+              </Text>
             </View>
             <View style={styles.exerciseStatDivider} />
             <View style={styles.exerciseStatColumn}>
