@@ -10,10 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
-import { colors } from "../../theme/colors";
 import { authAPI } from "../../services";
-import BadgeModal from "../../components/modals/BadgeModal";
-import BadgeListModal from "../../components/modals/BadgeListModal";
 import AIAnalysisModal from "../../components/modals/AIAnalysisModal";
 import MyPlanModal from "../../components/modals/MyPlanModal";
 import PaymentMethodModal from "../../components/modals/PaymentMethodModal";
@@ -23,13 +20,10 @@ import MealRecommendModal from "../../components/modals/MealRecommendModal";
 import DeleteAccountModal from "../../components/modals/DeleteAccountModal";
 
 const MyPageScreen = ({ navigation }: any) => {
-  // 프로필 데이터를 null로 초기화
   const [profileData, setProfileData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // 모달 상태
-  const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false);
-  const [isBadgeListModalOpen, setIsBadgeListModalOpen] = useState(false);
   const [isAIAnalysisModalOpen, setIsAIAnalysisModalOpen] = useState(false);
   const [isMyPlanModalOpen, setIsMyPlanModalOpen] = useState(false);
   const [isPaymentMethodModalOpen, setIsPaymentMethodModalOpen] =
@@ -41,26 +35,19 @@ const MyPageScreen = ({ navigation }: any) => {
     useState(false);
   const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] =
     useState(false);
-  const [selectedBadge, setSelectedBadge] = useState<any>(null);
 
-  // 컴포넌트 마운트 시 프로필 데이터 가져오기
   useEffect(() => {
     fetchProfile();
   }, []);
 
-  // 프로필 조회 함수
   const fetchProfile = async () => {
     try {
       setLoading(true);
       const data = await authAPI.getProfile();
       setProfileData(data);
     } catch (error: any) {
-      console.error("프로필 조회 실패:", error);
       Alert.alert("오류", "프로필 정보를 불러오는데 실패했습니다.");
-      // 토큰이 만료되었거나 없는 경우 로그인 페이지로 이동
-      if (error.status === 401) {
-        navigation.replace("Login");
-      }
+      if (error.status === 401) navigation.replace("Login");
     } finally {
       setLoading(false);
     }
@@ -72,14 +59,8 @@ const MyPageScreen = ({ navigation }: any) => {
       {
         text: "확인",
         onPress: async () => {
-          try {
-            await authAPI.logout();
-            navigation.replace("Login");
-          } catch (error) {
-            console.error("로그아웃 실패:", error);
-            // 실패해도 로그인 화면으로 이동
-            navigation.replace("Login");
-          }
+          await authAPI.logout();
+          navigation.replace("Login");
         },
       },
     ]);
@@ -89,7 +70,6 @@ const MyPageScreen = ({ navigation }: any) => {
     setIsDeleteAccountModalOpen(true);
   };
 
-  // membershipType을 한글로 변환
   const getMembershipTypeText = (type: string) => {
     switch (type) {
       case "FREE":
@@ -103,7 +83,6 @@ const MyPageScreen = ({ navigation }: any) => {
     }
   };
 
-  // 로딩 중일 때
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
@@ -115,7 +94,6 @@ const MyPageScreen = ({ navigation }: any) => {
     );
   }
 
-  // 데이터가 없을 때 (에러 발생)
   if (!profileData) {
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
@@ -134,11 +112,13 @@ const MyPageScreen = ({ navigation }: any) => {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>마이페이지</Text>
       </View>
+
       <ScrollView
         style={styles.content}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 }}
       >
+        {/* 프로필 카드 */}
         <View style={styles.profileCard}>
           <View style={styles.profileInfo}>
             <View style={styles.profileAvatar}>
@@ -153,14 +133,13 @@ const MyPageScreen = ({ navigation }: any) => {
                 <Text style={styles.usernameText}>
                   {profileData?.name || "사용자"}님
                 </Text>
-                {/* 뱃지나 등급에 따라 아이콘 색상 변경 가능 */}
-                <Icon name="ribbon" size={18} color={NEW_COLORS.accent} />
               </View>
               <Text style={styles.userTitle}>
                 {getMembershipTypeText(profileData?.membershipType || "FREE")}
               </Text>
             </View>
           </View>
+
           <TouchableOpacity
             style={styles.editProfileButton}
             onPress={() => setIsProfileEditModalOpen(true)}
@@ -169,58 +148,9 @@ const MyPageScreen = ({ navigation }: any) => {
           </TouchableOpacity>
         </View>
 
-        {/* 뱃지 섹션 */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              🏆 뱃지 <Text style={styles.badgeCount}>23/80</Text>
-            </Text>
-            <TouchableOpacity onPress={() => setIsBadgeListModalOpen(true)}>
-              <Text style={styles.viewMore}>
-                전체 보기{" "}
-                <Icon
-                  name="chevron-forward"
-                  size={16}
-                  color={NEW_COLORS.text_secondary}
-                />
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.badgesDisplay}>
-            {/* 예시 뱃지 */}
-            <TouchableOpacity
-              style={[styles.badge, styles.badgePurple]}
-              onPress={() => {
-                setSelectedBadge({ type: "purple" });
-                setIsBadgeModalOpen(true);
-              }}
-            >
-              <Icon name="medal" size={24} color={NEW_COLORS.badge_icon} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.badge, styles.badgeBlue]}
-              onPress={() => {
-                setSelectedBadge({ type: "blue" });
-                setIsBadgeModalOpen(true);
-              }}
-            >
-              <Icon name="barbell" size={24} color={NEW_COLORS.badge_icon} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.badge, styles.badgeRed]}
-              onPress={() => {
-                setSelectedBadge({ type: "red" });
-                setIsBadgeModalOpen(true);
-              }}
-            >
-              <Icon name="flame" size={24} color={NEW_COLORS.badge_icon} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
         <View style={styles.separator} />
 
-        {/* 구독/결제 섹션 */}
+        {/* 구독/결제 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>💳 구독/결제</Text>
           <View style={styles.sectionLinks}>
@@ -235,7 +165,9 @@ const MyPageScreen = ({ navigation }: any) => {
                 color={NEW_COLORS.text_secondary}
               />
             </TouchableOpacity>
+
             <View style={styles.subSeparator} />
+
             <TouchableOpacity
               style={styles.linkItem}
               onPress={() => setIsPaymentMethodModalOpen(true)}
@@ -252,7 +184,7 @@ const MyPageScreen = ({ navigation }: any) => {
 
         <View style={styles.separator} />
 
-        {/* 추천 내역 섹션 */}
+        {/* 추천 내역 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🌟 추천 내역</Text>
           <View style={styles.sectionLinks}>
@@ -267,7 +199,9 @@ const MyPageScreen = ({ navigation }: any) => {
                 color={NEW_COLORS.text_secondary}
               />
             </TouchableOpacity>
+
             <View style={styles.subSeparator} />
+
             <TouchableOpacity
               style={styles.linkItem}
               onPress={() => navigation.navigate("MealRecommendHistory")}
@@ -284,7 +218,7 @@ const MyPageScreen = ({ navigation }: any) => {
 
         <View style={styles.separator} />
 
-        {/* 계정 관리 섹션 */}
+        {/* 계정 관리 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>⚙️ 계정 관리</Text>
           <View style={styles.sectionLinks}>
@@ -296,7 +230,9 @@ const MyPageScreen = ({ navigation }: any) => {
                 color={NEW_COLORS.text_secondary}
               />
             </TouchableOpacity>
+
             <View style={styles.subSeparator} />
+
             <TouchableOpacity
               style={styles.linkItem}
               onPress={handleDeleteAccount}
@@ -312,23 +248,7 @@ const MyPageScreen = ({ navigation }: any) => {
         </View>
       </ScrollView>
 
-      <BadgeModal
-        isOpen={isBadgeModalOpen}
-        onClose={() => {
-          setIsBadgeModalOpen(false);
-          setSelectedBadge(null);
-        }}
-        badge={selectedBadge}
-      />
-      <BadgeListModal
-        isOpen={isBadgeListModalOpen}
-        onClose={() => setIsBadgeListModalOpen(false)}
-        onBadgeClick={(badge) => {
-          setIsBadgeListModalOpen(false);
-          setSelectedBadge(badge);
-          setIsBadgeModalOpen(true);
-        }}
-      />
+      {/* 모달들 */}
       <AIAnalysisModal
         isOpen={isAIAnalysisModalOpen}
         onClose={() => setIsAIAnalysisModalOpen(false)}
@@ -358,10 +278,7 @@ const MyPageScreen = ({ navigation }: any) => {
       <DeleteAccountModal
         isOpen={isDeleteAccountModalOpen}
         onClose={() => setIsDeleteAccountModalOpen(false)}
-        onDeleteSuccess={() => {
-          setIsDeleteAccountModalOpen(false);
-          navigation.replace("Login");
-        }}
+        onDeleteSuccess={() => navigation.replace("Login")}
       />
     </SafeAreaView>
   );
@@ -374,10 +291,6 @@ const NEW_COLORS = {
   accent: "#e3ff7c",
   card_bg: "#252525",
   separator: "#3a3a3a",
-  badge_purple: "#8b5cf6",
-  badge_blue: "#3b82f6",
-  badge_red: "#ef4444",
-  badge_icon: "#ffffff",
   delete_color: "#ff6b6b",
 };
 
@@ -414,7 +327,6 @@ const styles = StyleSheet.create({
   header: {
     paddingVertical: 16,
     paddingHorizontal: 20,
-    borderBottomWidth: 0,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -422,7 +334,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "700",
     color: NEW_COLORS.text,
-    textAlign: "center",
   },
   content: {
     flex: 1,
@@ -437,11 +348,6 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: NEW_COLORS.card_bg,
     borderRadius: 15,
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
   },
   profileInfo: {
     flexDirection: "row",
@@ -496,50 +402,10 @@ const styles = StyleSheet.create({
     marginVertical: 4,
     marginLeft: 10,
   },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "600",
     color: NEW_COLORS.text,
-  },
-  badgeCount: {
-    color: NEW_COLORS.accent,
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-  viewMore: {
-    fontSize: 14,
-    color: NEW_COLORS.text_secondary,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  badgesDisplay: {
-    flexDirection: "row",
-    gap: 16,
-    paddingTop: 8,
-  },
-  badge: {
-    width: 60,
-    height: 60,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 2,
-  },
-  badgePurple: {
-    backgroundColor: NEW_COLORS.badge_purple,
-  },
-  badgeBlue: {
-    backgroundColor: NEW_COLORS.badge_blue,
-  },
-  badgeRed: {
-    backgroundColor: NEW_COLORS.badge_red,
   },
   sectionLinks: {
     backgroundColor: NEW_COLORS.card_bg,

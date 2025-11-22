@@ -17,9 +17,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
-import { authAPI, recommendedMealAPI } from "../../services";
+import { recommendedMealAPI, userPreferencesAPI } from "../../services";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
 
 const { width } = Dimensions.get("window");
 
@@ -237,217 +236,118 @@ const loadingStyles = StyleSheet.create({
   },
 });
 
-const transformApiResponseToUI = (apiData: any) => {
-  console.log("🔍 변환 전 API 데이터:", JSON.stringify(apiData, null, 2));
+// ✅ 임시 식단 → UI 데이터 변환
+const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
+  console.log(`🔄 ${dayIndex}일차 변환 시작`);
 
-  const breakfast = apiData.meals.find((m: any) => m.mealType === "BREAKFAST");
-  const lunch = apiData.meals.find((m: any) => m.mealType === "LUNCH");
-  const dinner = apiData.meals.find((m: any) => m.mealType === "DINNER");
+  // ✅ SNACK 처리를 위한 로직 추가
+  let breakfast, lunch, dinner;
 
-  const planDate = apiData.planDate ? new Date(apiData.planDate) : new Date();
+  if (tempDay.meals && tempDay.meals.length > 0) {
+    // mealType으로 찾기
+    breakfast = tempDay.meals.find((m: any) => m.mealType === "BREAKFAST");
+    lunch = tempDay.meals.find((m: any) => m.mealType === "LUNCH");
+    dinner = tempDay.meals.find((m: any) => m.mealType === "DINNER");
 
-  // ✅ 실제 영양소 계산 (API 값 무시하고 실제 데이터로 계산)
-  const actualBreakfastCal = breakfast?.totalCalories || 0;
-  const actualLunchCal = lunch?.totalCalories || 0;
-  const actualDinnerCal = dinner?.totalCalories || 0;
-  const actualTotalCalories =
-    actualBreakfastCal + actualLunchCal + actualDinnerCal;
+    // ✅ BREAKFAST, LUNCH, DINNER가 없으면 SNACK을 순서대로 매핑
+    if (!breakfast && !lunch && !dinner) {
+      console.log(`⚠️ ${dayIndex}일차는 SNACK만 있음 - 순서대로 매핑`);
 
-  const actualBreakfastCarbs = breakfast?.totalCarbs || 0;
-  const actualLunchCarbs = lunch?.totalCarbs || 0;
-  const actualDinnerCarbs = dinner?.totalCarbs || 0;
-  const actualTotalCarbs =
-    actualBreakfastCarbs + actualLunchCarbs + actualDinnerCarbs;
+      const snacks = tempDay.meals.filter((m: any) => m.mealType === "SNACK");
 
-  const actualBreakfastProtein = breakfast?.totalProtein || 0;
-  const actualLunchProtein = lunch?.totalProtein || 0;
-  const actualDinnerProtein = dinner?.totalProtein || 0;
-  const actualTotalProtein =
-    actualBreakfastProtein + actualLunchProtein + actualDinnerProtein;
+      if (snacks.length >= 1) breakfast = snacks[0];
+      if (snacks.length >= 2) lunch = snacks[1];
+      if (snacks.length >= 3) dinner = snacks[2];
 
-  const actualBreakfastFat = breakfast?.totalFat || 0;
-  const actualLunchFat = lunch?.totalFat || 0;
-  const actualDinnerFat = dinner?.totalFat || 0;
-  const actualTotalFat = actualBreakfastFat + actualLunchFat + actualDinnerFat;
-
-  // ⚠️ API와 실제 값 비교 (디버깅용)
-  if (Math.abs(actualTotalCalories - apiData.totalCalories) > 50) {
-    console.warn("⚠️ 칼로리 불일치 감지!", {
-      "API totalCalories": apiData.totalCalories,
-      "실제 계산값": actualTotalCalories,
-      차이: apiData.totalCalories - actualTotalCalories,
-      "아침 칼로리": actualBreakfastCal,
-      "점심 칼로리": actualLunchCal,
-      "저녁 칼로리": actualDinnerCal,
-    });
+      console.log(
+        `✅ SNACK 매핑 완료: 아침=${!!breakfast}, 점심=${!!lunch}, 저녁=${!!dinner}`
+      );
+    }
   }
 
-  const result = {
-    day: 1,
+  // 하루 전체 영양소 계산
+  const totalCalories =
+    (breakfast?.totalCalories || 0) +
+    (lunch?.totalCalories || 0) +
+    (dinner?.totalCalories || 0);
+
+  const totalCarbs =
+    (breakfast?.totalCarbs || 0) +
+    (lunch?.totalCarbs || 0) +
+    (dinner?.totalCarbs || 0);
+
+  const totalProtein =
+    (breakfast?.totalProtein || 0) +
+    (lunch?.totalProtein || 0) +
+    (dinner?.totalProtein || 0);
+
+  const totalFat =
+    (breakfast?.totalFat || 0) +
+    (lunch?.totalFat || 0) +
+    (dinner?.totalFat || 0);
+
+  // 날짜 계산
+  const planDate = new Date();
+  planDate.setDate(planDate.getDate() + (dayIndex - 1));
+
+  return {
+    day: dayIndex,
     date: `${planDate.getMonth() + 1}/${planDate.getDate()}`,
     fullDate: planDate.toLocaleDateString("ko-KR", {
       month: "long",
       day: "numeric",
       weekday: "short",
     }),
-    planId: apiData.id,
-    planName: apiData.planName,
-    description: apiData.description,
-    recommendationReason: apiData.recommendationReason,
-
-    // ✅ 실제 계산된 값 사용
-    totalCalories: actualTotalCalories,
-    carbs: actualTotalCarbs,
-    protein: actualTotalProtein,
-    fat: actualTotalFat,
-
-    // 📊 API 원본 값도 보관 (디버깅용)
-    apiTotalCalories: apiData.totalCalories,
-    apiTotalCarbs: apiData.totalCarbs,
-    apiTotalProtein: apiData.totalProtein,
-    apiTotalFat: apiData.totalFat,
-
-    isSaved: apiData.isSaved,
+    planId: null,
+    planName: "AI 추천 식단",
+    description: "맞춤형 7일 식단",
+    recommendationReason: "영양소 균형을 고려한 식단",
+    totalCalories: Math.round(totalCalories),
+    carbs: Math.round(totalCarbs),
+    protein: Math.round(totalProtein),
+    fat: Math.round(totalFat),
+    isSaved: false,
     breakfast: {
       meals:
         breakfast?.foods.map((f: any) => ({
           name: f.foodName,
-          calories: f.calories,
-          carbs: f.carbs,
-          protein: f.protein,
-          fat: f.fat,
+          calories: Math.round(f.calories),
+          carbs: Math.round(f.carbs),
+          protein: Math.round(f.protein),
+          fat: Math.round(f.fat),
         })) || [],
-      calories: breakfast?.totalCalories || 0,
-      carbs: breakfast?.totalCarbs || 0,
-      protein: breakfast?.totalProtein || 0,
-      fat: breakfast?.totalFat || 0,
+      calories: Math.round(breakfast?.totalCalories || 0),
+      carbs: Math.round(breakfast?.totalCarbs || 0),
+      protein: Math.round(breakfast?.totalProtein || 0),
+      fat: Math.round(breakfast?.totalFat || 0),
     },
     lunch: {
       meals:
         lunch?.foods.map((f: any) => ({
           name: f.foodName,
-          calories: f.calories,
-          carbs: f.carbs,
-          protein: f.protein,
-          fat: f.fat,
+          calories: Math.round(f.calories),
+          carbs: Math.round(f.carbs),
+          protein: Math.round(f.protein),
+          fat: Math.round(f.fat),
         })) || [],
-      calories: lunch?.totalCalories || 0,
-      carbs: lunch?.totalCarbs || 0,
-      protein: lunch?.totalProtein || 0,
-      fat: lunch?.totalFat || 0,
+      calories: Math.round(lunch?.totalCalories || 0),
+      carbs: Math.round(lunch?.totalCarbs || 0),
+      protein: Math.round(lunch?.totalProtein || 0),
+      fat: Math.round(lunch?.totalFat || 0),
     },
     dinner: {
       meals:
         dinner?.foods.map((f: any) => ({
           name: f.foodName,
-          calories: f.calories,
-          carbs: f.carbs,
-          protein: f.protein,
-          fat: f.fat,
-        })) || [],
-      calories: dinner?.totalCalories || 0,
-      carbs: dinner?.totalCarbs || 0,
-      protein: dinner?.totalProtein || 0,
-      fat: dinner?.totalFat || 0,
-    },
-  };
-
-  console.log("✅ 변환 후 데이터:", {
-    planId: result.planId,
-    "실제 totalCalories": result.totalCalories,
-    "API totalCalories": result.apiTotalCalories,
-    아침: result.breakfast.calories,
-    점심: result.lunch.calories,
-    저녁: result.dinner.calories,
-  });
-
-  return result;
-};
-
-const transformAIResponseToUI = (aiData: any) => {
-  const meal1 = aiData.meals.find((m: any) => m.meal_type === "meal_1");
-  const meal2 = aiData.meals.find((m: any) => m.meal_type === "meal_2");
-  const meal3 = aiData.meals.find((m: any) => m.meal_type === "meal_3");
-
-  const parseDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date;
-  };
-
-  const date = parseDate(aiData.date);
-
-  return {
-    day: 1,
-    date: `${date.getMonth() + 1}/${date.getDate()}`,
-    fullDate: date.toLocaleDateString("ko-KR", {
-      month: "long",
-      day: "numeric",
-      weekday: "short",
-    }),
-    planId: null,
-    planName: `${
-      aiData.goal === "maintain"
-        ? "유지"
-        : aiData.goal === "cut"
-        ? "감량"
-        : "증량"
-    } 식단`,
-    description: `AI가 생성한 ${
-      aiData.goal === "maintain"
-        ? "유지"
-        : aiData.goal === "cut"
-        ? "감량"
-        : "증량"
-    } 하루 식단`,
-    recommendationReason: `목표 칼로리: ${Math.round(
-      aiData.target_daily_calories
-    )}kcal`,
-    totalCalories: Math.round(aiData.target_daily_calories),
-    carbs: Math.round(aiData.target_carbs),
-    protein: Math.round(aiData.target_protein),
-    fat: Math.round(aiData.target_fat),
-    isSaved: false,
-    breakfast: {
-      meals:
-        meal1?.foods.map((f: any) => ({
-          name: f.name,
           calories: Math.round(f.calories),
           carbs: Math.round(f.carbs),
           protein: Math.round(f.protein),
           fat: Math.round(f.fat),
         })) || [],
-      calories: Math.round(meal1?.actual_calories || 0),
-      carbs: Math.round(meal1?.actual_carbs || 0),
-      protein: Math.round(meal1?.actual_protein || 0),
-      fat: Math.round(meal1?.actual_fat || 0),
-    },
-    lunch: {
-      meals:
-        meal2?.foods.map((f: any) => ({
-          name: f.name,
-          calories: Math.round(f.calories),
-          carbs: Math.round(f.carbs),
-          protein: Math.round(f.protein),
-          fat: Math.round(f.fat),
-        })) || [],
-      calories: Math.round(meal2?.actual_calories || 0),
-      carbs: Math.round(meal2?.actual_carbs || 0),
-      protein: Math.round(meal2?.actual_protein || 0),
-      fat: Math.round(meal2?.actual_fat || 0),
-    },
-    dinner: {
-      meals:
-        meal3?.foods.map((f: any) => ({
-          name: f.name,
-          calories: Math.round(f.calories),
-          carbs: Math.round(f.carbs),
-          protein: Math.round(f.protein),
-          fat: Math.round(f.fat),
-        })) || [],
-      calories: Math.round(meal3?.actual_calories || 0),
-      carbs: Math.round(meal3?.actual_carbs || 0),
-      protein: Math.round(meal3?.actual_protein || 0),
-      fat: Math.round(meal3?.actual_fat || 0),
+      calories: Math.round(dinner?.totalCalories || 0),
+      carbs: Math.round(dinner?.totalCarbs || 0),
+      protein: Math.round(dinner?.totalProtein || 0),
+      fat: Math.round(dinner?.totalFat || 0),
     },
   };
 };
@@ -464,7 +364,6 @@ const MealRecommendScreen = () => {
   const [loading, setLoading] = useState(false);
   const [savedMeals, setSavedMeals] = useState<any[]>([]);
   const [currentPlanId, setCurrentPlanId] = useState<number | null>(null);
-  const [loadingProgress, setLoadingProgress] = useState(0);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -476,43 +375,85 @@ const MealRecommendScreen = () => {
     }).start();
   }, [screen]);
 
+  // ✅ 초기 데이터 로드
   useEffect(() => {
     const loadData = async () => {
       try {
-        const stored = await AsyncStorage.getItem("excludedIngredients");
-        if (stored) {
-          setExcludedIngredients(JSON.parse(stored));
-        }
+        // ✅ 비선호 음식만 가져오기
+        const dislikedFoods = await userPreferencesAPI.getDislikedFoods();
+        setExcludedIngredients(dislikedFoods);
+
+        console.log("✅ 비선호 음식 로드 완료:", dislikedFoods.length, "개");
 
         await loadSavedMeals();
       } catch (error) {
-        console.log("Failed to load data", error);
+        console.error("데이터 로드 실패:", error);
+        // fallback: 로컬 스토리지
+        try {
+          const stored = await AsyncStorage.getItem("excludedIngredients");
+          if (stored) {
+            setExcludedIngredients(JSON.parse(stored));
+          }
+        } catch (e) {
+          console.error("로컬 스토리지 읽기 실패:", e);
+        }
       }
     };
     loadData();
   }, []);
 
+  // ✅ 저장된 식단 불러오기
   const loadSavedMeals = async () => {
     try {
-      const serverMeals = await recommendedMealAPI.getSavedMealPlans();
-
+      // 로컬 스토리지에서 가져오기
       const localStored = await AsyncStorage.getItem("savedMealPlans");
       const localMeals = localStored ? JSON.parse(localStored) : [];
 
-      // ✅ 필터링 추가: 실제로 저장 버튼을 눌러서 저장한 것만
-      const filteredServerMeals = serverMeals.filter((meal: any) => {
-        // 저장된 식단은 특정 조건을 만족해야 함
-        // 예: createdAt과 updatedAt이 다르면 저장된 것
-        // 또는 별도 savedAt 필드가 있으면 사용
-        return meal.isSaved === true && meal.savedAt; // savedAt 필드가 있다고 가정
+      // 서버에서 가져오기 (bundleId로 그룹화)
+      const serverPlans = await recommendedMealAPI.getSavedMealPlans();
+
+      console.log("📦 서버에서 받은 plans:", serverPlans.length);
+
+      // ✅ bundleId로 그룹화
+      const bundleMap = new Map<string, any>();
+
+      serverPlans.forEach((plan) => {
+        if (!bundleMap.has(plan.bundleId)) {
+          bundleMap.set(plan.bundleId, {
+            id: plan.bundleId,
+            bundleId: plan.bundleId,
+            planName: plan.planName,
+            description: "",
+            totalCalories: 0,
+            createdAt: plan.createdAt,
+            mealCount: 0,
+            isServerMeal: true,
+          });
+        }
+
+        const bundle = bundleMap.get(plan.bundleId)!;
+        bundle.mealCount++;
+        bundle.totalCalories += plan.totalCalories;
+        // ✅ totalCarbs, totalProtein, totalFat 제거
       });
 
-      const allMeals = [...localMeals, ...filteredServerMeals];
+      // ✅ 평균 계산
+      const serverBundles = Array.from(bundleMap.values()).map((bundle) => ({
+        ...bundle,
+        totalCalories: Math.round(
+          bundle.totalCalories / (bundle.mealCount || 1)
+        ),
+        description: `${bundle.mealCount}일 식단`,
+      }));
+
+      console.log("✅ 그룹화된 서버 번들:", serverBundles.length);
+
+      // 로컬 + 서버 합치기
+      const allMeals = [...localMeals, ...serverBundles];
 
       console.log("📋 저장된 식단:", {
         로컬: localMeals.length,
-        서버: filteredServerMeals.length,
-        "필터 전 서버": serverMeals.length,
+        서버: serverBundles.length,
         합계: allMeals.length,
       });
 
@@ -536,57 +477,69 @@ const MealRecommendScreen = () => {
     ]);
   };
 
+  // ✅ 식단 추천 받기
   const handleGetRecommendation = async () => {
     setLoading(true);
-    setLoadingProgress(0);
 
     try {
-      console.log("🍽️ 주간 식단 추천 시작");
+      console.log("🍽️ 임시 식단 생성 시작");
 
-      const weeklyPlans = await recommendedMealAPI.getWeeklyMealPlan();
+      const tempMeals = await recommendedMealAPI.getWeeklyMealPlan();
 
-      if (!weeklyPlans || weeklyPlans.length === 0) {
+      // ✅ 1단계: API 응답 전체 확인
+      console.log("=== 📦 API 응답 원본 ===");
+      console.log("응답 배열 길이:", tempMeals.length);
+      console.log("전체 응답:", JSON.stringify(tempMeals, null, 2));
+
+      // ✅ 2단계: 각 날짜별 데이터 확인
+      tempMeals.forEach((day, index) => {
+        console.log(`\n=== ${index + 1}일차 상세 ===`);
+        console.log("dayIndex:", day.dayIndex);
+        console.log("meals 배열:", day.meals);
+        console.log("meals 길이:", day.meals?.length || 0);
+
+        // 각 meal 확인
+        day.meals?.forEach((meal, mealIdx) => {
+          console.log(`  - ${meal.mealType}:`, {
+            id: meal.id,
+            foods개수: meal.foods?.length || 0,
+            totalCalories: meal.totalCalories,
+          });
+        });
+      });
+
+      if (!tempMeals || tempMeals.length === 0) {
         throw new Error("식단 생성에 실패했습니다.");
       }
 
-      console.log(`✅ ${weeklyPlans.length}일치 식단 생성 완료`);
-      console.log("📦 전체 응답 데이터:", JSON.stringify(weeklyPlans, null, 2));
+      console.log(`✅ ${tempMeals.length}일치 임시 식단 생성 완료`);
 
-      const weekData = weeklyPlans.map((apiResponse, index) => {
-        console.log(`🔄 ${index + 1}일차 변환 시작`);
-        const transformedData = transformApiResponseToUI(apiResponse);
+      // ✅ 3단계: 변환 전후 비교
+      const weekData = tempMeals.map((tempDay, index) => {
+        const transformed = transformTempMealToUI(tempDay, index + 1);
 
-        const planDate = new Date(apiResponse.planDate);
+        console.log(`\n=== ${index + 1}일차 변환 후 ===`);
+        console.log("totalCalories:", transformed.totalCalories);
+        console.log("아침 음식 수:", transformed.breakfast.meals.length);
+        console.log("점심 음식 수:", transformed.lunch.meals.length);
+        console.log("저녁 음식 수:", transformed.dinner.meals.length);
 
-        const result = {
-          ...transformedData,
-          day: index + 1,
-          date: `${planDate.getMonth() + 1}/${planDate.getDate()}`,
-          fullDate: planDate.toLocaleDateString("ko-KR", {
-            month: "long",
-            day: "numeric",
-            weekday: "short",
-          }),
-          planId: apiResponse.id,
-          bundleId: apiResponse.bundleId,
-          bundleDay: apiResponse.bundleDay,
-        };
-
-        console.log(`✅ ${index + 1}일차 변환 완료:`, {
-          planId: result.planId,
-          totalCalories: result.totalCalories,
-          아침: result.breakfast.meals.map((m) => m.name),
-          점심: result.lunch.meals.map((m) => m.name),
-          저녁: result.dinner.meals.map((m) => m.name),
-        });
-
-        return result;
+        return transformed;
       });
 
-      console.log("📊 최종 weekData:", weekData);
+      console.log("\n=== 📊 최종 weekData ===");
+      console.log("weekData 길이:", weekData.length);
+      weekData.forEach((day, idx) => {
+        console.log(`${idx + 1}일차:`, {
+          totalCalories: day.totalCalories,
+          아침: day.breakfast.meals.length,
+          점심: day.lunch.meals.length,
+          저녁: day.dinner.meals.length,
+        });
+      });
 
       setWeeklyMeals(weekData);
-      setCurrentPlanId(weekData[0]?.planId || null);
+      setCurrentPlanId(null);
       setScreen("meals");
       setCurrentDay(0);
 
@@ -599,30 +552,91 @@ const MealRecommendScreen = () => {
       Alert.alert("오류", error.message || "식단을 불러오는데 실패했습니다.");
     } finally {
       setLoading(false);
-      setLoadingProgress(0);
     }
   };
+  const handleAddExcludedIngredient = async () => {
+    const trimmed = newIngredient.trim();
 
-  const handleAddExcludedIngredient = () => {
-    if (
-      newIngredient.trim() &&
-      !excludedIngredients.includes(newIngredient.trim())
-    ) {
-      setExcludedIngredients([...excludedIngredients, newIngredient.trim()]);
+    if (!trimmed) {
+      return;
+    }
+
+    if (excludedIngredients.includes(trimmed)) {
+      Alert.alert("알림", "이미 추가된 식재료입니다.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // ✅ 현재 목록 기반으로 서버에 추가
+      const result = await userPreferencesAPI.addDislikedFoods(
+        excludedIngredients,
+        [trimmed]
+      );
+
+      // ✅ 서버 응답으로 상태 업데이트
+      setExcludedIngredients(result.updatedList);
+
+      // ✅ 로컬 스토리지 백업
+      await AsyncStorage.setItem(
+        "excludedIngredients",
+        JSON.stringify(result.updatedList)
+      );
+
       setNewIngredient("");
+      console.log("✅ 비선호 음식 추가 완료:", result.updatedList);
+    } catch (error: any) {
+      console.error("비선호 음식 추가 실패:", error);
+      Alert.alert("오류", error.message || "식재료 추가에 실패했습니다.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleRemoveExcludedIngredient = (ingredient: string) => {
-    setExcludedIngredients(excludedIngredients.filter((i) => i !== ingredient));
+  // ✅ 비선호 음식 삭제 (최적화)
+  const handleRemoveExcludedIngredient = async (ingredient: string) => {
+    Alert.alert("삭제", `"${ingredient}"를 삭제하시겠습니까?`, [
+      { text: "취소", style: "cancel" },
+      {
+        text: "삭제",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setLoading(true);
+
+            // ✅ 현재 목록 기반으로 서버에서 삭제
+            const result = await userPreferencesAPI.removeDislikedFood(
+              excludedIngredients,
+              ingredient
+            );
+
+            // ✅ 서버 응답으로 상태 업데이트
+            setExcludedIngredients(result.updatedList);
+
+            // ✅ 로컬 스토리지 백업
+            await AsyncStorage.setItem(
+              "excludedIngredients",
+              JSON.stringify(result.updatedList)
+            );
+
+            console.log("✅ 비선호 음식 삭제 완료:", result.updatedList);
+          } catch (error: any) {
+            console.error("비선호 음식 삭제 실패:", error);
+            Alert.alert("오류", error.message || "식재료 삭제에 실패했습니다.");
+          } finally {
+            setLoading(false);
+          }
+        },
+      },
+    ]);
   };
 
-  // ✅ 개선된 삭제 함수 - 항상 삭제 가능
+  // ✅ 음식 삭제
   const handleDeleteMeal = (mealType: string, mealIndex: number) => {
     const currentMeal = weeklyMeals[currentDay];
     const mealData = currentMeal[mealType];
 
-    // 마지막 음식인 경우 확인
     if (mealData.meals.length === 1) {
       Alert.alert(
         "음식 삭제",
@@ -656,7 +670,6 @@ const MealRecommendScreen = () => {
       const removedMeal = mealArray[mealIndex];
       mealArray.splice(mealIndex, 1);
 
-      // ✅ 식사 시간대 영양소 재계산
       const newMealCalories = Math.max(
         0,
         dayMeals[mealType].calories - removedMeal.calories
@@ -679,7 +692,6 @@ const MealRecommendScreen = () => {
         fat: newMealFat,
       };
 
-      // ✅ 총 영양소 재계산 (실제 값으로)
       const newTotalCalories =
         dayMeals.breakfast.calories +
         dayMeals.lunch.calories +
@@ -700,17 +712,11 @@ const MealRecommendScreen = () => {
 
       updated[currentDay] = dayMeals;
 
-      console.log("🔄 삭제 후 영양소:", {
-        totalCalories: newTotalCalories,
-        carbs: newTotalCarbs,
-        protein: newTotalProtein,
-        fat: newTotalFat,
-      });
-
       return updated;
     });
   };
 
+  // ✅ 로컬 저장
   const handleSaveMealPlanLocally = async () => {
     try {
       setLoading(true);
@@ -726,7 +732,7 @@ const MealRecommendScreen = () => {
       }));
 
       const mealPlanToSave = {
-        id: `ai_${Date.now()}`,
+        id: `local_${Date.now()}`,
         date: new Date().toLocaleDateString("ko-KR"),
         planName: weeklyMeals[0]?.planName || "AI 식단",
         description: weeklyMeals[0]?.description || "AI가 생성한 식단",
@@ -736,7 +742,7 @@ const MealRecommendScreen = () => {
         totalFat: weeklyMeals[0]?.fat || 0,
         createdAt: new Date().toISOString(),
         meals: mealsForHistory,
-        isAIPlan: true,
+        isLocalMeal: true,
       };
 
       const stored = await AsyncStorage.getItem("savedMealPlans");
@@ -767,54 +773,56 @@ const MealRecommendScreen = () => {
     }
   };
 
+  // ✅ 식단 저장
   const handleSaveMealPlan = async () => {
-    if (!currentPlanId) {
-      Alert.alert(
-        "식단 저장",
-        "AI 생성 식단은 기기에만 저장됩니다.\n(다른 기기에서는 볼 수 없습니다)",
-        [
-          { text: "취소", style: "cancel" },
-          {
-            text: "저장",
-            onPress: handleSaveMealPlanLocally,
-          },
-        ]
-      );
-      return;
-    }
+    Alert.alert(
+      "식단 저장",
+      "이 식단을 저장하시겠습니까?\n저장하지 않으면 임시 식단이 사라집니다.",
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "저장",
+          onPress: async () => {
+            try {
+              setLoading(true);
 
-    try {
-      setLoading(true);
-      const response = await recommendedMealAPI.saveMealPlan(currentPlanId);
+              const response = await recommendedMealAPI.saveTempMealPlan();
 
-      if (response.success) {
-        Alert.alert("저장 완료", response.message || "식단이 저장되었습니다!", [
-          {
-            text: "확인",
-            onPress: async () => {
-              await loadSavedMeals();
-              navigation.navigate("MealRecommendHistory" as never);
-            },
+              if (response.success) {
+                Alert.alert("저장 완료", response.message, [
+                  {
+                    text: "확인",
+                    onPress: async () => {
+                      await loadSavedMeals();
+                      navigation.navigate("MealRecommendHistory" as never);
+                    },
+                  },
+                ]);
+              } else {
+                Alert.alert("오류", "식단 저장에 실패했습니다.");
+              }
+            } catch (error: any) {
+              console.error("식단 저장 실패:", error);
+              Alert.alert("오류", error.message || "식단 저장에 실패했습니다.");
+            } finally {
+              setLoading(false);
+            }
           },
-        ]);
-      } else {
-        Alert.alert("오류", response.message || "식단 저장에 실패했습니다.");
-      }
-    } catch (error: any) {
-      console.error("식단 저장 실패:", error);
-      Alert.alert("오류", error.message || "식단 저장에 실패했습니다.");
-    } finally {
-      setLoading(false);
-    }
+        },
+      ]
+    );
   };
 
+  // ✅ 저장된 식단 삭제
   const handleDeleteSavedMeal = async (meal: any) => {
     const isLocalMeal =
-      typeof meal.id === "string" && meal.id.startsWith("ai_");
+      typeof meal.id === "string" && meal.id.startsWith("local_");
 
     Alert.alert(
       "삭제",
-      `이 ${isLocalMeal ? "로컬" : "서버"} 식단을 삭제하시겠습니까?`,
+      `이 ${isLocalMeal ? "로컬" : "서버"} 식단을 삭제하시겠습니까?${
+        !isLocalMeal && meal.mealCount ? `\n(${meal.mealCount}일치)` : ""
+      }`,
       [
         { text: "취소", style: "cancel" },
         {
@@ -822,7 +830,10 @@ const MealRecommendScreen = () => {
           style: "destructive",
           onPress: async () => {
             try {
+              setLoading(true);
+
               if (isLocalMeal) {
+                // ✅ 로컬 식단 삭제
                 const stored = await AsyncStorage.getItem("savedMealPlans");
                 const existingMeals = stored ? JSON.parse(stored) : [];
                 const updatedMeals = existingMeals.filter(
@@ -834,25 +845,20 @@ const MealRecommendScreen = () => {
                 );
 
                 console.log("🗑️ 로컬 식단 삭제:", meal.id);
-                await loadSavedMeals();
-                Alert.alert("성공", "식단이 삭제되었습니다.");
               } else {
-                const response = await recommendedMealAPI.deleteMealPlan(
-                  meal.id
-                );
-                if (response.success) {
-                  await loadSavedMeals();
-                  Alert.alert(
-                    "성공",
-                    response.message || "식단이 삭제되었습니다."
-                  );
-                } else {
-                  Alert.alert("오류", response.message || "삭제 실패");
-                }
+                // ✅ 서버 번들 삭제 - deleteBundle 사용
+                console.log("🗑️ 서버 번들 삭제:", meal.bundleId || meal.id);
+                await recommendedMealAPI.deleteBundle(meal.bundleId || meal.id);
               }
+
+              // ✅ 삭제 후 목록 새로고침
+              await loadSavedMeals();
+              Alert.alert("성공", "식단이 삭제되었습니다.");
             } catch (error: any) {
               console.error("식단 삭제 실패:", error);
               Alert.alert("오류", error.message || "식단 삭제에 실패했습니다.");
+            } finally {
+              setLoading(false);
             }
           },
         },
@@ -983,9 +989,10 @@ const MealRecommendScreen = () => {
             {savedMeals.length > 0 && (
               <View style={styles.savedMealsSection}>
                 <Text style={styles.sectionTitle}>저장된 식단</Text>
-                {savedMeals.map((meal, index) => {
+                {savedMeals.map((meal) => {
+                  // ✅ 수정: "local_" 체크
                   const isLocalMeal =
-                    typeof meal.id === "string" && meal.id.startsWith("ai_");
+                    typeof meal.id === "string" && meal.id.startsWith("local_");
 
                   return (
                     <TouchableOpacity
@@ -1297,28 +1304,11 @@ const MealRecommendScreen = () => {
                     <View>
                       <Text style={styles.caloriesTotalLabel}>총 칼로리</Text>
                       <View style={styles.caloriesTotalRow}>
-                        {/* ✅ 실제 계산된 값 표시 */}
                         <Text style={styles.caloriesTotal}>
                           {currentMeal.totalCalories}
                         </Text>
                         <Text style={styles.caloriesTotalUnit}>kcal</Text>
                       </View>
-                      {/* 🐛 디버깅: API 불일치 표시 */}
-                      {currentMeal.apiTotalCalories &&
-                        Math.abs(
-                          currentMeal.totalCalories -
-                            currentMeal.apiTotalCalories
-                        ) > 50 && (
-                          <Text
-                            style={{
-                              color: "#ef4444",
-                              fontSize: 10,
-                              marginTop: 4,
-                            }}
-                          >
-                            (API: {currentMeal.apiTotalCalories}kcal - 불일치)
-                          </Text>
-                        )}
                     </View>
                     <View style={styles.caloriesIcon}>
                       <LinearGradient
@@ -1478,7 +1468,6 @@ const MealRecommendScreen = () => {
                               <Text style={styles.mealCal}>
                                 ({meal.calories}kcal)
                               </Text>
-                              {/* ✅ 항상 삭제 버튼 표시 */}
                               <TouchableOpacity
                                 style={styles.mealDeleteBtn}
                                 onPress={() =>
@@ -2459,7 +2448,6 @@ const styles = StyleSheet.create({
   mealDeleteBtn: {
     marginLeft: 4,
   },
-  // ✅ 빈 식사 상태 스타일 추가
   emptyMealState: {
     paddingVertical: 20,
     paddingHorizontal: 16,

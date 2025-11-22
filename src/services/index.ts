@@ -12,6 +12,13 @@ export type { ApiResponse } from "./apiConfig";
 export { chatAPI } from "./chatAPI";
 export { recommendedMealAPI } from "./recommendedMealAPI";
 export { recommendedExerciseAPI } from "./recommendedExerciseAPI";
+export { userPreferencesAPI } from "./userPreferencesAPI";
+export type { UserPreferences } from "./userPreferencesAPI";
+export type {
+  TempDayMeal,
+  MealPlan,
+  SavedMealPlanSummary,
+} from "./recommendedMealAPI";
 // 향후 추가될 API들
 // export {exerciseAPI} from './exerciseAPI';
 // export {profileAPI} from './profileAPI';

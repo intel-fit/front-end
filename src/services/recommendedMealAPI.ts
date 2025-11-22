@@ -2,62 +2,101 @@
 import { request } from "./apiConfig";
 
 /**
- * ===========================
- * 식단 추천 API
- * ===========================
+ * 식단 추천 API (임시 식단 기반)
  */
 export const recommendedMealAPI = {
   /**
-   * 1) 주간 식단 추천 생성 (7일)
-   * POST /api/recommended-meals/week
+   * ✅ 1) 임시 식단 생성 + 조회 (7일치)
    */
-  getWeeklyMealPlan: async (startDate?: string) => {
+  getWeeklyMealPlan: async () => {
     try {
-      const start = startDate || new Date().toISOString().split("T")[0];
+      console.log("🍽️ 임시 식단 생성 시작");
 
-      const response = await request<Array<MealPlan>>(
-        `/api/recommended-meals/week?start=${start}`,
-        {
-          method: "POST",
-        }
+      // Step 1: 임시 식단 생성
+      const createResponse = await request<{ tempBundleId: string }>(
+        "/api/temp-meals/weekly",
+        { method: "POST" }
       );
 
-      console.log("✅ 주간 식단 생성 완료:", response.length);
+      console.log("✅ 임시 식단 생성 완료:", createResponse);
+
+      // Step 2: 임시 식단 조회
+      const response = await request<Array<TempDayMeal>>(
+        "/api/temp-meals/weekly",
+        { method: "GET" }
+      );
+
+      // ✅ 원본 응답 상세 로그
+      console.log("=== 🔍 GET /api/temp-meals/weekly 응답 ===");
+      console.log("응답 타입:", typeof response);
+      console.log("응답 길이:", response.length);
+      console.log("응답 전체:", JSON.stringify(response, null, 2));
+
+      // ✅ 각 day 검증
+      response.forEach((day, idx) => {
+        console.log(`\nDay ${idx + 1} 검증:`);
+        console.log("- dayIndex:", day.dayIndex);
+        console.log("- meals 존재:", !!day.meals);
+        console.log(
+          "- meals 타입:",
+          Array.isArray(day.meals) ? "배열" : typeof day.meals
+        );
+        console.log("- meals 길이:", day.meals?.length || 0);
+
+        if (day.meals && day.meals.length === 0) {
+          console.warn(`⚠️ ${idx + 1}일차 meals가 빈 배열입니다!`);
+        }
+      });
+
+      console.log(`✅ 임시 식단 조회 완료: ${response.length}일`);
       return response;
     } catch (error: any) {
-      console.error("❌ 주간 식단 생성 실패:", error);
+      console.error("❌ 임시 식단 생성/조회 실패:", error);
       throw new Error(error.message || "식단 생성에 실패했습니다.");
     }
   },
 
   /**
-   * 2) 식단 저장
-   * POST /api/recommended-meals/{id}/save
+   * ✅ 2) 임시 식단 저장 (DB에 확정)
    */
-  saveMealPlan: async (planId: number) => {
+  saveTempMealPlan: async () => {
     try {
-      return await request<SimpleResponse>(
-        `/api/recommended-meals/${planId}/save`,
-        { method: "POST" }
+      console.log("💾 임시 식단 commit 요청");
+
+      const response = await request<{ message: string }>(
+        "/api/temp-meals/weekly/commit",
+        {
+          method: "POST",
+        }
       );
+
+      console.log("✅ 임시 식단 저장 완료:", response.message);
+      return {
+        success: true,
+        message: response.message || "식단이 저장되었습니다.",
+      };
     } catch (error: any) {
-      console.error("❌ 식단 저장 실패:", error);
-      throw new Error(error.message || "식단 저장 실패");
+      console.error("❌ 임시 식단 저장 실패:", error);
+      throw new Error(error.message || "식단 저장에 실패했습니다.");
     }
   },
 
   /**
    * 3) 저장된 식단 목록 조회 (번들 단위)
-   * GET /api/recommended-meals/saved
    */
   getSavedMealPlans: async () => {
     try {
-      const res = await request<{
+      console.log("📋 저장된 식단 목록 조회");
+
+      const response = await request<{
         totalCount: number;
         plans: SavedMealPlanSummary[];
-      }>(`/api/recommended-meals/saved`);
+      }>("/api/recommended-meals/saved", {
+        method: "GET",
+      });
 
-      return res.plans || [];
+      console.log("✅ 저장된 식단:", response.totalCount, "개");
+      return response.plans || [];
     } catch (error: any) {
       console.error("❌ 저장된 식단 조회 실패:", error);
       return [];
@@ -65,110 +104,119 @@ export const recommendedMealAPI = {
   },
 
   /**
-   * 4) 번들 상세 조회 (7일)
-   * GET /api/recommended-meals/bundles/{bundleId}
+   * 4) 번들 상세 조회 (7일치)
    */
   getBundleDetail: async (bundleId: string) => {
     try {
+      console.log("🔍 번들 상세 조회:", bundleId);
+
       const response = await request<Array<MealPlan>>(
-        `/api/recommended-meals/bundles/${bundleId}`
+        `/api/recommended-meals/bundles/${bundleId}`,
+        {
+          method: "GET",
+        }
       );
+
+      console.log("✅ 번들 상세:", response.length, "일");
       return response;
     } catch (error: any) {
-      console.error("❌ 번들 상세 불러오기 실패:", error);
-      throw new Error(error.message || "번들 상세 조회 실패");
+      console.error("❌ 번들 상세 조회 실패:", error);
+      throw new Error(error.message || "번들 상세 조회에 실패했습니다.");
     }
   },
 
   /**
    * 5) 단일 식단 삭제
-   * DELETE /api/recommended-meals/{id}
    */
   deleteMealPlan: async (planId: number) => {
     try {
-      return await request<SimpleResponse>(`/api/recommended-meals/${planId}`, {
+      console.log("🗑️ 식단 삭제:", planId);
+
+      const response = await request<{
+        success: boolean;
+        message: string;
+      }>(`/api/recommended-meals/${planId}`, {
         method: "DELETE",
       });
+
+      console.log("✅ 식단 삭제 완료");
+      return response;
     } catch (error: any) {
       console.error("❌ 식단 삭제 실패:", error);
-      throw new Error(error.message || "식단 삭제 실패");
+      throw new Error(error.message || "식단 삭제에 실패했습니다.");
     }
   },
 
   /**
    * 6) 번들 삭제 (7일치 전체)
-   * DELETE /api/recommended-meals/bundles/{bundleId}/delete
    */
   deleteBundle: async (bundleId: string) => {
     try {
-      return await request<BundleDeleteResponse>(
-        `/api/recommended-meals/bundles/${bundleId}/delete`,
-        { method: "DELETE" }
-      );
+      console.log("🗑️ 번들 삭제:", bundleId);
+
+      const response = await request<{
+        success: boolean;
+        message: string;
+      }>(`/api/recommended-meals/bundles/${bundleId}`, {
+        method: "DELETE",
+      });
+
+      console.log("✅ 번들 삭제 완료");
+      return response;
     } catch (error: any) {
       console.error("❌ 번들 삭제 실패:", error);
-      throw new Error(error.message || "번들 삭제 실패");
+      throw new Error(error.message || "번들 삭제에 실패했습니다.");
     }
   },
 
   /**
    * 7) 일괄 삭제
-   * DELETE /api/recommended-meals/bundles/bulk-delete
    */
   deleteBulk: async (bundleIds: string[]) => {
     try {
-      return await request<BulkDeleteResponse>(
-        `/api/recommended-meals/bundles/bulk-delete`,
-        {
-          method: "DELETE",
-          body: JSON.stringify({ bundleIds }),
-        }
-      );
-    } catch (error: any) {
-      console.error("❌ 일괄 삭제 실패:", error);
-      throw new Error(error.message || "일괄 삭제 실패");
-    }
-  },
+      console.log("🗑️ 일괄 삭제:", bundleIds.length, "개");
 
-  /**
-   * 8) 특정 날짜의 식단 조회
-   * GET /api/recommended-meals/date/{date}
-   */
-  getMealPlanByDate: async (date: string) => {
-    try {
-      return await request<MealPlan>(`/api/recommended-meals/date/${date}`);
-    } catch (error: any) {
-      console.error("❌ 날짜별 식단 조회 실패:", error);
-      throw new Error(error.message || "식단 조회에 실패했습니다.");
-    }
-  },
-
-  /**
-   * 9) 식단 수정
-   * PUT /api/recommended-meals/{id}
-   */
-  updateMealPlan: async (planId: number, updateData: UpdateMealPlanReq) => {
-    try {
-      return await request<{
+      const response = await request<{
         success: boolean;
         message: string;
-        updatedPlan: MealPlan;
-      }>(`/api/recommended-meals/${planId}`, {
-        method: "PUT",
-        body: JSON.stringify(updateData),
+        deletedCount: number;
+      }>("/api/recommended-meals/bundles/bulk-delete", {
+        method: "DELETE",
+        body: JSON.stringify({ bundleIds }),
       });
+
+      console.log("✅ 일괄 삭제 완료:", response.deletedCount, "개");
+      return response;
     } catch (error: any) {
-      console.error("❌ 식단 수정 실패:", error);
-      throw new Error(error.message || "식단 수정에 실패했습니다.");
+      console.error("❌ 일괄 삭제 실패:", error);
+      throw new Error(error.message || "일괄 삭제에 실패했습니다.");
     }
   },
 };
 
 /**
- * ===========================
  * 타입 정의
- * ===========================
  */
+export interface TempDayMeal {
+  dayIndex: number;
+  meals: Array<{
+    id: number;
+    mealType: "BREAKFAST" | "LUNCH" | "DINNER";
+    totalCalories: number;
+    totalCarbs: number;
+    totalProtein: number;
+    totalFat: number;
+    foods: Array<{
+      id: number;
+      foodName: string;
+      servingSize: number;
+      calories: number;
+      carbs: number;
+      protein: number;
+      fat: number;
+    }>;
+  }>;
+}
 
 export interface Food {
   id: number;
@@ -178,8 +226,8 @@ export interface Food {
   carbs: number;
   protein: number;
   fat: number;
-  sodium: number | null;
-  sugar: number | null;
+  sodium?: number | null;
+  sugar?: number | null;
 }
 
 export interface Meal {
@@ -201,7 +249,7 @@ export interface MealPlan {
   totalCarbs: number;
   totalProtein: number;
   totalFat: number;
-  recommendationReason: string;
+  recommendationReason: string | null;
   isSaved: boolean;
   meals: Meal[];
   createdAt: string;
@@ -220,34 +268,4 @@ export interface SavedMealPlanSummary {
   bundleId: string;
   bundleDay: number;
   planDate: string;
-}
-
-export interface UpdateMealPlanReq {
-  planName?: string;
-  description?: string;
-  meals?: Array<{
-    mealType: string;
-    foods: Array<{
-      foodId: number;
-      servingSize: number;
-    }>;
-  }>;
-}
-
-export interface SimpleResponse {
-  success: boolean;
-  message: string;
-}
-
-export interface BundleDeleteResponse {
-  success: boolean;
-  message: string;
-  bundleId: string;
-  deletedCount: number;
-}
-
-export interface BulkDeleteResponse {
-  success: boolean;
-  message: string;
-  deletedCount: number;
 }

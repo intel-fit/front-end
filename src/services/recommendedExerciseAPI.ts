@@ -12,7 +12,7 @@ export const recommendedExerciseAPI = {
     try {
       console.log("💪 운동 플랜 생성 요청");
 
-      const response = await requestAI(`/api/exercise-recommendations/generate`, {
+      const response = await request(`/api/exercise-recommendations/generate`, {
         method: "POST",
       });
 
