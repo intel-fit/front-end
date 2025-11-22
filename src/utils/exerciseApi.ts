@@ -455,3 +455,78 @@ export const fetchDateProgress = async (date: string): Promise<DailyProgressWeek
   }
 };
 
+// 오늘 운동시간 누적 API
+export interface PostWorkoutTimeRequest {
+  userId: number;
+  seconds: number;
+}
+
+export const postWorkoutTime = async (userId: number, seconds: number): Promise<void> => {
+  try {
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const url = `${WORKOUTS_API_URL}/time`;
+    const payload: PostWorkoutTimeRequest = {
+      userId,
+      seconds,
+    };
+    console.log('[WORKOUT][TIME] 운동 시간 누적 요청:', payload);
+    const response = await axios.post(url, payload, {
+      headers: {
+        Authorization: `Bearer ${token || ''}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+    });
+    console.log('[WORKOUT][TIME] 운동 시간 누적 응답:', response.status);
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      console.error('[WORKOUT][TIME] 운동 시간 누적 에러:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+    } else {
+      console.error('[WORKOUT][TIME] 운동 시간 누적 예외:', error);
+    }
+    throw error;
+  }
+};
+
+// 오늘 운동시간 조회 API
+export interface GetTodayWorkoutTimeResponse {
+  userId: number;
+  totalSeconds: number;
+}
+
+export const getTodayWorkoutTime = async (userId: number): Promise<GetTodayWorkoutTimeResponse> => {
+  try {
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const url = `${WORKOUTS_API_URL}/time/${encodeURIComponent(userId)}`;
+    console.log('[WORKOUT][TIME] 오늘 운동 시간 조회 요청:', url);
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token || ''}`,
+        Accept: 'application/json',
+      },
+    });
+    console.log('[WORKOUT][TIME] 오늘 운동 시간 조회 응답:', response.data);
+    return response.data as GetTodayWorkoutTimeResponse;
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      console.error('[WORKOUT][TIME] 오늘 운동 시간 조회 에러:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+      // 404나 다른 에러 시 기본값 반환
+      if (error.response?.status === 404) {
+        return { userId, totalSeconds: 0 };
+      }
+    } else {
+      console.error('[WORKOUT][TIME] 오늘 운동 시간 조회 예외:', error);
+    }
+    // 에러 발생 시 기본값 반환
+    return { userId, totalSeconds: 0 };
+  }
+};
+

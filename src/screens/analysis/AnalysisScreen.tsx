@@ -34,7 +34,6 @@ import MacroDonut from "../../components/charts/MacroDonut";
 import { authAPI } from "../../services";
 import {
   getLatestInBody,
-  postInBody,
   InBodyPayload,
 } from "../../utils/inbodyApi";
 import { eventBus } from "../../utils/eventBus";
@@ -1059,6 +1058,64 @@ const AnalysisScreen = ({ navigation }: any) => {
     navigation.navigate("InBodyManual");
   };
 
+  const mapDraftToManualDefaults = useCallback((draft: any) => {
+    if (!draft || typeof draft !== "object") return undefined;
+
+    const toStringValue = (value: any) => {
+      if (value === null || value === undefined) return "";
+      if (typeof value === "number") return String(value);
+      if (typeof value === "string") return value;
+      return "";
+    };
+
+    const normalizeDate = (value?: string | null) => {
+      if (!value) return new Date().toISOString().slice(0, 10);
+      const digits = value.replace(/\D/g, "");
+      if (digits.length >= 8) {
+        return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(
+          6,
+          8
+        )}`;
+      }
+      return value.includes(".") ? value.replace(/\./g, "-") : value;
+    };
+
+    return {
+      date: normalizeDate(draft.measurementDate),
+      gender: toStringValue(draft.gender),
+      age: toStringValue(draft.age),
+      height: toStringValue(draft.height),
+      weight: toStringValue(draft.weight),
+      smm: toStringValue(draft.skeletalMuscleMass),
+      muscleMass: toStringValue(draft.muscleMass),
+      bfm: toStringValue(draft.bodyFatMass),
+      pbf: toStringValue(draft.bodyFatPercentage),
+      score: toStringValue(draft.score),
+      vfa: toStringValue(draft.visceralFatLevel),
+      bmr: toStringValue(draft.basalMetabolicRate),
+      bmi: toStringValue(draft.bmi),
+      rArm: toStringValue(draft.rightArmMuscle),
+      lArm: toStringValue(draft.leftArmMuscle),
+      trunk: toStringValue(draft.trunkMuscle),
+      rLeg: toStringValue(draft.rightLegMuscle),
+      lLeg: toStringValue(draft.leftLegMuscle),
+      rArmFat: toStringValue(draft.rightArmFat),
+      lArmFat: toStringValue(draft.leftArmFat),
+      trunkFat: toStringValue(draft.trunkFat),
+      rLegFat: toStringValue(draft.rightLegFat),
+      lLegFat: toStringValue(draft.leftLegFat),
+      tbw: toStringValue(draft.totalBodyWater),
+      protein: toStringValue(draft.protein),
+      mineral: toStringValue(draft.mineral),
+      pbfStd: toStringValue(draft.bodyFatPercentageStandard),
+      obesityDegree: toStringValue(draft.obesityDegree),
+      ecw: toStringValue(draft.ecw),
+      wtCtrl: toStringValue(draft.weightControl),
+      fatCtrl: toStringValue(draft.fatControl),
+      musCtrl: toStringValue(draft.muscleControl),
+    };
+  }, []);
+
   const handlePhotoSave = async (data: any) => {
     console.log("[ANALYSIS][INBODY] handlePhotoSave 호출됨");
     console.log("[ANALYSIS][INBODY] 받은 데이터:", {
@@ -1082,90 +1139,10 @@ const AnalysisScreen = ({ navigation }: any) => {
         "[ANALYSIS][INBODY] 추출된 인바디 초안 데이터:",
         JSON.stringify(data.draftData, null, 2)
       );
-      console.log("[ANALYSIS][INBODY] 주요 데이터:", {
-        measurementDate: data.draftData.measurementDate,
-        weight: data.draftData.weight,
-        bodyFatPercentage: data.draftData.bodyFatPercentage,
-        muscleMass: data.draftData.muscleMass,
-        skeletalMuscleMass: data.draftData.skeletalMuscleMass,
-        bodyFatMass: data.draftData.bodyFatMass,
-        bmi: data.draftData.bmi,
-        basalMetabolicRate: data.draftData.basalMetabolicRate,
-        visceralFatLevel: data.draftData.visceralFatLevel,
-      });
 
-      // draftData를 사용해서 인바디 정보 저장
-      try {
-        console.log("[ANALYSIS][INBODY] 인바디 정보 저장 시작...");
-        const payload: InBodyPayload = {
-          measurementDate: data.draftData.measurementDate,
-          weight: data.draftData.weight,
-          muscleMass: data.draftData.muscleMass,
-          bodyFatMass: data.draftData.bodyFatMass,
-          skeletalMuscleMass: data.draftData.skeletalMuscleMass,
-          bodyFatPercentage: data.draftData.bodyFatPercentage,
-          leftArmMuscle: data.draftData.leftArmMuscle,
-          rightArmMuscle: data.draftData.rightArmMuscle,
-          trunkMuscle: data.draftData.trunkMuscle,
-          leftLegMuscle: data.draftData.leftLegMuscle,
-          rightLegMuscle: data.draftData.rightLegMuscle,
-          leftArmFat: data.draftData.leftArmFat,
-          rightArmFat: data.draftData.rightArmFat,
-          trunkFat: data.draftData.trunkFat,
-          leftLegFat: data.draftData.leftLegFat,
-          rightLegFat: data.draftData.rightLegFat,
-          totalBodyWater: data.draftData.totalBodyWater,
-          protein: data.draftData.protein,
-          mineral: data.draftData.mineral,
-          bmi: data.draftData.bmi,
-          bodyFatPercentageStandard: data.draftData.bodyFatPercentageStandard,
-          obesityDegree: data.draftData.obesityDegree,
-          visceralFatLevel: data.draftData.visceralFatLevel,
-          basalMetabolicRate: data.draftData.basalMetabolicRate,
-        };
-
-        // undefined 값 제거
-        const cleanPayload: InBodyPayload = Object.fromEntries(
-          Object.entries(payload).filter(
-            ([_, v]) => v !== null && v !== undefined
-          )
-        ) as InBodyPayload;
-
-        console.log(
-          "[ANALYSIS][INBODY] 저장할 페이로드:",
-          JSON.stringify(cleanPayload, null, 2)
-        );
-
-        const response = await postInBody(cleanPayload);
-
-        if (response.success) {
-          console.log("[ANALYSIS][INBODY] 인바디 정보 저장 성공:", {
-            inBodyId: response.inBody?.id,
-            message: response.message,
-          });
-
-          // 최신 인바디 날짜 업데이트
-          await loadLatestInBodyDate();
-
-          // 이벤트 버스로 인바디 업데이트 알림
-          eventBus.emit("inbodyUpdated");
-
-          console.log(
-            "[ANALYSIS][INBODY] 인바디 정보가 성공적으로 저장되었습니다."
-          );
-        } else {
-          console.warn(
-            "[ANALYSIS][INBODY] 인바디 정보 저장 실패:",
-            response.message
-          );
-        }
-      } catch (error: any) {
-        console.error("[ANALYSIS][INBODY] 인바디 정보 저장 에러:", {
-          message: error.message,
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          data: error.response?.data,
-        });
+      const defaults = mapDraftToManualDefaults(data.draftData);
+      if (defaults) {
+        navigation.navigate("InBodyManual", { defaultValues: defaults });
       }
     }
 
