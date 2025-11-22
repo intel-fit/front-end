@@ -106,14 +106,6 @@ const HomeScreen = ({ navigation }: any) => {
     }
   };
 
-  // 운동 시간을 시:분:초 형식으로 변환
-  const formatWorkoutTime = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-  };
-
   // 화면 포커스 시 데이터 로드
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
