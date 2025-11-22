@@ -1,4 +1,4 @@
-// ChatbotScreen.tsx 수정
+// ChatbotScreen.tsx
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -17,10 +17,6 @@ import { colors } from "../../theme/colors";
 import { authAPI } from "../../services";
 import { chatAPI } from "../../services/chatAPI";
 
-console.log("🔍 chatAPI 확인:", chatAPI);
-console.log("🔍 sendMessage:", chatAPI?.sendMessage);
-console.log("🔍 typeof sendMessage:", typeof chatAPI?.sendMessage);
-
 interface Message {
   type: "user" | "bot";
   text: string;
@@ -32,16 +28,13 @@ const ChatbotScreen = ({ navigation }: any) => {
   const [isLoading, setIsLoading] = useState(false);
   const [userId, setUserId] = useState<number>(0);
 
-  // 컴포넌트 마운트 시 userId 가져오기
+  // ✅ 컴포넌트 마운트 시 userId만 가져오기
   useEffect(() => {
     const loadUserId = async () => {
       try {
         const profile = await authAPI.getProfile();
         setUserId(profile.id);
         console.log("✅ 사용자 ID 로드:", profile.id);
-
-        // 👇 AI 서버에 유저 생성 시도
-        await chatAPI.createUserInAI(profile);
       } catch (error) {
         console.error("❌ 프로필 로드 실패:", error);
         Alert.alert("오류", "사용자 정보를 불러올 수 없습니다.", [
@@ -75,7 +68,10 @@ const ChatbotScreen = ({ navigation }: any) => {
       setMessages((prev) => [...prev, { type: "bot", text: errorMessage }]);
 
       // 인증 오류시 로그인 화면으로
-      if (error.message?.includes("로그인")) {
+      if (
+        error.message?.includes("로그인") ||
+        error.message?.includes("인증")
+      ) {
         setTimeout(() => {
           navigation.replace("Login");
         }, 1500);

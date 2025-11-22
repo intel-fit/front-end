@@ -189,30 +189,40 @@ const getExerciseIcon = (category: string, muscleName: string) => {
 
   return muscleIcons[muscleName] || "💪";
 };
-
 const transformAIExerciseToUI = (apiResponse: any) => {
   const { plan } = apiResponse;
 
-  const dayOrder = [
-    "월요일",
-    "화요일",
-    "수요일",
-    "목요일",
-    "금요일",
-    "토요일",
-    "일요일",
-  ];
+  // ✅ 7일치 빈 배열 초기화
+  const weekRoutines: any[] = Array.from({ length: 7 }, () => []);
 
-  const sortedRoutines = [...plan.routines].sort((a: any, b: any) => {
-    return dayOrder.indexOf(a.dayOfWeek) - dayOrder.indexOf(b.dayOfWeek);
-  });
+  // 요일 매핑
+  const dayNameToIndex: { [key: string]: number } = {
+    월요일: 0,
+    화요일: 1,
+    수요일: 2,
+    목요일: 3,
+    금요일: 4,
+    토요일: 5,
+    일요일: 6,
+  };
 
-  const weekRoutines = sortedRoutines.map((routine: any) => {
+  // 각 routine 처리
+  plan.routines.forEach((routine: any) => {
+    // ✅ dayOfWeek를 쉼표로 분할 ("월요일, 수요일, 금요일" → ["월요일", "수요일", "금요일"])
+    const days = routine.dayOfWeek
+      .split(",")
+      .map((d: string) => d.trim())
+      .filter((d: string) => dayNameToIndex[d] !== undefined);
+
+    console.log(`📅 Routine "${routine.routineName}" 적용 요일:`, days);
+
+    // items를 운동 순서대로 정렬
     const sortedItems = [...routine.items].sort(
       (a: any, b: any) => a.exerciseOrder - b.exerciseOrder
     );
 
-    return sortedItems.map((item: any) => {
+    // UI 형식으로 변환
+    const exercises = sortedItems.map((item: any) => {
       let name = "";
       let detail = "";
       let icon = "";
@@ -232,13 +242,43 @@ const transformAIExerciseToUI = (apiResponse: any) => {
         icon = getExerciseIcon("RESISTANCE", item.muscleGroupName || "");
         const details = [];
         if (item.recommendedSets) details.push(`${item.recommendedSets}세트`);
-        if (item.recommendedWeight) details.push(`${item.recommendedWeight}kg`);
-        if (item.recommendedReps) details.push(`${item.recommendedReps}회`);
+        if (item.recommendedReps) {
+          // "10-12" 같은 문자열 처리
+          details.push(`${item.recommendedReps}회`);
+        }
+        if (item.recommendedWeight) {
+          // "1RM의 70-75%" 같은 문자열은 간단하게 표시
+          const weightStr = String(item.recommendedWeight).includes("1RM")
+            ? "적정 중량"
+            : `${item.recommendedWeight}kg`;
+          details.push(weightStr);
+        }
         detail = details.join(" X ");
       }
 
-      return { name: name || "운동", detail: detail || "", icon: icon || "💪" };
+      return {
+        name: name || "운동",
+        detail: detail || item.description || "",
+        icon: icon || "💪",
+      };
     });
+
+    // ✅ 해당 요일들에 운동 할당
+    days.forEach((dayName: string) => {
+      const dayIndex = dayNameToIndex[dayName];
+      if (dayIndex !== undefined) {
+        // 기존 운동에 추가 (여러 routine이 같은 날에 있을 수 있음)
+        weekRoutines[dayIndex] = [...weekRoutines[dayIndex], ...exercises];
+      }
+    });
+  });
+
+  console.log("\n=== 📊 최종 변환 결과 ===");
+  weekRoutines.forEach((day, index) => {
+    console.log(
+      `${index + 1}일차: ${day.length}개 운동 -`,
+      day.map((e: any) => e.name).join(", ")
+    );
   });
 
   return weekRoutines;

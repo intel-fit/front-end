@@ -25,6 +25,9 @@ type DayMealFood = {
 
 type DayMealBlock = {
   calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
   meals: DayMealFood[];
 };
 
@@ -47,7 +50,6 @@ type SavedBundle = {
   createdAt: string;
   planDate: string;
   isServerMeal: boolean;
-  // 7일치 상세 데이터 (로드 후 채워짐)
   days?: DayMeal[];
 };
 
@@ -70,8 +72,8 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
   );
   const [selectedDay, setSelectedDay] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false); // ✅ 편집 모드
-  const [selectedBundleIds, setSelectedBundleIds] = useState<string[]>([]); // ✅ 선택된 번들
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [selectedBundleIds, setSelectedBundleIds] = useState<string[]>([]);
 
   // ========== Normalizers ==========
   const toNumber = (v: any, def = 0) =>
@@ -79,7 +81,12 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
 
   const normalizeMealBlock = (raw: any): DayMealBlock | undefined => {
     if (!raw) return undefined;
+
     const calories = toNumber(raw.totalCalories || raw.calories);
+    const carbs = toNumber(raw.totalCarbs || raw.carbs);
+    const protein = toNumber(raw.totalProtein || raw.protein);
+    const fat = toNumber(raw.totalFat || raw.fat);
+
     const rawItems = raw.foods || raw.meals || raw.items || [];
     const meals: DayMealFood[] = Array.isArray(rawItems)
       ? rawItems.map((it: any) => ({
@@ -90,24 +97,42 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
           fat: toNumber(it?.fat),
         }))
       : [];
-    return { calories, meals };
-  };
 
+    return { calories, carbs, protein, fat, meals };
+  };
   const normalizeDay = (raw: any): DayMeal => {
     const totalCalories = toNumber(raw?.totalCalories);
     const carbs = toNumber(raw?.totalCarbs || raw?.carbs);
     const protein = toNumber(raw?.totalProtein || raw?.protein);
     const fat = toNumber(raw?.totalFat || raw?.fat);
 
-    const breakfast = normalizeMealBlock(
-      raw?.meals?.find((m: any) => m.mealType === "BREAKFAST")
+    // meals 배열에서 찾기
+    const mealsArray = raw?.meals || [];
+
+    let breakfast = normalizeMealBlock(
+      mealsArray.find((m: any) => m.mealType === "BREAKFAST") || raw?.breakfast
     );
-    const lunch = normalizeMealBlock(
-      raw?.meals?.find((m: any) => m.mealType === "LUNCH")
+    let lunch = normalizeMealBlock(
+      mealsArray.find((m: any) => m.mealType === "LUNCH") || raw?.lunch
     );
-    const dinner = normalizeMealBlock(
-      raw?.meals?.find((m: any) => m.mealType === "DINNER")
+    let dinner = normalizeMealBlock(
+      mealsArray.find((m: any) => m.mealType === "DINNER") || raw?.dinner
     );
+
+    // ✅ SNACK 처리: BREAKFAST, LUNCH, DINNER가 없으면 SNACK을 순서대로 매핑
+    if (!breakfast && !lunch && !dinner) {
+      const snacks = mealsArray.filter((m: any) => m.mealType === "SNACK");
+
+      if (snacks.length >= 1) breakfast = normalizeMealBlock(snacks[0]);
+      if (snacks.length >= 2) lunch = normalizeMealBlock(snacks[1]);
+      if (snacks.length >= 3) dinner = normalizeMealBlock(snacks[2]);
+
+      console.log(
+        `⚠️ SNACK 매핑: ${
+          snacks.length
+        }개 → 아침=${!!breakfast}, 점심=${!!lunch}, 저녁=${!!dinner}`
+      );
+    }
 
     return { totalCalories, carbs, protein, fat, breakfast, lunch, dinner };
   };
@@ -151,24 +176,42 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
     try {
       const plans = await recommendedMealAPI.getSavedMealPlans();
 
-      // bundleId로 그룹화
+      console.log("📦 서버에서 받은 plans:", plans.length);
+
+      // ✅ bundleId로 그룹화
       const bundleMap = new Map<string, SavedBundle>();
 
       plans.forEach((plan) => {
         if (!bundleMap.has(plan.bundleId)) {
+          // 첫 번째 plan으로 번들 생성
           bundleMap.set(plan.bundleId, {
             bundleId: plan.bundleId,
             planName: plan.planName,
-            totalCalories: plan.totalCalories,
-            mealCount: plan.mealCount,
+            description: "", // 나중에 채울 수 있음
+            totalCalories: 0, // 평균으로 계산할 예정
+            mealCount: 0,
             createdAt: plan.createdAt,
             planDate: plan.planDate,
             isServerMeal: true,
           });
         }
+
+        // ✅ 번들 정보 업데이트
+        const bundle = bundleMap.get(plan.bundleId)!;
+        bundle.mealCount++;
+        bundle.totalCalories += plan.totalCalories;
       });
 
-      return Array.from(bundleMap.values());
+      // ✅ 평균 칼로리 계산
+      const bundles = Array.from(bundleMap.values()).map((bundle) => ({
+        ...bundle,
+        totalCalories: Math.round(
+          bundle.totalCalories / (bundle.mealCount || 1)
+        ),
+      }));
+
+      console.log("✅ 그룹화된 번들:", bundles.length);
+      return bundles;
     } catch (error) {
       console.error("서버 번들 불러오기 실패:", error);
       return [];
@@ -179,8 +222,24 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
     bundleId: string
   ): Promise<DayMeal[] | null> => {
     try {
+      console.log("🔍 번들 상세 조회:", bundleId);
+
       const days = await recommendedMealAPI.getBundleDetail(bundleId);
-      return days.map((day) => normalizeDay(day));
+
+      console.log("📦 받은 days:", days.length);
+
+      const normalized = days.map((day) => {
+        const result = normalizeDay(day);
+        console.log("📊 normalized day:", {
+          totalCalories: result.totalCalories,
+          hasBreakfast: !!result.breakfast,
+          hasLunch: !!result.lunch,
+          hasDinner: !!result.dinner,
+        });
+        return result;
+      });
+
+      return normalized;
     } catch (error) {
       console.error("번들 상세 불러오기 실패:", error);
       return null;
@@ -207,7 +266,7 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
         createdAt: meal.date || "",
         planDate: meal.date || "",
         isServerMeal: false,
-        days: meal.meals, // 이미 로드됨
+        days: meal.meals,
       }));
 
       // 병합 및 정렬
@@ -218,6 +277,9 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
       });
 
       console.log("📦 전체 번들:", allBundles.length);
+      console.log("- 서버:", serverBundles.length);
+      console.log("- 로컬:", localBundles.length);
+
       setBundles(allBundles);
     } catch (error) {
       console.error("번들 불러오기 실패:", error);
@@ -238,7 +300,6 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
   // ========== 상세보기 ==========
   const handleBundleClick = async (bundle: SavedBundle) => {
     if (isEditMode) {
-      // 편집 모드: 선택/해제
       toggleBundleSelection(bundle.bundleId);
       return;
     }
@@ -251,13 +312,15 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
       // 서버 번들이고 상세 데이터가 없으면 API 호출
       if (bundle.isServerMeal && !days) {
         days = await loadBundleDetail(bundle.bundleId);
-        if (!days) {
+        if (!days || days.length === 0) {
           Alert.alert("오류", "식단 상세 정보를 불러오지 못했습니다.");
           return;
         }
         // 캐시 저장
         bundle.days = days;
       }
+
+      console.log("✅ 번들 상세 로드 완료:", days?.length, "일");
 
       setSelectedBundle(bundle);
       setSelectedDay(0);
@@ -292,7 +355,7 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
     Alert.alert(
       "삭제",
       `"${bundle.planName}" 식단을 삭제하시겠습니까?\n(${
-        bundle.days?.length || 0
+        bundle.mealCount || bundle.days?.length || 0
       }일치)`,
       [
         { text: "취소", style: "cancel" },
@@ -304,12 +367,13 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
               setLoading(true);
 
               if (bundle.isServerMeal) {
+                console.log("🗑️ 서버 번들 삭제:", bundle.bundleId);
                 await recommendedMealAPI.deleteBundle(bundle.bundleId);
               } else {
+                console.log("🗑️ 로컬 번들 삭제:", bundle.bundleId);
                 await deleteLocalBundle(bundle.bundleId);
               }
 
-              // 목록에서 제거
               setBundles((prev) =>
                 prev.filter((b) => b.bundleId !== bundle.bundleId)
               );
@@ -347,6 +411,7 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
       setSelectedBundleIds(bundles.map((b) => b.bundleId));
     }
   };
+
   const handleBulkDelete = async () => {
     if (selectedBundleIds.length === 0) {
       Alert.alert("알림", "삭제할 식단을 선택해주세요.");
@@ -381,15 +446,16 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
 
               // 서버 일괄 삭제
               if (serverBundleIds.length > 0) {
+                console.log("🗑️ 서버 번들 일괄 삭제:", serverBundleIds);
                 await recommendedMealAPI.deleteBulk(serverBundleIds);
               }
 
               // 로컬 삭제
               for (const bundleId of localBundleIds) {
+                console.log("🗑️ 로컬 번들 삭제:", bundleId);
                 await deleteLocalBundle(bundleId);
               }
 
-              // UI 업데이트
               setBundles((prev) =>
                 prev.filter((b) => !selectedBundleIds.includes(b.bundleId))
               );
@@ -468,7 +534,6 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
             </View>
           ) : (
             <View style={styles.list}>
-              {/* ✅ 편집 모드 툴바 */}
               {isEditMode && (
                 <View style={styles.editToolbar}>
                   <TouchableOpacity
@@ -577,7 +642,8 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
                     <View style={styles.summary}>
                       <View style={styles.badge}>
                         <Text style={styles.badgeText}>
-                          📅 {bundle.days?.length || bundle.mealCount}일 식단
+                          📅 {bundle.mealCount || bundle.days?.length || 0}일
+                          식단
                         </Text>
                       </View>
                       <View style={[styles.badge, styles.caloriesBadge]}>
