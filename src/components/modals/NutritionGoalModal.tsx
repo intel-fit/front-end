@@ -63,7 +63,8 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
     onClose();
   };
 
-  const handleSave = async () => {
+  // 영양 목표 수정하기
+  const handleUpdate = async () => {
     const calories = Number(targetCalories);
     const carbs = Number(targetCarbs);
     const protein = Number(targetProtein);
@@ -98,7 +99,7 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
       };
 
       await mealAPI.setNutritionGoal(goalData);
-      Alert.alert('성공', '영양 목표가 설정되었습니다.', [
+      Alert.alert('성공', '영양 목표가 수정되었습니다.', [
         {
           text: '확인',
           onPress: () => {
@@ -108,8 +109,38 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
         },
       ]);
     } catch (error: any) {
-      console.error('영양 목표 설정 실패:', error);
-      Alert.alert('오류', error.message || '영양 목표 설정에 실패했습니다.');
+      console.error('영양 목표 수정 실패:', error);
+      Alert.alert('오류', error.message || '영양 목표 수정에 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 최적의 영양 목표 추천받기
+  const handleGetRecommendation = async () => {
+    setLoading(true);
+    try {
+      // TODO: 영양 목표 추천 API 연동
+      // 예시: const recommendation = await mealAPI.getRecommendedNutritionGoal();
+      
+      // 임시로 자동 계산된 목표를 가져오는 방식 (goalType을 AUTO로 설정)
+      // 실제 API가 준비되면 아래 코드를 교체
+      const recommendation = await mealAPI.getNutritionGoal();
+      
+      // 추천된 목표가 있으면 입력 필드에 설정
+      if (recommendation) {
+        setTargetCalories(String(recommendation.targetCalories || 0));
+        setTargetCarbs(String(recommendation.targetCarbs || 0));
+        setTargetProtein(String(recommendation.targetProtein || 0));
+        setTargetFat(String(recommendation.targetFat || 0));
+        setGoalType('AUTO');
+        Alert.alert('성공', '최적의 영양 목표를 추천받았습니다. 수정 후 저장해주세요.');
+      } else {
+        Alert.alert('알림', '추천 목표를 가져올 수 없습니다.');
+      }
+    } catch (error: any) {
+      console.error('영양 목표 추천 실패:', error);
+      Alert.alert('오류', error.message || '영양 목표 추천에 실패했습니다.');
     } finally {
       setLoading(false);
     }
@@ -192,15 +223,27 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
                 </View>
               </View>
 
-              {/* 저장하기 버튼 */}
+              {/* 최적의 영양 목표 추천받기 버튼 */}
+              <TouchableOpacity 
+                style={[styles.recommendButton, loading && styles.recommendButtonDisabled]} 
+                onPress={handleGetRecommendation}
+                disabled={loading}>
+                {loading ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.recommendButtonText}>최적의 영양 목표 추천받기</Text>
+                )}
+              </TouchableOpacity>
+
+              {/* 수정하기 버튼 */}
               <TouchableOpacity 
                 style={[styles.saveButton, loading && styles.saveButtonDisabled]} 
-                onPress={handleSave}
+                onPress={handleUpdate}
                 disabled={loading}>
                 {loading ? (
                   <ActivityIndicator size="small" color="#000000" />
                 ) : (
-                  <Text style={styles.saveButtonText}>저장하기</Text>
+                  <Text style={styles.saveButtonText}>수정하기</Text>
                 )}
               </TouchableOpacity>
             </ScrollView>
@@ -280,6 +323,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#ffffff',
     textAlign: 'center',
+  },
+  recommendButton: {
+    width: '100%',
+    backgroundColor: '#464646',
+    borderWidth: 1,
+    borderColor: '#e3ff7c',
+    borderRadius: 10,
+    paddingVertical: 20,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  recommendButtonDisabled: {
+    opacity: 0.6,
+  },
+  recommendButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#e3ff7c',
   },
   saveButton: {
     width: '100%',
