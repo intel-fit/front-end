@@ -30,6 +30,7 @@ interface Food {
 const FoodSearchScreen = ({navigation}: any) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDirectInputModalOpen, setIsDirectInputModalOpen] = useState(false);
+  const [selectedFood, setSelectedFood] = useState<Food | null>(null);
   const [foods, setFoods] = useState<Food[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -81,7 +82,8 @@ const FoodSearchScreen = ({navigation}: any) => {
   }, [searchQuery]);
 
   const handleFoodSelect = (food: Food) => {
-    navigation.navigate('MealAdd', {selectedFood: food});
+    setSelectedFood(food);
+    setIsDirectInputModalOpen(true);
   };
 
   const handleDirectInput = () => {
@@ -145,18 +147,18 @@ const FoodSearchScreen = ({navigation}: any) => {
       {/* 검색 입력 */}
       <View style={styles.searchSection}>
         <View style={styles.searchInputWrapper}>
+          <Icon
+            name="search"
+            size={20}
+            color="rgba(255, 255, 255, 0.7)"
+            style={styles.searchIcon}
+          />
           <TextInput
             style={styles.searchInput}
-            placeholder="음식 이름을 입력해주세요"
+            placeholder="음식 이름을 검색하세요."
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholderTextColor="rgba(255, 255, 255, 0.7)"
-          />
-          <Icon
-            name="search"
-            size={26}
-            color="#ffffff"
-            style={styles.searchIcon}
           />
         </View>
       </View>
@@ -196,8 +198,12 @@ const FoodSearchScreen = ({navigation}: any) => {
       {/* 직접 음식 입력 모달 */}
       <FoodDirectInputModal
         isOpen={isDirectInputModalOpen}
-        onClose={() => setIsDirectInputModalOpen(false)}
+        onClose={() => {
+          setIsDirectInputModalOpen(false);
+          setSelectedFood(null);
+        }}
         onSave={handleSaveFood}
+        initialFood={selectedFood}
       />
     </SafeAreaView>
   );
@@ -238,25 +244,24 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   searchInputWrapper: {
-    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#393a38',
+    borderRadius: 10,
+    paddingLeft: 18,
+    paddingRight: 18,
+  },
+  searchIcon: {
+    marginRight: 10,
   },
   searchInput: {
-    width: '100%',
-    backgroundColor: '#393a38',
+    flex: 1,
+    backgroundColor: 'transparent',
     borderWidth: 0,
-    borderRadius: 10,
     paddingVertical: 10,
-    paddingLeft: 18,
-    paddingRight: 50,
     fontSize: 12,
     fontWeight: '700',
     color: '#ffffff',
-  },
-  searchIcon: {
-    position: 'absolute',
-    right: 15,
   },
   directInputSection: {
     paddingHorizontal: 20,

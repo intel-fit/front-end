@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import {mealAPI} from '../../services';
@@ -19,6 +20,7 @@ interface FoodDirectInputModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (foodData: {
+    id?: number;
     name: string;
     calories: number;
     carbs: number;
@@ -26,12 +28,22 @@ interface FoodDirectInputModalProps {
     fat: number;
     weight: number;
   }) => void;
+  initialFood?: {
+    id?: number;
+    name: string;
+    calories: number;
+    carbs: number;
+    protein: number;
+    fat: number;
+    weight?: number;
+  } | null;
 }
 
 const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
   isOpen,
   onClose,
   onSave,
+  initialFood,
 }) => {
   const [foodName, setFoodName] = useState('');
   const [calories, setCalories] = useState('');
@@ -39,7 +51,105 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
   const [protein, setProtein] = useState('');
   const [fat, setFat] = useState('');
   const [weight, setWeight] = useState('');
+  const [portion, setPortion] = useState('');
+  const [inputType, setInputType] = useState<'weight' | 'portion'>('weight');
   const [isLoading, setIsLoading] = useState(false);
+  
+  // 초기 영양소 값과 중량을 저장 (비율 계산용)
+  const baseNutritionRef = useRef<{
+    calories: number;
+    carbs: number;
+    protein: number;
+    fat: number;
+    weight: number;
+  } | null>(null);
+
+  // 초기값 설정
+  useEffect(() => {
+    if (isOpen && initialFood) {
+      const initialWeight = initialFood.weight || 100;
+      setFoodName(initialFood.name || '');
+      setCalories(String(initialFood.calories || 0));
+      setCarbs(String(initialFood.carbs || 0));
+      setProtein(String(initialFood.protein || 0));
+      setFat(String(initialFood.fat || 0));
+      setWeight(String(initialWeight));
+      setPortion('1');
+      setInputType('weight');
+      
+      // 초기값 저장
+      baseNutritionRef.current = {
+        calories: initialFood.calories || 0,
+        carbs: initialFood.carbs || 0,
+        protein: initialFood.protein || 0,
+        fat: initialFood.fat || 0,
+        weight: initialWeight,
+      };
+    } else if (isOpen && !initialFood) {
+      // 직접 입력 모드일 때 초기화
+      setFoodName('');
+      setCalories('');
+      setCarbs('');
+      setProtein('');
+      setFat('');
+      setWeight('');
+      setPortion('1');
+      setInputType('weight');
+      baseNutritionRef.current = null;
+    }
+  }, [isOpen, initialFood]);
+
+  // 중량/인분 변경 시 영양소 자동 계산
+  const calculateNutrition = (newWeight: number) => {
+    if (!baseNutritionRef.current || baseNutritionRef.current.weight === 0) {
+      return;
+    }
+
+    const ratio = newWeight / baseNutritionRef.current.weight;
+    
+    setCalories(String(Math.round(baseNutritionRef.current.calories * ratio)));
+    setCarbs(String(Math.round(baseNutritionRef.current.carbs * ratio * 10) / 10));
+    setProtein(String(Math.round(baseNutritionRef.current.protein * ratio * 10) / 10));
+    setFat(String(Math.round(baseNutritionRef.current.fat * ratio * 10) / 10));
+  };
+
+  // 중량 변경 핸들러
+  const handleWeightChange = (text: string) => {
+    setWeight(text);
+    const weightValue = Number(text);
+    if (weightValue > 0 && baseNutritionRef.current) {
+      calculateNutrition(weightValue);
+    }
+  };
+
+  // 인분 변경 핸들러
+  const handlePortionChange = (text: string) => {
+    setPortion(text);
+    const portionValue = Number(text);
+    if (portionValue > 0 && baseNutritionRef.current) {
+      // 1인분 = 100g 가정
+      const newWeight = portionValue * 100;
+      calculateNutrition(newWeight);
+    }
+  };
+
+  // 입력 타입 변경 시 중량/인분 변환 및 계산
+  const handleInputTypeChange = (type: 'weight' | 'portion') => {
+    setInputType(type);
+    
+    if (type === 'portion' && weight) {
+      // 중량 -> 인분 변환 (1인분 = 100g)
+      const portionValue = Number(weight) / 100;
+      setPortion(String(portionValue));
+    } else if (type === 'weight' && portion) {
+      // 인분 -> 중량 변환
+      const weightValue = Number(portion) * 100;
+      setWeight(String(weightValue));
+      if (weightValue > 0 && baseNutritionRef.current) {
+        calculateNutrition(weightValue);
+      }
+    }
+  };
 
   const handleSave = async () => {
     if (!foodName.trim()) {
@@ -47,44 +157,70 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
       return;
     }
 
-    const weightValue = Number(weight) || 0;
-    if (weightValue <= 0) {
+    // 중량 또는 인분 중 하나는 필수
+    const weightValue = inputType === 'weight' ? Number(weight) : 0;
+    const portionValue = inputType === 'portion' ? Number(portion) : 0;
+    
+    if (inputType === 'weight' && weightValue <= 0) {
       Alert.alert('알림', '총 중량을 입력해주세요.');
       return;
     }
+    
+    if (inputType === 'portion' && portionValue <= 0) {
+      Alert.alert('알림', '인분을 입력해주세요.');
+      return;
+    }
 
-    setIsLoading(true);
+    // 인분을 중량으로 변환 (1인분 = 100g 가정, 필요시 조정)
+    const finalWeight = inputType === 'weight' ? weightValue : portionValue * 100;
 
-    try {
+    // 검색에서 온 음식이면 바로 저장, 직접 입력이면 API 호출
+    if (initialFood && initialFood.id) {
+      // 검색에서 선택한 음식 - 바로 저장
       const foodData = {
+        id: initialFood.id,
         name: foodName.trim(),
-        weight: weightValue,
         calories: Number(calories) || 0,
         carbs: Number(carbs) || 0,
         protein: Number(protein) || 0,
         fat: Number(fat) || 0,
+        weight: finalWeight,
       };
-
-      const response: SearchFoodResponse = await mealAPI.addManualFood(foodData);
-
-      // API 응답을 Food 타입으로 변환하여 onSave 콜백 호출
-      const savedFood = {
-        id: response.id,
-        name: response.name,
-        calories: response.calories,
-        carbs: response.carbs,
-        protein: response.protein,
-        fat: response.fat,
-        weight: response.weight,
-      };
-
-      onSave(savedFood);
+      onSave(foodData);
       handleClose();
-    } catch (error: any) {
-      console.error('직접 음식 입력 오류:', error);
-      Alert.alert('오류', error.message || '음식 저장에 실패했습니다. 다시 시도해주세요.');
-    } finally {
-      setIsLoading(false);
+    } else {
+      // 직접 입력 - API 호출
+      setIsLoading(true);
+      try {
+        const foodData = {
+          name: foodName.trim(),
+          weight: finalWeight,
+          calories: Number(calories) || 0,
+          carbs: Number(carbs) || 0,
+          protein: Number(protein) || 0,
+          fat: Number(fat) || 0,
+        };
+
+        const response: SearchFoodResponse = await mealAPI.addManualFood(foodData);
+
+        const savedFood = {
+          id: response.id,
+          name: response.name,
+          calories: response.calories,
+          carbs: response.carbs,
+          protein: response.protein,
+          fat: response.fat,
+          weight: response.weight,
+        };
+
+        onSave(savedFood);
+        handleClose();
+      } catch (error: any) {
+        console.error('직접 음식 입력 오류:', error);
+        Alert.alert('오류', error.message || '음식 저장에 실패했습니다. 다시 시도해주세요.');
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -95,6 +231,8 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
     setProtein('');
     setFat('');
     setWeight('');
+    setPortion('1');
+    setInputType('weight');
     onClose();
   };
 
@@ -112,17 +250,21 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
         </TouchableWithoutFeedback>
         <TouchableWithoutFeedback>
           <View style={styles.modalContainer} onStartShouldSetResponder={() => true}>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={handleClose}>
-              <Icon name="close" size={28} color="#ffffff" />
-            </TouchableOpacity>
-
             <ScrollView
               style={styles.modalContent}
               contentContainerStyle={styles.modalContentContainer}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}>
+            {/* 헤더 */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>음식 정보를 입력해주세요</Text>
+              <TouchableOpacity
+                style={styles.closeButtonTop}
+                onPress={handleClose}>
+                <Icon name="close" size={24} color="#ffffff" />
+              </TouchableOpacity>
+            </View>
+
             {/* 음식 이름 */}
             <View style={styles.inputGroup}>
               <TextInput
@@ -132,13 +274,16 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
                 value={foodName}
                 onChangeText={text => setFoodName(text.slice(0, 20))}
                 maxLength={20}
+                returnKeyType="done"
+                blurOnSubmit={true}
+                onSubmitEditing={() => Keyboard.dismiss()}
               />
             </View>
 
             {/* 칼로리 & 탄수화물 */}
             <View style={styles.inputRow}>
               <View style={styles.inputGroupHalf}>
-                <Text style={[styles.inputLabel, {marginBottom: 10}]}>칼로리</Text>
+                <Text style={styles.inputLabel}>칼로리</Text>
                 <TextInput
                   style={styles.inputField}
                   placeholder="0"
@@ -146,10 +291,13 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
                   value={calories}
                   onChangeText={setCalories}
                   keyboardType="number-pad"
+                  returnKeyType="done"
+                  blurOnSubmit={true}
+                  onSubmitEditing={() => Keyboard.dismiss()}
                 />
               </View>
               <View style={styles.inputGroupHalf}>
-                <Text style={[styles.inputLabel, {marginBottom: 10}]}>탄수화물</Text>
+                <Text style={styles.inputLabel}>탄수화물</Text>
                 <TextInput
                   style={styles.inputField}
                   placeholder="0"
@@ -157,6 +305,9 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
                   value={carbs}
                   onChangeText={setCarbs}
                   keyboardType="number-pad"
+                  returnKeyType="done"
+                  blurOnSubmit={true}
+                  onSubmitEditing={() => Keyboard.dismiss()}
                 />
               </View>
             </View>
@@ -164,7 +315,7 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
             {/* 단백질 & 지방 */}
             <View style={styles.inputRow}>
               <View style={styles.inputGroupHalf}>
-                <Text style={[styles.inputLabel, {marginBottom: 10}]}>단백질</Text>
+                <Text style={styles.inputLabel}>단백질</Text>
                 <TextInput
                   style={styles.inputField}
                   placeholder="0"
@@ -172,10 +323,13 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
                   value={protein}
                   onChangeText={setProtein}
                   keyboardType="number-pad"
+                  returnKeyType="done"
+                  blurOnSubmit={true}
+                  onSubmitEditing={() => Keyboard.dismiss()}
                 />
               </View>
               <View style={styles.inputGroupHalf}>
-                <Text style={[styles.inputLabel, {marginBottom: 10}]}>지방</Text>
+                <Text style={styles.inputLabel}>지방</Text>
                 <TextInput
                   style={styles.inputField}
                   placeholder="0"
@@ -183,21 +337,58 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
                   value={fat}
                   onChangeText={setFat}
                   keyboardType="number-pad"
+                  returnKeyType="done"
+                  blurOnSubmit={true}
+                  onSubmitEditing={() => Keyboard.dismiss()}
                 />
               </View>
             </View>
 
-            {/* 총 중량 */}
+            {/* 총 중량 / 인분 선택 */}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabelCenter}>총 중량</Text>
-              <TextInput
-                style={styles.inputField}
-                placeholder="0"
-                placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                value={weight}
-                onChangeText={setWeight}
-                keyboardType="number-pad"
-              />
+              <View style={styles.weightInputContainer}>
+                <View style={styles.weightTypeSelector}>
+                  <TouchableOpacity
+                    style={[
+                      styles.weightTypeButton,
+                      inputType === 'weight' && styles.weightTypeButtonActive,
+                    ]}
+                    onPress={() => handleInputTypeChange('weight')}>
+                    <Text
+                      style={[
+                        styles.weightTypeText,
+                        inputType === 'weight' && styles.weightTypeTextActive,
+                      ]}>
+                      중량
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.weightTypeButton,
+                      inputType === 'portion' && styles.weightTypeButtonActive,
+                    ]}
+                    onPress={() => handleInputTypeChange('portion')}>
+                    <Text
+                      style={[
+                        styles.weightTypeText,
+                        inputType === 'portion' && styles.weightTypeTextActive,
+                      ]}>
+                      인분
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <TextInput
+                  style={styles.weightInputField}
+                  placeholder="0"
+                  placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                  value={inputType === 'weight' ? weight : portion}
+                  onChangeText={inputType === 'weight' ? handleWeightChange : handlePortionChange}
+                  keyboardType="number-pad"
+                  returnKeyType="done"
+                  blurOnSubmit={true}
+                  onSubmitEditing={() => Keyboard.dismiss()}
+                />
+              </View>
             </View>
 
             {/* 저장하기 버튼 */}
@@ -245,28 +436,78 @@ const styles = StyleSheet.create({
     zIndex: 999,
     elevation: 5,
   },
-  closeButton: {
-    position: 'absolute',
-    top: 15,
-    right: 15,
-    backgroundColor: 'transparent',
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+    paddingTop: 4,
+  },
+  modalTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#ffffff',
+    flex: 1,
+  },
+  closeButtonTop: {
+    padding: 4,
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  weightInputContainer: {
+    gap: 10,
+  },
+  weightTypeSelector: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'center',
+  },
+  weightTypeButton: {
+    flex: 1,
+    backgroundColor: '#393a38',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weightTypeButtonActive: {
+    backgroundColor: '#e3ff7c',
+  },
+  weightTypeText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  weightTypeTextActive: {
+    color: '#000000',
+  },
+  weightInputField: {
+    width: '100%',
+    backgroundColor: '#464646',
     borderWidth: 0,
-    padding: 0,
-    zIndex: 10,
+    borderRadius: 10,
+    padding: 20,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+    textAlign: 'center',
   },
   modalContent: {
     width: '100%',
   },
   modalContentContainer: {
-    paddingTop: 10,
-    paddingBottom: 10,
+    paddingTop: 4,
+    paddingBottom: 20,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   inputRow: {
     flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: 24,
     gap: 20,
   },
   inputGroupHalf: {
@@ -287,6 +528,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#ffffff',
     textAlign: 'center',
+    marginBottom: 10,
   },
   inputLabelCenter: {
     fontSize: 15,
@@ -311,9 +553,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#e3ff7c',
     borderWidth: 0,
     borderRadius: 10,
-    paddingVertical: 20,
+    paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 4,
   },
   saveButtonDisabled: {
     opacity: 0.6,

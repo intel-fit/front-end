@@ -691,10 +691,9 @@ const DietScreen = ({navigation, route}: any) => {
                 <TouchableOpacity
                   style={styles.mealContent}
                   onPress={() => {
-                    // 식단 수정 기능 일시 비활성화
-                    // if (originalMeal) {
-                    //   navigation.navigate('MealAdd', { meal: originalMeal });
-                    // }
+                    if (originalMeal) {
+                      navigation.navigate('MealAdd', { meal: originalMeal });
+                    }
                   }}
                   activeOpacity={0.7}>
                   {/* 식사 헤더: 식사 종류, 시간, 칼로리 */}
@@ -703,8 +702,21 @@ const DietScreen = ({navigation, route}: any) => {
                       <Text style={styles.mealTitle}>{meal.type}</Text>
                       <Text style={styles.mealTime}>{meal.time}</Text>
                     </View>
-                    {/* 해당 식사의 총 칼로리 */}
-                    <Text style={styles.mealCalories}>{meal.calories} kcal</Text>
+                    {/* 해당 식사의 총 칼로리 및 삭제 버튼 */}
+                    <View style={styles.mealRight}>
+                      <Text style={styles.mealCalories}>{meal.calories} kcal</Text>
+                      {originalMeal && (
+                        <TouchableOpacity
+                          style={styles.deleteButton}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleDeleteMeal(originalMeal.id);
+                          }}
+                          activeOpacity={0.7}>
+                          <Icon name="trash-outline" size={20} color={colors.textLight} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </View>
                   {/* 섭취한 음식 목록: 음식명을 태그 형태로 표시 */}
                   <View style={styles.foodTags}>
@@ -720,16 +732,6 @@ const DietScreen = ({navigation, route}: any) => {
                     ))}
                   </View>
                 </TouchableOpacity>
-                
-                {/* 삭제 버튼 - 일시 비활성화 */}
-                {/* {originalMeal && (
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => handleDeleteMeal(originalMeal.id)}
-                    activeOpacity={0.7}>
-                    <Icon name="trash-outline" size={20} color={colors.textLight} />
-                  </TouchableOpacity>
-                )} */}
               </View>
             );
           })}
@@ -1038,6 +1040,11 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     gap: 5,
   },
+  mealRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   mealTitle: {
     fontSize: 20,
     fontWeight: '700',
@@ -1072,10 +1079,9 @@ const styles = StyleSheet.create({
     color: '#000000',
   },
   deleteButton: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
     padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   addMealSection: {
     marginTop: 0,

@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import {useFocusEffect} from '@react-navigation/native';
 import FoodAddOptionsModal from '../../components/modals/FoodAddOptionsModal';
 import FoodEditModal from '../../components/modals/FoodEditModal';
+import FoodDirectInputModal from '../../components/modals/FoodDirectInputModal';
 import {mealAPI} from '../../services';
 import {useDate} from '../../contexts/DateContext';
 import {fetchDateProgress, fetchTodayProgress} from '../../utils/exerciseApi';
@@ -94,9 +95,11 @@ const MealAddScreen = ({navigation, route}: any) => {
   const [isMealTypeModalOpen, setIsMealTypeModalOpen] = useState(false);
   const [foods, setFoods] = useState<Food[]>([]);
   const [isFoodEditModalOpen, setIsFoodEditModalOpen] = useState(false);
+  const [isFoodDirectInputModalOpen, setIsFoodDirectInputModalOpen] = useState(false);
   const [selectedFood, setSelectedFood] = useState<Food | null>(null);
   const [loading, setLoading] = useState(false);
   const [showDateTimeModal, setShowDateTimeModal] = useState(false);
+  const [dateTimeMode, setDateTimeMode] = useState<'date' | 'time'>('date');
   const [tempDateTime, setTempDateTime] = useState(initialDate);
   const [selectedDateTime, setSelectedDateTime] = useState(initialDate);
   const [nutritionGoal, setNutritionGoal] = useState<NutritionGoal | null>(null);
@@ -245,10 +248,18 @@ const MealAddScreen = ({navigation, route}: any) => {
   }, [mealData, routeSelectedDateString]);
 
   // 날짜 선택 모달 열기
-  const handleDateTimePress = () => {
-    // 현재 선택된 날짜를 정확히 복사 (새로운 객체 생성)
+  const handleDatePress = () => {
     const currentDateTime = new Date(selectedDateTime);
     setTempDateTime(new Date(currentDateTime));
+    setDateTimeMode('date');
+    setShowDateTimeModal(true);
+  };
+
+  // 시간 선택 모달 열기
+  const handleTimePress = () => {
+    const currentDateTime = new Date(selectedDateTime);
+    setTempDateTime(new Date(currentDateTime));
+    setDateTimeMode('time');
     setShowDateTimeModal(true);
   };
 
@@ -892,6 +903,45 @@ const MealAddScreen = ({navigation, route}: any) => {
     ));
   };
 
+  // 음식 직접 입력 모달에서 저장 핸들러
+  const handleFoodDirectInputSave = (foodData: {
+    id?: number;
+    name: string;
+    calories: number;
+    carbs: number;
+    protein: number;
+    fat: number;
+    weight: number;
+  }) => {
+    if (selectedFood && foodData.id === selectedFood.id) {
+      // 기존 음식 수정
+      const updatedFood: Food = {
+        id: foodData.id || selectedFood.id,
+        name: foodData.name,
+        calories: foodData.calories,
+        carbs: foodData.carbs,
+        protein: foodData.protein,
+        fat: foodData.fat,
+        weight: foodData.weight,
+      };
+      handleFoodUpdate(updatedFood);
+    } else {
+      // 새 음식 추가 (이 경우는 없을 것 같지만 안전을 위해)
+      const newFood: Food = {
+        id: foodData.id || Date.now(),
+        name: foodData.name,
+        calories: foodData.calories,
+        carbs: foodData.carbs,
+        protein: foodData.protein,
+        fat: foodData.fat,
+        weight: foodData.weight,
+      };
+      setFoods(prev => [...prev, newFood]);
+    }
+    setIsFoodDirectInputModalOpen(false);
+    setSelectedFood(null);
+  };
+
   // 음식 삭제 핸들러
   const handleFoodDelete = (foodId: number) => {
     setFoods(prev => prev.filter(food => food.id !== foodId));
@@ -935,17 +985,33 @@ const MealAddScreen = ({navigation, route}: any) => {
           />
         </View>
 
-        {/* 날짜 및 식사 시간 */}
+        {/* 식단 카테고리 선택 */}
+        <View style={styles.categorySection}>
+          <TouchableOpacity 
+            style={styles.categoryChip}
+            onPress={handleMealTypePress}>
+            <Text style={styles.chipText}>{getMealTypeDisplay(mealType)}</Text>
+            <Icon name="chevron-down" size={24} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
+
+        {/* 날짜 및 시간 */}
         <View style={styles.timeSection}>
           <TouchableOpacity 
             style={styles.timeChip}
-            onPress={handleDateTimePress}>
+            onPress={handleDatePress}>
             <Text style={styles.chipText}>{formatSelectedDateTime()}</Text>
           </TouchableOpacity>
           <TouchableOpacity 
-            style={styles.mealTypeChip}
-            onPress={handleMealTypePress}>
-            <Text style={styles.chipText}>{getMealTypeDisplay(mealType)}</Text>
+            style={styles.timeChip}
+            onPress={handleTimePress}>
+            <Text style={styles.chipText}>
+              {selectedDateTime.toLocaleTimeString('ko-KR', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+              })}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -985,31 +1051,43 @@ const MealAddScreen = ({navigation, route}: any) => {
               key={food.id}
               style={styles.foodItem}
               onPress={() => {
-                // 음식 수정 기능 일시 비활성화
-                // setSelectedFood(food);
-                // setIsFoodEditModalOpen(true);
+                setSelectedFood(food);
+                setIsFoodDirectInputModalOpen(true);
               }}
               activeOpacity={0.7}>
-              <View style={styles.foodItemHeader}>
-                <Text style={styles.foodName} numberOfLines={2}>{food.name}</Text>
-                <Text style={styles.foodCalories}>{food.calories}kcal</Text>
-              </View>
-              <View style={styles.foodNutrition}>
-                <View style={styles.nutritionItem}>
-                  <Text style={styles.nutritionLabel}>탄</Text>
-                  <Text style={styles.nutritionValue}>{food.carbs}g</Text>
+              <View style={styles.foodItemContent}>
+                <View style={styles.foodItemHeader}>
+                  <Text style={styles.foodName} numberOfLines={2}>{food.name}</Text>
+                  <View style={styles.foodCaloriesContainer}>
+                    <Text style={styles.foodCalories}>{food.calories}kcal</Text>
+                    <TouchableOpacity
+                      style={styles.foodDeleteButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleFoodDelete(food.id);
+                      }}
+                      activeOpacity={0.7}>
+                      <Icon name="trash-outline" size={16} color="#ffffff" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <View style={styles.nutritionItem}>
-                  <Text style={styles.nutritionLabel}>단</Text>
-                  <Text style={styles.nutritionValue}>{food.protein}g</Text>
-                </View>
-                <View style={styles.nutritionItem}>
-                  <Text style={styles.nutritionLabel}>지</Text>
-                  <Text style={styles.nutritionValue}>{food.fat}g</Text>
-                </View>
-                <View style={styles.nutritionItem}>
-                  <Text style={styles.nutritionLabel}>중량</Text>
-                  <Text style={styles.nutritionValue}>{food.weight}g</Text>
+                <View style={styles.foodNutrition}>
+                  <View style={styles.nutritionItem}>
+                    <Text style={styles.nutritionLabel}>탄</Text>
+                    <Text style={styles.nutritionValue}>{food.carbs}g</Text>
+                  </View>
+                  <View style={styles.nutritionItem}>
+                    <Text style={styles.nutritionLabel}>단</Text>
+                    <Text style={styles.nutritionValue}>{food.protein}g</Text>
+                  </View>
+                  <View style={styles.nutritionItem}>
+                    <Text style={styles.nutritionLabel}>지</Text>
+                    <Text style={styles.nutritionValue}>{food.fat}g</Text>
+                  </View>
+                  <View style={styles.nutritionItem}>
+                    <Text style={styles.nutritionLabel}>중량</Text>
+                    <Text style={styles.nutritionValue}>{food.weight}g</Text>
+                  </View>
                 </View>
               </View>
             </TouchableOpacity>
@@ -1044,6 +1122,24 @@ const MealAddScreen = ({navigation, route}: any) => {
         onDelete={handleFoodDelete}
       />
 
+      <FoodDirectInputModal
+        isOpen={isFoodDirectInputModalOpen}
+        onClose={() => {
+          setIsFoodDirectInputModalOpen(false);
+          setSelectedFood(null);
+        }}
+        onSave={handleFoodDirectInputSave}
+        initialFood={selectedFood ? {
+          id: selectedFood.id,
+          name: selectedFood.name,
+          calories: selectedFood.calories,
+          carbs: selectedFood.carbs,
+          protein: selectedFood.protein,
+          fat: selectedFood.fat,
+          weight: selectedFood.weight,
+        } : null}
+      />
+
       {/* 업로드 중 로딩 모달 */}
       {isUploading && (
         <Modal
@@ -1074,7 +1170,9 @@ const MealAddScreen = ({navigation, route}: any) => {
               <TouchableOpacity onPress={handleDateTimeCancel}>
                 <Text style={styles.modalCancelText}>취소</Text>
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>날짜 선택</Text>
+              <Text style={styles.modalTitle}>
+                {dateTimeMode === 'date' ? '날짜 선택' : '시간 선택'}
+              </Text>
               <TouchableOpacity onPress={handleDateTimeConfirm}>
                 <Text style={styles.modalConfirmText}>확인</Text>
               </TouchableOpacity>
@@ -1082,11 +1180,11 @@ const MealAddScreen = ({navigation, route}: any) => {
             <View style={styles.dateTimePickerContainer}>
               <DateTimePicker
                 value={tempDateTime}
-                mode="date"
+                mode={dateTimeMode}
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={onChangeDate}
-                minimumDate={new Date(2020, 0, 1)}
-                maximumDate={new Date(2100, 11, 31)}
+                onChange={dateTimeMode === 'date' ? onChangeDate : onChangeTime}
+                minimumDate={dateTimeMode === 'date' ? new Date(2020, 0, 1) : undefined}
+                maximumDate={dateTimeMode === 'date' ? new Date(2100, 11, 31) : undefined}
               />
             </View>
           </View>
@@ -1103,82 +1201,75 @@ const MealAddScreen = ({navigation, route}: any) => {
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => setIsMealTypeModalOpen(false)}>
-          <View style={styles.modalContainer} onStartShouldSetResponder={() => true}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>식사 타입 선택</Text>
-              <TouchableOpacity
-                onPress={() => setIsMealTypeModalOpen(false)}
-                style={styles.modalCloseButton}>
-                <Icon name="close" size={24} color="#ffffff" />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.modalOptions}>
+          <View style={styles.mealTypeModalContainer} onStartShouldSetResponder={() => true}>
+            <Text style={styles.mealTypeModalTitle}>식단 카테고리를 선택해주세요</Text>
+            <View style={styles.mealTypeGrid}>
               <TouchableOpacity
                 style={[
-                  styles.modalOption,
-                  mealType === 'BREAKFAST' && styles.modalOptionActive,
+                  styles.mealTypeGridItem,
+                  mealType === 'BREAKFAST' && styles.mealTypeGridItemActive,
                 ]}
                 onPress={() => handleMealTypeSelect('BREAKFAST')}>
                 <Text
                   style={[
-                    styles.modalOptionText,
-                    mealType === 'BREAKFAST' && styles.modalOptionTextActive,
+                    styles.mealTypeGridText,
+                    mealType === 'BREAKFAST' && styles.mealTypeGridTextActive,
                   ]}>
                   아침
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
-                  styles.modalOption,
-                  mealType === 'LUNCH' && styles.modalOptionActive,
+                  styles.mealTypeGridItem,
+                  mealType === 'LUNCH' && styles.mealTypeGridItemActive,
                 ]}
                 onPress={() => handleMealTypeSelect('LUNCH')}>
                 <Text
                   style={[
-                    styles.modalOptionText,
-                    mealType === 'LUNCH' && styles.modalOptionTextActive,
+                    styles.mealTypeGridText,
+                    mealType === 'LUNCH' && styles.mealTypeGridTextActive,
                   ]}>
                   점심
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
-                  styles.modalOption,
-                  mealType === 'DINNER' && styles.modalOptionActive,
+                  styles.mealTypeGridItem,
+                  mealType === 'DINNER' && styles.mealTypeGridItemActive,
                 ]}
                 onPress={() => handleMealTypeSelect('DINNER')}>
                 <Text
                   style={[
-                    styles.modalOptionText,
-                    mealType === 'DINNER' && styles.modalOptionTextActive,
+                    styles.mealTypeGridText,
+                    mealType === 'DINNER' && styles.mealTypeGridTextActive,
                   ]}>
                   저녁
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
-                  styles.modalOption,
-                  mealType === 'SNACK' && styles.modalOptionActive,
+                  styles.mealTypeGridItem,
+                  mealType === 'SNACK' && styles.mealTypeGridItemActive,
                 ]}
                 onPress={() => handleMealTypeSelect('SNACK')}>
                 <Text
                   style={[
-                    styles.modalOptionText,
-                    mealType === 'SNACK' && styles.modalOptionTextActive,
+                    styles.mealTypeGridText,
+                    mealType === 'SNACK' && styles.mealTypeGridTextActive,
                   ]}>
                   야식
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
-                  styles.modalOption,
-                  mealType === 'OTHER' && styles.modalOptionActive,
+                  styles.mealTypeGridItem,
+                  mealType === 'OTHER' && styles.mealTypeGridItemActive,
                 ]}
                 onPress={() => handleMealTypeSelect('OTHER')}>
                 <Text
                   style={[
-                    styles.modalOptionText,
-                    mealType === 'OTHER' && styles.modalOptionTextActive,
+                    styles.mealTypeGridText,
+                    mealType === 'OTHER' && styles.mealTypeGridTextActive,
                   ]}>
                   기타
                 </Text>
@@ -1239,6 +1330,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#ffffff',
   },
+  categorySection: {
+    paddingHorizontal: 20,
+    marginBottom: 15,
+  },
+  categoryChip: {
+    backgroundColor: '#393a38',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   timeSection: {
     flexDirection: 'row',
     gap: 15,
@@ -1248,16 +1352,7 @@ const styles = StyleSheet.create({
   timeChip: {
     backgroundColor: '#393a38',
     borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 20,
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mealTypeChip: {
-    backgroundColor: '#393a38',
-    borderRadius: 10,
-    paddingVertical: 6,
+    paddingVertical: 10,
     paddingHorizontal: 20,
     flex: 1,
     alignItems: 'center',
@@ -1316,20 +1411,37 @@ const styles = StyleSheet.create({
   foodList: {
     paddingHorizontal: 20,
     marginBottom: 15,
-    gap: 15,
   },
   foodItem: {
     backgroundColor: '#393a38',
     borderRadius: 10,
-    paddingVertical: 18,
-    paddingHorizontal: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 12,
+  },
+  foodItemContent: {
+    flex: 1,
+    minWidth: 0,
   },
   foodItemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 10,
     gap: 12,
+  },
+  foodCaloriesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  foodDeleteButton: {
+    padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalOverlay: {
     flex: 1,
@@ -1387,52 +1499,116 @@ const styles = StyleSheet.create({
   modalOptionTextActive: {
     color: '#000000',
   },
+  mealTypeModalContainer: {
+    backgroundColor: '#252525',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 30,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    maxHeight: '60%',
+  },
+  mealTypeModalTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#ffffff',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  mealTypeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 20,
+    justifyContent: 'space-between',
+  },
+  mealTypeGridItem: {
+    backgroundColor: '#393a38',
+    borderRadius: 10,
+    width: '47%',
+    height: 45,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mealTypeGridItemActive: {
+    backgroundColor: '#e3ff7c',
+  },
+  mealTypeGridText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#ffffff',
+    textAlign: 'center',
+  },
+  mealTypeGridTextActive: {
+    color: '#000000',
+  },
   foodName: {
-    fontSize: 20,
+    fontSize: 15,
     fontWeight: '700',
     color: '#ffffff',
     flex: 1,
     flexShrink: 1,
     minWidth: 0,
+    lineHeight: 18,
   },
   foodCalories: {
-    fontSize: 20,
-    fontWeight: '400',
+    fontSize: 15,
+    fontWeight: '700',
     color: '#ffffff',
     textAlign: 'right',
     flexShrink: 0,
+    lineHeight: 18,
   },
   foodNutrition: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
     justifyContent: 'flex-start',
+    flexWrap: 'wrap',
   },
   nutritionItem: {
     flexDirection: 'row',
-    gap: 5,
+    gap: 4,
     alignItems: 'center',
   },
   nutritionLabel: {
     fontSize: 10,
     fontWeight: '700',
     color: '#ffffff',
+    lineHeight: 12,
   },
   nutritionValue: {
     fontSize: 10,
     fontWeight: '400',
     color: '#ffffff',
+    lineHeight: 12,
   },
   addFoodButtonContainer: {
     paddingHorizontal: 20,
+    marginBottom: 15,
   },
   addFoodButton: {
     width: '100%',
     backgroundColor: '#e3ff7c',
-    paddingVertical: 18,
+    paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
   },
   addFoodButtonText: {
+    color: '#000000',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  deleteMealButtonContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 15,
+  },
+  deleteMealButton: {
+    width: '100%',
+    backgroundColor: '#d9d9d9',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  deleteMealButtonText: {
     color: '#000000',
     fontSize: 16,
     fontWeight: '700',
