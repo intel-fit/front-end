@@ -11,13 +11,16 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  Linking,
 } from 'react-native';
 import {Picker} from '@react-native-picker/picker';
 import {authAPI} from '../../services';
 
 const SignupScreen = ({navigation}: any) => {
+  // 회원가입 단계 관리 (1~5단계)
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  // 회원가입 폼 데이터
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -34,18 +37,23 @@ const SignupScreen = ({navigation}: any) => {
     healthGoal: '', // 헬스 목적
     verificationCode: '',
   });
+  // 폼 검증 에러 메시지
   const [errors, setErrors] = useState<any>({});
+  // 아이디 중복 확인 여부
   const [isUsernameChecked, setIsUsernameChecked] = useState(false);
+  // 이메일 인증코드 발송 여부
   const [isEmailSent, setIsEmailSent] = useState(false);
+  // 약관 동의 여부
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
+  // 모달 표시 여부
   const [pickerModalVisible, setPickerModalVisible] = useState(false);
   const [tempPickerValue, setTempPickerValue] = useState({year: '', month: '', day: ''});
   const [genderModalVisible, setGenderModalVisible] = useState(false);
-  const [termsModalVisible, setTermsModalVisible] = useState(false);
-  const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
+  // 회원가입 완료 화면 표시 여부
   const [showCompleteScreen, setShowCompleteScreen] = useState(false);
 
+  // 폼 데이터 변경 핸들러
   const handleChange = (name: string, value: string) => {
     setFormData(prev => ({...prev, [name]: value}));
     if (errors[name]) {
@@ -53,6 +61,18 @@ const SignupScreen = ({navigation}: any) => {
     }
   };
 
+  // Step 1 완료 여부 확인 (에러 설정 없이 검증만)
+  const checkStep1Complete = () => {
+    if (!formData.username.trim() || formData.username.length < 4) return false;
+    if (!formData.password.trim() || formData.password.length < 8) return false;
+    if (!/(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*])/.test(formData.password)) return false;
+    if (!formData.confirmPassword.trim() || formData.password !== formData.confirmPassword) return false;
+    if (!isUsernameChecked) return false;
+    if (!agreedToTerms || !agreedToPrivacy) return false;
+    return true;
+  };
+
+  // Step 1 검증 (에러 메시지 설정)
   const validateStep1 = () => {
     const newErrors: any = {};
 
@@ -92,6 +112,16 @@ const SignupScreen = ({navigation}: any) => {
     return Object.keys(newErrors).length === 0;
   };
 
+  // Step 2 완료 여부 확인
+  const checkStep2Complete = () => {
+    if (!formData.name.trim()) return false;
+    if (!formData.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) return false;
+    if (!isEmailSent) return false;
+    if (!formData.verificationCode.trim() || !/^\d{6}$/.test(formData.verificationCode)) return false;
+    return true;
+  };
+
+  // Step 2 검증
   const validateStep2 = () => {
     const newErrors: any = {};
 
@@ -117,6 +147,12 @@ const SignupScreen = ({navigation}: any) => {
     return Object.keys(newErrors).length === 0;
   };
 
+  // Step 3 완료 여부 확인 (헬스 고민 선택)
+  const checkStep3Complete = () => {
+    return !!formData.healthConcern;
+  };
+
+  // Step 3 검증
   const validateStep3 = () => {
     const newErrors: any = {};
 
@@ -128,7 +164,38 @@ const SignupScreen = ({navigation}: any) => {
     return Object.keys(newErrors).length === 0;
   };
 
+  // Step 4 완료 여부 확인 (헬스 목적 선택)
+  const checkStep4Complete = () => {
+    return !!formData.healthGoal;
+  };
+
+  // Step 4 검증
   const validateStep4 = () => {
+    const newErrors: any = {};
+
+    if (!formData.healthGoal) {
+      newErrors.healthGoal = '헬스 목적을 선택해주세요';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Step 5 완료 여부 확인 (신체 정보 입력)
+  const checkStep5Complete = () => {
+    if (!formData.birthYear || !formData.birthMonth || !formData.birthDay) return false;
+    if (!formData.gender) return false;
+    if (!formData.height.trim()) return false;
+    const heightNum = Number(formData.height);
+    if (heightNum < 100 || heightNum > 250) return false;
+    if (!formData.weight.trim()) return false;
+    const weightNum = Number(formData.weight);
+    if (weightNum < 30 || weightNum > 200) return false;
+    return true;
+  };
+
+  // Step 5 검증
+  const validateStep5 = () => {
     const newErrors: any = {};
 
     if (!formData.birthYear || !formData.birthMonth || !formData.birthDay) {
@@ -155,17 +222,7 @@ const SignupScreen = ({navigation}: any) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const validateStep5 = () => {
-    const newErrors: any = {};
-
-    if (!formData.healthGoal) {
-      newErrors.healthGoal = '헬스 목적을 선택해주세요';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
+  // 아이디 중복 확인
   const handleUsernameCheck = async () => {
     if (!formData.username.trim()) {
       setErrors((prev: any) => ({...prev, username: '아이디를 입력해주세요'}));
@@ -209,6 +266,7 @@ const SignupScreen = ({navigation}: any) => {
     }
   };
 
+  // 이메일 인증코드 발송
   const handleEmailVerification = async () => {
     if (!formData.email.trim()) {
       setErrors((prev: any) => ({...prev, email: '이메일을 입력해주세요'}));
@@ -243,6 +301,7 @@ const SignupScreen = ({navigation}: any) => {
     }
   };
 
+  // 다음 단계로 이동
   const handleNext = () => {
     if (step === 1 && validateStep1()) {
       setStep(2);
@@ -255,6 +314,7 @@ const SignupScreen = ({navigation}: any) => {
     }
   };
 
+  // 회원가입 제출
   const handleSubmit = async () => {
     if (!validateStep5()) {
       return;
@@ -305,6 +365,7 @@ const SignupScreen = ({navigation}: any) => {
     }
   };
 
+  // 생년월일 선택을 위한 연도 옵션 생성
   const generateYearOptions = () => {
     const currentYear = new Date().getFullYear();
     const years = [];
@@ -314,10 +375,12 @@ const SignupScreen = ({navigation}: any) => {
     return years.reverse();
   };
 
+  // 월 옵션 생성
   const generateMonthOptions = () => {
     return Array.from({length: 12}, (_, i) => i + 1);
   };
 
+  // 헬스 고민 옵션
   const healthConcernOptions = [
     {label: '의지 부족', value: 'WILLPOWER'},
     {label: '근육의 자극', value: 'MUSCLE_STIMULATION'},
@@ -327,6 +390,7 @@ const SignupScreen = ({navigation}: any) => {
     {label: '기타', value: 'OTHER'},
   ];
 
+  // 헬스 목적 옵션
   const healthGoalOptions = [
     {label: '벌크업', value: 'BULK'},
     {label: '다이어트', value: 'DIET'},
@@ -337,6 +401,7 @@ const SignupScreen = ({navigation}: any) => {
     {label: '기타', value: 'OTHER'},
   ];
 
+  // 단계 인디케이터 렌더링
   const renderStepIndicator = () => {
     return (
       <View style={styles.stepIndicator}>
@@ -344,10 +409,22 @@ const SignupScreen = ({navigation}: any) => {
         <View style={[styles.stepLine, step >= 2 && styles.stepLineActive]} />
         <View style={[styles.stepLine, step >= 3 && styles.stepLineActive]} />
         <View style={[styles.stepLine, step >= 4 && styles.stepLineActive]} />
+        <View style={[styles.stepLine, step >= 5 && styles.stepLineActive]} />
       </View>
     );
   };
 
+  // 각 단계 완료 여부 확인 (렌더링 중 상태 변경 없이)
+  const isStepComplete = (stepNum: number) => {
+    if (stepNum === 1) return checkStep1Complete();
+    if (stepNum === 2) return checkStep2Complete();
+    if (stepNum === 3) return checkStep3Complete();
+    if (stepNum === 4) return checkStep4Complete();
+    if (stepNum === 5) return checkStep5Complete();
+    return false;
+  };
+
+  // 회원가입 완료 화면
   if (showCompleteScreen) {
     return (
       <View style={styles.container}>
@@ -380,17 +457,19 @@ const SignupScreen = ({navigation}: any) => {
 
           {renderStepIndicator()}
 
+          {/* Step 1: 아이디/비밀번호 입력 */}
           {step === 1 && (
             <View style={styles.stepContent}>
-              <Text style={styles.title}>회원가입을 위해{'\n'}정보를 입력해주세요</Text>
+              <View style={styles.stepContentInner}>
+                <Text style={styles.title}>회원가입을 위해{'\n'}정보를 입력해주세요</Text>
 
               <View style={styles.inputGroup}>
                 <View style={styles.inputWithButton}>
                   <TextInput
                     style={[styles.input, styles.inputFlex]}
                     placeholder="아이디"
-                    textContentType="none"
-                    autoComplete="off"
+                    textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : 'username'}
+                    autoComplete={Platform.OS === 'ios' ? 'off' : 'username'}
                     autoCapitalize="none"
                     autoCorrect={false}
                     value={formData.username}
@@ -423,10 +502,11 @@ const SignupScreen = ({navigation}: any) => {
                   value={formData.password}
                   onChangeText={text => handleChange('password', text)}
                   secureTextEntry
-                  textContentType="none"
-                  autoComplete="off"
+                  textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : 'password'}
+                  autoComplete={Platform.OS === 'ios' ? 'off' : 'password-new'}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  passwordRules=""
                   placeholderTextColor="rgba(255, 255, 255, 0.7)"
                 />
                 {errors.password && (
@@ -441,10 +521,11 @@ const SignupScreen = ({navigation}: any) => {
                   value={formData.confirmPassword}
                   onChangeText={text => handleChange('confirmPassword', text)}
                   secureTextEntry
-                  textContentType="none"
-                  autoComplete="off"
+                  textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : 'password'}
+                  autoComplete={Platform.OS === 'ios' ? 'off' : 'password-new'}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  passwordRules=""
                   placeholderTextColor="rgba(255, 255, 255, 0.7)"
                 />
                 {errors.confirmPassword && (
@@ -461,7 +542,7 @@ const SignupScreen = ({navigation}: any) => {
                   </View>
                   <Text style={styles.agreementText}>개인정보 처리방침</Text>
                   <TouchableOpacity
-                    onPress={() => setPrivacyModalVisible(true)}
+                    onPress={() => Linking.openURL('https://rigorous-drifter-031.notion.site/26ac1a180bb981bebe20ee0cd31d4f01')}
                     style={styles.agreementLink}>
                     <Text style={styles.agreementLinkText}>보기</Text>
                   </TouchableOpacity>
@@ -478,7 +559,7 @@ const SignupScreen = ({navigation}: any) => {
                   </View>
                   <Text style={styles.agreementText}>서비스 이용약관</Text>
                   <TouchableOpacity
-                    onPress={() => setTermsModalVisible(true)}
+                    onPress={() => Linking.openURL('https://rigorous-drifter-031.notion.site/INTELFIT-26ac1a180bb98192a438f0576a77024e')}
                     style={styles.agreementLink}>
                     <Text style={styles.agreementLinkText}>보기</Text>
                   </TouchableOpacity>
@@ -487,22 +568,38 @@ const SignupScreen = ({navigation}: any) => {
                   <Text style={styles.errorMessage}>{errors.terms}</Text>
                 )}
               </View>
+              </View>
 
-              <TouchableOpacity style={styles.nextBtn} onPress={handleNext}>
-                <Text style={styles.nextBtnText}>다음</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => navigation.goBack()}>
-                <Text style={styles.cancelBtnText}>취소하기</Text>
-              </TouchableOpacity>
+              <View style={styles.bottomButtonContainer}>
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={() => navigation.goBack()}>
+                  <Text style={styles.backButtonText}>뒤로가기</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.nextBtn,
+                    isStepComplete(1) && styles.nextBtnActive,
+                  ]}
+                  onPress={handleNext}
+                  disabled={!isStepComplete(1)}>
+                  <Text
+                    style={[
+                      styles.nextBtnText,
+                      isStepComplete(1) && styles.nextBtnTextActive,
+                    ]}>
+                    다음
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
 
+          {/* Step 2: 이름/이메일 입력 */}
           {step === 2 && (
             <View style={styles.stepContent}>
-              <Text style={styles.title}>회원가입을 위해{'\n'}정보를 입력해주세요</Text>
+              <View style={styles.stepContentInner}>
+                <Text style={styles.title}>회원가입을 위해{'\n'}정보를 입력해주세요</Text>
 
               <View style={styles.inputGroup}>
                 <TextInput
@@ -530,6 +627,10 @@ const SignupScreen = ({navigation}: any) => {
                       }
                     }}
                     keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoComplete="off"
+                    textContentType="none"
                     placeholderTextColor="rgba(255, 255, 255, 0.7)"
                   />
                   <TouchableOpacity
@@ -564,31 +665,45 @@ const SignupScreen = ({navigation}: any) => {
                   <Text style={styles.errorMessage}>{errors.verificationCode}</Text>
                 )}
               </View>
+              </View>
 
-              <TouchableOpacity
-                style={[styles.nextBtn, loading && styles.nextBtnDisabled]}
-                onPress={handleNext}
-                disabled={loading}>
-                {loading ? (
-                  <ActivityIndicator color="#ffffff" />
-                ) : (
-                  <Text style={styles.nextBtnText}>다음</Text>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setStep(1)}>
-                <Text style={styles.cancelBtnText}>취소하기</Text>
-              </TouchableOpacity>
+              <View style={styles.bottomButtonContainer}>
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={() => setStep(1)}>
+                  <Text style={styles.backButtonText}>뒤로가기</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.nextBtn,
+                    isStepComplete(2) && styles.nextBtnActive,
+                    loading && styles.nextBtnDisabled,
+                  ]}
+                  onPress={handleNext}
+                  disabled={loading || !isStepComplete(2)}>
+                  {loading ? (
+                    <ActivityIndicator color={isStepComplete(2) ? "#000000" : "#ffffff"} />
+                  ) : (
+                    <Text
+                      style={[
+                        styles.nextBtnText,
+                        isStepComplete(2) && styles.nextBtnTextActive,
+                      ]}>
+                      다음
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           )}
 
+          {/* Step 3: 헬스 고민 선택 */}
           {step === 3 && (
             <View style={styles.stepContent}>
-              <Text style={styles.title}>헬스 고민이 무엇인가요?</Text>
+              <View style={styles.stepContentInner}>
+                <Text style={styles.title}>헬스 고민이 무엇인가요?</Text>
 
-              <View style={styles.optionGrid}>
+                <View style={styles.optionGrid}>
                 {healthConcernOptions.map((option) => (
                   <TouchableOpacity
                     key={option.value}
@@ -606,28 +721,97 @@ const SignupScreen = ({navigation}: any) => {
                     </Text>
                   </TouchableOpacity>
                 ))}
+                </View>
+                {errors.healthConcern && (
+                  <Text style={styles.errorMessage}>{errors.healthConcern}</Text>
+                )}
               </View>
-              {errors.healthConcern && (
-                <Text style={styles.errorMessage}>{errors.healthConcern}</Text>
-              )}
 
-              <TouchableOpacity style={styles.nextBtn} onPress={handleNext}>
-                <Text style={styles.nextBtnText}>다음</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setStep(2)}>
-                <Text style={styles.cancelBtnText}>취소하기</Text>
-              </TouchableOpacity>
+              <View style={styles.bottomButtonContainer}>
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={() => setStep(2)}>
+                  <Text style={styles.backButtonText}>뒤로가기</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.nextBtn,
+                    isStepComplete(3) && styles.nextBtnActive,
+                  ]}
+                  onPress={handleNext}>
+                  <Text
+                    style={[
+                      styles.nextBtnText,
+                      isStepComplete(3) && styles.nextBtnTextActive,
+                    ]}>
+                    다음
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
 
+          {/* Step 4: 헬스 목적 선택 */}
           {step === 4 && (
             <View style={styles.stepContent}>
-              <Text style={styles.title}>신체 정보를 입력해주세요</Text>
+              <View style={styles.stepContentInner}>
+                <Text style={styles.title}>헬스 목적이 무엇인가요?</Text>
 
-              <View style={styles.inputGroup}>
+                <View style={styles.optionGrid}>
+                {healthGoalOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.optionButton,
+                      formData.healthGoal === option.value && styles.optionButtonSelected,
+                    ]}
+                    onPress={() => handleChange('healthGoal', option.value)}>
+                    <Text
+                      style={[
+                        styles.optionButtonText,
+                        formData.healthGoal === option.value && styles.optionButtonTextSelected,
+                      ]}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                </View>
+                {errors.healthGoal && (
+                  <Text style={styles.errorMessage}>{errors.healthGoal}</Text>
+                )}
+              </View>
+
+              <View style={styles.bottomButtonContainer}>
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={() => setStep(3)}>
+                  <Text style={styles.backButtonText}>뒤로가기</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.nextBtn,
+                    isStepComplete(4) && styles.nextBtnActive,
+                  ]}
+                  onPress={handleNext}>
+                  <Text
+                    style={[
+                      styles.nextBtnText,
+                      isStepComplete(4) && styles.nextBtnTextActive,
+                    ]}>
+                    다음
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Step 5: 신체 정보 입력 */}
+          {step === 5 && (
+            <View style={styles.stepContent}>
+              <View style={styles.stepContentInner}>
+                <Text style={styles.title}>신체 정보를 입력해주세요</Text>
+
+                <View style={styles.inputGroup}>
                 <TouchableOpacity
                   activeOpacity={0.8}
                   style={styles.birthDateButtonContainer}
@@ -657,6 +841,7 @@ const SignupScreen = ({navigation}: any) => {
                 )}
               </View>
 
+              {/* 생년월일 선택 모달 */}
               <Modal
                 visible={pickerModalVisible}
                 transparent={true}
@@ -770,6 +955,7 @@ const SignupScreen = ({navigation}: any) => {
                 )}
               </View>
 
+              {/* 성별 선택 모달 */}
               <Modal
                 visible={genderModalVisible}
                 transparent={true}
@@ -859,195 +1045,38 @@ const SignupScreen = ({navigation}: any) => {
                   )}
                 </View>
               </View>
+              </View>
 
-              <TouchableOpacity style={styles.nextBtn} onPress={handleNext}>
-                <Text style={styles.nextBtnText}>다음</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setStep(3)}>
-                <Text style={styles.cancelBtnText}>취소하기</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {step === 5 && (
-            <View style={styles.stepContent}>
-              <Text style={styles.title}>헬스 목적이 무엇인가요?</Text>
-
-              <View style={styles.optionGrid}>
-                {healthGoalOptions.map((option) => (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[
-                      styles.optionButton,
-                      formData.healthGoal === option.value && styles.optionButtonSelected,
-                    ]}
-                    onPress={() => handleChange('healthGoal', option.value)}>
+              <View style={styles.bottomButtonContainer}>
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={() => setStep(4)}>
+                  <Text style={styles.backButtonText}>뒤로가기</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.submitBtn,
+                    isStepComplete(5) && styles.nextBtnActive,
+                    loading && styles.submitBtnDisabled,
+                  ]}
+                  onPress={handleSubmit}
+                  disabled={loading || !isStepComplete(5)}>
+                  {loading ? (
+                    <ActivityIndicator color={isStepComplete(5) ? "#000000" : "#ffffff"} />
+                  ) : (
                     <Text
                       style={[
-                        styles.optionButtonText,
-                        formData.healthGoal === option.value && styles.optionButtonTextSelected,
+                        styles.submitBtnText,
+                        isStepComplete(5) && styles.nextBtnTextActive,
                       ]}>
-                      {option.label}
+                      완료
                     </Text>
-                  </TouchableOpacity>
-                ))}
+                  )}
+                </TouchableOpacity>
               </View>
-              {errors.healthGoal && (
-                <Text style={styles.errorMessage}>{errors.healthGoal}</Text>
-              )}
-
-              <TouchableOpacity
-                style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
-                onPress={handleSubmit}
-                disabled={loading}>
-                {loading ? (
-                  <ActivityIndicator color="#ffffff" />
-                ) : (
-                  <Text style={styles.submitBtnText}>다음</Text>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setStep(4)}>
-                <Text style={styles.cancelBtnText}>취소하기</Text>
-              </TouchableOpacity>
             </View>
           )}
 
-          {/* 약관 모달 */}
-          <Modal
-            visible={termsModalVisible}
-            transparent={true}
-            animationType="slide"
-            onRequestClose={() => setTermsModalVisible(false)}>
-            <View style={styles.termsModalContainer}>
-              <View style={styles.termsModalHeader}>
-                <Text style={styles.termsModalTitle}>서비스 이용 약관</Text>
-                <TouchableOpacity onPress={() => setTermsModalVisible(false)}>
-                  <Text style={styles.termsModalClose}>✕</Text>
-                </TouchableOpacity>
-              </View>
-              <ScrollView style={styles.termsModalContent}>
-                <Text style={styles.termsModalText}>
-                  제1조(목적){'\n'}
-                  이 약관은 INTELFIT (이하 '회사' 라고 합니다)가 제공하는 제반 서비스의 이용과 관련하여 회사와 회원과의 권리, 의무 및 책임사항, 기타 필요한 사항을 규정함을 목적으로 합니다.
-                  {'\n\n'}
-                  제2조(정의){'\n'}
-                  이 약관에서 사용하는 주요 용어의 정의는 다음과 같습니다.
-                  {'\n'}
-                  '서비스'라 함은 구현되는 단말기(PC, TV, 휴대형단말기 등의 각종 유무선 장치를 포함)와 상관없이 '이용자'가 이용할 수 있는 회사가 제공하는 제반 서비스를 의미합니다.
-                  {'\n'}
-                  '이용자'란 이 약관에 따라 회사가 제공하는 서비스를 받는 '개인회원' , '기업회원' 및 '비회원'을 말합니다.
-                  {'\n'}
-                  '개인회원'은 회사에 개인정보를 제공하여 회원등록을 한 사람으로, 회사로부터 지속적으로 정보를 제공받고 '회사'가 제공하는 서비스를 계속적으로 이용할 수 있는 자를 말합니다.
-                  {'\n'}
-                  '기업회원'은 회사에 기업정보 및 개인정보를 제공하여 회원등록을 한 사람으로, 회사로부터 지속적으로 정보를 제공받고 회사가 제공하는 서비스를 계속적으로 이용할 수 있는 자를 말합니다.
-                  {'\n'}
-                  '비회원'은 회원가입 없이 회사가 제공하는 서비스를 이용하는 자를 말합니다.
-                  {'\n'}
-                  '아이디(ID)'라 함은 회원의 식별과 서비스이용을 위하여 회원이 정하고 회사가 승인하는 문자 또는 문자와 숫자의 조합을 의미합니다.
-                  {'\n'}
-                  '비밀번호'라 함은 회원이 부여받은 아이디와 일치되는 회원임을 확인하고 비밀의 보호를 위해 회원 자신이 정한 문자(특수문자 포함)와 숫자의 조합을 의미합니다.
-                  {'\n'}
-                  '유료서비스'라 함은 회사가 유료로 제공하는 제반 서비스를 의미합니다.
-                  {'\n'}
-                  '결제'란 회사가 제공하는 유료서비스를 이용하기 위하여 회원이 지불수단을 선택하고, 금융정보를 입력하는 행위를 말합니다.
-                  {'\n\n'}
-                  제3조(약관 외 준칙){'\n'}
-                  이 약관에서 정하지 아니한 사항에 대해서는 법령 또는 회사가 정한 서비스의 개별약관, 운영정책 및 규칙 등(이하 세부지침)의 규정에 따릅니다. 또한 본 약관과 세부지침이 충돌할 경우에는 세부지침에 따릅니다.
-                  {'\n\n'}
-                  제4조(약관의 효력과 변경){'\n'}
-                  이 약관은 INTELFIT(이)가 제공하는 모든 인터넷서비스에 게시하여 공시합니다. '회사'는 '전자상거래 등에서의 소비자보호에 관한 법률(이하 '전자상거래법'이라 함)', '약관의 규제에 관한 법률(이하 '약관규제법'이라 함)', '전자문서 및 전자거래 기본법(이하 '전자문서법'이라 함)', '전자금융거래법', '정보통신망 이용촉진 및 정보보호 등에 관한 법률(이하 '정보통신망법'이라 함)', '소비자기본법' 등 관계 법령(이하 '관계법령' 이라 함)에 위배되지 않는 범위 내에서 이 약관을 변경할 수 있으며, 회사는 약관이 변경되는 경우에 변경된 약관의 내용과 시행일을 정하여, 그 시행일로부터 최소 7일 (이용자에게 불리하거나 중대한 사항의 변경은 30일) 이전부터 시행일 후 상당한 기간 동안 공지하고, 기존 이용자에게는 변경된 약관, 적용일자 및 변경사유(변경될 내용 중 중요사항에 대한 설명을 포함)를 별도의 전자적 수단(전자우편, 문자메시지, 서비스 내 전자쪽지발송, 알림 메시지를 띄우는 등의 방법)으로 개별 통지합니다. 변경된 약관은 공지하거나 통지한 시행일로부터 효력이 발생합니다.
-                  {'\n\n'}
-                  (약관 전문은 계속됩니다. 전체 약관 내용은 서비스 내에서 확인하실 수 있습니다.)
-                </Text>
-              </ScrollView>
-            </View>
-          </Modal>
-
-          <Modal
-            visible={privacyModalVisible}
-            transparent={true}
-            animationType="slide"
-            onRequestClose={() => setPrivacyModalVisible(false)}>
-            <View style={styles.termsModalContainer}>
-              <View style={styles.termsModalHeader}>
-                <Text style={styles.termsModalTitle}>개인정보 처리방침</Text>
-                <TouchableOpacity onPress={() => setPrivacyModalVisible(false)}>
-                  <Text style={styles.termsModalClose}>✕</Text>
-                </TouchableOpacity>
-              </View>
-              <ScrollView style={styles.termsModalContent}>
-                <Text style={styles.termsModalText}>
-                  본 개인정보처리방침은 INTELFIT(이하 "서비스 제공업체")가 프리미엄(Freemium) 서비스로 제작한 모바일 기기용 INTELLFIT 앱(이하 "애플리케이션")에 적용됩니다. 본 서비스는 "있는 그대로" 사용되어야 합니다.
-                  {'\n\n'}
-                  정보 수집 및 사용{'\n'}
-                  애플리케이션은 다운로드 및 사용 시 정보를 수집합니다. 이 정보에는 다음과 같은 정보가 포함될 수 있습니다.
-                  {'\n'}
-                  기기의 인터넷 프로토콜 주소(예: IP 주소)
-                  {'\n'}
-                  방문한 애플리케이션 페이지, 방문 시간 및 날짜, 해당 페이지에서 소요된 시간
-                  {'\n'}
-                  애플리케이션에서 소요된 시간
-                  {'\n'}
-                  모바일 기기에서 사용하는 운영 체제
-                  {'\n'}
-                  애플리케이션은 모바일 기기의 위치에 대한 정확한 정보를 수집하지 않습니다.
-                  {'\n'}
-                  애플리케이션은 기기의 위치를 수집하며, 이는 서비스 제공업체가 사용자의 대략적인 지리적 위치를 파악하고 다음과 같은 방식으로 활용하는 데 도움이 됩니다.
-                  {'\n'}
-                  위치 정보 서비스: 서비스 제공업체는 위치 데이터를 활용하여 개인 맞춤 콘텐츠, 관련 추천, 위치 기반 서비스와 같은 기능을 제공합니다.
-                  {'\n'}
-                  분석 및 개선: 집계되고 익명화된 위치 데이터는 서비스 제공업체가 사용자 행동을 분석하고, 추세를 파악하며, 애플리케이션의 전반적인 성능과 기능을 개선하는 데 도움이 됩니다.
-                  {'\n'}
-                  제3자 서비스: 서비스 제공업체는 주기적으로 익명화된 위치 데이터를 외부 서비스에 전송할 수 있습니다. 이러한 서비스는 애플리케이션 개선 및 서비스 최적화에 도움이 됩니다.
-                  {'\n\n'}
-                  서비스 제공업체는 귀하가 제공한 정보를 사용하여 귀하에게 중요한 정보, 필수 공지 및 마케팅 프로모션을 제공하기 위해 수시로 귀하에게 연락할 수 있습니다.
-                  {'\n'}
-                  더 나은 경험을 위해, 서비스 제공업체는 애플리케이션 사용 시 이메일, 사용자 ID, 연령, 성별 등을 포함하되 이에 국한되지 않는 특정 개인 식별 정보 제공을 요청할 수 있습니다. 서비스 제공업체가 요청하는 정보는 서비스 제공업체에서 보관하며 본 개인정보 처리방침에 명시된 대로 사용됩니다.
-                  {'\n\n'}
-                  제3자 접근{'\n'}
-                  서비스 제공업체가 애플리케이션 및 해당 서비스를 개선하는 데 도움이 되도록 집계되고 익명화된 데이터만 주기적으로 외부 서비스에 전송됩니다. 서비스 제공업체는 본 개인정보 처리방침에 명시된 방식으로 귀하의 정보를 제3자와 공유할 수 있습니다.
-                  {'\n'}
-                  본 애플리케이션은 데이터 처리에 대한 자체 개인정보 처리방침을 보유한 제3자 서비스를 활용합니다. 아래는 애플리케이션에서 사용하는 제3자 서비스 제공업체의 개인정보 처리방침 링크입니다.
-                  {'\n'}
-                  Google Play 서비스
-                  {'\n'}
-                  AdMob
-                  {'\n'}
-                  Firebase용 Google 애널리틱스
-                  {'\n'}
-                  Firebase Crashlytics
-                  {'\n\n'}
-                  서비스 제공업체는 다음과 같은 경우 사용자 제공 정보 및 자동 수집 정보를 공개할 수 있습니다.
-                  {'\n'}
-                  소환장 또는 유사한 법적 절차 준수 등 법률에 따라 요구되는 경우
-                  {'\n'}
-                  본인의 권리 보호, 본인 또는 타인의 안전 보호, 사기 조사 또는 정부 요청에 응하기 위해 정보 공개가 필요하다고 선의로 판단하는 경우;
-                  {'\n'}
-                  당사를 대신하여 업무를 수행하고, 당사가 공개하는 정보를 독립적으로 사용하지 않으며, 본 개인정보 처리방침에 명시된 규칙을 준수하는 데 동의한 신뢰할 수 있는 서비스 제공업체와 공유합니다.
-                  {'\n\n'}
-                  옵트아웃 권리{'\n'}
-                  애플리케이션을 삭제하면 모든 정보 수집을 쉽게 중단할 수 있습니다. 모바일 기기에 내장된 표준 삭제 절차나 모바일 애플리케이션 마켓플레이스 또는 네트워크를 통해 제공되는 삭제 절차를 사용할 수 있습니다.
-                  {'\n\n'}
-                  데이터 보존 정책{'\n'}
-                  서비스 제공업체는 사용자가 애플리케이션을 사용하는 동안 및 그 이후 합리적인 기간 동안 사용자 제공 데이터를 보관합니다. 애플리케이션을 통해 제공한 사용자 제공 데이터를 삭제하려면 a06246@gmail.com으로 문의하시면 합리적인 기간 내에 답변해 드리겠습니다.
-                  {'\n\n'}
-                  어린이{'\n'}
-                  서비스 제공자는 본 애플리케이션을 이용하여 13세 미만 어린이로부터 고의로 데이터를 수집하거나 마케팅 활동을 하지 않습니다.
-                  {'\n'}
-                  본 애플리케이션은 13세 미만 어린이를 대상으로 하지 않습니다. 서비스 제공자는 13세 미만 어린이의 개인 식별 정보를 고의로 수집하지 않습니다. 서비스 제공자는 13세 미만 어린이가 개인 정보를 제공한 사실을 발견하는 경우, 해당 정보를 서버에서 즉시 삭제합니다. 부모 또는 보호자이시며 자녀가 당사에 개인 정보를 제공한 사실을 알고 계신 경우, 서비스 제공자(a06246@gmail.com)에게 연락하여 필요한 조치를 취하도록 하십시오.
-                  {'\n\n'}
-                  보안{'\n'}
-                  서비스 제공자는 귀하의 정보 기밀 유지에 최선을 다하고 있습니다. 서비스 제공자는 서비스 제공자가 제공하는 정보를 보호하기 위해 물리적, 전자적, 절차적 보안 조치를 제공합니다.
-                </Text>
-              </ScrollView>
-            </View>
-          </Modal>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -1061,6 +1090,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    minHeight: '100%',
   },
   signupContainer: {
     flex: 1,
@@ -1100,10 +1130,32 @@ const styles = StyleSheet.create({
   stepLineActive: {
     backgroundColor: '#e3ff7c',
   },
+  bottomButtonContainer: {
+    width: '100%',
+    marginTop: 'auto',
+    paddingTop: 20,
+    paddingBottom: 20,
+    gap: 12,
+  },
+  backButton: {
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  backButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '400',
+  },
   stepContent: {
     width: '100%',
     maxWidth: 360,
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  stepContentInner: {
     gap: 20,
+    flex: 1,
   },
   title: {
     color: '#ffffff',
@@ -1220,7 +1272,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+  },
+  nextBtnActive: {
+    backgroundColor: '#e3ff7c',
   },
   nextBtnDisabled: {
     opacity: 0.6,
@@ -1229,6 +1283,10 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '400',
+  },
+  nextBtnTextActive: {
+    color: '#000000',
+    fontWeight: '600',
   },
   submitBtn: {
     width: '100%',
@@ -1245,16 +1303,6 @@ const styles = StyleSheet.create({
   submitBtnText: {
     color: '#ffffff',
     fontSize: 16,
-    fontWeight: '400',
-  },
-  cancelBtn: {
-    backgroundColor: 'transparent',
-    marginTop: 16,
-    alignItems: 'center',
-  },
-  cancelBtnText: {
-    color: '#ffffff',
-    fontSize: 12,
     fontWeight: '400',
   },
   optionGrid: {
@@ -1372,41 +1420,6 @@ const styles = StyleSheet.create({
   genderOptionTextSelected: {
     color: '#252525',
     fontWeight: '600',
-  },
-  termsModalContainer: {
-    flex: 1,
-    backgroundColor: '#252525',
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
-  },
-  termsModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#434343',
-  },
-  termsModalTitle: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  termsModalClose: {
-    color: '#ffffff',
-    fontSize: 24,
-    fontWeight: '400',
-  },
-  termsModalContent: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  termsModalText: {
-    color: '#ffffff',
-    fontSize: 10,
-    fontWeight: '400',
-    lineHeight: 20,
   },
   completeContainer: {
     flex: 1,
