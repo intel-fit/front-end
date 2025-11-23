@@ -1,6 +1,12 @@
 // src/services/recommendedMealAPI.ts
 import { request } from "./apiConfig";
 
+const formatDateToString = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 /**
  * 식단 추천 API (임시 식단 기반)
  */
@@ -26,29 +32,7 @@ export const recommendedMealAPI = {
         { method: "GET" }
       );
 
-      // ✅ 원본 응답 상세 로그
-      console.log("=== 🔍 GET /api/temp-meals/weekly 응답 ===");
-      console.log("응답 타입:", typeof response);
-      console.log("응답 길이:", response.length);
-      console.log("응답 전체:", JSON.stringify(response, null, 2));
-
-      // ✅ 각 day 검증
-      response.forEach((day, idx) => {
-        console.log(`\nDay ${idx + 1} 검증:`);
-        console.log("- dayIndex:", day.dayIndex);
-        console.log("- meals 존재:", !!day.meals);
-        console.log(
-          "- meals 타입:",
-          Array.isArray(day.meals) ? "배열" : typeof day.meals
-        );
-        console.log("- meals 길이:", day.meals?.length || 0);
-
-        if (day.meals && day.meals.length === 0) {
-          console.warn(`⚠️ ${idx + 1}일차 meals가 빈 배열입니다!`);
-        }
-      });
-
-      console.log(`✅ 임시 식단 조회 완료: ${response.length}일`);
+      console.log("✅ 임시 식단 조회 완료:", response.length, "일");
       return response;
     } catch (error: any) {
       console.error("❌ 임시 식단 생성/조회 실패:", error);
@@ -104,11 +88,83 @@ export const recommendedMealAPI = {
   },
 
   /**
-   * 4) 번들 상세 조회 (7일치)
+   * ✅ 4) 번들 상세 조회 (DietScreen용 - 평탄화)
+   */
+  getSavedMealPlansByBundle: async (bundleId: string) => {
+    try {
+      console.log("🔍 번들 상세 조회 (DietScreen용):", bundleId);
+
+      const response = await request<Array<MealPlan>>(
+        `/api/recommended-meals/bundles/${bundleId}`,
+        {
+          method: "GET",
+        }
+      );
+
+      console.log("✅ 서버 응답:", response.length, "개 플랜");
+
+      // ✅ 첫 번째 플랜의 날짜를 기준 날짜로 사용
+      const baseDateStr =
+        response[0]?.planDate || formatDateToString(new Date());
+      const baseDate = new Date(baseDateStr);
+
+      console.log("📅 기준 날짜:", baseDateStr);
+
+      // ✅ DietScreen이 기대하는 형식으로 변환
+      const flattenedMeals: any[] = [];
+
+      response.forEach((plan) => {
+        // ✅ bundleDay를 사용하여 실제 날짜 계산
+        const actualDate = new Date(baseDate);
+        actualDate.setDate(baseDate.getDate() + (plan.bundleDay - 1));
+        const actualDateStr = formatDateToString(actualDate);
+
+        console.log(`📆 ${plan.bundleDay}일차 → ${actualDateStr}`);
+
+        plan.meals.forEach((meal) => {
+          flattenedMeals.push({
+            id: meal.id,
+            planId: plan.id,
+            planName: plan.planName,
+            bundleId: plan.bundleId,
+            bundleDay: plan.bundleDay,
+            mealType: meal.mealType,
+            mealTypeName: meal.mealTypeName,
+            totalCalories: meal.totalCalories,
+            totalCarbs: meal.totalCarbs,
+            totalProtein: meal.totalProtein,
+            totalFat: meal.totalFat,
+            foods: meal.foods,
+            targetDate: actualDateStr, // ✅ bundleDay 기반 날짜 사용
+            originalPlanDate: plan.planDate,
+            createdAt: plan.createdAt,
+          });
+        });
+      });
+
+      console.log("✅ 평탄화 완료:", flattenedMeals.length, "개 끼니");
+
+      // ✅ 날짜별 분포 로그
+      const dateDistribution = flattenedMeals.reduce((acc, meal) => {
+        acc[meal.targetDate] = (acc[meal.targetDate] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      console.log("📊 날짜별 분포:", dateDistribution);
+
+      return flattenedMeals;
+    } catch (error: any) {
+      console.error("❌ 번들 상세 조회 실패:", error);
+      throw new Error(error.message || "번들 상세 조회에 실패했습니다.");
+    }
+  },
+
+  /**
+   * 4-1) 번들 상세 조회 (원본 구조)
    */
   getBundleDetail: async (bundleId: string) => {
     try {
-      console.log("🔍 번들 상세 조회:", bundleId);
+      console.log("🔍 번들 상세 조회 (원본):", bundleId);
 
       const response = await request<Array<MealPlan>>(
         `/api/recommended-meals/bundles/${bundleId}`,
