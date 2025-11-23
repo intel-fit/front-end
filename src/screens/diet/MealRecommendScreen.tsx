@@ -775,42 +775,28 @@ const MealRecommendScreen = () => {
 
   // ✅ 식단 저장
   const handleSaveMealPlan = async () => {
-    Alert.alert(
-      "식단 저장",
-      "이 식단을 저장하시겠습니까?\n저장하지 않으면 임시 식단이 사라집니다.",
-      [
-        { text: "취소", style: "cancel" },
+    try {
+      setLoading(true);
+      console.log("💾 식단 저장 시작");
+
+      await recommendedMealAPI.saveTempMealPlan();
+
+      Alert.alert("저장 완료", "식단이 성공적으로 저장되었습니다!", [
         {
-          text: "저장",
-          onPress: async () => {
-            try {
-              setLoading(true);
-
-              const response = await recommendedMealAPI.saveTempMealPlan();
-
-              if (response.success) {
-                Alert.alert("저장 완료", response.message, [
-                  {
-                    text: "확인",
-                    onPress: async () => {
-                      await loadSavedMeals();
-                      navigation.navigate("MealRecommendHistory" as never);
-                    },
-                  },
-                ]);
-              } else {
-                Alert.alert("오류", "식단 저장에 실패했습니다.");
-              }
-            } catch (error: any) {
-              console.error("식단 저장 실패:", error);
-              Alert.alert("오류", error.message || "식단 저장에 실패했습니다.");
-            } finally {
-              setLoading(false);
-            }
+          text: "확인",
+          onPress: () => {
+            // ❌ 제거: navigation.navigate("Diet");
+            // ✅ 현재 화면 유지, 필요시 목록 새로고침
+            console.log("✅ 식단 저장 완료 - 현재 화면 유지");
           },
         },
-      ]
-    );
+      ]);
+    } catch (error: any) {
+      console.error("❌ 식단 저장 실패:", error);
+      Alert.alert("저장 실패", error.message || "식단 저장에 실패했습니다.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // ✅ 저장된 식단 삭제
