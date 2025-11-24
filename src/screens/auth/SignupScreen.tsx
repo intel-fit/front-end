@@ -35,6 +35,7 @@ const SignupScreen = ({navigation}: any) => {
     weight: '',
     healthConcern: '', // 헬스 고민
     healthGoal: '', // 헬스 목적
+    workoutDaysPerWeek: '', // 주간 운동 횟수
     verificationCode: '',
   });
   // 폼 검증 에러 메시지
@@ -50,6 +51,7 @@ const SignupScreen = ({navigation}: any) => {
   const [pickerModalVisible, setPickerModalVisible] = useState(false);
   const [tempPickerValue, setTempPickerValue] = useState({year: '', month: '', day: ''});
   const [genderModalVisible, setGenderModalVisible] = useState(false);
+  const [workoutDaysModalVisible, setWorkoutDaysModalVisible] = useState(false);
   // 회원가입 완료 화면 표시 여부
   const [showCompleteScreen, setShowCompleteScreen] = useState(false);
 
@@ -191,6 +193,7 @@ const SignupScreen = ({navigation}: any) => {
     if (!formData.weight.trim()) return false;
     const weightNum = Number(formData.weight);
     if (weightNum < 30 || weightNum > 200) return false;
+    if (!formData.workoutDaysPerWeek) return false;
     return true;
   };
 
@@ -216,6 +219,10 @@ const SignupScreen = ({navigation}: any) => {
       newErrors.weight = '체중을 입력해주세요';
     } else if (Number(formData.weight) < 30 || Number(formData.weight) > 200) {
       newErrors.weight = '체중은 30-200kg 사이여야 합니다';
+    }
+
+    if (!formData.workoutDaysPerWeek) {
+      newErrors.workoutDaysPerWeek = '주간 운동 횟수를 선택해주세요';
     }
 
     setErrors(newErrors);
@@ -339,6 +346,7 @@ const SignupScreen = ({navigation}: any) => {
         weightGoal: Number(formData.weight), // 목표 체중은 현재 체중과 동일하게 설정
         healthConcern: formData.healthConcern,
         healthGoal: formData.healthGoal,
+        workoutDaysPerWeek: formData.workoutDaysPerWeek,
       };
 
       const response = await authAPI.signup(signupData);
@@ -399,6 +407,17 @@ const SignupScreen = ({navigation}: any) => {
     {label: '체력증진', value: 'ENDURANCE'},
     {label: '자세 교정', value: 'POSTURE'},
     {label: '기타', value: 'OTHER'},
+  ];
+
+  // 주간 운동 횟수 옵션
+  const workoutDaysOptions = [
+    {label: '주 1회', value: '1'},
+    {label: '주 2회', value: '2'},
+    {label: '주 3회', value: '3'},
+    {label: '주 4회', value: '4'},
+    {label: '주 5회', value: '5'},
+    {label: '주 6회', value: '6'},
+    {label: '주 7회', value: '7'},
   ];
 
   // 단계 인디케이터 렌더링
@@ -1045,6 +1064,78 @@ const SignupScreen = ({navigation}: any) => {
                   )}
                 </View>
               </View>
+
+              <View style={styles.inputGroup}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={styles.birthDateButtonContainer}
+                  onPress={() => setWorkoutDaysModalVisible(true)}>
+                  <TextInput
+                    style={styles.input}
+                    value={
+                      formData.workoutDaysPerWeek
+                        ? workoutDaysOptions.find(opt => opt.value === formData.workoutDaysPerWeek)?.label || ''
+                        : ''
+                    }
+                    placeholder="주간 운동 횟수"
+                    placeholderTextColor="rgba(255, 255, 255, 0.7)"
+                    editable={false}
+                    pointerEvents="none"
+                  />
+                </TouchableOpacity>
+                {errors.workoutDaysPerWeek && (
+                  <Text style={styles.errorMessage}>{errors.workoutDaysPerWeek}</Text>
+                )}
+              </View>
+
+              {/* 주간 운동 횟수 선택 모달 */}
+              <Modal
+                visible={workoutDaysModalVisible}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setWorkoutDaysModalVisible(false)}>
+                <TouchableOpacity
+                  style={styles.modalOverlay}
+                  activeOpacity={1}
+                  onPress={() => setWorkoutDaysModalVisible(false)}>
+                  <TouchableOpacity
+                    activeOpacity={1}
+                    onPress={() => {}}
+                    style={styles.modalContent}>
+                    <View style={styles.modalHeader}>
+                      <TouchableOpacity onPress={() => setWorkoutDaysModalVisible(false)}>
+                        <Text style={styles.modalCancelText}>취소</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.modalTitle}>주간 운동 횟수 선택</Text>
+                      <View style={{width: 50}} />
+                    </View>
+                    <View style={styles.modalOptionContainer}>
+                      <View style={styles.optionGrid}>
+                        {workoutDaysOptions.map((option) => (
+                          <TouchableOpacity
+                            key={option.value}
+                            style={[
+                              styles.optionButton,
+                              formData.workoutDaysPerWeek === option.value && styles.optionButtonSelected,
+                            ]}
+                            onPress={() => {
+                              handleChange('workoutDaysPerWeek', option.value);
+                              setWorkoutDaysModalVisible(false);
+                            }}>
+                            <Text
+                              style={[
+                                styles.optionButtonText,
+                                formData.workoutDaysPerWeek === option.value && styles.optionButtonTextSelected,
+                              ]}>
+                              {option.label}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              </Modal>
               </View>
 
               <View style={styles.bottomButtonContainer}>
@@ -1167,6 +1258,12 @@ const styles = StyleSheet.create({
   },
   inputGroup: {
     gap: 8,
+  },
+  label: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '400',
+    marginBottom: 8,
   },
   input: {
     width: '100%',
@@ -1400,6 +1497,9 @@ const styles = StyleSheet.create({
   genderOptionContainer: {
     padding: 20,
     gap: 12,
+  },
+  modalOptionContainer: {
+    padding: 20,
   },
   genderOption: {
     width: '100%',
