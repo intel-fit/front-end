@@ -33,6 +33,7 @@ const SignupScreen = ({navigation}: any) => {
     gender: '' as 'M' | 'F' | '',
     height: '',
     weight: '',
+    weightGoal: '', // 목표 체중
     healthConcern: '', // 헬스 고민
     healthGoal: '', // 헬스 목적
     workoutDaysPerWeek: '', // 주간 운동 횟수
@@ -193,6 +194,9 @@ const SignupScreen = ({navigation}: any) => {
     if (!formData.weight.trim()) return false;
     const weightNum = Number(formData.weight);
     if (weightNum < 30 || weightNum > 200) return false;
+    if (!formData.weightGoal.trim()) return false;
+    const weightGoalNum = Number(formData.weightGoal);
+    if (weightGoalNum < 30 || weightGoalNum > 200) return false;
     if (!formData.workoutDaysPerWeek) return false;
     return true;
   };
@@ -219,6 +223,12 @@ const SignupScreen = ({navigation}: any) => {
       newErrors.weight = '체중을 입력해주세요';
     } else if (Number(formData.weight) < 30 || Number(formData.weight) > 200) {
       newErrors.weight = '체중은 30-200kg 사이여야 합니다';
+    }
+
+    if (!formData.weightGoal.trim()) {
+      newErrors.weightGoal = '목표 체중을 입력해주세요';
+    } else if (Number(formData.weightGoal) < 30 || Number(formData.weightGoal) > 200) {
+      newErrors.weightGoal = '목표 체중은 30-200kg 사이여야 합니다';
     }
 
     if (!formData.workoutDaysPerWeek) {
@@ -331,6 +341,14 @@ const SignupScreen = ({navigation}: any) => {
     try {
       const birthDate = `${formData.birthYear}-${String(formData.birthMonth).padStart(2, '0')}-${String(formData.birthDay).padStart(2, '0')}`;
       
+      // workoutDaysPerWeek를 "1일", "2일" 형식으로 변환
+      const workoutDaysFormatted = formData.workoutDaysPerWeek ? `${formData.workoutDaysPerWeek}일` : '';
+      
+      // 유연성 향상, 체력증진, 자세교정은 빈 값으로 전송
+      const healthGoalValue = ['FLEXIBILITY', 'ENDURANCE', 'POSTURE'].includes(formData.healthGoal) 
+        ? '' 
+        : formData.healthGoal;
+      
       const signupData = {
         userId: formData.username,
         name: formData.name,
@@ -338,17 +356,18 @@ const SignupScreen = ({navigation}: any) => {
         password: formData.password,
         passwordConfirm: formData.confirmPassword,
         birthDate,
-        phoneNumber: '', // 피그마 디자인에 없지만 API 필수 필드
         verificationCode: formData.verificationCode,
+        agreePrivacy: agreedToPrivacy, // 개인정보 처리방침 동의
+        agreeTerms: agreedToTerms, // 서비스 이용약관 동의
         gender: formData.gender as 'M' | 'F',
         height: Number(formData.height),
         weight: Number(formData.weight),
-        weightGoal: Number(formData.weight), // 목표 체중은 현재 체중과 동일하게 설정
-        healthConcern: formData.healthConcern,
-        healthGoal: formData.healthGoal,
-        workoutDaysPerWeek: formData.workoutDaysPerWeek,
+        weightGoal: Number(formData.weightGoal),
+        healthGoal: healthGoalValue,
+        workoutDaysPerWeek: workoutDaysFormatted,
       };
 
+      console.log('회원가입 요청 데이터:', signupData);
       const response = await authAPI.signup(signupData);
       
       if (response.success) {
@@ -362,7 +381,22 @@ const SignupScreen = ({navigation}: any) => {
         }
       }
     } catch (error: any) {
-      const errorMessage = error.message || '회원가입에 실패했습니다';
+      console.error('회원가입 에러:', error);
+      console.error('에러 상태:', error.status);
+      console.error('에러 데이터:', error.data);
+      
+      let errorMessage = '회원가입에 실패했습니다';
+      
+      if (error.status === 500) {
+        errorMessage = error.data?.message || '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+      } else if (error.status === 400) {
+        errorMessage = error.data?.message || '입력 정보를 확인해주세요.';
+      } else if (error.status === 409) {
+        errorMessage = error.data?.message || '이미 사용 중인 아이디 또는 이메일입니다.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       if (Platform.OS === 'web') {
         window.alert(`회원가입 실패\n${errorMessage}`);
       } else {
@@ -835,10 +869,16 @@ const SignupScreen = ({navigation}: any) => {
                   activeOpacity={0.8}
                   style={styles.birthDateButtonContainer}
                   onPress={() => {
+                    // 기본값 설정: 선택된 값이 없으면 현재 연도 기준으로 설정
+                    const currentYear = new Date().getFullYear();
+                    const defaultYear = formData.birthYear || String(currentYear - 20);
+                    const defaultMonth = formData.birthMonth || '1';
+                    const defaultDay = formData.birthDay || '1';
+                    
                     setTempPickerValue({
-                      year: formData.birthYear,
-                      month: formData.birthMonth,
-                      day: formData.birthDay,
+                      year: defaultYear,
+                      month: defaultMonth,
+                      day: defaultDay,
                     });
                     setPickerModalVisible(true);
                   }}>
@@ -894,9 +934,22 @@ const SignupScreen = ({navigation}: any) => {
                         <Text style={styles.birthPickerLabelTop}>년</Text>
                         <Picker
                           selectedValue={tempPickerValue.year}
-                          onValueChange={value =>
-                            setTempPickerValue({...tempPickerValue, year: value})
-                          }
+                          onValueChange={value => {
+                            const newValue = {...tempPickerValue, year: value};
+                            // 연도 변경 시 일(day) 유효성 검사
+                            if (newValue.year && newValue.month) {
+                              const daysInMonth = new Date(
+                                Number(newValue.year),
+                                Number(newValue.month),
+                                0
+                              ).getDate();
+                              const currentDay = Number(newValue.day) || 1;
+                              if (currentDay > daysInMonth) {
+                                newValue.day = '1';
+                              }
+                            }
+                            setTempPickerValue(newValue);
+                          }}
                           style={styles.modalPicker}
                           itemStyle={styles.pickerItemStyle}>
                           {generateYearOptions().map(year => (
@@ -908,9 +961,22 @@ const SignupScreen = ({navigation}: any) => {
                         <Text style={styles.birthPickerLabelTop}>월</Text>
                         <Picker
                           selectedValue={tempPickerValue.month}
-                          onValueChange={value =>
-                            setTempPickerValue({...tempPickerValue, month: value})
-                          }
+                          onValueChange={value => {
+                            const newValue = {...tempPickerValue, month: value};
+                            // 월 변경 시 일(day) 유효성 검사
+                            if (newValue.year && newValue.month) {
+                              const daysInMonth = new Date(
+                                Number(newValue.year),
+                                Number(newValue.month),
+                                0
+                              ).getDate();
+                              const currentDay = Number(newValue.day) || 1;
+                              if (currentDay > daysInMonth) {
+                                newValue.day = '1';
+                              }
+                            }
+                            setTempPickerValue(newValue);
+                          }}
                           style={styles.modalPicker}
                           itemStyle={styles.pickerItemStyle}>
                           {generateMonthOptions().map(month => (
@@ -926,22 +992,33 @@ const SignupScreen = ({navigation}: any) => {
                         <Text style={styles.birthPickerLabelTop}>일</Text>
                         <Picker
                           selectedValue={tempPickerValue.day}
-                          onValueChange={value =>
-                            setTempPickerValue({...tempPickerValue, day: value})
-                          }
+                          onValueChange={value => {
+                            setTempPickerValue({...tempPickerValue, day: value});
+                          }}
                           style={styles.modalPicker}
                           itemStyle={styles.pickerItemStyle}>
-                          {(tempPickerValue.year && tempPickerValue.month
-                            ? (() => {
-                                const daysInMonth = new Date(
-                                  Number(tempPickerValue.year),
-                                  Number(tempPickerValue.month),
-                                  0,
-                                ).getDate();
-                                return Array.from({length: daysInMonth}, (_, i) => i + 1);
-                              })()
-                            : Array.from({length: 31}, (_, i) => i + 1)
-                          ).map(day => (
+                          {(() => {
+                            // 연도와 월이 모두 선택되어 있으면 해당 월의 일수 계산
+                            if (tempPickerValue.year && tempPickerValue.month) {
+                              const year = Number(tempPickerValue.year);
+                              const month = Number(tempPickerValue.month);
+                              // new Date(year, month, 0)는 해당 월의 마지막 날을 반환
+                              const daysInMonth = new Date(year, month, 0).getDate();
+                              const days = Array.from({length: daysInMonth}, (_, i) => i + 1);
+                              
+                              // 선택된 day가 유효한 범위를 벗어나면 1일로 초기화
+                              const currentDay = Number(tempPickerValue.day) || 1;
+                              if (currentDay > daysInMonth) {
+                                setTimeout(() => {
+                                  setTempPickerValue({...tempPickerValue, day: '1'});
+                                }, 0);
+                              }
+                              
+                              return days;
+                            }
+                            // 연도나 월이 없으면 31일까지 표시
+                            return Array.from({length: 31}, (_, i) => i + 1);
+                          })().map(day => (
                             <Picker.Item
                               key={day}
                               label={String(day).padStart(2, '0')}
@@ -1063,6 +1140,20 @@ const SignupScreen = ({navigation}: any) => {
                     <Text style={styles.errorMessage}>{errors.weight}</Text>
                   )}
                 </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="목표 체중"
+                  value={formData.weightGoal}
+                  onChangeText={text => handleChange('weightGoal', text)}
+                  keyboardType="number-pad"
+                  placeholderTextColor="rgba(255, 255, 255, 0.7)"
+                />
+                {errors.weightGoal && (
+                  <Text style={styles.errorMessage}>{errors.weightGoal}</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
