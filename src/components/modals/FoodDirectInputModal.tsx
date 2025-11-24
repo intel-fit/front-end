@@ -99,6 +99,29 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
     }
   }, [isOpen, initialFood]);
 
+  // 직접 입력 모드에서 baseNutritionRef 업데이트
+  const updateBaseNutritionForDirectInput = (weightValue?: number) => {
+    if (!initialFood) {
+      const currentWeight = weightValue !== undefined ? weightValue : Number(weight);
+      if (currentWeight > 0) {
+        const caloriesValue = Number(calories) || 0;
+        const carbsValue = Number(carbs) || 0;
+        const proteinValue = Number(protein) || 0;
+        const fatValue = Number(fat) || 0;
+        
+        baseNutritionRef.current = {
+          calories: caloriesValue,
+          carbs: carbsValue,
+          protein: proteinValue,
+          fat: fatValue,
+          weight: currentWeight,
+        };
+        // 인분도 업데이트
+        setPortion('1');
+      }
+    }
+  };
+
   // 중량/인분 변경 시 영양소 자동 계산
   const calculateNutrition = (newWeight: number) => {
     if (!baseNutritionRef.current || baseNutritionRef.current.weight === 0) {
@@ -108,17 +131,27 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
     const ratio = newWeight / baseNutritionRef.current.weight;
     
     setCalories(String(Math.round(baseNutritionRef.current.calories * ratio)));
-    setCarbs(String(Math.round(baseNutritionRef.current.carbs * ratio * 10) / 10));
-    setProtein(String(Math.round(baseNutritionRef.current.protein * ratio * 10) / 10));
-    setFat(String(Math.round(baseNutritionRef.current.fat * ratio * 10) / 10));
+    // 소수점 2자리까지 유지
+    setCarbs(String(Math.round(baseNutritionRef.current.carbs * ratio * 100) / 100));
+    setProtein(String(Math.round(baseNutritionRef.current.protein * ratio * 100) / 100));
+    setFat(String(Math.round(baseNutritionRef.current.fat * ratio * 100) / 100));
   };
 
   // 중량 변경 핸들러
   const handleWeightChange = (text: string) => {
     setWeight(text);
     const weightValue = Number(text);
-    if (weightValue > 0 && baseNutritionRef.current) {
+    
+    // 직접 입력 모드에서 중량을 입력하면 그게 1인분이 되도록 baseNutritionRef 설정
+    if (weightValue > 0 && !initialFood) {
+      // 직접 입력 모드: 사용자가 중량을 입력하면 그게 1인분 기준이 됨
+      updateBaseNutritionForDirectInput(weightValue);
+    } else if (weightValue > 0 && baseNutritionRef.current) {
+      // 검색에서 온 음식이거나 이미 baseNutritionRef가 설정된 경우
       calculateNutrition(weightValue);
+      // 인분도 자동 업데이트
+      const portionValue = weightValue / baseNutritionRef.current.weight;
+      setPortion(String(portionValue));
     }
   };
 
@@ -127,8 +160,9 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
     setPortion(text);
     const portionValue = Number(text);
     if (portionValue > 0 && baseNutritionRef.current) {
-      // 1인분 = 100g 가정
-      const newWeight = portionValue * 100;
+      // 1인분 = 음식의 실제 중량 (baseNutritionRef.current.weight)
+      const newWeight = portionValue * baseNutritionRef.current.weight;
+      setWeight(String(newWeight));
       calculateNutrition(newWeight);
     }
   };
@@ -137,15 +171,15 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
   const handleInputTypeChange = (type: 'weight' | 'portion') => {
     setInputType(type);
     
-    if (type === 'portion' && weight) {
-      // 중량 -> 인분 변환 (1인분 = 100g)
-      const portionValue = Number(weight) / 100;
+    if (type === 'portion' && weight && baseNutritionRef.current) {
+      // 중량 -> 인분 변환 (1인분 = 음식의 실제 중량)
+      const portionValue = Number(weight) / baseNutritionRef.current.weight;
       setPortion(String(portionValue));
-    } else if (type === 'weight' && portion) {
+    } else if (type === 'weight' && portion && baseNutritionRef.current) {
       // 인분 -> 중량 변환
-      const weightValue = Number(portion) * 100;
+      const weightValue = Number(portion) * baseNutritionRef.current.weight;
       setWeight(String(weightValue));
-      if (weightValue > 0 && baseNutritionRef.current) {
+      if (weightValue > 0) {
         calculateNutrition(weightValue);
       }
     }
@@ -171,8 +205,9 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
       return;
     }
 
-    // 인분을 중량으로 변환 (1인분 = 100g 가정, 필요시 조정)
-    const finalWeight = inputType === 'weight' ? weightValue : portionValue * 100;
+    // 인분을 중량으로 변환 (1인분 = 음식의 실제 중량)
+    const baseWeight = baseNutritionRef.current?.weight || 100; // 기본값 100g (직접 입력 모드에서 중량 미입력 시)
+    const finalWeight = inputType === 'weight' ? weightValue : portionValue * baseWeight;
 
     // 검색에서 온 음식이면 바로 저장, 직접 입력이면 API 호출
     if (initialFood && initialFood.id) {
@@ -289,7 +324,11 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
                   placeholder="0"
                   placeholderTextColor="rgba(255, 255, 255, 0.5)"
                   value={calories}
-                  onChangeText={setCalories}
+                  onChangeText={(text) => {
+                    setCalories(text);
+                    // 직접 입력 모드에서 중량이 입력되어 있으면 baseNutritionRef 업데이트
+                    updateBaseNutritionForDirectInput();
+                  }}
                   keyboardType="number-pad"
                   returnKeyType="done"
                   blurOnSubmit={true}
@@ -303,7 +342,10 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
                   placeholder="0"
                   placeholderTextColor="rgba(255, 255, 255, 0.5)"
                   value={carbs}
-                  onChangeText={setCarbs}
+                  onChangeText={(text) => {
+                    setCarbs(text);
+                    updateBaseNutritionForDirectInput();
+                  }}
                   keyboardType="number-pad"
                   returnKeyType="done"
                   blurOnSubmit={true}
@@ -321,7 +363,10 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
                   placeholder="0"
                   placeholderTextColor="rgba(255, 255, 255, 0.5)"
                   value={protein}
-                  onChangeText={setProtein}
+                  onChangeText={(text) => {
+                    setProtein(text);
+                    updateBaseNutritionForDirectInput();
+                  }}
                   keyboardType="number-pad"
                   returnKeyType="done"
                   blurOnSubmit={true}
@@ -335,7 +380,10 @@ const FoodDirectInputModal: React.FC<FoodDirectInputModalProps> = ({
                   placeholder="0"
                   placeholderTextColor="rgba(255, 255, 255, 0.5)"
                   value={fat}
-                  onChangeText={setFat}
+                  onChangeText={(text) => {
+                    setFat(text);
+                    updateBaseNutritionForDirectInput();
+                  }}
                   keyboardType="number-pad"
                   returnKeyType="done"
                   blurOnSubmit={true}

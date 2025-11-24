@@ -485,9 +485,14 @@ const SignupScreen = ({navigation}: any) => {
           <View style={styles.checkIcon}>
             <Text style={styles.checkIconText}>✓</Text>
           </View>
-          <Text style={styles.completeTitle}>
-            회원가입이 완료되었습니다{'\n\n'}INTELFIT과 함께 건강 관리를 시작해봐요!
-          </Text>
+          <View style={styles.completeTitleContainer}>
+            <Text style={styles.completeTitle}>
+              회원가입이 완료되었습니다
+            </Text>
+            <Text style={styles.completeSubtitle}>
+              INTELFIT과 함께 헬스 케어를 시작해봐요!
+            </Text>
+          </View>
           <TouchableOpacity
             style={styles.completeBtn}
             onPress={() => navigation.navigate('Login')}>
@@ -1632,13 +1637,24 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontWeight: 'bold',
   },
+  completeTitleContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
   completeTitle: {
     color: '#ffffff',
     fontSize: 20,
     fontWeight: '700',
     textAlign: 'center',
-    marginBottom: 40,
+    marginBottom: 12,
     lineHeight: 24.2,
+  },
+  completeSubtitle: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '400',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   completeBtn: {
     width: '100%',
