@@ -99,7 +99,6 @@ export const authAPI = {
     password: string;
     passwordConfirm: string;
     birthDate: string;
-    phoneNumber: string;
     verificationCode: string;
     gender: "M" | "F";
     height: number;
@@ -107,6 +106,8 @@ export const authAPI = {
     weightGoal: number;
     healthGoal: string;
     workoutDaysPerWeek?: string;
+    agreeTerms: boolean;
+    agreePrivacy: boolean;
   }): Promise<ApiResponse<{ userId: number }>> => {
     return request<ApiResponse<{ userId: number }>>("/api/users/signup", {
       method: "POST",
