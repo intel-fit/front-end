@@ -55,6 +55,7 @@ interface ExerciseApiResponse {
 
 const EXERCISE_API_URL = 'http://43.200.40.140/api/exercise-db';
 const WORKOUTS_API_URL = 'http://43.200.40.140/api/workouts';
+const SAVED_WORKOUTS_API_URL = `${WORKOUTS_API_URL}/saved`;
 
 export const fetchExercises = async (params: ExerciseApiParams = {}): Promise<ExerciseApiResponse> => {
   try {
@@ -137,12 +138,12 @@ export interface WorkoutSet {
 }
 
 export interface WorkoutSession {
-  sessionId: string;
+  sessionId?: string; // 서버에서 생성하므로 optional
   exerciseName: string;
   category: string;
   workoutDate: string; // ISO string
   sets: WorkoutSet[];
-  userId?: number | string;
+  userId: number | string; // 필수 필드
   exerciseId?: string; // externalId
   imageUrl?: string;
   exerciseImageUrl?: string;
@@ -181,6 +182,25 @@ export const fetchUserWorkouts = async (userId: string | number): Promise<Workou
 export const postWorkoutSession = async (payload: WorkoutSession): Promise<any> => {
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    
+    // 요청 페이로드 상세 로그
+    console.log('[WORKOUT][POST] API 요청:', {
+      url: WORKOUTS_API_URL,
+      method: 'POST',
+      payload: JSON.stringify(payload, null, 2),
+      payloadDetails: {
+        sessionId: payload.sessionId,
+        exerciseName: payload.exerciseName,
+        category: payload.category,
+        workoutDate: payload.workoutDate,
+        userId: payload.userId,
+        exerciseId: payload.exerciseId,
+        setsCount: payload.sets?.length || 0,
+        sets: payload.sets,
+      },
+      hasToken: !!token,
+    });
+    
     const response = await axios.post(WORKOUTS_API_URL, payload, {
       headers: {
         Authorization: `Bearer ${token || ''}`,
@@ -188,16 +208,27 @@ export const postWorkoutSession = async (payload: WorkoutSession): Promise<any> 
         Accept: 'application/json',
       },
     });
+    
+    console.log('[WORKOUT][POST] API 응답 성공:', {
+      status: response.status,
+      data: response.data,
+    });
+    
     return response.data;
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
-      console.error('운동 기록 저장 에러:', {
+      console.error('[WORKOUT][POST] API 에러 상세:', {
         message: error.message,
         status: error.response?.status,
-        data: error.response?.data,
+        statusText: error.response?.statusText,
+        errorCode: error.response?.data?.code,
+        errorMessage: error.response?.data?.message,
+        errorData: error.response?.data,
+        requestUrl: error.config?.url,
+        requestPayload: error.config?.data ? JSON.parse(error.config.data) : null,
       });
     } else {
-      console.error('운동 기록 저장 예외:', error);
+      console.error('[WORKOUT][POST] 예외:', error);
     }
     throw error;
   }
@@ -527,6 +558,128 @@ export const getTodayWorkoutTime = async (userId: number): Promise<GetTodayWorko
     }
     // 에러 발생 시 기본값 반환
     return { userId, totalSeconds: 0 };
+  }
+};
+
+// 운동 저장 제목 API
+export interface SaveWorkoutTitleRequest {
+  userId: number;
+  saveTitle: string;
+}
+
+export interface SaveWorkoutTitleResponse {
+  sessionId: string;
+  saveTitle: string;
+  updatedCount: number;
+}
+
+export const saveWorkoutTitle = async (
+  userId: number,
+  saveTitle: string
+): Promise<SaveWorkoutTitleResponse> => {
+  try {
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const url = `${WORKOUTS_API_URL}/save`;
+    const payload: SaveWorkoutTitleRequest = {
+      userId,
+      saveTitle,
+    };
+    console.log('[WORKOUT][SAVE] API 요청:', {
+      url,
+      method: 'POST',
+      payload,
+      hasToken: !!token,
+    });
+    
+    const response = await axios.post(url, payload, {
+      headers: {
+        Authorization: `Bearer ${token || ''}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+    });
+    
+    console.log('[WORKOUT][SAVE] API 응답 성공:', {
+      status: response.status,
+      data: response.data,
+      sessionId: response.data?.sessionId,
+      saveTitle: response.data?.saveTitle,
+      updatedCount: response.data?.updatedCount,
+    });
+    
+    // AI 피드백 전송 로그 (서버에서 자동 처리됨)
+    if (response.data?.updatedCount > 0) {
+      console.log('[WORKOUT][SAVE] AI 피드백 전송됨:', {
+        savedSets: response.data.updatedCount,
+        saveTitle: response.data.saveTitle,
+      });
+    }
+    
+    return response.data as SaveWorkoutTitleResponse;
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      console.error('[WORKOUT][SAVE] API 에러:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        url: error.config?.url,
+        payload: error.config?.data,
+      });
+    } else {
+      console.error('[WORKOUT][SAVE] 예외:', error);
+    }
+    throw error;
+  }
+};
+
+// 저장된 운동 기록 조회 API
+export interface SavedWorkoutRecord {
+  id: number;
+  setNumber: number;
+  weight: number;
+  reps: number;
+  category?: string;
+  exerciseName: string;
+  workoutDate: string;
+}
+
+export interface SavedWorkoutSession {
+  sessionId: string;
+  records: SavedWorkoutRecord[];
+}
+
+export interface SavedWorkoutGroup {
+  title: string;
+  sessions: SavedWorkoutSession[];
+}
+
+export const fetchSavedWorkouts = async (
+  userId: number
+): Promise<SavedWorkoutGroup[]> => {
+  try {
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const url = `${SAVED_WORKOUTS_API_URL}/${encodeURIComponent(userId)}`;
+    console.log('[WORKOUT][SAVED] 조회 요청:', url);
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token || ''}`,
+        Accept: 'application/json',
+      },
+    });
+    console.log('[WORKOUT][SAVED] 조회 응답:', response.data);
+    return Array.isArray(response.data) ? response.data : [];
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      console.error('[WORKOUT][SAVED] 조회 에러:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+    } else {
+      console.error('[WORKOUT][SAVED] 조회 예외:', error);
+    }
+    throw error;
   }
 };
 

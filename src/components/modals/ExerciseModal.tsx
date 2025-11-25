@@ -109,6 +109,8 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   const [isWorkoutTimerRunning, setIsWorkoutTimerRunning] = useState(false);
   const workoutTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prefetchedInstructionUrlsRef = useRef<Set<string>>(new Set());
+  // 이미지 로드 실패 추적 (URL을 키로 사용)
+  const [failedImageUrls, setFailedImageUrls] = useState<Set<string>>(new Set());
   const allSetsCompleted = useMemo(
     () => sets.length > 0 && sets.every((set) => set.isCompleted),
     [sets]
@@ -541,7 +543,24 @@ const getExerciseDisplayName = React.useCallback(
             availableBodyParts.sort()
           );
         }
-        setApiExercises(Array.isArray(res?.content) ? res.content : []);
+        const exercises = Array.isArray(res?.content) ? res.content : [];
+        
+        // 이미지 URL 확인 로그
+        if (__DEV__ && exercises.length > 0) {
+          console.log('[EXERCISE_MODAL] 운동 목록 로드:', {
+            count: exercises.length,
+            firstExercise: {
+              name: exercises[0]?.name,
+              imageUrl: exercises[0]?.imageUrl,
+              image: exercises[0]?.image,
+              imgUrl: exercises[0]?.imgUrl,
+              photoUrl: exercises[0]?.photoUrl,
+              thumbnailUrl: exercises[0]?.thumbnailUrl,
+            },
+          });
+        }
+        
+        setApiExercises(exercises);
       } catch (e: any) {
         console.error("❌ 운동 목록 불러오기 실패:", {
           message: e?.message,
@@ -1244,23 +1263,50 @@ const getExerciseDisplayName = React.useCallback(
                           </View>
                         )}
                         <View style={styles.exerciseIcon}>
-                          {ex.imageUrl || ex.image || ex.imgUrl || ex.photoUrl ? (
-                            <Image
-                              source={{
-                                uri:
-                                  ex.imageUrl ||
-                                  ex.image ||
-                                  ex.imgUrl ||
-                                  ex.photoUrl,
-                              }}
-                              style={styles.exerciseImage}
-                              resizeMode="cover"
-                            />
-                          ) : (
-                            <View style={styles.exerciseImagePlaceholder}>
-                              <Icon name="barbell" size={16} color="#666666" />
-                            </View>
-                          )}
+                          {(() => {
+                            const imageUrl =
+                              ex.imageUrl ||
+                              ex.image ||
+                              ex.imgUrl ||
+                              ex.photoUrl ||
+                              ex.thumbnailUrl;
+                            
+                            // 이미지 URL이 없거나 이미 로드 실패한 경우 placeholder 표시
+                            if (!imageUrl || failedImageUrls.has(imageUrl)) {
+                              return (
+                                <View style={styles.exerciseImagePlaceholder}>
+                                  <Icon name="barbell" size={16} color="#666666" />
+                                </View>
+                              );
+                            }
+                            
+                            return (
+                              <Image
+                                source={{ uri: imageUrl }}
+                                style={styles.exerciseImage}
+                                resizeMode="cover"
+                                onError={(error) => {
+                                  // 이미지 로드 실패 시 Set에 추가하여 다음 렌더링에서 placeholder 표시
+                                  setFailedImageUrls((prev) => new Set(prev).add(imageUrl));
+                                  if (__DEV__) {
+                                    console.warn('[EXERCISE_MODAL] 이미지 로드 실패:', {
+                                      exerciseName: ex.name,
+                                      imageUrl,
+                                      error: error.nativeEvent?.error,
+                                    });
+                                  }
+                                }}
+                                onLoad={() => {
+                                  if (__DEV__) {
+                                    console.log('[EXERCISE_MODAL] 이미지 로드 성공:', {
+                                      exerciseName: ex.name,
+                                      imageUrl,
+                                    });
+                                  }
+                                }}
+                              />
+                            );
+                          })()}
                         </View>
                         <View style={styles.exerciseInfo}>
                           <Text
@@ -1863,23 +1909,35 @@ const getExerciseDisplayName = React.useCallback(
                       onPress={() => handleExerciseSelect(ex)}
                     >
                       <View style={styles.exerciseIcon}>
-                        {ex.imageUrl || ex.image || ex.imgUrl || ex.photoUrl ? (
-                          <Image
-                            source={{
-                              uri:
-                                ex.imageUrl ||
-                                ex.image ||
-                                ex.imgUrl ||
-                                ex.photoUrl,
-                            }}
-                            style={styles.exerciseImage}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <View style={styles.exerciseImagePlaceholder}>
-                            <Icon name="barbell" size={16} color="#666666" />
-                          </View>
-                        )}
+                        {(() => {
+                          const imageUrl =
+                            ex.imageUrl ||
+                            ex.image ||
+                            ex.imgUrl ||
+                            ex.photoUrl ||
+                            ex.thumbnailUrl;
+                          
+                          // 이미지 URL이 없거나 이미 로드 실패한 경우 placeholder 표시
+                          if (!imageUrl || failedImageUrls.has(imageUrl)) {
+                            return (
+                              <View style={styles.exerciseImagePlaceholder}>
+                                <Icon name="barbell" size={16} color="#666666" />
+                              </View>
+                            );
+                          }
+                          
+                          return (
+                            <Image
+                              source={{ uri: imageUrl }}
+                              style={styles.exerciseImage}
+                              resizeMode="cover"
+                              onError={() => {
+                                // 이미지 로드 실패 시 Set에 추가하여 다음 렌더링에서 placeholder 표시
+                                setFailedImageUrls((prev) => new Set(prev).add(imageUrl));
+                              }}
+                            />
+                          );
+                        })()}
                       </View>
                       <View style={styles.exerciseInfo}>
                         <Text
