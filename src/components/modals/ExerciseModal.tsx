@@ -40,11 +40,23 @@ const createInitialSets = (): Set[] => [
   { id: Date.now() + 2, order: 3, weight: 20, reps: 12, isCompleted: false },
 ];
 
+const getExerciseKey = (exercise: any): string =>
+  exercise?.externalId ||
+  exercise?.id ||
+  exercise?.exerciseId ||
+  exercise?.code ||
+  exercise?.uuid ||
+  exercise?.name ||
+  String(exercise);
+
 interface ExerciseModalProps {
   isOpen: boolean;
   onClose: () => void;
   mode?: "add" | "edit";
   exerciseData?: any;
+  sequenceActivities?: any[];
+  sequenceIndex?: number;
+  onSequenceNavigate?: (direction: "prev" | "next") => void;
   onSave?: (
     sets: Set[],
     exerciseName: string,
@@ -61,9 +73,34 @@ interface ExerciseModalProps {
     name: string;
     targetMuscle?: string;
     imageUrl?: string;
+    externalId?: string;
+    activityId?: number;
+    sessionId?: string;
+    sets?: Set[];
+    allSetsCompleted?: boolean;
+    comment?: string;
   }>) => void;
+  onFeedbackUpdate?: (
+    exerciseName: string,
+    feedback: {
+      intensity: "heavy" | "light" | null;
+      feedback: "like" | "dislike" | null;
+    }
+  ) => void;
+  onSetChange?: (
+    exerciseName: string,
+    sets: Set[],
+    meta?: {
+      externalId?: string;
+      category?: string;
+      imageUrl?: string;
+      activityId?: number;
+      sessionId?: string;
+    }
+  ) => void;
   fullScreen?: boolean;
   renderContentOnly?: boolean;
+  isCompleted?: boolean; // 완료된 운동 열람용 (타이머 숨김, 세트 정보만 표시)
 }
 
 const ExerciseModal: React.FC<ExerciseModalProps> = ({
@@ -71,10 +108,16 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   onClose,
   mode = "add",
   exerciseData,
+  sequenceActivities,
+  sequenceIndex,
+  onSequenceNavigate,
   onSave,
   onWorkoutComplete,
+  onFeedbackUpdate,
+  onSetChange,
   fullScreen = false,
   renderContentOnly = false,
+  isCompleted = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("전체");
@@ -89,6 +132,32 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   const [instructionImageUrl, setInstructionImageUrl] = useState<string>("");
   const [comment, setComment] = useState<string>("");
   const [userName, setUserName] = useState<string>("Member");
+  const [showInstructionsSection, setShowInstructionsSection] =
+    useState<boolean>(false);
+
+  const getSequenceStoreKey = useCallback((exercise?: any) => {
+    if (!exercise) return null;
+    return (
+      exercise.id ??
+      exercise.exerciseId ??
+      exercise.sessionId ??
+      exercise.externalId ??
+      exercise.name ??
+      null
+    );
+  }, []);
+
+  const restoreSequenceSets = useCallback(
+    (exercise?: any) => {
+      const key = getSequenceStoreKey(exercise);
+      if (!key) return false;
+      const stored = sequenceSetsRef.current.get(key);
+      if (!stored) return false;
+      setSets(stored.map((set) => ({ ...set })));
+      return true;
+    },
+    [getSequenceStoreKey]
+  );
   // 추가한 모든 운동 리스트 관리
   const [addedExercises, setAddedExercises] = useState<Array<{
     exercise: any;
@@ -100,15 +169,85 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   }>>([]);
   // 현재 보고 있는 운동의 인덱스 (-1이면 새로 선택한 운동, 0 이상이면 추가한 운동 중 하나)
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState<number>(-1);
-  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
-  const [selectedSearchExercises, setSelectedSearchExercises] = useState<
-    Record<string, any>
-  >({});
+  const [selectedExerciseList, setSelectedExerciseList] = useState<any[]>([]);
+  const selectedExerciseKeys = useMemo(() => {
+    const keySet = new Set<string>();
+    selectedExerciseList.forEach((exercise) => {
+      const key = getExerciseKey(exercise);
+      if (key) keySet.add(key);
+    });
+    return keySet;
+  }, [selectedExerciseList]);
+  const selectedExerciseCount = selectedExerciseList.length;
   const [showExerciseListModal, setShowExerciseListModal] = useState(false);
   const [workoutTimerSeconds, setWorkoutTimerSeconds] = useState(0);
   const [isWorkoutTimerRunning, setIsWorkoutTimerRunning] = useState(false);
   const workoutTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sequenceSetsRef = useRef<Map<string | number, Set[]>>(new Map());
+  const emitSetChange = useCallback(
+    (updatedSets: Set[]) => {
+      if (!onSetChange) return;
+      const currentEx = selectedExercise || exerciseData;
+      if (!currentEx) return;
+      const exerciseName = getExerciseDisplayName(currentEx);
+      let activityId: number | undefined =
+        currentEx?.activityId || currentEx?.id;
+      let sessionId = currentEx?.sessionId;
+
+      if (
+        currentExerciseIndex >= 0 &&
+        currentExerciseIndex < addedExercises.length
+      ) {
+        const entry = addedExercises[currentExerciseIndex];
+        if (entry?.exercise) {
+          activityId =
+            entry.exercise?.activityId ||
+            entry.exercise?.id ||
+            activityId;
+          sessionId = entry.sessionId || entry.exercise?.sessionId || sessionId;
+        }
+      }
+
+      onSetChange(
+        exerciseName,
+        updatedSets,
+        {
+          externalId: currentEx.externalId,
+          category: currentEx.bodyPart || currentEx.category,
+          imageUrl:
+            currentEx.imageUrl ||
+            currentEx.image ||
+            currentEx.imgUrl ||
+            currentEx.photoUrl,
+          activityId,
+          sessionId,
+        }
+      );
+    },
+    [
+      onSetChange,
+      selectedExercise,
+      exerciseData,
+      currentExerciseIndex,
+      addedExercises,
+      getExerciseDisplayName,
+    ]
+  );
   const prefetchedInstructionUrlsRef = useRef<Set<string>>(new Set());
+  // 이미지 로드 실패 추적 (URL을 키로 사용)
+  const [failedImageUrls, setFailedImageUrls] = useState<Set<string>>(new Set());
+  // 운동별 피드백 상태 관리 (운동 이름을 키로 사용)
+  // intensity: "heavy" | "light" | null (무거워요/가벼워요/선택안함)
+  // feedback: "like" | "dislike" | null (좋아요/싫어요/선택안함)
+  const [exerciseFeedbacks, setExerciseFeedbacks] = useState<
+    Record<
+      string,
+      {
+        intensity: "heavy" | "light" | null;
+        feedback: "like" | "dislike" | null;
+      }
+    >
+  >({});
   const allSetsCompleted = useMemo(
     () => sets.length > 0 && sets.every((set) => set.isCompleted),
     [sets]
@@ -168,10 +307,10 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   }, [instructionImageUrl, selectedExercise, exerciseData, prefetchInstructionImage]);
 
   useEffect(() => {
-    if (isOpen && currentMode === "detail") {
+    if (isOpen && currentMode === "detail" && mode !== "edit" && !isCompleted) {
       startWorkoutTimer();
     }
-  }, [isOpen, currentMode, startWorkoutTimer]);
+  }, [isOpen, currentMode, mode, isCompleted, startWorkoutTimer]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -185,6 +324,25 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
       stopWorkoutTimer(true);
     };
   }, [stopWorkoutTimer]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      sequenceSetsRef.current.clear();
+    }
+  }, [isOpen]);
+
+  const cacheCurrentExerciseSets = useCallback(() => {
+    const key = getSequenceStoreKey(selectedExercise || exerciseData);
+    if (!key) return;
+    sequenceSetsRef.current.set(
+      key,
+      sets.map((set) => ({ ...set }))
+    );
+  }, [selectedExercise, exerciseData, sets, getSequenceStoreKey]);
+
+  useEffect(() => {
+    cacheCurrentExerciseSets();
+  }, [cacheCurrentExerciseSets]);
 
   useEffect(() => {
     // 유저명 가져오기
@@ -229,22 +387,34 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
         setInstructionText("");
         setInstructionImageUrl("");
         setShowInstructions(false);
+        setShowInstructionsSection(false);
       } else if (mode === "edit") {
         setCurrentMode("detail");
         setSelectedExercise(exerciseData);
         setAddedExercises([]);
         setCurrentExerciseIndex(-1);
+        let restored = false;
+        if (exerciseData) {
+          restored = restoreSequenceSets(exerciseData);
+        }
+        if (!restored) {
         if (exerciseData?.sets && exerciseData.sets.length > 0) {
-          const convertedSets: Set[] = exerciseData.sets.map((set: any, index: number) => ({
+            const convertedSets: Set[] = exerciseData.sets.map(
+              (set: any, index: number) => ({
             id: set.id || index + 1,
             order: set.order !== undefined ? set.order : index + 1,
             weight: set.weight || 0,
             reps: set.reps || 0,
-            isCompleted: set.isCompleted !== undefined ? set.isCompleted : (set.completed || false),
-          }));
+                isCompleted:
+                  set.isCompleted !== undefined
+                    ? set.isCompleted
+                    : set.completed || false,
+              })
+            );
           setSets(convertedSets);
         } else {
           setSets(createInitialSets());
+          }
         }
         setComment(exerciseData?.comment || "");
         if (exerciseData?.externalId) {
@@ -281,11 +451,12 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
       setInstructionText("");
       setInstructionImageUrl("");
       setShowInstructions(false);
+      setShowInstructionsSection(false);
       setAddedExercises([]);
       setCurrentExerciseIndex(-1);
       setSets(createInitialSets());
     }
-  }, [isOpen, mode, exerciseData, getExerciseDisplayName]);
+  }, [isOpen, mode, exerciseData, getExerciseDisplayName, restoreSequenceSets]);
 
   // 운동 상세 정보 자동 로드
   useEffect(() => {
@@ -314,6 +485,10 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
     }
   }, [currentMode, selectedExercise, exerciseData]);
 
+  useEffect(() => {
+    setShowInstructionsSection(false);
+  }, [selectedExercise, currentMode]);
+
   const categories = [
     "전체",
     "가슴",
@@ -325,11 +500,53 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
     "유산소",
   ];
 
-  const multiSelectCount = useMemo(
-    () => Object.keys(selectedSearchExercises).length,
-    [selectedSearchExercises]
+  const canUseMultiSelect = mode === "add";
+  const sequenceLength = Array.isArray(sequenceActivities)
+    ? sequenceActivities.length
+    : 0;
+  const hasSequenceControls =
+    sequenceLength > 0 &&
+    typeof sequenceIndex === "number" &&
+    sequenceIndex !== null &&
+    sequenceIndex >= 0 &&
+    sequenceIndex < sequenceLength;
+  const hasPrevSequence = hasSequenceControls && sequenceIndex! > 0;
+  const hasNextSequence =
+    hasSequenceControls && sequenceIndex! < sequenceLength - 1;
+
+  const isExerciseSelected = (exercise: any) => {
+    const key = getExerciseKey(exercise);
+    return key ? selectedExerciseKeys.has(key) : false;
+  };
+
+  const toggleExerciseSelection = (exercise: any) => {
+    if (!canUseMultiSelect) {
+      handleExerciseSelect(exercise);
+      return;
+    }
+    const key = getExerciseKey(exercise);
+    if (!key) return;
+    setSelectedExerciseList((prev) => {
+      const exists = prev.some(
+        (item) => getExerciseKey(item) === key
+      );
+      if (exists) {
+        return prev.filter(
+          (item) => getExerciseKey(item) !== key
+        );
+      }
+      return [...prev, exercise];
+    });
+  };
+
+  const handleSequenceNavigatePress = useCallback(
+    (direction: "prev" | "next") => {
+      cacheCurrentExerciseSets();
+      persistCurrentExerciseState();
+      onSequenceNavigate?.(direction);
+    },
+    [cacheCurrentExerciseSets, persistCurrentExerciseState, onSequenceNavigate]
   );
-  const canUseMultiSelect = currentMode === "add";
 
   // UI 카테고리 → API bodyPart 매핑 (서버가 다른 값을 사용할 수 있음)
   // 여러 후보 값을 시도하도록 수정
@@ -397,15 +614,6 @@ const getExerciseDisplayName = React.useCallback(
   },
   []
 );
-
-  const getExerciseKey = (ex: any) =>
-    ex?.externalId ||
-    ex?.id ||
-    ex?.exerciseId ||
-    ex?.code ||
-    ex?.uuid ||
-    getExerciseDisplayName(ex) ||
-    String(ex);
 
   // 실제 API bodyPart 값과 UI 카테고리 매핑 (자동 감지)
   const [bodyPartMapping, setBodyPartMapping] = useState<
@@ -487,14 +695,9 @@ const getExerciseDisplayName = React.useCallback(
 
   useEffect(() => {
     if (!isOpen) {
-      setIsMultiSelectMode(false);
-      setSelectedSearchExercises({});
+      setSelectedExerciseList([]);
     }
   }, [isOpen]);
-
-  useEffect(() => {
-    setSelectedSearchExercises({});
-  }, [searchTerm, selectedCategory]);
 
   const bodyPartParam = bodyPartMapping[selectedCategory] || "";
 
@@ -541,7 +744,46 @@ const getExerciseDisplayName = React.useCallback(
             availableBodyParts.sort()
           );
         }
-        setApiExercises(Array.isArray(res?.content) ? res.content : []);
+        const exercises = Array.isArray(res?.content) ? res.content : [];
+        
+        // 이미지 URL 확인 로그 (상세)
+        if (__DEV__ && exercises.length > 0) {
+          const firstEx = exercises[0];
+          const allImageFields = {
+            imageUrl: firstEx?.imageUrl,
+            image: firstEx?.image,
+            imgUrl: firstEx?.imgUrl,
+            photoUrl: firstEx?.photoUrl,
+            thumbnailUrl: firstEx?.thumbnailUrl,
+          };
+          const hasImageUrl = Object.values(allImageFields).some(v => v);
+          
+          console.log('[EXERCISE_MODAL] 운동 목록 로드:', {
+            count: exercises.length,
+            firstExercise: {
+              name: firstEx?.name,
+              externalId: firstEx?.externalId,
+              ...allImageFields,
+            },
+            hasImageUrl,
+            allFields: Object.keys(firstEx || {}), // 모든 필드 확인
+          });
+          
+          // 이미지 URL이 있는 운동과 없는 운동 개수 확인
+          const withImage = exercises.filter(ex => 
+            ex?.imageUrl || ex?.image || ex?.imgUrl || ex?.photoUrl || ex?.thumbnailUrl
+          ).length;
+          const withoutImage = exercises.length - withImage;
+          
+          console.log('[EXERCISE_MODAL] 이미지 URL 통계:', {
+            total: exercises.length,
+            withImage,
+            withoutImage,
+            percentage: `${Math.round((withImage / exercises.length) * 100)}%`,
+          });
+        }
+        
+        setApiExercises(exercises);
       } catch (e: any) {
         console.error("❌ 운동 목록 불러오기 실패:", {
           message: e?.message,
@@ -582,6 +824,7 @@ const getExerciseDisplayName = React.useCallback(
     );
     setSets(nextSets);
     syncCurrentExerciseSets(nextSets);
+    emitSetChange(nextSets);
   };
 
   const handleOrderChange = (setId: number, newOrder: number) => {
@@ -615,12 +858,15 @@ const getExerciseDisplayName = React.useCallback(
           console.error('[EXERCISE][TOGGLE] 세션 토글 실패:', error);
           // 실패 시 로컬 state 롤백
           setSets(sets);
+          return;
         }
       }
     } else if (currentEx) {
       // 새로 선택한 운동인 경우, 아직 저장되지 않았을 수 있음
       // 로컬 state만 업데이트 (이미 위에서 업데이트됨)
     }
+
+    emitSetChange(newSets);
   };
 
   const persistCurrentExerciseState = React.useCallback(() => {
@@ -669,6 +915,7 @@ const getExerciseDisplayName = React.useCallback(
     const nextSets = [...sets, newSet];
     setSets(nextSets);
     syncCurrentExerciseSets(nextSets);
+    emitSetChange(nextSets);
   };
 
   const handleRemoveSet = (setId: number) => {
@@ -681,6 +928,7 @@ const getExerciseDisplayName = React.useCallback(
         }));
       setSets(filtered);
       syncCurrentExerciseSets(filtered);
+      emitSetChange(filtered);
     }
   };
 
@@ -784,83 +1032,45 @@ const getExerciseDisplayName = React.useCallback(
     }
   };
 
-  const handleToggleMultiSelectMode = () => {
-    if (currentMode !== "add") {
-      return;
-    }
-    setIsMultiSelectMode((prev) => {
-      const next = !prev;
-      if (!next) {
-        setSelectedSearchExercises({});
-      }
-      return next;
-    });
-  };
-
-  const handleMultiSelectPick = (exercise: any) => {
-    const key = getExerciseKey(exercise);
-    if (!key) return;
-    setSelectedSearchExercises((prev) => {
-      const next = { ...prev };
-      if (next[key]) {
-        delete next[key];
-      } else {
-        next[key] = exercise;
-      }
-      return next;
-    });
-  };
-
-  const handleStartSelectedExercises = () => {
-    if (!canUseMultiSelect) return;
-    const selections = Object.values(selectedSearchExercises);
+  const handleStartSelectedExercises = async () => {
+    const selections = selectedExerciseList;
     if (selections.length === 0) {
       return;
     }
-    setIsMultiSelectMode(false);
-    setSelectedSearchExercises({});
-    const entries = selections.map((exercise) => ({
-      exercise,
-      sets: createInitialSets(),
-      comment: "",
-      instructionText: "",
-      instructionImageUrl: "",
-    }));
 
-    const prevLength = addedExercises.length;
-    setAddedExercises((prev) => [...prev, ...entries]);
+    if (!onSave) {
+      setSelectedExerciseList([]);
+      return;
+    }
 
-    const firstEntry = entries[0];
-    setSelectedExercise(firstEntry.exercise);
-    setCurrentMode("detail");
-    setCurrentExerciseIndex(prevLength);
-    setSets(firstEntry.sets);
-    setComment(firstEntry.comment || "");
-    setInstructionText(firstEntry.instructionText || "");
-    setInstructionImageUrl(firstEntry.instructionImageUrl || "");
-    setShowInstructions(!!firstEntry.instructionText);
+    try {
+      for (let i = 0; i < selections.length; i++) {
+        const exercise = selections[i];
+        const exerciseName = getExerciseDisplayName(exercise);
+        const isLast = i === selections.length - 1;
 
-    if (firstEntry.exercise?.externalId) {
-      setInstructionLoading(true);
-      fetchExerciseDetail(firstEntry.exercise.externalId)
-        .then((data: any) => {
-          const desc =
-            data?.description ||
-            data?.instructions ||
-            data?.howTo ||
-            data?.guide ||
-            data?.tip ||
-            "";
-          if (typeof desc === "string") {
-            setInstructionText(desc);
-            setShowInstructions(true);
-          }
-          if (data?.imageUrl) {
-            setInstructionImageUrl(data.imageUrl);
-          }
-        })
-        .catch(() => {})
-        .finally(() => setInstructionLoading(false));
+        await onSave(
+          createInitialSets(),
+          exerciseName,
+          {
+            externalId: exercise.externalId,
+            category: exercise.bodyPart || exercise.category,
+            imageUrl:
+              exercise.imageUrl ||
+              exercise.image ||
+              exercise.imgUrl ||
+              exercise.photoUrl,
+          },
+          "",
+          { keepModalOpen: !isLast, skipServerSave: true }
+        );
+      }
+
+      setSelectedExerciseList([]);
+      onClose();
+    } catch (error) {
+      console.error("[EXERCISE_MODAL] 선택한 운동 저장 실패:", error);
+      setSelectedExerciseList([]);
     }
   };
 
@@ -871,9 +1081,63 @@ const getExerciseDisplayName = React.useCallback(
     if (currentMode !== "detail") {
       return;
     }
+    cacheCurrentExerciseSets();
     persistCurrentExerciseState();
 
-    const snapshotExercises = addedExercises.map((item, idx) => {
+    // sequenceActivities가 있으면 그것을 사용, 없으면 addedExercises 사용
+    // 둘 다 비어있으면 현재 운동만 사용
+    let exercisesSource: Array<{
+      exercise: any;
+      sets: Set[];
+      comment: string;
+      instructionText: string;
+      instructionImageUrl: string;
+    }>;
+    
+    if (sequenceActivities && sequenceActivities.length > 0) {
+      exercisesSource = sequenceActivities.map((activity) => {
+        // sequenceSetsRef에서 최신 세트 가져오기
+        const key = getSequenceStoreKey(activity);
+        const storedSets = key ? sequenceSetsRef.current.get(key) : null;
+        return {
+          exercise: activity,
+          sets: storedSets || (activity.sets || createInitialSets()),
+          comment: activity.comment || "",
+          instructionText: "",
+          instructionImageUrl: "",
+        };
+      });
+    } else if (addedExercises && addedExercises.length > 0) {
+      exercisesSource = addedExercises;
+    } else {
+      // 둘 다 비어있으면 현재 운동만 사용
+      const currentEx = selectedExercise || exerciseData;
+      if (currentEx) {
+        const key = getSequenceStoreKey(currentEx);
+        const storedSets = key ? sequenceSetsRef.current.get(key) : null;
+        exercisesSource = [{
+          exercise: currentEx,
+          sets: storedSets || sets,
+          comment: comment || "",
+          instructionText: instructionText || "",
+          instructionImageUrl: instructionImageUrl || "",
+        }];
+      } else {
+        exercisesSource = [];
+      }
+    }
+    
+    console.log("[EXERCISE_MODAL] exercisesSource 개수:", exercisesSource.length);
+    console.log("[EXERCISE_MODAL] sequenceActivities 개수:", sequenceActivities?.length || 0);
+    console.log("[EXERCISE_MODAL] addedExercises 개수:", addedExercises.length);
+
+    // 모든 운동의 최신 세트를 sequenceSetsRef에서 가져와서 snapshotExercises 생성
+    const snapshotExercises = exercisesSource.map((item, idx) => {
+      // sequenceSetsRef에서 최신 세트 가져오기
+      const key = getSequenceStoreKey(item.exercise);
+      const storedSets = key ? sequenceSetsRef.current.get(key) : null;
+      const latestSets = storedSets || item.sets;
+      
       if (
         idx === currentExerciseIndex &&
         (selectedExercise || exerciseData) &&
@@ -888,7 +1152,11 @@ const getExerciseDisplayName = React.useCallback(
           instructionImageUrl,
         };
       }
-      return item;
+      // 현재 운동이 아니어도 최신 세트 사용
+      return {
+        ...item,
+        sets: latestSets.map((set) => ({ ...set })),
+      };
     });
 
     // 완료된 운동 목록 수집
@@ -897,17 +1165,30 @@ const getExerciseDisplayName = React.useCallback(
       sets: Set[];
       name: string;
       targetMuscle?: string;
+      activityId?: number;
+      sessionId?: string;
+      externalId?: string;
+      comment?: string;
     }> = [];
 
     // snapshotExercises의 모든 운동 추가
     snapshotExercises.forEach((item) => {
       const exerciseName = getExerciseDisplayName(item.exercise);
       const displayName = exerciseName;
+      // sequenceSetsRef에서 최신 세트 가져오기
+      const key = getSequenceStoreKey(item.exercise);
+      const storedSets = key ? sequenceSetsRef.current.get(key) : null;
+      const finalSets = storedSets || item.sets;
+      
       exercisesToSave.push({
         exercise: item.exercise,
-        sets: item.sets,
+        sets: finalSets,
         name: displayName,
         targetMuscle: item.exercise?.targetMuscle || item.exercise?.bodyPart,
+        activityId: item.exercise?.activityId || item.exercise?.id,
+        sessionId: item.exercise?.sessionId,
+        externalId: item.exercise?.externalId,
+        comment: item.comment,
       });
       
       // 각 운동을 저장
@@ -927,10 +1208,10 @@ const getExerciseDisplayName = React.useCallback(
             undefined,
         };
         const trimmedComment =
-          item.sets.every((s) => s.isCompleted) && item.comment?.trim().length > 0
+          finalSets.every((s) => s.isCompleted) && item.comment?.trim().length > 0
             ? item.comment.trim()
             : undefined;
-        const saveResult = onSave(item.sets, displayName, meta, trimmedComment);
+        const saveResult = onSave(finalSets, displayName, meta, trimmedComment);
         // sessionId 저장 (Promise인 경우 await)
         if (saveResult instanceof Promise) {
           saveResult.then((sessionId) => {
@@ -960,11 +1241,20 @@ const getExerciseDisplayName = React.useCallback(
       );
       
       if (!isAlreadyInList) {
+        // sequenceSetsRef에서 최신 세트 가져오기
+        const key = getSequenceStoreKey(currentEx);
+        const storedSets = key ? sequenceSetsRef.current.get(key) : null;
+        const finalSets = storedSets || sets;
+        
         exercisesToSave.push({
           exercise: currentEx,
-          sets: sets,
+          sets: finalSets,
           name: currentDisplayName,
           targetMuscle: currentEx?.targetMuscle || currentEx?.bodyPart,
+          activityId: currentEx?.activityId || currentEx?.id,
+          sessionId: currentEx?.sessionId,
+          externalId: currentEx?.externalId,
+          comment: comment,
         });
         
         // 현재 운동도 저장
@@ -1009,7 +1299,16 @@ const getExerciseDisplayName = React.useCallback(
     }
     
     // 완료된 운동 목록을 ExerciseScreen에 전달
+    // exercisesToSave에 모든 운동이 포함되어 있는지 확인
+    console.log("[EXERCISE_MODAL] exercisesToSave 개수:", exercisesToSave.length);
+    console.log("[EXERCISE_MODAL] addedExercises 개수:", addedExercises.length);
+    
     const exercisesForModal = exercisesToSave.map((ex) => {
+      const mappedSets = ex.sets?.map((set) => ({ ...set })) || [];
+      const allSetsCompleted =
+        Array.isArray(mappedSets) &&
+        mappedSets.length > 0 &&
+        mappedSets.every((set) => set?.isCompleted === true);
       return {
         name: ex.name,
         targetMuscle: ex.targetMuscle,
@@ -1018,8 +1317,18 @@ const getExerciseDisplayName = React.useCallback(
           ex.exercise?.image ||
           ex.exercise?.imgUrl ||
           ex.exercise?.photoUrl,
-        externalId: ex.exercise?.externalId,
+        externalId: ex.externalId || ex.exercise?.externalId,
+        activityId: ex.activityId ?? ex.exercise?.activityId ?? ex.exercise?.id,
+        sessionId: ex.sessionId || ex.exercise?.sessionId,
+        sets: mappedSets,
+        allSetsCompleted,
+        comment: ex.comment ?? ex.exercise?.comment,
       };
+    });
+    
+    console.log("[EXERCISE_MODAL] exercisesForModal 개수:", exercisesForModal.length);
+    exercisesForModal.forEach((ex, idx) => {
+      console.log(`[EXERCISE_MODAL] 운동 ${idx + 1}:`, ex.name, "세트:", ex.sets?.length, "완료:", ex.allSetsCompleted);
     });
     
     // 모든 운동 저장이 완료된 후 완료 모달 표시
@@ -1089,7 +1398,7 @@ const getExerciseDisplayName = React.useCallback(
                   <View style={styles.modalHeader}>
                     <View style={styles.headerLeft}>
                     </View>
-                    <Text style={styles.modalTitle}>종목 추가</Text>
+                    <Text style={styles.modalTitle}>운동 선택</Text>
                     <View style={styles.headerRight}>
                       <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                         <Icon name="close" size={12} color="#ffffff" />
@@ -1121,29 +1430,6 @@ const getExerciseDisplayName = React.useCallback(
                     value={searchTerm}
                     onChangeText={setSearchTerm}
                   />
-                </View>
-                <View style={styles.searchActionRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.multiSelectToggle,
-                      !canUseMultiSelect && styles.multiSelectToggleInactive,
-                      isMultiSelectMode && styles.multiSelectToggleActive,
-                    ]}
-                    onPress={handleToggleMultiSelectMode}
-                    activeOpacity={0.8}
-                    disabled={!canUseMultiSelect}
-                  >
-                    <Text
-                      style={[
-                        styles.multiSelectToggleText,
-                        isMultiSelectMode && styles.multiSelectToggleTextActive,
-                      ]}
-                    >
-                      {isMultiSelectMode
-                        ? `다중 선택 중 (${multiSelectCount})`
-                        : "다중 선택"}
-                    </Text>
-                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -1208,65 +1494,104 @@ const getExerciseDisplayName = React.useCallback(
                 {!loadingList &&
                   apiExercises.map((ex: any, index: number) => {
                     const key = ex.externalId || `${ex.name}-${index}`;
-                    const isSelected =
-                      !!selectedSearchExercises[getExerciseKey(ex)];
+                    const isSelected = isExerciseSelected(ex);
                     return (
                       <TouchableOpacity
                         key={key}
                         style={[
                           styles.exerciseItem,
-                          isMultiSelectMode && styles.exerciseItemSelectable,
-                          isMultiSelectMode &&
-                            isSelected &&
-                            styles.exerciseItemSelected,
+                          isSelected && styles.exerciseItemSelected,
                         ]}
-                        onPress={() =>
-                          isMultiSelectMode
-                            ? handleMultiSelectPick(ex)
-                            : handleExerciseSelect(ex)
-                        }
+                        onPress={() => toggleExerciseSelection(ex)}
                         activeOpacity={0.8}
                       >
-                        {isMultiSelectMode && (
-                          <View
-                            style={[
-                              styles.exerciseSelectBadge,
-                              isSelected && styles.exerciseSelectBadgeActive,
-                            ]}
-                          >
-                            <Icon
-                              name={
-                                isSelected ? "checkmark" : "add-outline"
-                              }
-                              size={14}
-                              color={isSelected ? "#0c0c0c" : "#d6ff4b"}
-                            />
-                          </View>
-                        )}
                         <View style={styles.exerciseIcon}>
-                          {ex.imageUrl || ex.image || ex.imgUrl || ex.photoUrl ? (
-                            <Image
-                              source={{
-                                uri:
+                          {(() => {
+                            const imageUrl =
                                   ex.imageUrl ||
                                   ex.image ||
                                   ex.imgUrl ||
-                                  ex.photoUrl,
-                              }}
-                              style={styles.exerciseImage}
-                              resizeMode="cover"
-                            />
-                          ) : (
+                              ex.photoUrl ||
+                              ex.thumbnailUrl;
+                            
+                            // 이미지 URL 존재 여부 확인 로그 (첫 번째 항목만)
+                            if (__DEV__ && index === 0) {
+                              console.log('[EXERCISE_MODAL] 첫 번째 운동 이미지 URL 확인:', {
+                                exerciseName: ex.name,
+                                hasImageUrl: !!imageUrl,
+                                imageUrl,
+                                imageFields: {
+                                  imageUrl: ex.imageUrl,
+                                  image: ex.image,
+                                  imgUrl: ex.imgUrl,
+                                  photoUrl: ex.photoUrl,
+                                  thumbnailUrl: ex.thumbnailUrl,
+                                },
+                                isFailed: failedImageUrls.has(imageUrl || ''),
+                              });
+                            }
+                            
+                            // 이미지 URL이 없는 경우
+                            if (!imageUrl) {
+                              if (__DEV__ && index < 3) {
+                                console.log('[EXERCISE_MODAL] 이미지 URL 없음:', {
+                                  exerciseName: ex.name,
+                                  externalId: ex.externalId,
+                                  allFields: Object.keys(ex),
+                                });
+                              }
+                              return (
                             <View style={styles.exerciseImagePlaceholder}>
                               <Icon name="barbell" size={16} color="#666666" />
                             </View>
-                          )}
+                              );
+                            }
+                            
+                            // 이미 로드 실패한 경우
+                            if (failedImageUrls.has(imageUrl)) {
+                              return (
+                                <View style={styles.exerciseImagePlaceholder}>
+                                  <Icon name="barbell" size={16} color="#666666" />
+                                </View>
+                              );
+                            }
+                            
+                            return (
+                              <Image
+                                source={{ uri: imageUrl }}
+                                style={styles.exerciseImage}
+                                resizeMode="cover"
+                                onError={(error) => {
+                                  // 이미지 로드 실패 시 Set에 추가하여 다음 렌더링에서 placeholder 표시
+                                  setFailedImageUrls((prev) => new Set(prev).add(imageUrl));
+                                  console.warn('[EXERCISE_MODAL] 이미지 로드 실패:', {
+                                    exerciseName: ex.name,
+                                    imageUrl,
+                                    error: error.nativeEvent?.error,
+                                    errorMessage: error.nativeEvent?.error?.message,
+                                  });
+                                }}
+                                onLoad={() => {
+                                  if (__DEV__) {
+                                    console.log('[EXERCISE_MODAL] 이미지 로드 성공:', {
+                                      exerciseName: ex.name,
+                                      imageUrl,
+                                    });
+                                  }
+                                }}
+                              />
+                            );
+                          })()}
                         </View>
                         <View style={styles.exerciseInfo}>
                           <Text
                             style={[
                               styles.exerciseName,
                               fullScreen && styles.exerciseNameLight,
+                              isSelected && styles.exerciseNameSelected,
+                              isSelected &&
+                                fullScreen &&
+                                styles.exerciseNameSelectedLight,
                             ]}
                             numberOfLines={1}
                             ellipsizeMode="tail"
@@ -1278,6 +1603,10 @@ const getExerciseDisplayName = React.useCallback(
                             style={[
                               styles.exerciseLastUsed,
                               fullScreen && styles.exerciseLastUsedLight,
+                              isSelected && styles.exerciseLastUsedSelected,
+                              isSelected &&
+                                fullScreen &&
+                                styles.exerciseLastUsedSelectedLight,
                             ]}
                             numberOfLines={1}
                             ellipsizeMode="tail"
@@ -1292,28 +1621,14 @@ const getExerciseDisplayName = React.useCallback(
                     );
                   })}
               </ScrollView>
-              {isMultiSelectMode && (
-                <View style={styles.multiSelectFooter}>
+              {selectedExerciseCount > 0 && (
+                <View style={[styles.multiSelectFooter, styles.multiSelectFooterRaised]}>
                   <TouchableOpacity
-                    style={[
-                      styles.multiSelectActionBtn,
-                      multiSelectCount === 0 &&
-                        styles.multiSelectActionBtnDisabled,
-                    ]}
-                    disabled={multiSelectCount === 0}
+                    style={styles.multiSelectActionBtn}
                     onPress={handleStartSelectedExercises}
                   >
-                    <Text
-                      style={[
-                        styles.multiSelectActionText,
-                        multiSelectCount === 0 &&
-                          styles.multiSelectActionTextDisabled,
-                      ]}
-                    >
-                      선택한 운동 시작하기
-                      {multiSelectCount > 0
-                        ? ` (${multiSelectCount})`
-                        : ""}
+                    <Text style={styles.multiSelectActionText}>
+                      선택 운동 추가하기 ({selectedExerciseCount})
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1364,16 +1679,7 @@ const getExerciseDisplayName = React.useCallback(
                               });
                           }
                         } else {
-                          setCurrentMode("add");
-                          setSelectedExercise(null);
-                          setCurrentExerciseIndex(-1);
-                          setSearchTerm("");
-                          setSelectedCategory("전체");
-                          setSets(createInitialSets());
-                          setComment("");
-                          setInstructionText("");
-                          setInstructionImageUrl("");
-                          setShowInstructions(false);
+                          onClose?.();
                         }
                       }} 
                       style={styles.backBtnTop}
@@ -1386,6 +1692,7 @@ const getExerciseDisplayName = React.useCallback(
                       )}
                     </Text>
                     <View style={styles.detailHeaderActions}>
+                      {!isCompleted && (
                       <TouchableOpacity
                         style={styles.headerIconBtn}
                         onPress={() => setShowExerciseListModal(true)}
@@ -1393,6 +1700,8 @@ const getExerciseDisplayName = React.useCallback(
                       >
                         <Icon name="menu-outline" size={20} color="#ffffff" />
                       </TouchableOpacity>
+                      )}
+                      {mode !== "edit" && !isCompleted && (
                       <TouchableOpacity
                         style={[
                           styles.timerBadge,
@@ -1410,6 +1719,7 @@ const getExerciseDisplayName = React.useCallback(
                           {formatWorkoutTimer(workoutTimerSeconds)}
                         </Text>
                       </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 </View>
@@ -1428,6 +1738,7 @@ const getExerciseDisplayName = React.useCallback(
                     </Text>
                   </View>
                   <View style={styles.headerRightRow}>
+                    {!isCompleted && (
                     <TouchableOpacity
                       style={styles.headerIconBtn}
                       onPress={() => setShowExerciseListModal(true)}
@@ -1435,6 +1746,8 @@ const getExerciseDisplayName = React.useCallback(
                     >
                       <Icon name="menu-outline" size={20} color="#ffffff" />
                     </TouchableOpacity>
+                    )}
+                    {mode !== "edit" && !isCompleted && (
                     <TouchableOpacity
                       style={[
                         styles.timerBadge,
@@ -1452,6 +1765,7 @@ const getExerciseDisplayName = React.useCallback(
                         {formatWorkoutTimer(workoutTimerSeconds)}
                       </Text>
                     </TouchableOpacity>
+                    )}
                     <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                       <Icon name="close" size={12} color="#ffffff" />
                     </TouchableOpacity>
@@ -1570,51 +1884,91 @@ const getExerciseDisplayName = React.useCallback(
                   )}
                 </View>
 
-                {/* 운동 방법 설명 - 항상 표시, 번호가 있는 리스트 형식 */}
+                {/* 운동 방법 설명 - 토글 가능 */}
                 <View style={styles.instructionBox}>
+                  <TouchableOpacity
+                    style={styles.instructionHeader}
+                    onPress={() =>
+                      setShowInstructionsSection((prev) => !prev)
+                    }
+                  >
                   <Text style={styles.instructionTitle}>운동 방법</Text>
+                    <Icon
+                      name={showInstructionsSection ? "chevron-up" : "chevron-down"}
+                      size={18}
+                      color="#ffffff"
+                    />
+                  </TouchableOpacity>
+                  {showInstructionsSection && (
+                    <>
                   {instructionLoading ? (
                     <Text style={styles.instructionText}>불러오는 중...</Text>
                   ) : (
                     <View style={styles.instructionList}>
                       {instructionText ? (
-                        instructionText.split('\n').filter(line => line.trim()).map((line, index) => {
-                          // Step:1, Step:2 형식 또는 1., 2. 형식 확인
-                          const stepMatch = line.match(/^Step:\s*(\d+)\s*(.+)$/i);
-                          const numberedMatch = line.match(/^(\d+)\.\s*(.+)$/);
+                            instructionText
+                              .split("\n")
+                              .filter((line) => line.trim())
+                              .map((line, index) => {
+                                const stepMatch =
+                                  line.match(/^Step:\s*(\d+)\s*(.+)$/i);
+                                const numberedMatch =
+                                  line.match(/^(\d+)\.\s*(.+)$/);
                           
                           if (stepMatch) {
                             return (
-                              <View key={index} style={styles.instructionItem}>
-                                <Text style={styles.instructionNumber}>Step: {stepMatch[1]}</Text>
+                                    <View
+                                      key={index}
+                                      style={styles.instructionItem}
+                                    >
+                                      <Text style={styles.instructionNumber}>
+                                        Step: {stepMatch[1]}
+                                      </Text>
                                 <View style={styles.instructionContent}>
-                                  <Text style={styles.instructionText}>{stepMatch[2]}</Text>
+                                        <Text style={styles.instructionText}>
+                                          {stepMatch[2]}
+                                        </Text>
                                 </View>
                               </View>
                             );
                           } else if (numberedMatch) {
                             return (
-                              <View key={index} style={styles.instructionItem}>
-                                <Text style={styles.instructionNumber}>{numberedMatch[1]}.</Text>
+                                    <View
+                                      key={index}
+                                      style={styles.instructionItem}
+                                    >
+                                      <Text style={styles.instructionNumber}>
+                                        {numberedMatch[1]}.
+                                      </Text>
                                 <View style={styles.instructionContent}>
-                                  <Text style={styles.instructionText}>{numberedMatch[2]}</Text>
+                                        <Text style={styles.instructionText}>
+                                          {numberedMatch[2]}
+                                        </Text>
                                 </View>
                               </View>
                             );
                           }
-                          // 번호 없이 내용만 있는 경우
                           return (
-                            <View key={index} style={styles.instructionItem}>
+                                  <View
+                                    key={index}
+                                    style={styles.instructionItem}
+                                  >
                               <View style={styles.instructionContent}>
-                                <Text style={styles.instructionText}>{line}</Text>
+                                      <Text style={styles.instructionText}>
+                                        {line}
+                                      </Text>
                               </View>
                             </View>
                           );
                         })
                       ) : (
-                        <Text style={styles.instructionText}>설명이 없습니다.</Text>
+                            <Text style={styles.instructionText}>
+                              설명이 없습니다.
+                            </Text>
                       )}
                     </View>
+                      )}
+                    </>
                   )}
                 </View>
 
@@ -1646,115 +2000,219 @@ const getExerciseDisplayName = React.useCallback(
                     ))}
                   </View>
 
-                  {allSetsCompleted && (
+                  {allSetsCompleted && (() => {
+                    const currentExerciseName = getExerciseDisplayName(
+                      selectedExercise || exerciseData || { name: "" }
+                    );
+                    const currentFeedback = exerciseFeedbacks[currentExerciseName] || {
+                      intensity: null,
+                      feedback: null,
+                    };
+
+                    const handleIntensityClick = (value: "heavy" | "light") => {
+                      setExerciseFeedbacks((prev) => {
+                        const newFeedback = {
+                          ...prev[currentExerciseName],
+                          intensity:
+                            prev[currentExerciseName]?.intensity === value
+                              ? null
+                              : value,
+                          feedback: prev[currentExerciseName]?.feedback || null,
+                        };
+                        const updated = {
+                          ...prev,
+                          [currentExerciseName]: newFeedback,
+                        };
+                        // ExerciseScreen에 피드백 업데이트 전달
+                        if (onFeedbackUpdate) {
+                          onFeedbackUpdate(currentExerciseName, newFeedback);
+                        }
+                        return updated;
+                      });
+                    };
+
+                    const handleFeedbackClick = (value: "like" | "dislike") => {
+                      setExerciseFeedbacks((prev) => {
+                        const newFeedback = {
+                          ...prev[currentExerciseName],
+                          intensity: prev[currentExerciseName]?.intensity || null,
+                          feedback:
+                            prev[currentExerciseName]?.feedback === value
+                              ? null
+                              : value,
+                        };
+                        const updated = {
+                          ...prev,
+                          [currentExerciseName]: newFeedback,
+                        };
+                        // ExerciseScreen에 피드백 업데이트 전달
+                        if (onFeedbackUpdate) {
+                          onFeedbackUpdate(currentExerciseName, newFeedback);
+                        }
+                        return updated;
+                      });
+                    };
+
+                    if (isCompleted) {
+                      return null;
+                    }
+                    if (isCompleted) {
+                      return null;
+                    }
+                    return (
                     <View style={styles.feedbackSection}>
                       <Text style={styles.feedbackTitle}>이 운동 어땠나요?</Text>
                       <View style={styles.feedbackButtonsRow}>
-                        <TouchableOpacity style={styles.feedbackButton}>
-                          <Text style={styles.feedbackButtonText}>버튼 1</Text>
+                          <TouchableOpacity
+                            style={[
+                              styles.feedbackButton,
+                              currentFeedback.intensity === "heavy" &&
+                                styles.feedbackButtonSelected,
+                            ]}
+                            onPress={() => handleIntensityClick("heavy")}
+                          >
+                            <Text
+                              style={[
+                                styles.feedbackButtonText,
+                                currentFeedback.intensity === "heavy" &&
+                                  styles.feedbackButtonTextSelected,
+                              ]}
+                            >
+                              무거워요
+                            </Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.feedbackButton}>
-                          <Text style={styles.feedbackButtonText}>버튼 2</Text>
+                          <TouchableOpacity
+                            style={[
+                              styles.feedbackButton,
+                              currentFeedback.intensity === "light" &&
+                                styles.feedbackButtonSelected,
+                            ]}
+                            onPress={() => handleIntensityClick("light")}
+                          >
+                            <Text
+                              style={[
+                                styles.feedbackButtonText,
+                                currentFeedback.intensity === "light" &&
+                                  styles.feedbackButtonTextSelected,
+                              ]}
+                            >
+                              가벼워요
+                            </Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.feedbackButton}>
-                          <Text style={styles.feedbackButtonText}>버튼 3</Text>
+                          <TouchableOpacity
+                            style={[
+                              styles.feedbackButton,
+                              currentFeedback.feedback === "like" &&
+                                styles.feedbackButtonSelected,
+                            ]}
+                            onPress={() => handleFeedbackClick("like")}
+                          >
+                            <Text
+                              style={[
+                                styles.feedbackButtonText,
+                                currentFeedback.feedback === "like" &&
+                                  styles.feedbackButtonTextSelected,
+                              ]}
+                            >
+                              좋아요
+                            </Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.feedbackButton}>
-                          <Text style={styles.feedbackButtonText}>버튼 4</Text>
+                          <TouchableOpacity
+                            style={[
+                              styles.feedbackButton,
+                              currentFeedback.feedback === "dislike" &&
+                                styles.feedbackButtonSelected,
+                            ]}
+                            onPress={() => handleFeedbackClick("dislike")}
+                          >
+                            <Text
+                              style={[
+                                styles.feedbackButtonText,
+                                currentFeedback.feedback === "dislike" &&
+                                  styles.feedbackButtonTextSelected,
+                              ]}
+                            >
+                              싫어요
+                            </Text>
                         </TouchableOpacity>
                       </View>
                     </View>
-                  )}
+                    );
+                  })()}
 
-                  <View style={styles.addButtonsRow}>
+                  <View style={styles.addSetButtonWrapper}>
                     <TouchableOpacity
-                      style={styles.addSetButton}
+                      style={styles.addSetCircleButton}
                       onPress={handleAddSet}
+                      activeOpacity={0.85}
                     >
-                      <Text style={styles.addSetButtonText}>세트 추가</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.addExerciseButton}
-                      onPress={() => {
-                        const currentEx = selectedExercise || exerciseData;
-                        if (currentEx) {
-                          let newIndex = currentExerciseIndex;
-                          if (currentExerciseIndex === -1 || currentExerciseIndex >= addedExercises.length) {
-                            newIndex = addedExercises.length;
-                            setAddedExercises((prev) => [
-                              ...prev,
-                              {
-                                exercise: currentEx,
-                                sets: [...sets],
-                                comment: comment,
-                                instructionText: instructionText,
-                                instructionImageUrl: instructionImageUrl,
-                              },
-                            ]);
-                          } else {
-                            setAddedExercises((prev) => {
-                              const updated = [...prev];
-                              updated[currentExerciseIndex] = {
-                                exercise: currentEx,
-                                sets: [...sets],
-                                comment: comment,
-                                instructionText: instructionText,
-                                instructionImageUrl: instructionImageUrl,
-                              };
-                              return updated;
-                            });
-                            newIndex = currentExerciseIndex;
-                          }
-                          setCurrentExerciseIndex(newIndex);
-                        }
-                        
-                        const exerciseName = onSave ? getExerciseDisplayName(currentEx || { name: "운동" }) : "";
-                        const displayName = exerciseName;
-                        const meta = currentEx?.externalId
-                          ? {
-                              externalId: currentEx.externalId,
-                              category:
-                                currentEx.category ||
-                                currentEx.bodyPart ||
-                                currentEx.targetMuscle,
-                              imageUrl:
-                                currentEx.imageUrl ||
-                                currentEx.image ||
-                                currentEx.imgUrl ||
-                                currentEx.photoUrl ||
-                                undefined,
-                            }
-                          : undefined;
-                        const trimmedComment =
-                          allSetsCompleted && comment.trim().length > 0
-                            ? comment.trim()
-                            : undefined;
-                        
-                        setCurrentMode("add");
-                        setSelectedExercise(null);
-                        setSearchTerm("");
-                        setSelectedCategory("전체");
-                        setSets(createInitialSets());
-                        setComment("");
-                        setInstructionText("");
-                        setInstructionImageUrl("");
-                        setShowInstructions(false);
-                        
-                        if (onSave && currentEx) {
-                          requestAnimationFrame(() => {
-                            onSave(sets, displayName, meta, trimmedComment, { keepModalOpen: true });
-                          });
-                        }
-                      }}
-                    >
-                      <Text style={styles.addExerciseButtonText}>종목 추가</Text>
+                      <Icon name="add" size={22} color="#0c0c0c" />
                     </TouchableOpacity>
                   </View>
                 </View>
                 </ScrollView>
               </KeyboardAvoidingView>
 
-              <View style={styles.footer}>
+              <View
+                style={[
+                  styles.footer,
+                  hasSequenceControls && styles.footerExtended,
+                ]}
+              >
+                {hasSequenceControls && (
+                  <View style={styles.sequenceControlRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.sequenceControlButton,
+                        !hasPrevSequence && styles.sequenceControlButtonDisabled,
+                      ]}
+                      onPress={() => handleSequenceNavigatePress("prev")}
+                      disabled={!hasPrevSequence}
+                    >
+                      <Text
+                        style={[
+                          styles.sequenceControlText,
+                          !hasPrevSequence && styles.sequenceControlTextDisabled,
+                        ]}
+                      >
+                        이전 운동
+                      </Text>
+                    </TouchableOpacity>
+                    {!isCompleted && (
+                      <TouchableOpacity
+                        style={[styles.sequenceControlButton, styles.sequenceTimerButton]}
+                        onPress={toggleWorkoutTimer}
+                      >
+                        <Text style={styles.sequenceTimerLabel}>타이머</Text>
+                        <Text
+                          style={[
+                            styles.sequenceTimerValue,
+                            !isWorkoutTimerRunning && styles.sequenceTimerValuePaused,
+                          ]}
+                        >
+                          {formatWorkoutTimer(workoutTimerSeconds)}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={[
+                        styles.sequenceControlButton,
+                        !hasNextSequence && styles.sequenceControlButtonDisabled,
+                      ]}
+                      onPress={() => handleSequenceNavigatePress("next")}
+                      disabled={!hasNextSequence}
+                    >
+                      <Text
+                        style={[
+                          styles.sequenceControlText,
+                          !hasNextSequence && styles.sequenceControlTextDisabled,
+                        ]}
+                      >
+                        다음 운동
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
                 <TouchableOpacity
                   style={styles.endWorkoutBtn}
                   onPress={handleSave}
@@ -1856,34 +2314,56 @@ const getExerciseDisplayName = React.useCallback(
                   </View>
                 )}
                 {!loadingList &&
-                  apiExercises.map((ex: any, index: number) => (
+                  apiExercises.map((ex: any, index: number) => {
+                    const key = ex.externalId || `${ex.name}-${index}`;
+                    const isSelected = isExerciseSelected(ex);
+                    return (
                     <TouchableOpacity
-                      key={ex.externalId || `${ex.name}-${index}`}
-                      style={styles.exerciseItem}
-                      onPress={() => handleExerciseSelect(ex)}
+                        key={key}
+                        style={[
+                          styles.exerciseItem,
+                          isSelected && styles.exerciseItemSelected,
+                        ]}
+                        onPress={() => toggleExerciseSelection(ex)}
+                        activeOpacity={0.8}
                     >
                       <View style={styles.exerciseIcon}>
-                        {ex.imageUrl || ex.image || ex.imgUrl || ex.photoUrl ? (
-                          <Image
-                            source={{
-                              uri:
+                        {(() => {
+                          const imageUrl =
                                 ex.imageUrl ||
                                 ex.image ||
                                 ex.imgUrl ||
-                                ex.photoUrl,
-                            }}
+                            ex.photoUrl ||
+                            ex.thumbnailUrl;
+                          
+                          // 이미지 URL이 없거나 이미 로드 실패한 경우 placeholder 표시
+                          if (!imageUrl || failedImageUrls.has(imageUrl)) {
+                            return (
+                              <View style={styles.exerciseImagePlaceholder}>
+                                <Icon name="barbell" size={16} color="#666666" />
+                              </View>
+                            );
+                          }
+                          
+                          return (
+                            <Image
+                              source={{ uri: imageUrl }}
                             style={styles.exerciseImage}
                             resizeMode="cover"
-                          />
-                        ) : (
-                          <View style={styles.exerciseImagePlaceholder}>
-                            <Icon name="barbell" size={16} color="#666666" />
-                          </View>
-                        )}
+                              onError={() => {
+                                // 이미지 로드 실패 시 Set에 추가하여 다음 렌더링에서 placeholder 표시
+                                setFailedImageUrls((prev) => new Set(prev).add(imageUrl));
+                              }}
+                            />
+                          );
+                        })()}
                       </View>
                       <View style={styles.exerciseInfo}>
                         <Text
-                          style={styles.exerciseName}
+                          style={[
+                            styles.exerciseName,
+                            isSelected && styles.exerciseNameSelected,
+                          ]}
                           numberOfLines={1}
                           ellipsizeMode="tail"
                           allowFontScaling={false}
@@ -1891,7 +2371,10 @@ const getExerciseDisplayName = React.useCallback(
                           {getExerciseDisplayName(ex)}
                         </Text>
                         <Text
-                          style={styles.exerciseLastUsed}
+                          style={[
+                            styles.exerciseLastUsed,
+                            isSelected && styles.exerciseLastUsedSelected,
+                          ]}
                           numberOfLines={1}
                           ellipsizeMode="tail"
                           allowFontScaling={false}
@@ -1902,8 +2385,26 @@ const getExerciseDisplayName = React.useCallback(
                         </Text>
                       </View>
                     </TouchableOpacity>
-                  ))}
+                  );
+                })}
               </ScrollView>
+              {selectedExerciseCount > 0 && (
+                <View
+                  style={[
+                    styles.multiSelectFooter,
+                    styles.multiSelectFooterRaised,
+                  ]}
+                >
+                  <TouchableOpacity
+                    style={styles.multiSelectActionBtn}
+                    onPress={handleStartSelectedExercises}
+                  >
+                    <Text style={styles.multiSelectActionText}>
+                      선택 운동 추가하기 ({selectedExerciseCount})
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
               </View>
             </KeyboardAvoidingView>
           ) : (
@@ -1922,6 +2423,7 @@ const getExerciseDisplayName = React.useCallback(
                     </Text>
                   </View>
                   <View style={styles.headerRightRow}>
+                    {!isCompleted && (
                     <TouchableOpacity
                       style={styles.headerIconBtn}
                       onPress={() => setShowExerciseListModal(true)}
@@ -1929,12 +2431,15 @@ const getExerciseDisplayName = React.useCallback(
                     >
                       <Icon name="menu-outline" size={20} color="#ffffff" />
                     </TouchableOpacity>
+                    )}
+                    {mode !== "edit" && !isCompleted && (
                     <View style={styles.timerBadge}>
                       <Icon name="time-outline" size={16} color="#ffffff" />
                       <Text style={styles.timerBadgeText}>
                         {formatWorkoutTimer(workoutTimerSeconds)}
                       </Text>
                     </View>
+                    )}
                     <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                       <Icon name="close" size={12} color="#ffffff" />
                     </TouchableOpacity>
@@ -2046,107 +2551,147 @@ const getExerciseDisplayName = React.useCallback(
                     ))}
                   </View>
 
-                  {allSetsCompleted && (
+                  {allSetsCompleted && (() => {
+                    const currentExerciseName = getExerciseDisplayName(
+                      selectedExercise || exerciseData || { name: "" }
+                    );
+                    const currentFeedback = exerciseFeedbacks[currentExerciseName] || {
+                      intensity: null,
+                      feedback: null,
+                    };
+
+                    const handleIntensityClick = (value: "heavy" | "light") => {
+                      setExerciseFeedbacks((prev) => {
+                        const newFeedback = {
+                          ...prev[currentExerciseName],
+                          intensity:
+                            prev[currentExerciseName]?.intensity === value
+                              ? null
+                              : value,
+                          feedback: prev[currentExerciseName]?.feedback || null,
+                        };
+                        const updated = {
+                          ...prev,
+                          [currentExerciseName]: newFeedback,
+                        };
+                        // ExerciseScreen에 피드백 업데이트 전달
+                        if (onFeedbackUpdate) {
+                          onFeedbackUpdate(currentExerciseName, newFeedback);
+                        }
+                        return updated;
+                      });
+                    };
+
+                    const handleFeedbackClick = (value: "like" | "dislike") => {
+                      setExerciseFeedbacks((prev) => {
+                        const newFeedback = {
+                          ...prev[currentExerciseName],
+                          intensity: prev[currentExerciseName]?.intensity || null,
+                          feedback:
+                            prev[currentExerciseName]?.feedback === value
+                              ? null
+                              : value,
+                        };
+                        const updated = {
+                          ...prev,
+                          [currentExerciseName]: newFeedback,
+                        };
+                        // ExerciseScreen에 피드백 업데이트 전달
+                        if (onFeedbackUpdate) {
+                          onFeedbackUpdate(currentExerciseName, newFeedback);
+                        }
+                        return updated;
+                      });
+                    };
+
+                    return (
                     <View style={styles.feedbackSection}>
                       <Text style={styles.feedbackTitle}>이 운동 어땠나요?</Text>
                       <View style={styles.feedbackButtonsRow}>
-                        <TouchableOpacity style={styles.feedbackButton}>
-                          <Text style={styles.feedbackButtonText}>버튼 1</Text>
+                          <TouchableOpacity
+                            style={[
+                              styles.feedbackButton,
+                              currentFeedback.intensity === "heavy" &&
+                                styles.feedbackButtonSelected,
+                            ]}
+                            onPress={() => handleIntensityClick("heavy")}
+                          >
+                            <Text
+                              style={[
+                                styles.feedbackButtonText,
+                                currentFeedback.intensity === "heavy" &&
+                                  styles.feedbackButtonTextSelected,
+                              ]}
+                            >
+                              무거워요
+                            </Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.feedbackButton}>
-                          <Text style={styles.feedbackButtonText}>버튼 2</Text>
+                          <TouchableOpacity
+                            style={[
+                              styles.feedbackButton,
+                              currentFeedback.intensity === "light" &&
+                                styles.feedbackButtonSelected,
+                            ]}
+                            onPress={() => handleIntensityClick("light")}
+                          >
+                            <Text
+                              style={[
+                                styles.feedbackButtonText,
+                                currentFeedback.intensity === "light" &&
+                                  styles.feedbackButtonTextSelected,
+                              ]}
+                            >
+                              가벼워요
+                            </Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.feedbackButton}>
-                          <Text style={styles.feedbackButtonText}>버튼 3</Text>
+                          <TouchableOpacity
+                            style={[
+                              styles.feedbackButton,
+                              currentFeedback.feedback === "like" &&
+                                styles.feedbackButtonSelected,
+                            ]}
+                            onPress={() => handleFeedbackClick("like")}
+                          >
+                            <Text
+                              style={[
+                                styles.feedbackButtonText,
+                                currentFeedback.feedback === "like" &&
+                                  styles.feedbackButtonTextSelected,
+                              ]}
+                            >
+                              좋아요
+                            </Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.feedbackButton}>
-                          <Text style={styles.feedbackButtonText}>버튼 4</Text>
+                          <TouchableOpacity
+                            style={[
+                              styles.feedbackButton,
+                              currentFeedback.feedback === "dislike" &&
+                                styles.feedbackButtonSelected,
+                            ]}
+                            onPress={() => handleFeedbackClick("dislike")}
+                          >
+                            <Text
+                              style={[
+                                styles.feedbackButtonText,
+                                currentFeedback.feedback === "dislike" &&
+                                  styles.feedbackButtonTextSelected,
+                              ]}
+                            >
+                              싫어요
+                            </Text>
                         </TouchableOpacity>
                       </View>
                     </View>
-                  )}
+                    );
+                  })()}
 
-                  <View style={styles.addButtonsRow}>
+                  <View style={styles.addSetButtonWrapper}>
                     <TouchableOpacity
-                      style={styles.addSetButton}
+                      style={styles.addSetCircleButton}
                       onPress={handleAddSet}
+                      activeOpacity={0.85}
                     >
-                      <Text style={styles.addSetButtonText}>세트 추가</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.addExerciseButton}
-                      onPress={() => {
-                        const currentEx = selectedExercise || exerciseData;
-                        if (currentEx) {
-                          let newIndex = currentExerciseIndex;
-                          if (currentExerciseIndex === -1 || currentExerciseIndex >= addedExercises.length) {
-                            newIndex = addedExercises.length;
-                            setAddedExercises((prev) => [
-                              ...prev,
-                              {
-                                exercise: currentEx,
-                                sets: [...sets],
-                                comment: comment,
-                                instructionText: instructionText,
-                                instructionImageUrl: instructionImageUrl,
-                              },
-                            ]);
-                          } else {
-                            setAddedExercises((prev) => {
-                              const updated = [...prev];
-                              updated[currentExerciseIndex] = {
-                                exercise: currentEx,
-                                sets: [...sets],
-                                comment: comment,
-                                instructionText: instructionText,
-                                instructionImageUrl: instructionImageUrl,
-                              };
-                              return updated;
-                            });
-                            newIndex = currentExerciseIndex;
-                          }
-                          setCurrentExerciseIndex(newIndex);
-                        }
-                        
-                        const exerciseName = onSave ? getExerciseDisplayName(currentEx || { name: "운동" }) : "";
-                        const meta = currentEx?.externalId
-                          ? {
-                              externalId: currentEx.externalId,
-                              category:
-                                currentEx.category ||
-                                currentEx.bodyPart ||
-                                currentEx.targetMuscle,
-                              imageUrl:
-                                currentEx.imageUrl ||
-                                currentEx.image ||
-                                currentEx.imgUrl ||
-                                currentEx.photoUrl ||
-                                undefined,
-                            }
-                          : undefined;
-                        const trimmedComment =
-                          allSetsCompleted && comment.trim().length > 0
-                            ? comment.trim()
-                            : undefined;
-                        
-                        setCurrentMode("add");
-                        setSelectedExercise(null);
-                        setSearchTerm("");
-                        setSelectedCategory("전체");
-                        setSets(createInitialSets());
-                        setComment("");
-                        setInstructionText("");
-                        setInstructionImageUrl("");
-                        setShowInstructions(false);
-                        
-                        if (onSave && currentEx) {
-                          requestAnimationFrame(() => {
-                            onSave(sets, exerciseName, meta, trimmedComment, { keepModalOpen: true });
-                          });
-                        }
-                      }}
-                    >
-                      <Text style={styles.addExerciseButtonText}>종목 추가</Text>
+                      <Icon name="add" size={22} color="#0c0c0c" />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -2299,14 +2844,16 @@ const styles = StyleSheet.create({
   fullScreenHeader: {
     paddingHorizontal: 20,
     backgroundColor: "#0c0c0c",
+    paddingTop: 6,
+    paddingBottom: 2,
   },
   fullScreenHeaderAdd: {
-    paddingTop: 28,
-    paddingBottom: 6,
+    paddingTop: 10,
+    paddingBottom: 4,
   },
   fullScreenHeaderDetail: {
-    paddingTop: 28,
-    paddingBottom: 6,
+    paddingTop: 10,
+    paddingBottom: 4,
   },
   backBtnTop: {
     width: 40,
@@ -2344,7 +2891,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     marginHorizontal: 10,
-    paddingTop: 16,
+    paddingTop: 10,
     marginTop: 0,
     minHeight: 0,
   },
@@ -2458,6 +3005,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 0,
   },
+  instructionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
   instructionText: {
     fontSize: 12,
     color: "#cccccc",
@@ -2483,7 +3036,7 @@ const styles = StyleSheet.create({
   exerciseImageContainer: {
     position: "relative",
     width: "100%",
-    height: 300,
+    height: 270,
     marginTop: 0,
     marginBottom: 24,
     backgroundColor: "#1a1a1a",
@@ -2528,42 +3081,23 @@ const styles = StyleSheet.create({
     color: "#666666",
     fontSize: 14,
   },
-  addButtonsRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 24,
-    marginHorizontal: 20,
-    marginBottom: 0,
-  },
-  addSetButton: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#000000",
-    borderRadius: 8,
-    paddingVertical: 12,
+  addSetButtonWrapper: {
     alignItems: "center",
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  addSetCircleButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#e3ff7c",
     justifyContent: "center",
-  },
-  addSetButtonText: {
-    color: "#000000",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  addExerciseButton: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#000000",
-    borderRadius: 8,
-    paddingVertical: 12,
     alignItems: "center",
-    justifyContent: "center",
-  },
-  addExerciseButtonText: {
-    color: "#000000",
-    fontSize: 14,
-    fontWeight: "600",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   feedbackSection: {
     marginTop: 24,
@@ -2593,10 +3127,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 12,
   },
+  feedbackButtonSelected: {
+    backgroundColor: "#d6ff4b",
+    borderColor: "#d6ff4b",
+  },
   feedbackButtonText: {
     color: "#000000",
     fontSize: 14,
     fontWeight: "500",
+  },
+  feedbackButtonTextSelected: {
+    color: "#000000",
+    fontWeight: "600",
   },
   exerciseListOverlay: {
     flex: 1,
@@ -2893,7 +3435,9 @@ const styles = StyleSheet.create({
     borderBottomColor: "#666666",
   },
   exerciseItemSelectable: {},
-  exerciseItemSelected: {},
+  exerciseItemSelected: {
+    backgroundColor: "transparent",
+  },
   exerciseIcon: {
     width: 48,
     height: 48,
@@ -2945,6 +3489,12 @@ const styles = StyleSheet.create({
   exerciseNameLight: {
     color: "#000000",
   },
+  exerciseNameSelected: {
+    color: "#d6ff4b",
+  },
+  exerciseNameSelectedLight: {
+    color: "#4a6400",
+  },
   exerciseLastUsed: {
     fontSize: 12,
     lineHeight: 16,
@@ -2953,10 +3503,20 @@ const styles = StyleSheet.create({
   exerciseLastUsedLight: {
     color: "#666666",
   },
+  exerciseLastUsedSelected: {
+    color: "#c0ff7a",
+  },
+  exerciseLastUsedSelectedLight: {
+    color: "#5a6b2c",
+  },
   multiSelectFooter: {
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 4,
+  },
+  multiSelectFooterRaised: {
+    paddingBottom: 36,
+    marginBottom: 16,
   },
   multiSelectActionBtn: {
     borderRadius: 14,
@@ -3141,8 +3701,8 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: 20,
-    paddingBottom: 40,
-    paddingTop: 20,
+    paddingBottom: 20,
+    paddingTop: 14,
     backgroundColor: "#2a2a2a",
   },
   footerExtended: {
@@ -3166,7 +3726,7 @@ const styles = StyleSheet.create({
   commentSection: {
     marginHorizontal: 12,
     marginTop: 24,
-    marginBottom: 48,
+    marginBottom: 24,
     gap: 16,
   },
   commentLabel: {
@@ -3190,6 +3750,54 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#888888",
     textAlign: "right",
+  },
+  sequenceControlContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 0,
+    gap: 12,
+  },
+  sequenceControlRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  sequenceControlButton: {
+    flex: 1,
+    borderRadius: 12,
+    backgroundColor: "#272727",
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sequenceControlButtonDisabled: {
+    backgroundColor: "#1a1a1a",
+    opacity: 0.4,
+  },
+  sequenceControlText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  sequenceControlTextDisabled: {
+    color: "#888888",
+  },
+  sequenceTimerButton: {
+    gap: 6,
+    paddingVertical: 10,
+  },
+  sequenceTimerLabel: {
+    color: "#bbbbbb",
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  sequenceTimerValue: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  sequenceTimerValuePaused: {
+    color: "#ffb84d",
   },
   commentSendButton: {
     backgroundColor: "#e3ff7c",
