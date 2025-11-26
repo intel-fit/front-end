@@ -42,10 +42,23 @@ export const getExerciseGoalSummary =
         `${BASE_URL}/summary`,
         config
       );
+      if (__DEV__) {
+        console.log("[GOAL][GET] API 응답:", response.data);
+      }
       return response.data;
     } catch (error: any) {
-      if (axios.isAxiosError(error) && error.response?.status === 404) {
-        return null;
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 404) {
+          if (__DEV__) {
+            console.log("[GOAL][GET] 목표 없음 (404)");
+          }
+          return null;
+        }
+        console.error("[GOAL][GET] API 에러:", {
+          status: error.response?.status,
+          data: error.response?.data,
+          message: error.message,
+        });
       }
       throw error;
     }
@@ -54,18 +67,53 @@ export const getExerciseGoalSummary =
 export const saveExerciseGoal = async (
   payload: ExerciseGoalPayload
 ): Promise<ExerciseGoalSummary> => {
-  const config = await withAuthHeaders();
-  const response = await axios.post<ExerciseGoalSummary>(
-    BASE_URL,
-    payload,
-    config
-  );
-  return response.data;
+  try {
+    const config = await withAuthHeaders();
+    if (__DEV__) {
+      console.log("[GOAL][POST] API 요청:", payload);
+    }
+    // POST는 기존 값을 삭제하고 새로 생성하는 방식
+    const response = await axios.post<ExerciseGoalSummary>(
+      BASE_URL,
+      payload,
+      config
+    );
+    if (__DEV__) {
+      console.log("[GOAL][POST] API 응답:", response.data);
+    }
+    return response.data;
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      console.error("[GOAL][POST] API 에러:", {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message,
+      });
+    }
+    throw error;
+  }
 };
 
 export const deleteExerciseGoal = async (): Promise<void> => {
-  const config = await withAuthHeaders();
-  await axios.delete(BASE_URL, config);
+  try {
+    const config = await withAuthHeaders();
+    if (__DEV__) {
+      console.log("[GOAL][DELETE] API 요청");
+    }
+    await axios.delete(BASE_URL, config);
+    if (__DEV__) {
+      console.log("[GOAL][DELETE] API 응답 성공");
+    }
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      console.error("[GOAL][DELETE] API 에러:", {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message,
+      });
+    }
+    throw error;
+  }
 };
 
 

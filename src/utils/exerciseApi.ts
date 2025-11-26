@@ -565,17 +565,22 @@ export const getTodayWorkoutTime = async (userId: number): Promise<GetTodayWorko
 export interface SaveWorkoutTitleRequest {
   userId: number;
   saveTitle: string;
+  intensity?: number[]; // 무거워요(7.5), 선택안함(5.0), 가벼워요(2.5)
+  feedback?: string[]; // 좋아요(like), 선택안함(neutral), 싫어요(dislike)
 }
 
 export interface SaveWorkoutTitleResponse {
   sessionId: string;
   saveTitle: string;
   updatedCount: number;
+  sessionIds?: string[];
 }
 
 export const saveWorkoutTitle = async (
   userId: number,
-  saveTitle: string
+  saveTitle: string,
+  intensity?: number[],
+  feedback?: string[]
 ): Promise<SaveWorkoutTitleResponse> => {
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
@@ -583,6 +588,8 @@ export const saveWorkoutTitle = async (
     const payload: SaveWorkoutTitleRequest = {
       userId,
       saveTitle,
+      ...(intensity && intensity.length > 0 && { intensity }),
+      ...(feedback && feedback.length > 0 && { feedback }),
     };
     console.log('[WORKOUT][SAVE] API 요청:', {
       url,

@@ -185,10 +185,10 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
     marginHorizontal: 12,
-    marginBottom: 12,
+    marginBottom: 8,
     borderRadius: 12,
     position: "relative",
     shadowColor: "#000",

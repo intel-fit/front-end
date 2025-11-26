@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,12 +6,15 @@ import {
   SafeAreaView,
   ScrollView,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   Alert,
   Modal,
   Image,
   FlatList,
   ActivityIndicator,
   TextInput,
+  BackHandler,
+  TextStyle,
 } from "react-native";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
@@ -50,7 +53,54 @@ interface Activity {
   comment?: string;
   imageUrl?: string; // 운동/스트레칭 이미지 URL
   externalId?: string; // 운동/스트레칭 외부 ID
+  saveTitle?: string;
+  groupKey?: string;
 }
+
+const DETAIL_TIME_REGEX = /(오전|오후)\s*\d{1,2}:\d{2}/gi;
+const cleanExerciseDetails = (details?: string): string => {
+  if (!details) return "";
+  const withoutTime = details.replace(DETAIL_TIME_REGEX, " ");
+  return withoutTime.replace(/\s+/g, " ").trim();
+};
+
+const formatDisplayTime = (dateInput?: string): string => {
+  if (!dateInput) return "";
+  const date = new Date(dateInput);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("ko-KR", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+};
+
+const buildDetailsFromSets = (sets?: any[]): string => {
+  if (!Array.isArray(sets) || sets.length === 0) {
+    return "";
+  }
+  const firstSet = sets[0] || {};
+  const weight =
+    typeof firstSet.weight === "number"
+      ? firstSet.weight
+      : firstSet.weight
+      ? Number(firstSet.weight)
+      : 0;
+  const reps =
+    typeof firstSet.reps === "number"
+      ? firstSet.reps
+      : firstSet.reps
+      ? Number(firstSet.reps)
+      : 0;
+  return `${weight || 0}kg ${reps || 0}회 ${sets.length}세트`;
+};
+
+const isStretchActivity = (activity?: Activity): boolean => {
+  if (!activity) return false;
+  const name = activity.name || "";
+  const details = activity.details || "";
+  return details.includes("스트레칭") || name.includes("스트레칭");
+};
 
 // 운동 이름 검색 키워드 생성 (분석하기 페이지와 동일)
 const HANGUL_TOKEN_REPLACEMENTS: Array<[RegExp, string]> = [
@@ -170,6 +220,248 @@ const ExerciseScreen = ({ navigation }: any) => {
       (activity) => activity.date === selectedDateStr
     );
   }, [allActivities, selectedDate]);
+  const workoutActivities = React.useMemo(
+    () => activities.filter((activity) => !isStretchActivity(activity)),
+    [activities]
+  );
+
+  const [savedWorkouts, setSavedWorkouts] = useState<SavedWorkoutGroup[]>([]);
+  const [savedWorkoutsLoading, setSavedWorkoutsLoading] = useState(false);
+  const [savedWorkoutsError, setSavedWorkoutsError] = useState<string | null>(
+    null
+  );
+
+  const isActivityFullyCompleted = useCallback((activity?: Activity | null) => {
+    if (!activity) return false;
+
+    // 명시적으로 isCompleted가 true인 경우만 완료로 간주
+    if (activity.isCompleted === true) {
+      // 세트가 있는 경우, 모든 세트가 완료되었는지도 확인
+      if (Array.isArray(activity.sets) && activity.sets.length > 0) {
+        const allSetsCompleted = activity.sets.every((set: any) => {
+          return set && set.isCompleted === true;
+        });
+        // isCompleted가 true여도 세트가 모두 완료되지 않았으면 false
+        return allSetsCompleted;
+      }
+      return true;
+    }
+
+    // 세트가 있는 경우, 모든 세트가 완료되어야 완료로 간주
+    if (Array.isArray(activity.sets) && activity.sets.length > 0) {
+      // 모든 세트가 완료되었는지 확인
+      const allSetsCompleted = activity.sets.every((set: any) => {
+        // set이 없거나 isCompleted가 명시적으로 true가 아니면 false
+        return set && set.isCompleted === true;
+      });
+      return allSetsCompleted;
+    }
+
+    // 세트가 없거나 빈 배열인 경우, isCompleted가 명시적으로 true가 아니면 완료되지 않은 것으로 간주
+    return false;
+  }, []);
+
+  const [pendingSavedRefs, setPendingSavedRefs] = useState<{
+    sessionIds: string[];
+    activityIds: number[];
+    externalKeys: string[];
+  }>({
+    sessionIds: [],
+    activityIds: [],
+    externalKeys: [],
+  });
+
+  const { orderedActivities, groupedActivityMeta } = React.useMemo(() => {
+    const defaultResult = {
+      orderedActivities: workoutActivities,
+      groupedActivityMeta: new Map<
+        number,
+        {
+          title: string;
+          isFirst: boolean;
+          isLast: boolean;
+          sessionIds: string[];
+        }
+      >(),
+    };
+
+    const sessionToGroup = new Map<string, { title: string; key: string }>();
+    savedWorkouts.forEach((group) => {
+      if (!group) return;
+      const normalizedTitle = (group.title || "").trim();
+      const key = normalizedTitle.toLowerCase() || "__untitled__";
+      if (Array.isArray(group.sessions)) {
+        group.sessions.forEach((session) => {
+          if (session?.sessionId) {
+            sessionToGroup.set(session.sessionId, {
+              title: normalizedTitle || group.title || "운동 기록",
+              key,
+            });
+          }
+        });
+      }
+    });
+
+    if (sessionToGroup.size === 0) {
+      return defaultResult;
+    }
+
+    const groupBuckets = new Map<
+      string,
+      {
+        title: string;
+        order: number;
+        activities: Array<{ activity: Activity; index: number }>;
+        sessionIds: Set<string>;
+      }
+    >();
+    const singleItems: Array<{ activity: Activity; order: number }> = [];
+
+    workoutActivities.forEach((activity, index) => {
+      const sessionId = activity.sessionId;
+      const activityTitle = activity.saveTitle?.trim();
+      const normalizedActivityTitle = activityTitle
+        ? activityTitle.toLowerCase()
+        : null;
+      const groupInfoFromSaved =
+        sessionId && sessionToGroup.get(sessionId || "");
+      const hasServerGroup = !!groupInfoFromSaved;
+
+      const resolvedTitle =
+        activityTitle || groupInfoFromSaved?.title || "운동 기록";
+
+      const bucketKey =
+        (activity.groupKey ? `group:${activity.groupKey}` : null) ||
+        (hasServerGroup && sessionId ? `session:${sessionId}` : null) ||
+        (normalizedActivityTitle ? `title:${normalizedActivityTitle}` : null) ||
+        (hasServerGroup && groupInfoFromSaved?.key
+          ? `saved:${groupInfoFromSaved.key}`
+          : null);
+
+      if (!bucketKey) {
+        singleItems.push({ activity, order: index });
+        return;
+      }
+
+      let bucket = groupBuckets.get(bucketKey);
+      if (!bucket) {
+        bucket = {
+          title: resolvedTitle,
+          order: index,
+          activities: [],
+          sessionIds: new Set<string>(),
+        };
+        groupBuckets.set(bucketKey, bucket);
+      }
+      bucket.title = resolvedTitle; // 최신 제목으로 유지
+      bucket.activities.push({ activity, index });
+      if (sessionId) {
+        bucket.sessionIds.add(sessionId);
+      }
+      if (index < bucket.order) {
+        bucket.order = index;
+      }
+    });
+
+    if (groupBuckets.size === 0) {
+      return defaultResult;
+    }
+
+    type TimelineItem =
+      | { type: "single"; activity: Activity; order: number }
+      | {
+          type: "group";
+          title: string;
+          activities: Activity[];
+          order: number;
+          sessionIds: string[];
+        };
+
+    const timelineItems: TimelineItem[] = [];
+
+    singleItems.forEach((item) => {
+      timelineItems.push({
+        type: "single",
+        activity: item.activity,
+        order: item.order,
+      });
+    });
+
+    Array.from(groupBuckets.values()).forEach((bucket) => {
+      timelineItems.push({
+        type: "group",
+        title: bucket.title,
+        activities: bucket.activities
+          .sort((a, b) => a.index - b.index)
+          .map((item) => item.activity),
+        order: bucket.order,
+        sessionIds: Array.from(bucket.sessionIds),
+      });
+    });
+
+    timelineItems.sort((a, b) => a.order - b.order);
+
+    const ordered: Activity[] = [];
+    const metaMap = new Map<
+      number,
+      { title: string; isFirst: boolean; isLast: boolean; sessionIds: string[] }
+    >();
+
+    timelineItems.forEach((item) => {
+      if (item.type === "single") {
+        ordered.push(item.activity);
+      } else {
+        item.activities.forEach((activity, idx) => {
+          ordered.push(activity);
+          metaMap.set(activity.id, {
+            title: item.title,
+            isFirst: idx === 0,
+            isLast: idx === item.activities.length - 1,
+            sessionIds: item.sessionIds,
+          });
+        });
+      }
+    });
+
+    if (__DEV__) {
+      console.log("[GROUP] 정렬된 운동 타임라인:", {
+        groups: Array.from(groupBuckets.values()).map((bucket) => ({
+          title: bucket.title,
+          count: bucket.activities.length,
+          order: bucket.order,
+        })),
+      });
+    }
+
+    return {
+      orderedActivities: ordered,
+      groupedActivityMeta: metaMap,
+    };
+  }, [
+    workoutActivities,
+    savedWorkouts,
+    isActivityFullyCompleted,
+    pendingSavedRefs,
+  ]);
+
+  const savedSessionTimes = React.useMemo(() => {
+    const map = new Map<string, string>();
+    savedWorkouts.forEach((group) => {
+      group.sessions?.forEach((session) => {
+        if (!session?.sessionId) return;
+        const recordWithTime =
+          session.records?.find((record) => record?.workoutDate) ||
+          session.records?.[0];
+        const formatted = recordWithTime
+          ? formatDisplayTime(recordWithTime.workoutDate)
+          : "";
+        if (formatted) {
+          map.set(session.sessionId, formatted);
+        }
+      });
+    });
+    return map;
+  }, [savedWorkouts]);
 
   const [goalData, setGoalData] = useState<ExerciseGoalInfo | null>(null);
   const [completedThisWeek, setCompletedThisWeek] = useState(0);
@@ -206,6 +498,8 @@ const ExerciseScreen = ({ navigation }: any) => {
   const [selectedExercise, setSelectedExercise] = useState<Activity | null>(
     null
   );
+  const [selectedExerciseCompleted, setSelectedExerciseCompleted] =
+    useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [userIdLoaded, setUserIdLoaded] = useState(false);
   // 운동 완료 모달 상태
@@ -215,18 +509,17 @@ const ExerciseScreen = ({ navigation }: any) => {
       name: string;
       targetMuscle?: string;
       imageUrl?: string;
-      time?: string;
       externalId?: string;
+      activityId?: number;
+      sessionId?: string;
+      sets?: any[];
+      allSetsCompleted?: boolean;
+      comment?: string;
     }>
   >([]);
   const [completionSummaryTitle, setCompletionSummaryTitle] = useState("");
   const [todayTotalWorkoutSeconds, setTodayTotalWorkoutSeconds] = useState(0);
   const [isSavingCompletionTitle, setIsSavingCompletionTitle] = useState(false);
-  const [savedWorkouts, setSavedWorkouts] = useState<SavedWorkoutGroup[]>([]);
-  const [savedWorkoutsLoading, setSavedWorkoutsLoading] = useState(false);
-  const [savedWorkoutsError, setSavedWorkoutsError] = useState<string | null>(
-    null
-  );
   const [expandedSavedTitle, setExpandedSavedTitle] = useState<string | null>(
     null
   );
@@ -236,6 +529,20 @@ const ExerciseScreen = ({ navigation }: any) => {
   const [completionSaveErrorDetail, setCompletionSaveErrorDetail] = useState<
     string | null
   >(null);
+  // 운동별 피드백 상태 관리 (운동 이름을 키로 사용)
+  const [exerciseFeedbacks, setExerciseFeedbacks] = useState<
+    Record<
+      string,
+      {
+        intensity: "heavy" | "light" | null;
+        feedback: "like" | "dislike" | null;
+      }
+    >
+  >({});
+  const [showAddOptions, setShowAddOptions] = useState(false);
+  const [exerciseSequence, setExerciseSequence] = useState<Activity[]>([]);
+  const [exerciseSequenceIndex, setExerciseSequenceIndex] =
+    useState<number>(-1);
   // 운동 이미지 로딩 상태 (분석하기 페이지와 동일한 방식)
   const [exerciseImages, setExerciseImages] = useState<Record<string, string>>(
     {}
@@ -255,6 +562,13 @@ const ExerciseScreen = ({ navigation }: any) => {
       prefetchedImageUrlsRef.current.delete(url);
     });
   }, []);
+
+  // 완료되지 않은 운동이 있는지 확인
+  const hasIncompleteActivities = React.useMemo(() => {
+    return workoutActivities.some(
+      (activity) => !isActivityFullyCompleted(activity)
+    );
+  }, [workoutActivities, isActivityFullyCompleted]);
 
   const goalSummaryText = React.useMemo(() => {
     if (!goalData) {
@@ -281,16 +595,6 @@ const ExerciseScreen = ({ navigation }: any) => {
     }
     return `목표치 | ${parts.join(" · ")}`;
   }, [goalData]);
-
-  const savedWorkoutTitles = React.useMemo(() => {
-    const titles = new Set<string>();
-    savedWorkouts.forEach((group) => {
-      if (group?.title) {
-        titles.add(group.title);
-      }
-    });
-    return Array.from(titles);
-  }, [savedWorkouts]);
 
   const trimmedCompletionTitle = completionSummaryTitle.trim();
 
@@ -370,7 +674,8 @@ const ExerciseScreen = ({ navigation }: any) => {
     const today = new Date();
     const todayStr = formatDateToString(today);
     const todayCompletedActivities = allActivities.filter(
-      (activity) => activity.date === todayStr && activity.isCompleted
+      (activity) =>
+        activity.date === todayStr && isActivityFullyCompleted(activity)
     );
 
     // 운동 이름 목록 (completedExercises + allActivities의 스트레칭)
@@ -603,12 +908,28 @@ const ExerciseScreen = ({ navigation }: any) => {
   // 주간 칼로리 합계 로드 (이번 주)
   const loadWeeklyCalories = React.useCallback(async () => {
     try {
+      console.log("[PROGRESS] 주간 진행률 로드 시작");
       const data = await fetchWeeklyProgress();
-      setWeeklyProgress(Array.isArray(data) ? data : []);
+      console.log("[PROGRESS] 주간 진행률 API 응답:", data);
+      const progressArray = Array.isArray(data) ? data : [];
+      setWeeklyProgress(progressArray);
       const sum = Array.isArray(data)
         ? data.reduce((s: number, d) => s + Number(d?.totalCalorie || 0), 0)
         : 0;
       setWeeklyCalories(sum);
+
+      // exerciseRate가 100인 날짜 확인
+      const completedDays = progressArray.filter(
+        (item) => item?.exerciseRate === 100
+      );
+      console.log(
+        "[PROGRESS] exerciseRate가 100인 날짜:",
+        completedDays.map((d) => d.date)
+      );
+      console.log(
+        "[PROGRESS] exerciseRate가 100인 날짜 개수:",
+        completedDays.length
+      );
     } catch (e) {
       console.error("주간 칼로리 로드 실패:", e);
       setWeeklyCalories(0);
@@ -638,7 +959,93 @@ const ExerciseScreen = ({ navigation }: any) => {
       setSavedWorkoutsLoading(true);
       setSavedWorkoutsError(null);
       const data = await fetchSavedWorkouts(userIdNum);
-      setSavedWorkouts(Array.isArray(data) ? data : []);
+      const workouts = Array.isArray(data) ? data : [];
+
+      // 동일한 제목의 운동은 한 그룹으로 합쳐서 세션을 이어 붙인다.
+      const mergedGroups: SavedWorkoutGroup[] = [];
+      const groupMap = new Map<string, SavedWorkoutGroup>();
+
+      workouts.forEach((group) => {
+        if (!group) return;
+        const normalizedTitle = (group.title || "").trim();
+        const key = normalizedTitle.toLowerCase() || "__untitled__";
+
+        let targetGroup = groupMap.get(key);
+        if (!targetGroup) {
+          targetGroup = {
+            title: normalizedTitle || group.title || "운동 기록",
+            sessions: [],
+          };
+          groupMap.set(key, targetGroup);
+          mergedGroups.push(targetGroup);
+        }
+
+        if (Array.isArray(group.sessions) && group.sessions.length > 0) {
+          targetGroup.sessions = targetGroup.sessions.concat(group.sessions);
+        }
+      });
+
+      setSavedWorkouts(mergedGroups);
+
+      const sessionTitleMapFresh = new Map<string, string>();
+      mergedGroups.forEach((group) => {
+        const normalizedTitle = (group.title || "").trim();
+        group.sessions?.forEach((session) => {
+          if (session?.sessionId) {
+            sessionTitleMapFresh.set(session.sessionId, normalizedTitle);
+          }
+        });
+      });
+      if (sessionTitleMapFresh.size > 0) {
+        const clearedSessionIds = new Set(sessionTitleMapFresh.keys());
+        setPendingSavedRefs((prev) => ({
+          ...prev,
+          sessionIds: prev.sessionIds.filter(
+            (id) => !clearedSessionIds.has(id)
+          ),
+        }));
+        setAllActivities((prev) =>
+          prev.map((activity) => {
+            if (!activity.sessionId) return activity;
+            const newTitle = sessionTitleMapFresh.get(activity.sessionId);
+            if (newTitle && activity.saveTitle !== newTitle) {
+              return { ...activity, saveTitle: newTitle };
+            }
+            return activity;
+          })
+        );
+      }
+      const sessionTitleMap = new Map<string, string>();
+      mergedGroups.forEach((group) => {
+        const normalizedTitle = (group.title || "").trim();
+        group.sessions?.forEach((session) => {
+          if (session?.sessionId) {
+            sessionTitleMap.set(session.sessionId, normalizedTitle);
+          }
+        });
+      });
+      if (sessionTitleMap.size > 0) {
+        setAllActivities((prev) =>
+          prev.map((activity) => {
+            if (!activity.sessionId) return activity;
+            const newTitle = sessionTitleMap.get(activity.sessionId);
+            if (newTitle && activity.saveTitle !== newTitle) {
+              return { ...activity, saveTitle: newTitle };
+            }
+            return activity;
+          })
+        );
+      }
+      if (__DEV__) {
+        console.log(
+          "[GROUP] 저장된 운동 제목 로드:",
+          mergedGroups.map((w) => ({
+            title: w.title,
+            sessionCount: w.sessions?.length || 0,
+            sessionIds: w.sessions?.map((s) => s.sessionId) || [],
+          }))
+        );
+      }
     } catch (error) {
       console.error("[WORKOUT][SAVED] 불러오기 실패:", error);
       setSavedWorkouts([]);
@@ -668,6 +1075,98 @@ const ExerciseScreen = ({ navigation }: any) => {
     loadTodayWorkoutTime,
     loadSavedWorkouts,
   ]);
+
+  // 기록하기 탭에 들어올 때마다 이번 주 진행률을 다시 계산
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!userIdLoaded) return;
+
+      const refreshThisWeekProgress = async () => {
+        try {
+          // 서버에서 이번 주 진행률 데이터 가져오기
+          const weeklyData = await fetchWeeklyProgress();
+          if (!Array.isArray(weeklyData)) return;
+
+          // 이번 주 시작일 계산
+          const now = new Date();
+          const thisWeekStart = new Date(now);
+          thisWeekStart.setDate(now.getDate() - now.getDay()); // 일요일로 설정
+          thisWeekStart.setHours(0, 0, 0, 0);
+
+          const today = new Date();
+          const todayEnd = new Date(
+            today.getFullYear(),
+            today.getMonth(),
+            today.getDate(),
+            23,
+            59,
+            59,
+            999
+          );
+
+          // 이번 주 완료된 날짜 개수 계산 (exerciseRate가 100인 날짜)
+          const completedDates = new Set<string>();
+          weeklyData.forEach((item) => {
+            if (!item || !item.date) return;
+            try {
+              const itemDate = new Date(item.date);
+              if (isNaN(itemDate.getTime())) return;
+
+              const itemDateOnly = new Date(
+                itemDate.getFullYear(),
+                itemDate.getMonth(),
+                itemDate.getDate()
+              );
+              const weekStartOnly = new Date(
+                thisWeekStart.getFullYear(),
+                thisWeekStart.getMonth(),
+                thisWeekStart.getDate()
+              );
+              const todayEndOnly = new Date(
+                todayEnd.getFullYear(),
+                todayEnd.getMonth(),
+                todayEnd.getDate()
+              );
+
+              // 이번 주 범위 내에 있고, exerciseRate가 100이면 완료된 날짜로 간주
+              if (
+                itemDateOnly >= weekStartOnly &&
+                itemDateOnly <= todayEndOnly &&
+                item.exerciseRate === 100
+              ) {
+                const dateKey = `${itemDateOnly.getFullYear()}-${String(
+                  itemDateOnly.getMonth() + 1
+                ).padStart(2, "0")}-${String(itemDateOnly.getDate()).padStart(
+                  2,
+                  "0"
+                )}`;
+                completedDates.add(dateKey);
+              }
+            } catch (error) {
+              // 날짜 파싱 에러 무시
+            }
+          });
+
+          const actualCompletedThisWeek = completedDates.size;
+
+          // completedThisWeek 업데이트
+          setCompletedCountPersist(actualCompletedThisWeek);
+
+          // weeklyProgress도 업데이트
+          setWeeklyProgress(weeklyData);
+          const sum = weeklyData.reduce(
+            (s: number, d) => s + Number(d?.totalCalorie || 0),
+            0
+          );
+          setWeeklyCalories(sum);
+        } catch (error) {
+          console.error("[PROGRESS] 이번 주 진행률 새로고침 실패:", error);
+        }
+      };
+
+      refreshThisWeekProgress();
+    }, [userIdLoaded, getStorageKey])
+  );
 
   // 날짜를 yyyy-MM-dd 형식으로 변환
   const formatDateToString = (date: Date): string => {
@@ -767,18 +1266,167 @@ const ExerciseScreen = ({ navigation }: any) => {
     try {
       setIsSavingCompletionTitle(true);
       setCompletionSaveErrorDetail(null);
+
+      if (completedExercises.length > 0) {
+        const saveGroupKey = `group_${Date.now()}_${Math.random()
+          .toString(36)
+          .slice(2)}`;
+        const sessionIdSet = new Set(
+          completedExercises
+            .map((ex) => ex.sessionId)
+            .filter((id): id is string => typeof id === "string")
+        );
+        const activityIdSet = new Set(
+          completedExercises
+            .map((ex) => ex.activityId)
+            .filter(
+              (id): id is number =>
+                typeof id === "number" && Number.isFinite(id)
+            )
+        );
+        const externalKeySet = new Set(
+          completedExercises
+            .map((ex) => {
+              if (ex.externalId && ex.name) {
+                return `${ex.externalId}__${ex.name}`;
+              }
+              return null;
+            })
+            .filter((key): key is string => !!key)
+        );
+
+        const sessionIdsArray = Array.from(sessionIdSet);
+        const activityIdsArray = Array.from(activityIdSet);
+        const externalKeysArray = Array.from(externalKeySet);
+
+        if (
+          sessionIdsArray.length > 0 ||
+          activityIdsArray.length > 0 ||
+          externalKeysArray.length > 0
+        ) {
+          setPendingSavedRefs((prev) => ({
+            sessionIds: Array.from(
+              new Set([...prev.sessionIds, ...sessionIdsArray])
+            ),
+            activityIds: Array.from(
+              new Set([...prev.activityIds, ...activityIdsArray])
+            ),
+            externalKeys: Array.from(
+              new Set([...prev.externalKeys, ...externalKeysArray])
+            ),
+          }));
+        }
+
+        if (
+          sessionIdSet.size > 0 ||
+          activityIdSet.size > 0 ||
+          externalKeySet.size > 0
+        ) {
+          setAllActivities((prev) =>
+            prev.map((activity) => {
+              if (activity.sessionId && sessionIdSet.has(activity.sessionId)) {
+                return {
+                  ...activity,
+                  saveTitle: trimmedTitle,
+                  groupKey: activity.groupKey || saveGroupKey,
+                };
+              }
+              if (
+                typeof activity.id === "number" &&
+                activityIdSet.has(activity.id)
+              ) {
+                return {
+                  ...activity,
+                  saveTitle: trimmedTitle,
+                  groupKey: activity.groupKey || saveGroupKey,
+                };
+              }
+              if (
+                activity.externalId &&
+                activity.name &&
+                externalKeySet.has(`${activity.externalId}__${activity.name}`)
+              ) {
+                return {
+                  ...activity,
+                  saveTitle: trimmedTitle,
+                  groupKey: activity.groupKey || saveGroupKey,
+                };
+              }
+              return activity;
+            })
+          );
+        }
+      }
+
+      // 완료된 운동들의 피드백 데이터 수집
+      const intensityList: number[] = [];
+      const feedbackList: string[] = [];
+
+      completedExercises.forEach((exercise) => {
+        const exerciseName = exercise.name;
+        const feedback = exerciseFeedbacks[exerciseName] || {
+          intensity: null,
+          feedback: null,
+        };
+
+        // intensity 변환: 무거워요(7.5), 선택안함(5.0), 가벼워요(2.5)
+        if (feedback.intensity === "heavy") {
+          intensityList.push(7.5);
+        } else if (feedback.intensity === "light") {
+          intensityList.push(2.5);
+        } else {
+          intensityList.push(5.0);
+        }
+
+        // feedback 변환: 좋아요(like), 선택안함(neutral), 싫어요(dislike)
+        if (feedback.feedback === "like") {
+          feedbackList.push("like");
+        } else if (feedback.feedback === "dislike") {
+          feedbackList.push("dislike");
+        } else {
+          feedbackList.push("neutral");
+        }
+      });
+
       console.log("[WORKOUT][SAVE] 운동 저장 시작:", {
         userId: userIdNum,
         saveTitle: trimmedTitle,
+        exerciseCount: completedExercises.length,
+        intensityList,
+        feedbackList,
       });
 
-      const response = await saveWorkoutTitle(userIdNum, trimmedTitle);
+      const response = await saveWorkoutTitle(
+        userIdNum,
+        trimmedTitle,
+        intensityList,
+        feedbackList
+      );
 
       console.log("[WORKOUT][SAVE] 운동 저장 성공:", {
         sessionId: response.sessionId,
         saveTitle: response.saveTitle,
         updatedCount: response.updatedCount,
       });
+
+      const savedSessionIds: string[] = Array.isArray(response.sessionIds)
+        ? response.sessionIds
+        : [];
+      if (savedSessionIds.length > 0) {
+        setAllActivities((prev) =>
+          prev.map((activity) =>
+            activity.sessionId && savedSessionIds.includes(activity.sessionId)
+              ? { ...activity, saveTitle: trimmedTitle }
+              : activity
+          )
+        );
+        setPendingSavedRefs((prev) => ({
+          ...prev,
+          sessionIds: prev.sessionIds.filter(
+            (id) => !savedSessionIds.includes(id)
+          ),
+        }));
+      }
 
       // 성공 메시지에 저장된 세트 수와 AI 피드백 전송 여부 포함
       const successMessage =
@@ -791,6 +1439,82 @@ const ExerciseScreen = ({ navigation }: any) => {
       setCompletionSummaryTitle(""); // 제목 초기화
       loadTodayWorkoutTime();
       loadSavedWorkouts();
+
+      // 운동 제목 저장 후 주간 진행률을 다시 가져와서 게이지 업데이트
+      // 서버에서 exerciseRate 계산에 시간이 걸릴 수 있으므로 여러 번 재시도
+      const retryLoadProgress = async (
+        retryCount: number = 0,
+        maxRetries: number = 3
+      ) => {
+        try {
+          await loadWeeklyCalories();
+
+          // exerciseRate가 업데이트되었는지 확인하기 위해 잠시 대기 후 다시 확인
+          setTimeout(async () => {
+            try {
+              const freshData = await fetchWeeklyProgress();
+              if (Array.isArray(freshData)) {
+                setWeeklyProgress(freshData);
+                const sum = freshData.reduce(
+                  (s: number, d) => s + Number(d?.totalCalorie || 0),
+                  0
+                );
+                setWeeklyCalories(sum);
+
+                // 오늘 날짜의 exerciseRate 확인
+                const today = new Date();
+                const todayStr = formatDateToString(today);
+                const todayProgress = freshData.find(
+                  (item) => item.date === todayStr
+                );
+
+                // exerciseRate가 여전히 0이고 재시도 횟수가 남아있으면 다시 시도
+                if (
+                  (!todayProgress || todayProgress.exerciseRate === 0) &&
+                  retryCount < maxRetries
+                ) {
+                  setTimeout(() => {
+                    retryLoadProgress(retryCount + 1, maxRetries);
+                  }, 2000 * (retryCount + 1)); // 재시도마다 대기 시간 증가 (2초, 4초, 6초)
+                } else if (
+                  todayProgress &&
+                  todayProgress.exerciseRate === 100
+                ) {
+                  console.log(
+                    "[PROGRESS] exerciseRate 업데이트 확인됨:",
+                    todayProgress
+                  );
+                }
+              }
+            } catch (error) {
+              console.error(
+                `[PROGRESS] 진행률 확인 실패 (재시도 ${retryCount}/${maxRetries}):`,
+                error
+              );
+              if (retryCount < maxRetries) {
+                setTimeout(() => {
+                  retryLoadProgress(retryCount + 1, maxRetries);
+                }, 2000 * (retryCount + 1));
+              }
+            }
+          }, 1000);
+        } catch (error) {
+          console.error(
+            `[PROGRESS] 운동 제목 저장 후 주간 진행률 새로고침 실패 (재시도 ${retryCount}/${maxRetries}):`,
+            error
+          );
+          if (retryCount < maxRetries) {
+            setTimeout(() => {
+              retryLoadProgress(retryCount + 1, maxRetries);
+            }, 2000 * (retryCount + 1));
+          }
+        }
+      };
+
+      // 첫 시도는 2초 후에
+      setTimeout(() => {
+        retryLoadProgress(0, 3);
+      }, 2000);
     } catch (error) {
       console.error("[WORKOUT][SAVE] 저장 실패:", error);
       setCompletionSaveErrorDetail(extractSaveErrorDetail(error));
@@ -807,7 +1531,10 @@ const ExerciseScreen = ({ navigation }: any) => {
     isSavingCompletionTitle,
     loadTodayWorkoutTime,
     loadSavedWorkouts,
+    loadWeeklyCalories,
     extractSaveErrorDetail,
+    completedExercises,
+    exerciseFeedbacks,
   ]);
 
   // 특정 날짜의 진행률 데이터 가져오기
@@ -885,10 +1612,15 @@ const ExerciseScreen = ({ navigation }: any) => {
 
   // 서버 목록 섹션 제거됨
 
-  const getProgressPercentage = () => {
-    if (!goalData) return 0;
+  const getProgressPercentage = React.useMemo(() => {
+    if (!goalData) {
+      if (__DEV__) {
+        console.log("[PROGRESS] goalData 없음, 0% 반환");
+      }
+      return 0;
+    }
 
-    // 실제 allActivities에서 이번 주 완료된 운동 개수 확인
+    // 서버 데이터(weeklyProgress)를 우선적으로 사용
     const now = new Date();
     const todayEnd = new Date(
       now.getFullYear(),
@@ -903,62 +1635,20 @@ const ExerciseScreen = ({ navigation }: any) => {
     thisWeekStart.setDate(now.getDate() - now.getDay()); // 일요일로 설정
     thisWeekStart.setHours(0, 0, 0, 0);
 
-    // 이번 주 완료된 운동 개수 (날짜별로 그룹화하여 하루에 1회로만 카운트)
-    const todayEndCopy2 = new Date(todayEnd);
+    // weeklyProgress에서 이번 주 완료된 날짜 개수 계산 (exerciseRate가 100인 날짜만)
     const completedDates = new Set<string>();
 
-    allActivities.forEach((activity) => {
-      if (!activity || !activity.date || !activity.isCompleted) return;
-      try {
-        const activityDate = new Date(activity.date);
-        if (isNaN(activityDate.getTime())) return;
-        const activityDateOnly = new Date(
-          activityDate.getFullYear(),
-          activityDate.getMonth(),
-          activityDate.getDate()
-        );
-        const weekStartOnly = new Date(
-          thisWeekStart.getFullYear(),
-          thisWeekStart.getMonth(),
-          thisWeekStart.getDate()
-        );
-        const todayEndOnly = new Date(
-          todayEndCopy2.getFullYear(),
-          todayEndCopy2.getMonth(),
-          todayEndCopy2.getDate()
-        );
+    if (Array.isArray(weeklyProgress) && weeklyProgress.length > 0) {
+      weeklyProgress.forEach((item) => {
+        if (!item || !item.date) return;
 
-        // 이번 주 범위 내에 있고, 완료된 운동이면 날짜를 Set에 추가
-        if (
-          activityDateOnly >= weekStartOnly &&
-          activityDateOnly <= todayEndOnly
-        ) {
-          // 날짜를 YYYY-MM-DD 형식으로 변환하여 Set에 추가 (하루에 여러 운동을 해도 1회로만 카운트)
-          const dateKey = `${activityDateOnly.getFullYear()}-${String(
-            activityDateOnly.getMonth() + 1
-          ).padStart(2, "0")}-${String(activityDateOnly.getDate()).padStart(
-            2,
-            "0"
-          )}`;
-          completedDates.add(dateKey);
-        }
-      } catch {
-        // 에러 발생 시 무시
-      }
-    });
+        // exerciseRate가 100이 아니면 완료로 간주하지 않음
+        if (item.exerciseRate !== 100) return;
 
-    // 고유한 날짜의 개수가 실제 완료 횟수 (하루에 여러 운동을 해도 1회로 카운트)
-    const actualCompletedThisWeek = completedDates.size;
-
-    // weeklyProgress에서 이번 주 데이터만 필터링하여 칼로리 계산
-    // todayEnd를 복사해서 사용 (원본 수정 방지)
-    const todayEndCopy = new Date(todayEnd);
-    const thisWeekCalories = weeklyProgress
-      .filter((item) => {
-        if (!item || !item.date) return false;
         try {
           const itemDate = new Date(item.date);
-          if (isNaN(itemDate.getTime())) return false;
+          if (isNaN(itemDate.getTime())) return;
+
           const itemDateOnly = new Date(
             itemDate.getFullYear(),
             itemDate.getMonth(),
@@ -970,22 +1660,54 @@ const ExerciseScreen = ({ navigation }: any) => {
             thisWeekStart.getDate()
           );
           const todayEndOnly = new Date(
-            todayEndCopy.getFullYear(),
-            todayEndCopy.getMonth(),
-            todayEndCopy.getDate()
+            todayEnd.getFullYear(),
+            todayEnd.getMonth(),
+            todayEnd.getDate()
           );
-          return itemDateOnly >= weekStartOnly && itemDateOnly <= todayEndOnly;
-        } catch {
-          return false;
-        }
-      })
-      .reduce((sum, item) => {
-        const calorie = Number(item?.totalCalorie || 0);
-        return sum + (isNaN(calorie) ? 0 : calorie);
-      }, 0);
 
-    // 이번 주에 운동 기록이 전혀 없으면 0% 반환
-    if (actualCompletedThisWeek === 0 && thisWeekCalories === 0) {
+          // 이번 주 범위 내에 있고, exerciseRate가 100이면 완료된 날짜로 간주
+          if (itemDateOnly >= weekStartOnly && itemDateOnly <= todayEndOnly) {
+            const dateKey = `${itemDateOnly.getFullYear()}-${String(
+              itemDateOnly.getMonth() + 1
+            ).padStart(2, "0")}-${String(itemDateOnly.getDate()).padStart(
+              2,
+              "0"
+            )}`;
+            completedDates.add(dateKey);
+          }
+        } catch (error) {
+          // 날짜 파싱 에러 무시
+        }
+      });
+    }
+
+    // 고유한 날짜의 개수가 실제 완료 횟수 (하루에 여러 운동을 해도 1회로 카운트)
+    const actualCompletedThisWeek = completedDates.size;
+
+    // 디버깅: 진행률 계산 로그
+    if (__DEV__) {
+      console.log(
+        "[PROGRESS] weeklyProgress 개수:",
+        weeklyProgress?.length || 0
+      );
+      console.log("[PROGRESS] 완료된 날짜:", Array.from(completedDates));
+      console.log("[PROGRESS] 완료된 날짜 개수:", actualCompletedThisWeek);
+      console.log(
+        "[PROGRESS] goalData:",
+        goalData
+          ? {
+              weeklyFrequency: goalData.weeklyFrequency,
+              weeklyCalorieGoal: goalData.weeklyCalorieGoal,
+            }
+          : null
+      );
+    }
+
+    // 이번 주에 완료된 운동이 전혀 없으면 0% 반환
+    if (actualCompletedThisWeek === 0) {
+      if (__DEV__) {
+        console.log("[PROGRESS] 완료된 운동 없음, 0% 반환");
+      }
       return 0;
     }
 
@@ -996,42 +1718,44 @@ const ExerciseScreen = ({ navigation }: any) => {
       1,
       Number.isNaN(frequencyValue) || frequencyValue <= 0 ? 1 : frequencyValue
     );
-    const countRate = Math.min(
-      1,
-      Math.max(0, actualCompletedThisWeek / countTarget)
-    );
-    const calorieTarget = Math.max(
-      1,
-      goalData.weeklyCalorieGoal && goalData.weeklyCalorieGoal > 0
-        ? Number(goalData.weeklyCalorieGoal)
-        : 1
-    );
-    const calorieRate = Math.min(
-      1,
-      Math.max(0, thisWeekCalories / calorieTarget)
-    );
-    // 이번 주에 운동 기록이 전혀 없으면 0% 반환 (재확인)
-    if (actualCompletedThisWeek === 0 && thisWeekCalories === 0) {
-      return 0;
-    }
 
-    // 운동 횟수 목표를 모두 완료했으면 100% 반환 (먼저 체크)
+    // 운동 횟수 목표를 모두 완료했으면 100% 반환
     if (actualCompletedThisWeek >= countTarget) {
+      if (__DEV__) {
+        console.log(
+          "[PROGRESS] 목표 달성:",
+          actualCompletedThisWeek,
+          ">=",
+          countTarget
+        );
+      }
       return 100;
     }
 
     // 운동 목표 설정 진행률은 운동 횟수만으로 계산 (칼로리 제외)
-    const frequencyProgress = countRate;
-
-    // 실제 진행률이 0이면 0% 반환
-    if (frequencyProgress === 0) {
-      return 0;
-    }
+    const countRate = Math.min(
+      1,
+      Math.max(0, actualCompletedThisWeek / countTarget)
+    );
 
     // 운동 횟수 진행률을 그대로 표시 (0~100%)
-    const actualProgress = Math.round(frequencyProgress * 100);
-    return Math.min(100, actualProgress);
-  };
+    const actualProgress = Math.round(countRate * 100);
+    const finalProgress = Math.min(100, Math.max(0, actualProgress));
+
+    if (__DEV__) {
+      console.log(
+        "[PROGRESS] 최종 진행률:",
+        finalProgress,
+        "% (완료:",
+        actualCompletedThisWeek,
+        "/ 목표:",
+        countTarget,
+        ")"
+      );
+    }
+
+    return finalProgress;
+  }, [goalData, weeklyProgress]);
 
   const loadStretchExercises = React.useCallback(async () => {
     setStretchLoading(true);
@@ -1079,6 +1803,86 @@ const ExerciseScreen = ({ navigation }: any) => {
 
   const handleWorkoutStartPress = () => {
     openExerciseEntry();
+  };
+
+  const handleStartWorkoutSequence = () => {
+    if (workoutActivities.length === 0) {
+      handleWorkoutStartPress();
+      return;
+    }
+
+    const nextActivity =
+      workoutActivities.find(
+        (activity) => !isActivityFullyCompleted(activity)
+      ) || workoutActivities[0];
+    const nextIndex = workoutActivities.findIndex(
+      (activity) => activity.id === nextActivity.id
+    );
+
+    setExerciseSequence(workoutActivities);
+    setExerciseSequenceIndex(nextIndex);
+    setModalMode("edit");
+    setSelectedExercise(nextActivity);
+    setIsModalOpen(true);
+  };
+
+  const handleSequenceNavigate = (direction: "prev" | "next") => {
+    if (!exerciseSequence.length) return;
+    const delta = direction === "next" ? 1 : -1;
+    const newIndex = exerciseSequenceIndex + delta;
+    if (newIndex < 0 || newIndex >= exerciseSequence.length) return;
+    const nextExercise = exerciseSequence[newIndex];
+    setExerciseSequenceIndex(newIndex);
+    setSelectedExercise(nextExercise);
+  };
+
+  const sequenceActivitiesWithLatestSets = React.useMemo(() => {
+    if (exerciseSequence.length === 0) return [];
+
+    const findLatestMatch = (seq: Activity) => {
+      const byId = workoutActivities.find((act) => act.id === seq.id);
+      if (byId) return byId;
+
+      if (seq.sessionId) {
+        const bySession = workoutActivities.find(
+          (act) => act.sessionId && act.sessionId === seq.sessionId
+        );
+        if (bySession) return bySession;
+      }
+
+      if (seq.externalId && seq.name) {
+        const byExternal = workoutActivities.find(
+          (act) => act.externalId === seq.externalId && act.name === seq.name
+        );
+        if (byExternal) return byExternal;
+      }
+
+      return null;
+    };
+
+    return exerciseSequence.map((seq) => {
+      const latest = findLatestMatch(seq);
+      if (!latest) return seq;
+      return {
+        ...seq,
+        ...latest,
+        sets: latest.sets || seq.sets,
+        isCompleted:
+          typeof latest.isCompleted === "boolean"
+            ? latest.isCompleted
+            : seq.isCompleted,
+      };
+    });
+  }, [exerciseSequence, workoutActivities]);
+
+  const handleStretchOptionSelect = () => {
+    setShowAddOptions(false);
+    handleStretchButtonPress();
+  };
+
+  const handleWorkoutOptionSelect = () => {
+    setShowAddOptions(false);
+    handleWorkoutStartPress();
   };
 
   const getStretchIdentifier = React.useCallback((option: any): string => {
@@ -1298,29 +2102,86 @@ const ExerciseScreen = ({ navigation }: any) => {
   // (임시 API 테스트 버튼 제거)
 
   const handleExerciseClick = (exercise: Activity) => {
+    const isCompleted = isActivityFullyCompleted(exercise);
     setModalMode("edit");
-    setSelectedExercise(exercise);
+    setExerciseSequence(workoutActivities);
+    const index = workoutActivities.findIndex(
+      (item) => item.id === exercise.id
+    );
+    setExerciseSequenceIndex(index);
+
+    // 저장된 운동 기록에서 세트 정보 불러오기
+    let exerciseWithSets = { ...exercise };
+    if (exercise.sessionId && savedWorkouts.length > 0) {
+      // savedWorkouts에서 해당 sessionId의 세트 정보 찾기
+      for (const group of savedWorkouts) {
+        for (const session of group.sessions) {
+          if (
+            session.sessionId === exercise.sessionId &&
+            session.records.length > 0
+          ) {
+            // SavedWorkoutRecord를 Activity의 sets 형식으로 변환
+            const sets = session.records
+              .sort((a, b) => a.setNumber - b.setNumber) // setNumber 순서대로 정렬
+              .map((record, index) => ({
+                id: record.id,
+                order: record.setNumber || index + 1, // setNumber를 order로 매핑
+                weight: record.weight,
+                reps: record.reps,
+                isCompleted: true, // 저장된 기록은 모두 완료된 것으로 표시
+              }));
+            exerciseWithSets = {
+              ...exerciseWithSets,
+              sets: sets,
+            };
+            break;
+          }
+        }
+      }
+    }
+
+    setSelectedExercise(exerciseWithSets);
     setIsModalOpen(true);
+    // 완료된 운동인지 상태로 저장 (ExerciseModal에 전달하기 위해)
+    setSelectedExerciseCompleted(isCompleted);
   };
 
-  const handleModalClose = () => {
+  const handleModalClose = useCallback(() => {
     setIsModalOpen(false);
     setSelectedExercise(null);
-  };
+    setSelectedExerciseCompleted(false);
+    setExerciseSequence([]);
+    setExerciseSequenceIndex(-1);
+  }, []);
+
+  useEffect(() => {
+    if (!isModalOpen) {
+      return;
+    }
+    const onHardwareBack = () => {
+      handleModalClose();
+      return true;
+    };
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      onHardwareBack
+    );
+    return () => {
+      subscription.remove();
+    };
+  }, [isModalOpen, handleModalClose]);
 
   const handleExerciseSave = async (
     sets: any[],
     exerciseName: string,
     meta?: { externalId?: string; category?: string; imageUrl?: string },
     comment?: string,
-    options?: { keepModalOpen?: boolean }
+    options?: { keepModalOpen?: boolean; skipServerSave?: boolean }
   ) => {
     const allSetsCompleted = sets.every(
       (set: any) => set.isCompleted || set.completed
     );
-    const details = `${sets[0]?.weight || 20}kg ${sets[0]?.reps || 12}회 ${
-      sets.length
-    }세트`;
+    const details = buildDetailsFromSets(sets);
     const trimmedComment =
       comment && typeof comment === "string" ? comment.trim() : "";
     const commentToSave =
@@ -1360,64 +2221,87 @@ const ExerciseScreen = ({ navigation }: any) => {
       "[WORKOUT] To record via API: POST http://43.200.40.140/api/workouts { ...payload above... }"
     );
 
+    const skipServerSave = options?.skipServerSave === true;
+
     // 실제 저장 API 호출
     let serverSessionId: string | undefined;
-    try {
-      const res = await postWorkoutSession(sessionPayload as any);
-      console.log("[WORKOUT][POST][OK]", res);
-      // 서버 응답에서 sessionId 받기 (서버에서 생성)
-      serverSessionId = res?.sessionId || res?.data?.sessionId;
-
-      // 운동 저장 후 해당 날짜의 진행률 다시 가져오기
-      const activeDateStr = formatDateToString(activeDate);
-      const today = new Date();
-      const isToday =
-        activeDate.getFullYear() === today.getFullYear() &&
-        activeDate.getMonth() === today.getMonth() &&
-        activeDate.getDate() === today.getDate();
-
+    if (!skipServerSave) {
       try {
-        let dateProgress: DailyProgressWeekItem;
-        if (isToday) {
-          dateProgress = await fetchTodayProgress();
-        } else {
-          dateProgress = await fetchDateProgress(activeDateStr);
+        const res = await postWorkoutSession(sessionPayload as any);
+        console.log("[WORKOUT][POST][OK]", res);
+        // 서버 응답에서 sessionId 받기 (서버에서 생성)
+        serverSessionId = res?.sessionId || res?.data?.sessionId;
+
+        // 운동 저장 후 해당 날짜의 진행률 다시 가져오기
+        const activeDateStr = formatDateToString(activeDate);
+        const today = new Date();
+        const isToday =
+          activeDate.getFullYear() === today.getFullYear() &&
+          activeDate.getMonth() === today.getMonth() &&
+          activeDate.getDate() === today.getDate();
+
+        try {
+          let dateProgress: DailyProgressWeekItem;
+          if (isToday) {
+            dateProgress = await fetchTodayProgress();
+          } else {
+            dateProgress = await fetchDateProgress(activeDateStr);
+          }
+
+          // 주간 진행률 업데이트
+          setWeeklyProgress((prev) => {
+            const index = prev.findIndex((item) => item.date === activeDateStr);
+            if (index >= 0) {
+              const updated = [...prev];
+              updated[index] = dateProgress;
+              return updated;
+            } else {
+              // 주간 범위에 없으면 추가하지 않음 (주간 API가 자동으로 관리)
+              return prev;
+            }
+          });
+
+          // 주간 진행률 전체를 다시 가져와서 게이지 업데이트
+          // 약간의 지연을 두어 서버에 반영될 시간을 줌
+          setTimeout(async () => {
+            try {
+              await loadWeeklyCalories();
+            } catch (error) {
+              console.error("[PROGRESS] 주간 진행률 새로고침 실패:", error);
+            }
+          }, 500);
+
+          // 월별 진행률 업데이트
+          setMonthlyProgress((prev) => {
+            const index = prev.findIndex((item) => item.date === activeDateStr);
+            if (index >= 0) {
+              const updated = [...prev];
+              updated[index] = dateProgress;
+              return updated;
+            } else {
+              // 월별 범위에 없으면 추가
+              return [...prev, dateProgress];
+            }
+          });
+
+          // 해당 달의 월별 데이터 전체 다시 가져오기
+          loadMonthlyProgress(activeDate.getFullYear(), activeDate.getMonth());
+        } catch (progressError) {
+          console.error("진행률 조회 실패:", progressError);
         }
-
-        // 주간 진행률 업데이트
-        setWeeklyProgress((prev) => {
-          const index = prev.findIndex((item) => item.date === activeDateStr);
-          if (index >= 0) {
-            const updated = [...prev];
-            updated[index] = dateProgress;
-            return updated;
-          } else {
-            // 주간 범위에 없으면 추가하지 않음 (주간 API가 자동으로 관리)
-            return prev;
-          }
-        });
-
-        // 월별 진행률 업데이트
-        setMonthlyProgress((prev) => {
-          const index = prev.findIndex((item) => item.date === activeDateStr);
-          if (index >= 0) {
-            const updated = [...prev];
-            updated[index] = dateProgress;
-            return updated;
-          } else {
-            // 월별 범위에 없으면 추가
-            return [...prev, dateProgress];
-          }
-        });
-
-        // 해당 달의 월별 데이터 전체 다시 가져오기
-        loadMonthlyProgress(activeDate.getFullYear(), activeDate.getMonth());
-      } catch (progressError) {
-        console.error("진행률 조회 실패:", progressError);
+      } catch (e: any) {
+        console.error("[WORKOUT][POST][FAIL]", e);
+        Alert.alert(
+          "운동 기록 저장 실패",
+          e?.response?.data?.message || e?.message || "알 수 없는 오류"
+        );
+        return undefined; // 에러 시 undefined 반환
       }
+    }
 
-      // POST 성공 시 활동 항목에 sessionId 저장 및 세트 내역 보존
-      if (modalMode === "edit" && selectedExercise) {
+    // 활동 항목 업데이트
+    if (modalMode === "edit" && selectedExercise) {
+      if (!skipServerSave) {
         // 이전 완료 상태와 비교하여 카운트 조정
         const prev = activities.find((a) => a.id === selectedExercise.id);
         const prevCompleted = !!prev?.isCompleted;
@@ -1426,60 +2310,55 @@ const ExerciseScreen = ({ navigation }: any) => {
           const delta = nextCompleted ? 1 : -1;
           setCompletedCountPersist(Math.max(0, completedThisWeek + delta));
         }
-        const targetId = selectedExercise.id;
-        setAllActivities((prevActivities) =>
-          prevActivities.map((activity) =>
-            activity.id === targetId
-              ? {
-                  ...activity,
-                  name: exerciseName,
-                  details,
-                  isCompleted: nextCompleted,
-                  sessionId: serverSessionId,
-                  sets,
-                  imageUrl: meta?.imageUrl || activity.imageUrl,
-                  comment:
-                    nextCompleted && commentToSave !== undefined
-                      ? commentToSave
-                      : nextCompleted
-                      ? activity.comment
-                      : undefined,
-                }
-              : activity
-          )
-        );
-      } else {
-        const selectedDateStr = `${activeDate.getFullYear()}-${String(
-          activeDate.getMonth() + 1
-        ).padStart(2, "0")}-${String(activeDate.getDate()).padStart(2, "0")}`;
-        const newWorkout: Activity = {
-          id: Date.now(),
-          name: exerciseName,
-          details,
-          time: new Date().toLocaleTimeString("ko-KR", {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: true,
-          }),
-          date: selectedDateStr,
-          isCompleted: allSetsCompleted,
-          sessionId: serverSessionId,
-          imageUrl: meta?.imageUrl,
-          sets,
-          comment: commentToSave,
-        };
-        setAllActivities((prevActivities) => [...prevActivities, newWorkout]);
-        if (allSetsCompleted) {
-          setCompletedCountPersist(completedThisWeek + 1);
-        }
       }
-    } catch (e: any) {
-      console.error("[WORKOUT][POST][FAIL]", e);
-      Alert.alert(
-        "운동 기록 저장 실패",
-        e?.response?.data?.message || e?.message || "알 수 없는 오류"
+      const targetId = selectedExercise.id;
+      setAllActivities((prevActivities) =>
+        prevActivities.map((activity) =>
+          activity.id === targetId
+            ? {
+                ...activity,
+                name: exerciseName,
+                details,
+                isCompleted: skipServerSave
+                  ? activity.isCompleted
+                  : allSetsCompleted,
+                sessionId: serverSessionId ?? activity.sessionId,
+                sets,
+                imageUrl: meta?.imageUrl || activity.imageUrl,
+                externalId: meta?.externalId || activity.externalId,
+                comment:
+                  !skipServerSave && allSetsCompleted
+                    ? commentToSave
+                    : activity.comment,
+              }
+            : activity
+        )
       );
-      return undefined; // 에러 시 undefined 반환
+    } else {
+      const selectedDateStr = `${activeDate.getFullYear()}-${String(
+        activeDate.getMonth() + 1
+      ).padStart(2, "0")}-${String(activeDate.getDate()).padStart(2, "0")}`;
+      const newWorkout: Activity = {
+        id: Date.now(),
+        name: exerciseName,
+        details,
+        time: new Date().toLocaleTimeString("ko-KR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        }),
+        date: selectedDateStr,
+        isCompleted: skipServerSave ? false : allSetsCompleted,
+        sessionId: serverSessionId,
+        imageUrl: meta?.imageUrl,
+        externalId: meta?.externalId,
+        sets,
+        comment: skipServerSave ? undefined : commentToSave,
+      };
+      setAllActivities((prevActivities) => [...prevActivities, newWorkout]);
+      if (!skipServerSave && allSetsCompleted) {
+        setCompletedCountPersist(completedThisWeek + 1);
+      }
     }
 
     // 운동 선택 화면에서 저장한 경우 WorkoutIntroModal 닫기
@@ -1584,7 +2463,7 @@ const ExerciseScreen = ({ navigation }: any) => {
               const activityDate = new Date(activity.date);
               activityDate.setHours(0, 0, 0, 0);
               return (
-                activity.isCompleted &&
+                isActivityFullyCompleted(activity) &&
                 activityDate >= thisWeekStart &&
                 activityDate <= today
               );
@@ -1620,7 +2499,10 @@ const ExerciseScreen = ({ navigation }: any) => {
 
   return (
     <ContainerComponent style={styles.container}>
-      <ScrollView style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+      >
         {/* 월 네비게이션 */}
         <View style={styles.monthNavigation}>
           <View style={styles.monthNavLeft}>
@@ -1881,12 +2763,17 @@ const ExerciseScreen = ({ navigation }: any) => {
                 <View
                   style={[
                     styles.progressFill,
-                    { width: `${getProgressPercentage()}%` },
+                    {
+                      width: `${Math.max(
+                        0,
+                        Math.min(100, getProgressPercentage)
+                      )}%`,
+                    },
                   ]}
                 />
               </View>
               <Text style={styles.progressText}>
-                {getProgressPercentage()}%
+                {Math.max(0, Math.min(100, getProgressPercentage))}%
               </Text>
             </View>
           </View>
@@ -1897,130 +2784,419 @@ const ExerciseScreen = ({ navigation }: any) => {
         <View style={styles.logSection}>
           <View style={styles.sectionTitleRow}>
             <Text style={styles.sectionTitle}>운동 기록하기</Text>
-            {todayTotalWorkoutSeconds > 0 && (
+            {hasIncompleteActivities && workoutActivities.length > 0 ? (
+              <TouchableOpacity
+                style={styles.startWorkoutButton}
+                onPress={handleStartWorkoutSequence}
+              >
+                <Text style={styles.startWorkoutButtonText}>시작</Text>
+              </TouchableOpacity>
+            ) : todayTotalWorkoutSeconds > 0 ? (
               <Text style={styles.todayWorkoutTimeText}>
                 오늘 총 운동 시간: {formatWorkoutTime(todayTotalWorkoutSeconds)}
               </Text>
-            )}
+            ) : null}
           </View>
 
           <View style={styles.logTimeline}>
-            {activities.map((activity, index) => (
-              <View key={activity.id} style={styles.logItem}>
-                <TouchableOpacity
-                  style={[
-                    styles.logCard,
-                    activity.isCompleted
-                      ? styles.logCardCompleted
-                      : styles.logCardPending,
-                  ]}
-                  onPress={() => handleExerciseClick(activity)}
-                >
-                  <View style={styles.logCardContent}>
-                    {/* 운동 이미지 */}
-                    {(() => {
-                      const imageUrl =
-                        activity.imageUrl ||
-                        (activity.externalId
-                          ? exerciseImages[activity.externalId]
-                          : null) ||
-                        (activity.name
-                          ? exerciseImagesByName[activity.name.toLowerCase()]
-                          : null);
+            {orderedActivities.map((activity, index) => {
+              const activityCompleted = isActivityFullyCompleted(activity);
+              const meta = groupedActivityMeta.get(activity.id);
+              const groupInfo = meta
+                ? {
+                    title: meta.title,
+                    isFirst: meta.isFirst,
+                    isLast: meta.isLast,
+                    sessionIds: meta.sessionIds,
+                  }
+                : null;
+              const isSavedRecord = !!groupInfo;
+              const showCompletedVisuals = activityCompleted && !isSavedRecord;
+              const detailText = cleanExerciseDetails(activity.details);
+              const savedTime =
+                activity.sessionId &&
+                savedSessionTimes.get(activity.sessionId || "");
+              const displayTime = activityCompleted
+                ? isSavedRecord
+                  ? ""
+                  : activity.time
+                : "";
 
-                      if (imageUrl) {
-                        return (
-                          <Image
-                            source={{ uri: imageUrl }}
-                            style={styles.logCardImage}
-                            resizeMode="cover"
-                          />
-                        );
-                      }
-                      return (
-                        <View style={styles.logCardImagePlaceholder}>
-                          <Icon
-                            name="barbell"
-                            size={24}
-                            color={colors.textLight}
-                          />
-                        </View>
-                      );
-                    })()}
-                    <View style={styles.logTextBlock}>
-                      <Text
-                        style={[
-                          styles.logName,
-                          !activity.isCompleted && styles.logNamePending,
-                          activity.isCompleted && styles.logNameCompleted,
-                        ]}
-                      >
-                        {activity.name}
+              const nameStyles: Array<TextStyle | undefined> = [styles.logName];
+              if (!activityCompleted) {
+                nameStyles.push(styles.logNamePending);
+              } else if (showCompletedVisuals) {
+                nameStyles.push(styles.logNameCompleted);
+              }
+              if (isSavedRecord) {
+                nameStyles.push(styles.logNameSaved);
+              }
+
+              const groupSavedTime =
+                groupInfo?.sessionIds
+                  ?.map((id) => (id ? savedSessionTimes.get(id) : ""))
+                  ?.find((time) => !!time) || "";
+
+              return (
+                <View key={activity.id}>
+                  {groupInfo?.isFirst && (
+                    <View style={styles.logGroupHeader}>
+                      <Text style={styles.logGroupTitle}>
+                        {groupInfo.title}
                       </Text>
-                      <Text
-                        style={[
-                          styles.logDetails,
-                          activity.isCompleted && styles.logDetailsCompleted,
-                        ]}
-                      >
-                        {activity.details}
-                      </Text>
+                      {groupSavedTime ? (
+                        <Text style={styles.logGroupTime}>
+                          {groupSavedTime}
+                        </Text>
+                      ) : null}
                     </View>
-                  </View>
-                  <Text
+                  )}
+                  <View
                     style={[
-                      styles.logTime,
-                      activity.isCompleted && styles.logTimeCompleted,
+                      styles.logItem,
+                      groupInfo && styles.logItemGrouped,
+                      groupInfo?.isFirst && styles.logItemGroupFirst,
+                      groupInfo?.isLast && styles.logItemGroupLast,
                     ]}
                   >
-                    {activity.time}
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.deleteBtn}
-                    onPress={() =>
-                      handleDeleteWorkout(activity.id, activity.sessionId)
-                    }
-                  >
-                    <Icon name="trash" size={18} color={colors.textLight} />
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              </View>
-            ))}
-            <View style={styles.addItem}>
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.stretchActionBtn]}
-                onPress={handleStretchButtonPress}
-              >
-                <Text style={styles.actionBtnText}>스트레칭</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.workoutActionBtn]}
-                onPress={handleWorkoutStartPress}
-              >
-                <Text style={[styles.actionBtnText, styles.workoutActionText]}>
-                  운동 시작하기
-                </Text>
-              </TouchableOpacity>
-            </View>
+                    <TouchableOpacity
+                      style={[
+                        styles.logCard,
+                        showCompletedVisuals
+                          ? styles.logCardCompleted
+                          : styles.logCardPending,
+                        groupInfo && styles.logCardGrouped,
+                        groupInfo?.isFirst && styles.logCardGroupFirst,
+                        groupInfo?.isLast && styles.logCardGroupLast,
+                      ]}
+                      onPress={() => handleExerciseClick(activity)}
+                    >
+                      <View style={styles.logCardContent}>
+                        {/* 운동 이미지 */}
+                        {(() => {
+                          const imageUrl =
+                            activity.imageUrl ||
+                            (activity.externalId
+                              ? exerciseImages[activity.externalId]
+                              : null) ||
+                            (activity.name
+                              ? exerciseImagesByName[
+                                  activity.name.toLowerCase()
+                                ]
+                              : null);
+
+                          if (imageUrl) {
+                            return (
+                              <Image
+                                source={{ uri: imageUrl }}
+                                style={styles.logCardImage}
+                                resizeMode="cover"
+                              />
+                            );
+                          }
+                          return (
+                            <View style={styles.logCardImagePlaceholder}>
+                              <Icon
+                                name="barbell"
+                                size={24}
+                                color={colors.textLight}
+                              />
+                            </View>
+                          );
+                        })()}
+                        <View style={styles.logTextBlock}>
+                          <View style={styles.logTextHeader}>
+                            <Text style={nameStyles}>{activity.name}</Text>
+                            {displayTime ? (
+                              <Text
+                                style={[
+                                  styles.logTime,
+                                  showCompletedVisuals &&
+                                    styles.logTimeCompleted,
+                                ]}
+                              >
+                                {displayTime}
+                              </Text>
+                            ) : null}
+                          </View>
+                          {detailText ? (
+                            <Text
+                              style={[
+                                styles.logDetails,
+                                showCompletedVisuals &&
+                                  styles.logDetailsCompleted,
+                              ]}
+                            >
+                              {detailText}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.deleteBtn}
+                        onPress={() =>
+                          handleDeleteWorkout(activity.id, activity.sessionId)
+                        }
+                      >
+                        <Icon name="trash" size={18} color={colors.textLight} />
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
           </View>
         </View>
 
         {/* 서버 기록 섹션 제거됨 */}
       </ScrollView>
 
+      {showAddOptions && (
+        <TouchableWithoutFeedback onPress={() => setShowAddOptions(false)}>
+          <View style={styles.fabBackdrop} />
+        </TouchableWithoutFeedback>
+      )}
+      <View style={styles.fabWrapper}>
+        {showAddOptions && (
+          <View style={styles.fabOptions}>
+            <TouchableOpacity
+              style={styles.fabOptionButton}
+              onPress={handleStretchOptionSelect}
+            >
+              <Text style={styles.fabOptionText}>스트레칭</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.fabOptionButton}
+              onPress={handleWorkoutOptionSelect}
+            >
+              <Text style={styles.fabOptionText}>운동 추가</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        <TouchableOpacity
+          style={styles.fabButton}
+          onPress={() => setShowAddOptions((prev) => !prev)}
+        >
+          <Icon
+            name={showAddOptions ? "close" : "add"}
+            size={28}
+            color={colors.black}
+          />
+        </TouchableOpacity>
+      </View>
+
       <ExerciseModal
         isOpen={isModalOpen}
         onClose={handleModalClose}
         mode={modalMode}
         exerciseData={selectedExercise}
+        sequenceActivities={sequenceActivitiesWithLatestSets}
+        sequenceIndex={exerciseSequenceIndex}
+        onSequenceNavigate={handleSequenceNavigate}
         onSave={handleExerciseSave}
-        onWorkoutComplete={(exercises) => {
+        isCompleted={selectedExerciseCompleted}
+        onWorkoutComplete={async (exercises) => {
           setCompletedExercises(exercises);
           setCompletionSummaryTitle("오늘의 운동");
           setShowCompletionModal(true);
+
+          // 운동 완료 후 주간 진행률을 다시 가져와서 게이지 업데이트
+          setTimeout(async () => {
+            try {
+              await loadWeeklyCalories();
+            } catch (error) {
+              console.error(
+                "[PROGRESS] 운동 완료 후 주간 진행률 새로고침 실패:",
+                error
+              );
+            }
+          }, 500);
+
+          setAllActivities((prevActivities) => {
+            const remaining = [...exercises];
+            const today = new Date();
+            const todayStr = formatDateToString(today);
+
+            const takeMatch = (activity: Activity) => {
+              const matchBy = (predicate: (ex: any) => boolean) => {
+                const index = remaining.findIndex(predicate);
+                if (index === -1) return null;
+                const match = remaining[index];
+                remaining.splice(index, 1);
+                return match;
+              };
+
+              return (
+                matchBy(
+                  (ex) => ex.activityId && ex.activityId === activity.id
+                ) ||
+                matchBy(
+                  (ex) =>
+                    ex.sessionId &&
+                    activity.sessionId &&
+                    ex.sessionId === activity.sessionId
+                ) ||
+                matchBy(
+                  (ex) =>
+                    ex.externalId &&
+                    activity.externalId &&
+                    ex.externalId === activity.externalId &&
+                    ex.name === activity.name
+                ) ||
+                matchBy(
+                  (ex) =>
+                    !ex.sessionId &&
+                    !activity.sessionId &&
+                    ex.name === activity.name &&
+                    activity.date === todayStr
+                )
+              );
+            };
+
+            // 기존 활동 업데이트
+            const updatedActivities = prevActivities.map((activity) => {
+              const matched = takeMatch(activity);
+              if (!matched) return activity;
+
+              const setsToApply = matched.sets ?? activity.sets;
+              const completed =
+                matched.allSetsCompleted ??
+                (Array.isArray(setsToApply) &&
+                  setsToApply.length > 0 &&
+                  setsToApply.every((set: any) => set?.isCompleted === true));
+
+              return {
+                ...activity,
+                isCompleted: completed ? true : activity.isCompleted,
+                sets: setsToApply,
+                comment: matched.comment ?? activity.comment,
+                sessionId: matched.sessionId ?? activity.sessionId,
+                externalId: matched.externalId ?? activity.externalId,
+              };
+            });
+
+            // 매칭되지 않은 운동들을 새로 추가
+            const newActivities: Activity[] = remaining.map((ex) => {
+              const setsToApply = ex.sets ?? [];
+              const completed =
+                ex.allSetsCompleted ??
+                (Array.isArray(setsToApply) &&
+                  setsToApply.length > 0 &&
+                  setsToApply.every((set: any) => set?.isCompleted === true));
+
+              return {
+                id: ex.activityId ?? Date.now() + Math.random(),
+                name: ex.name,
+                details:
+                  setsToApply.length > 0
+                    ? `${setsToApply[0]?.weight || 0}kg ${
+                        setsToApply[0]?.reps || 0
+                      }회 ${setsToApply.length}세트`
+                    : "",
+                time: new Date().toLocaleTimeString("ko-KR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: true,
+                }),
+                date: todayStr,
+                isCompleted: completed ? true : false,
+                sessionId: ex.sessionId,
+                imageUrl: ex.imageUrl,
+                externalId: ex.externalId,
+                sets: setsToApply,
+                comment: ex.comment,
+              };
+            });
+
+            return [...updatedActivities, ...newActivities];
+          });
           handleModalClose();
         }}
-        fullScreen={modalMode === "add"}
+        onFeedbackUpdate={(exerciseName, feedback) => {
+          setExerciseFeedbacks((prev) => ({
+            ...prev,
+            [exerciseName]: feedback,
+          }));
+        }}
+        onSetChange={(exerciseName, sets, meta) => {
+          // 세트 변경 시 즉시 allActivities 업데이트
+          const allSetsCompleted =
+            sets.length > 0 &&
+            sets.every((set: any) => set?.isCompleted === true);
+
+          setAllActivities((prevActivities) => {
+            // activityId로 먼저 매칭 시도
+            if (meta?.activityId) {
+              return prevActivities.map((activity) => {
+                if (activity.id === meta.activityId) {
+                  return {
+                    ...activity,
+                    sets,
+                    details: buildDetailsFromSets(sets),
+                    isCompleted: allSetsCompleted ? true : activity.isCompleted,
+                  };
+                }
+                return activity;
+              });
+            }
+
+            // sessionId로 매칭 시도
+            if (meta?.sessionId) {
+              return prevActivities.map((activity) => {
+                if (activity.sessionId === meta.sessionId) {
+                  return {
+                    ...activity,
+                    sets,
+                    details: buildDetailsFromSets(sets),
+                    isCompleted: allSetsCompleted ? true : activity.isCompleted,
+                  };
+                }
+                return activity;
+              });
+            }
+
+            // externalId + name으로 매칭 시도
+            if (meta?.externalId && exerciseName) {
+              return prevActivities.map((activity) => {
+                if (
+                  activity.externalId === meta.externalId &&
+                  activity.name === exerciseName
+                ) {
+                  return {
+                    ...activity,
+                    sets,
+                    details: buildDetailsFromSets(sets),
+                    isCompleted: allSetsCompleted ? true : activity.isCompleted,
+                  };
+                }
+                return activity;
+              });
+            }
+
+            // name만으로 매칭 시도 (오늘 날짜의 운동만)
+            if (exerciseName) {
+              const today = new Date();
+              const todayStr = formatDateToString(today);
+              return prevActivities.map((activity) => {
+                if (
+                  activity.name === exerciseName &&
+                  activity.date === todayStr
+                ) {
+                  return {
+                    ...activity,
+                    sets,
+                    details: buildDetailsFromSets(sets),
+                    isCompleted: allSetsCompleted ? true : activity.isCompleted,
+                  };
+                }
+                return activity;
+              });
+            }
+
+            return prevActivities;
+          });
+        }}
+        fullScreen={modalMode !== "add"}
       />
       <WorkoutIntroModal
         visible={isIntroVisible}
@@ -2064,6 +3240,12 @@ const ExerciseScreen = ({ navigation }: any) => {
                   setShowCompletionModal(true);
                   setIsIntroVisible(false);
                   setIntroStage("intro");
+                },
+                onFeedbackUpdate: (exerciseName, feedback) => {
+                  setExerciseFeedbacks((prev) => ({
+                    ...prev,
+                    [exerciseName]: feedback,
+                  }));
                 },
               }
             : undefined
@@ -2110,41 +3292,6 @@ const ExerciseScreen = ({ navigation }: any) => {
                   placeholderTextColor="#9a9a9a"
                 />
               </View>
-              {savedWorkoutTitles.length > 0 && (
-                <View style={styles.savedTitleSuggestions}>
-                  <Text style={styles.savedTitleSuggestionsLabel}>
-                    최근 저장한 제목
-                  </Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.savedTitleChips}
-                  >
-                    {savedWorkoutTitles.map((title) => {
-                      const isSelected = trimmedCompletionTitle === title;
-                      return (
-                        <TouchableOpacity
-                          key={title}
-                          style={[
-                            styles.savedTitleChip,
-                            isSelected && styles.savedTitleChipSelected,
-                          ]}
-                          onPress={() => setCompletionSummaryTitle(title)}
-                        >
-                          <Text
-                            style={[
-                              styles.savedTitleChipText,
-                              isSelected && styles.savedTitleChipTextSelected,
-                            ]}
-                          >
-                            {title}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-              )}
               {completionSaveErrorDetail && (
                 <View style={styles.saveErrorLogBox}>
                   <View style={styles.saveErrorLogHeader}>
@@ -2171,111 +3318,113 @@ const ExerciseScreen = ({ navigation }: any) => {
                   {String(new Date().getDate()).padStart(2, "0")}
                 </Text>
                 <View style={styles.completedExercisesList}>
-                  {/* 오늘 완료된 운동 및 스트레칭 모두 표시 */}
+                  {/* completedExercises를 직접 표시 - 이미 저장된 내역은 제외 */}
                   {(() => {
-                    const today = new Date();
-                    const todayStr = formatDateToString(today);
-
-                    // 오늘 완료된 모든 활동 (운동 + 스트레칭)
-                    const todayCompletedActivities = allActivities.filter(
-                      (activity) =>
-                        activity.date === todayStr && activity.isCompleted
+                    // savedWorkouts + pendingSavedRefs 를 기준으로 이미 저장된 내역 제외
+                    const savedSessionIds = new Set<string>();
+                    savedWorkouts.forEach((group) => {
+                      group.sessions.forEach((session) => {
+                        if (session.sessionId) {
+                          savedSessionIds.add(session.sessionId);
+                        }
+                      });
+                    });
+                    const pendingSessionIds = new Set(
+                      pendingSavedRefs.sessionIds
+                    );
+                    const pendingActivityIds = new Set(
+                      pendingSavedRefs.activityIds
+                    );
+                    const pendingExternalKeys = new Set(
+                      pendingSavedRefs.externalKeys
                     );
 
-                    // 운동은 completedExercises에서, 스트레칭은 allActivities에서 가져오기
-                    const exerciseMap = new Map<string, any>();
-                    completedExercises.forEach((ex) => {
-                      exerciseMap.set(ex.name, ex);
-                    });
-
-                    // allActivities에서 오늘 완료된 항목들을 시간순으로 정렬
-                    const allItems = todayCompletedActivities.map(
-                      (activity) => {
-                        const isStretch =
-                          activity.details?.includes("스트레칭") ||
-                          activity.name?.includes("스트레칭");
-                        const exerciseData = exerciseMap.get(activity.name);
-                        const externalId =
-                          activity.externalId || exerciseData?.externalId;
-                        const idKey = externalId
-                          ? String(externalId)
-                          : undefined;
-                        const nameKey = activity.name
-                          ? activity.name.toLowerCase()
-                          : undefined;
-
-                        // 이미지 URL 우선순위: activity.imageUrl > exerciseData?.imageUrl > exerciseImages[externalId] > exerciseImagesByName[name]
-                        const displayUrl =
-                          activity.imageUrl ||
-                          exerciseData?.imageUrl ||
-                          (idKey ? exerciseImages[idKey] : undefined) ||
-                          (nameKey ? exerciseImagesByName[nameKey] : undefined);
-
-                        const setsCompleted = Array.isArray(activity.sets)
-                          ? activity.sets.filter((set: any) => set?.isCompleted)
-                              .length
-                          : exerciseData?.sets?.filter(
-                              (set: any) => set?.isCompleted
-                            ).length || 0;
-                        const totalSets = Array.isArray(activity.sets)
-                          ? activity.sets.length
-                          : exerciseData?.sets?.length || 0;
-
-                        return {
-                          name: activity.name,
-                          targetMuscle: isStretch
-                            ? activity.details?.replace(" 스트레칭", "") || ""
-                            : exerciseData?.targetMuscle || "",
-                          imageUrl: displayUrl,
-                          isStretch,
-                          activityId: activity.id,
-                          setsCompleted,
-                          totalSets,
-                        };
+                    const newCompletedExercises = completedExercises.filter(
+                      (ex) => {
+                        const sessionId = ex.sessionId;
+                        const activityId = ex.activityId;
+                        const externalKey =
+                          ex.externalId && ex.name
+                            ? `${ex.externalId}__${ex.name}`
+                            : null;
+                        const alreadySavedBySession =
+                          sessionId &&
+                          (savedSessionIds.has(sessionId) ||
+                            pendingSessionIds.has(sessionId));
+                        const alreadySavedByActivity =
+                          typeof activityId === "number" &&
+                          pendingActivityIds.has(activityId);
+                        const alreadySavedByExternal =
+                          externalKey && pendingExternalKeys.has(externalKey);
+                        return !(
+                          alreadySavedBySession ||
+                          alreadySavedByActivity ||
+                          alreadySavedByExternal
+                        );
                       }
                     );
 
-                    return allItems.map((item, index) => (
-                      <View
-                        key={index}
-                        style={[
-                          styles.completedExerciseItem,
-                          index === allItems.length - 1 &&
-                            styles.completedExerciseItemLast,
-                        ]}
-                      >
-                        <View style={styles.completedExerciseIcon}>
-                          {item.imageUrl ? (
-                            <Image
-                              source={{ uri: item.imageUrl }}
-                              style={styles.completedExerciseImage}
-                              resizeMode="cover"
-                            />
-                          ) : (
-                            <Icon
-                              name={item.isStretch ? "fitness" : "barbell"}
-                              size={24}
-                              color="#666666"
-                            />
-                          )}
-                        </View>
-                        <View style={styles.completedExerciseInfo}>
-                          <View style={styles.completedExerciseNameRow}>
-                            <Text style={styles.completedExerciseName}>
-                              {item.name}
-                            </Text>
-                            {item.totalSets > 0 && (
-                              <Text style={styles.completedExerciseTime}>
-                                {item.setsCompleted}/{item.totalSets}세트
-                              </Text>
+                    if (newCompletedExercises.length === 0) {
+                      return (
+                        <Text style={styles.completedExerciseName}>
+                          완료된 운동이 없습니다.
+                        </Text>
+                      );
+                    }
+
+                    return newCompletedExercises.map((ex, index) => {
+                      const externalId = ex.externalId;
+                      const idKey = externalId ? String(externalId) : undefined;
+                      const nameKey = ex.name
+                        ? ex.name.toLowerCase()
+                        : undefined;
+
+                      // 이미지 URL 우선순위: ex.imageUrl > exerciseImages[externalId] > exerciseImagesByName[name]
+                      const displayUrl =
+                        ex.imageUrl ||
+                        (idKey ? exerciseImages[idKey] : undefined) ||
+                        (nameKey ? exerciseImagesByName[nameKey] : undefined);
+
+                      const setsCompleted = Array.isArray(ex.sets)
+                        ? ex.sets.filter(
+                            (set: any) => set?.isCompleted === true
+                          ).length
+                        : 0;
+                      const totalSets = Array.isArray(ex.sets)
+                        ? ex.sets.length
+                        : 0;
+
+                      return (
+                        <View
+                          key={index}
+                          style={[
+                            styles.completedExerciseItem,
+                            index === newCompletedExercises.length - 1 &&
+                              styles.completedExerciseItemLast,
+                          ]}
+                        >
+                          <View style={styles.completedExerciseIcon}>
+                            {displayUrl ? (
+                              <Image
+                                source={{ uri: displayUrl }}
+                                style={styles.completedExerciseImage}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <Icon name="barbell" size={24} color="#666666" />
                             )}
                           </View>
-                          <Text style={styles.completedExerciseMuscle}>
-                            {item.targetMuscle || ""}
-                          </Text>
+                          <View style={styles.completedExerciseInfo}>
+                            <Text style={styles.completedExerciseName}>
+                              {ex.name}
+                            </Text>
+                            <Text style={styles.completedExerciseMuscle}>
+                              {ex.targetMuscle || ""}
+                            </Text>
+                          </View>
                         </View>
-                      </View>
-                    ));
+                      );
+                    });
                   })()}
                 </View>
               </View>
@@ -2338,6 +3487,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 20,
+  },
+  contentContainer: {
+    paddingBottom: 140,
   },
   weekCalendar: {
     marginTop: 1,
@@ -2461,7 +3613,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginTop: 10,
-    marginBottom: 16,
+    marginBottom: 24,
   },
   goalContent: {
     flex: 1,
@@ -2524,7 +3676,47 @@ const styles = StyleSheet.create({
   },
   logItem: {
     flexDirection: "row",
+    marginBottom: 12,
+  },
+  logItemGrouped: {
+    marginBottom: 0,
+  },
+  logItemGroupFirst: {
+    marginTop: 0,
+    marginBottom: 0,
+  },
+  logItemGroupLast: {
     marginBottom: 16,
+  },
+  logGroupHeader: {
+    width: "100%",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "rgba(214, 255, 75, 0.15)",
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderRightWidth: 3,
+    borderTopColor: "#d6ff4b",
+    borderLeftColor: "#d6ff4b",
+    borderRightColor: "#d6ff4b",
+    borderBottomWidth: 2,
+    borderBottomColor: "#d6ff4b",
+    marginBottom: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  logGroupTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  logGroupTime: {
+    fontSize: 12,
+    color: colors.textLight,
   },
   timelineLine: {
     alignItems: "center",
@@ -2549,11 +3741,30 @@ const styles = StyleSheet.create({
   logCard: {
     flex: 1,
     borderRadius: 12,
-    paddingVertical: 12,
+    paddingVertical: 8,
     paddingHorizontal: 16,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  logCardGrouped: {
+    borderRadius: 0,
+    borderLeftWidth: 3,
+    borderRightWidth: 3,
+    borderLeftColor: "#d6ff4b",
+    borderRightColor: "#d6ff4b",
+  },
+  logCardGroupFirst: {
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderTopWidth: 3,
+    borderTopColor: "#d6ff4b",
+  },
+  logCardGroupLast: {
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    borderBottomWidth: 3,
+    borderBottomColor: "#d6ff4b",
   },
   deleteBtn: {
     marginLeft: 12,
@@ -2563,24 +3774,26 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   logCardCompleted: {
-    backgroundColor: colors.cardBackground,
+    backgroundColor: "#f0f0f0",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
   },
   logCardContent: {
     flex: 1,
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
     alignItems: "center",
   },
   logCardImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 6,
     backgroundColor: colors.cardBackground,
   },
   logCardImagePlaceholder: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 6,
     backgroundColor: colors.cardBackground,
     justifyContent: "center",
     alignItems: "center",
@@ -2589,17 +3802,26 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
+  logTextHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
   logName: {
     fontSize: 16,
     fontWeight: "600",
     color: colors.text,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   logNamePending: {
     color: colors.black,
   },
   logNameCompleted: {
     color: colors.textLight, // 완료된 항목은 회색 텍스트
+  },
+  logNameSaved: {
+    color: colors.black,
   },
   logDetails: {
     fontSize: 14,
@@ -2617,42 +3839,67 @@ const styles = StyleSheet.create({
     color: colors.textLight, // 완료된 항목은 회색 텍스트
     opacity: 0.7, // 더 연한 회색 효과
   },
-  addItem: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 12,
+  startWorkoutButton: {
+    backgroundColor: "#4a9eff", // 파란색
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    marginRight: 8,
+  },
+  startWorkoutButtonText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "600",
   },
   todayWorkoutTimeText: {
     fontSize: 11,
     color: colors.textLight,
     opacity: 0.7,
   },
-  actionBtn: {
-    flex: 1,
-    borderRadius: 12,
-    paddingVertical: 14,
+  fabWrapper: {
+    position: "absolute",
+    right: 24,
+    bottom: 24,
+    alignItems: "flex-end",
+    gap: 12,
+  },
+  fabButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#E3FF7C",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.grayDark,
-    minWidth: 0,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 6,
   },
-  stretchActionBtn: {
-    backgroundColor: colors.grayDark,
-    borderColor: colors.grayLight,
+  fabOptions: {
+    backgroundColor: "#ffffff",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    gap: 12,
+    minWidth: 160,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 8,
   },
-  workoutActionBtn: {
-    backgroundColor: "#E3FF7C",
-    borderColor: "#E3FF7C",
+  fabOptionButton: {
+    paddingVertical: 6,
   },
-  actionBtnText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: colors.text,
-  },
-  workoutActionText: {
+  fabOptionText: {
     color: colors.black,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  fabBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.2)",
   },
   stretchModalWrapper: {
     flex: 1,
@@ -3160,11 +4407,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E0E0E0",
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: "#f2f2f2",
+    marginBottom: 8,
   },
   completedExerciseItemLast: {
-    borderBottomWidth: 0,
+    marginBottom: 0,
   },
   completedExerciseIcon: {
     width: 40,
@@ -3186,20 +4435,25 @@ const styles = StyleSheet.create({
   completedExerciseNameRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+    columnGap: 8,
+    rowGap: 2,
     marginBottom: 4,
   },
   completedExerciseName: {
     fontSize: 16,
     fontWeight: "600",
     color: "#000000",
-    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
   },
   completedExerciseTime: {
     fontSize: 14,
     fontWeight: "400",
     color: "#666666",
     marginLeft: 8,
+    textAlign: "right",
   },
   completedExerciseMuscle: {
     fontSize: 14,
@@ -3243,38 +4497,6 @@ const styles = StyleSheet.create({
   completionConfirmButtonText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#ffffff",
-  },
-  savedTitleSuggestions: {
-    width: "100%",
-    marginBottom: 16,
-  },
-  savedTitleSuggestionsLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#777777",
-    marginBottom: 8,
-  },
-  savedTitleChips: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  savedTitleChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    backgroundColor: "#f0f0f0",
-    marginRight: 8,
-  },
-  savedTitleChipSelected: {
-    backgroundColor: "#4CAF50",
-  },
-  savedTitleChipText: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#333333",
-  },
-  savedTitleChipTextSelected: {
     color: "#ffffff",
   },
   saveErrorLogBox: {
@@ -3475,6 +4697,13 @@ interface WorkoutIntroModalProps {
         targetMuscle?: string;
         imageUrl?: string;
       }>
+    ) => void;
+    onFeedbackUpdate?: (
+      exerciseName: string,
+      feedback: {
+        intensity: "heavy" | "light" | null;
+        feedback: "like" | "dislike" | null;
+      }
     ) => void;
   };
 }
@@ -3930,6 +5159,7 @@ const WorkoutIntroModal = ({
             mode="add"
             onSave={exerciseModalProps.onSave}
             onWorkoutComplete={exerciseModalProps.onWorkoutComplete}
+            onFeedbackUpdate={exerciseModalProps.onFeedbackUpdate}
             fullScreen={true}
             renderContentOnly={true}
           />
