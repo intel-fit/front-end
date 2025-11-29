@@ -1,4 +1,4 @@
-import { request } from './apiConfig';
+import { request, AI_API_BASE_URL } from './apiConfig';
 import * as ImageManipulator from 'expo-image-manipulator';
 import type { 
   DailyMealsResponse, 
@@ -52,7 +52,7 @@ export const mealAPI = {
   //음식 검색
   searchFood: async (name: string): Promise<SearchFoodResponse[]> => {
     // 음식 검색 API는 8000 포트를 사용
-    const response = await fetch(`http://43.200.40.140:8000/food/search?name=${encodeURIComponent(name)}`, {
+    const response = await fetch(`${AI_API_BASE_URL}/food/search?name=${encodeURIComponent(name)}`, {
       method: 'GET',
       headers: {
         'accept': 'application/json',
@@ -69,7 +69,7 @@ export const mealAPI = {
   //직접 음식 입력
   addManualFood: async (foodData: AddManualFoodRequest): Promise<SearchFoodResponse> => {
     // 직접 음식 입력 API는 8000 포트를 사용
-    const response = await fetch('http://43.200.40.140:8000/food/add_manual_food', {
+    const response = await fetch(`${AI_API_BASE_URL}/food/add_manual_food`, {
       method: 'POST',
       headers: {
         'accept': 'application/json',
@@ -174,7 +174,7 @@ export const mealAPI = {
       });
 
       // API 호출
-      const response = await fetch('http://43.200.40.140:8000/food/upload_food', {
+      const response = await fetch(`${AI_API_BASE_URL}/food/upload_food`, {
         method: 'POST',
         headers: {
           'accept': 'application/json',
@@ -297,7 +297,7 @@ export const mealAPI = {
             type,
           });
 
-          const response = await fetch('http://43.200.40.140:8000/food/upload_food', {
+          const response = await fetch(`${AI_API_BASE_URL}/food/upload_food`, {
             method: 'POST',
             headers: {
               'accept': 'application/json',

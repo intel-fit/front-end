@@ -29,7 +29,7 @@ import {
 } from "../../utils/exerciseApi";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ACCESS_TOKEN_KEY } from "../../services/apiConfig";
+import { ACCESS_TOKEN_KEY, API_BASE_URL } from "../../services/apiConfig";
 import MacroDonut from "../../components/charts/MacroDonut";
 import { authAPI } from "../../services";
 import {
@@ -851,7 +851,7 @@ const AnalysisScreen = ({ navigation }: any) => {
       const monday = getThisWeekStart();
       const params = { thisWeekStart: toDateParam(monday) };
       const response = await axios.get<MealComparison>(
-        "http://43.200.40.140/api/meals/week-comparison",
+        `${API_BASE_URL}/api/meals/week-comparison`,
         {
           params,
           headers: {

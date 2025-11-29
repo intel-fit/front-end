@@ -1,8 +1,8 @@
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ACCESS_TOKEN_KEY } from "../services/apiConfig";
+import { ACCESS_TOKEN_KEY, API_BASE_URL } from "../services/apiConfig";
 
-const BASE_URL = "http://43.200.40.140/api/exercise-goal";
+const BASE_URL = `${API_BASE_URL}/api/exercise-goal`;
 
 export interface ExerciseGoalSummary {
   id?: number;
