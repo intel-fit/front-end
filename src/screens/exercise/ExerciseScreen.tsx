@@ -40,6 +40,7 @@ import { getExerciseGoalSummary } from "../../utils/exerciseGoalApi";
 import { eventBus } from "../../utils/eventBus";
 import { useDate } from "../../contexts/DateContext";
 import type { DailyProgressWeekItem } from "../../types";
+import { API_BASE_URL } from "../../services/apiConfig";
 
 interface Activity {
   id: number;
@@ -2218,7 +2219,7 @@ const ExerciseScreen = ({ navigation }: any) => {
     };
     console.log("[WORKOUT][LOCAL_SAVE]", sessionPayload);
     console.log(
-      "[WORKOUT] To record via API: POST http://43.200.40.140/api/workouts { ...payload above... }"
+      `[WORKOUT] To record via API: POST ${API_BASE_URL}/api/workouts { ...payload above... }`
     );
 
     const skipServerSave = options?.skipServerSave === true;

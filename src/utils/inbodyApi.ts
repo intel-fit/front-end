@@ -1,8 +1,8 @@
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ACCESS_TOKEN_KEY } from "../services/apiConfig";
+import { ACCESS_TOKEN_KEY, API_BASE_URL } from "../services/apiConfig";
 
-const INBODY_API_URL = "http://43.200.40.140/api/inbody";
+const INBODY_API_URL = `${API_BASE_URL}/api/inbody`;
 
 export interface InBodyPayload {
   measurementDate?: string; // "2025-08-04"

@@ -1,5 +1,5 @@
 import axios from "axios";
-import { ACCESS_TOKEN_KEY } from "../services/apiConfig";
+import { ACCESS_TOKEN_KEY, API_BASE_URL } from "../services/apiConfig";
 
 // ✅ RN 환경이 아닐 때도 안전하게 동작하도록
 let manualToken: string | null = null;
@@ -54,7 +54,7 @@ export const fetchExercises = async (
     queryParams.append("sort", params.sort);
   }
 
-  const url = `http://43.200.40.140/api/exercise-db?${queryParams.toString()}`;
+  const url = `${API_BASE_URL}/api/exercise-db?${queryParams.toString()}`;
 
   try {
     const response = await axios.get(url, {
@@ -111,7 +111,7 @@ export const testExerciseApi = async () => {
     console.log("🎯 테스트 성공! 결과:", JSON.stringify(result, null, 2));
 
     // 유저 운동 기록 조회 테스트
-    const workoutsUrl = `http://43.200.40.140/api/workouts/1`;
+    const workoutsUrl = `${API_BASE_URL}/api/workouts/1`;
     const res2 = await axios.get(workoutsUrl, {
       headers: {
         Authorization: `Bearer ${manualToken || ""}`,

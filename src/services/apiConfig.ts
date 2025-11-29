@@ -1,8 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // 백엔드 서버 주소
-export const API_BASE_URL = "http://43.200.40.140";
-export const AI_API_BASE_URL = "http://43.200.40.140:8000"; // AI 서버 주소
+export const API_BASE_URL = "https://intelfits.com";
+export const AI_API_BASE_URL = "https://intelfits.com"; // AI 서버 주소
 
 // 토큰 저장 키 (AsyncStorage에 저장할 때 사용)
 export const ACCESS_TOKEN_KEY = "access_token";

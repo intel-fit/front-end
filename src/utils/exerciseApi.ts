@@ -1,6 +1,6 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ACCESS_TOKEN_KEY } from '../services/apiConfig';
+import { ACCESS_TOKEN_KEY, API_BASE_URL } from '../services/apiConfig';
 import type { DailyProgressWeekItem } from '../types';
 
 interface ExerciseApiParams {
@@ -53,8 +53,8 @@ interface ExerciseApiResponse {
   empty: boolean;
 }
 
-const EXERCISE_API_URL = 'http://43.200.40.140/api/exercise-db';
-const WORKOUTS_API_URL = 'http://43.200.40.140/api/workouts';
+const EXERCISE_API_URL = `${API_BASE_URL}/api/exercise-db`;
+const WORKOUTS_API_URL = `${API_BASE_URL}/api/workouts`;
 const SAVED_WORKOUTS_API_URL = `${WORKOUTS_API_URL}/saved`;
 
 export const fetchExercises = async (params: ExerciseApiParams = {}): Promise<ExerciseApiResponse> => {
@@ -294,7 +294,7 @@ export const toggleWorkoutSession = async (sessionId: string): Promise<any> => {
 export const fetchWeeklyProgress = async (): Promise<DailyProgressWeekItem[]> => {
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-    const url = 'http://43.200.40.140/api/daily-progress/week';
+    const url = `${API_BASE_URL}/api/daily-progress/week`;
     console.log('주간 진행률 API 호출:', url);
     const response = await axios.get(url, {
       headers: {
@@ -353,7 +353,7 @@ export const fetchWeeklyProgress = async (): Promise<DailyProgressWeekItem[]> =>
 export const fetchMonthlyProgress = async (yearMonth: string): Promise<DailyProgressWeekItem[]> => {
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-    const url = `http://43.200.40.140/api/daily-progress/month?yearMonth=${encodeURIComponent(yearMonth)}`;
+    const url = `${API_BASE_URL}/api/daily-progress/month?yearMonth=${encodeURIComponent(yearMonth)}`;
     console.log('월별 진행률 API 호출:', url);
     const response = await axios.get(url, {
       headers: {
@@ -412,7 +412,7 @@ export const fetchMonthlyProgress = async (yearMonth: string): Promise<DailyProg
 export const fetchTodayProgress = async (): Promise<DailyProgressWeekItem> => {
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-    const url = 'http://43.200.40.140/api/daily-progress/today';
+    const url = `${API_BASE_URL}/api/daily-progress/today`;
     const response = await axios.get(url, {
       headers: {
         Authorization: `Bearer ${token || ''}`,
@@ -438,7 +438,7 @@ export const fetchTodayProgress = async (): Promise<DailyProgressWeekItem> => {
 export const fetchRecentProgress = async (days: number = 7): Promise<DailyProgressWeekItem[]> => {
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-    const url = `http://43.200.40.140/api/daily-progress/recent?days=${days}`;
+    const url = `${API_BASE_URL}/api/daily-progress/recent?days=${days}`;
     const response = await axios.get(url, {
       headers: {
         Authorization: `Bearer ${token || ''}`,
@@ -464,7 +464,7 @@ export const fetchRecentProgress = async (days: number = 7): Promise<DailyProgre
 export const fetchDateProgress = async (date: string): Promise<DailyProgressWeekItem> => {
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-    const url = `http://43.200.40.140/api/daily-progress/date?date=${encodeURIComponent(date)}`;
+    const url = `${API_BASE_URL}/api/daily-progress/date?date=${encodeURIComponent(date)}`;
     const response = await axios.get(url, {
       headers: {
         Authorization: `Bearer ${token || ''}`,
