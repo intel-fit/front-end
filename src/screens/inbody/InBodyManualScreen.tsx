@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import InBodyManualForm from "../../components/common/InBodyManualForm";
-import { postInBody, patchInBody, getInBodyByDate, InBodyPayload } from "../../utils/inbodyApi";
+import { postInBody, patchInBody, getInBodyByDate, getInBodyList, getLatestInBody, InBodyPayload } from "../../utils/inbodyApi";
 import { eventBus } from "../../utils/eventBus";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -349,11 +349,115 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
           ? await patchInBody(existingInBodyId, payload)
           : await postInBody(payload);
       } catch (e: any) {
-        throw e;
+        // POST 요청에서 409 에러가 발생하면 기존 기록이 있다는 의미
+        // 에러 응답에서 기존 기록 ID를 추출하여 PATCH로 재시도
+        if (!existingInBodyId && e?.response?.status === 409) {
+          console.log("[INBODY] 409 에러 발생, 기존 기록 ID 찾기 시도");
+          
+          // 에러 응답에서 기존 기록 ID 추출 시도
+          const errorData = e.response?.data;
+          let foundInBodyId: number | string | undefined;
+          
+          // 여러 가능한 경로에서 ID 찾기
+          if (errorData?.inBodyId) {
+            foundInBodyId = errorData.inBodyId;
+          } else if (errorData?.inBody?.id) {
+            foundInBodyId = errorData.inBody.id;
+          } else if (errorData?.id) {
+            foundInBodyId = errorData.id;
+          }
+          
+          // ID를 찾았으면 PATCH로 재시도
+          if (foundInBodyId) {
+            console.log("[INBODY] 기존 기록 ID 발견, PATCH로 재시도:", foundInBodyId);
+            try {
+              response = await patchInBody(foundInBodyId, payload);
+              existingInBodyId = foundInBodyId; // 성공 시 ID 저장
+            } catch (patchError: any) {
+              // PATCH도 실패하면 원래 에러를 다시 throw
+              console.error("[INBODY] PATCH 재시도 실패:", patchError);
+              throw patchError;
+            }
+          } else {
+            // ID를 찾지 못했으면 getLatestInBody로 최신 기록 확인
+            console.log("[INBODY] getLatestInBody로 최신 기록 확인 시도");
+            try {
+              const latestInBody = await getLatestInBody();
+              if (latestInBody?.id) {
+                // 최신 기록의 날짜와 현재 날짜 비교
+                const latestDate = latestInBody.measurementDate || latestInBody.date;
+                if (latestDate) {
+                  // 날짜 형식 정규화 (YYYY-MM-DD, YYYY.MM.DD 등)
+                  const normalizedLatestDate = latestDate.replace(/\./g, "-");
+                  const normalizedPayloadDate = payload.measurementDate?.replace(/\./g, "-");
+                  
+                  if (normalizedLatestDate === normalizedPayloadDate) {
+                    foundInBodyId = latestInBody.id;
+                    console.log("[INBODY] getLatestInBody에서 기존 기록 ID 발견, PATCH로 재시도:", foundInBodyId);
+                    response = await patchInBody(foundInBodyId, payload);
+                    existingInBodyId = foundInBodyId;
+                  } else {
+                    console.log("[INBODY] 최신 기록의 날짜가 일치하지 않음, getInBodyList로 시도");
+                    // 날짜가 일치하지 않으면 getInBodyList로 시도
+                    throw new Error("날짜 불일치");
+                  }
+                } else {
+                  console.log("[INBODY] 최신 기록에 날짜 정보 없음, getInBodyList로 시도");
+                  throw new Error("날짜 정보 없음");
+                }
+              } else {
+                console.log("[INBODY] 최신 기록 없음, getInBodyList로 시도");
+                throw new Error("최신 기록 없음");
+              }
+            } catch (latestError: any) {
+              // getLatestInBody 실패 또는 날짜 불일치 시 getInBodyList로 시도
+              if (latestError.message === "날짜 불일치" || latestError.message === "날짜 정보 없음" || latestError.message === "최신 기록 없음" || !latestError.response) {
+                console.log("[INBODY] getInBodyList로 기존 기록 찾기 시도");
+                try {
+                  const inBodyList = await getInBodyList();
+                  if (inBodyList?.success && Array.isArray(inBodyList.data)) {
+                    // 날짜로 필터링하여 기존 기록 찾기
+                    const existingRecord = inBodyList.data.find((record: any) => {
+                      const recordDate = record.measurementDate || record.date;
+                      if (!recordDate) return false;
+                      // 날짜 형식 정규화 (YYYY-MM-DD, YYYY.MM.DD 등)
+                      const normalizedRecordDate = recordDate.replace(/\./g, "-");
+                      const normalizedPayloadDate = payload.measurementDate?.replace(/\./g, "-");
+                      return normalizedRecordDate === normalizedPayloadDate;
+                    });
+                    
+                    if (existingRecord?.id) {
+                      foundInBodyId = existingRecord.id;
+                      console.log("[INBODY] getInBodyList에서 기존 기록 ID 발견, PATCH로 재시도:", foundInBodyId);
+                      response = await patchInBody(foundInBodyId, payload);
+                      existingInBodyId = foundInBodyId;
+                    } else {
+                      console.warn("[INBODY] getInBodyList에서도 기존 기록을 찾지 못함");
+                      throw e;
+                    }
+                  } else {
+                    console.warn("[INBODY] getInBodyList 응답 형식 오류");
+                    throw e;
+                  }
+                } catch (listError: any) {
+                  console.error("[INBODY] getInBodyList로 기존 기록 찾기 실패:", listError);
+                  throw e;
+                }
+              } else {
+                // getLatestInBody 자체가 실패한 경우 (네트워크 에러 등)
+                console.error("[INBODY] getLatestInBody 실패:", latestError);
+                throw e;
+              }
+            }
+          }
+        } else {
+          // 409가 아니거나 이미 existingInBodyId가 있으면 원래 에러를 throw
+          throw e;
+        }
       }
 
       if (response.success) {
-        eventBus.emit("inbodyUpdated");
+        eventBus.emit("inbodyUpdated", { measurementDate: payload.measurementDate });
         const savedInBodyId = response.inBody?.id ?? existingInBodyId ?? "N/A";
         await storeManualPayload(
           payload.measurementDate || measurementDate,

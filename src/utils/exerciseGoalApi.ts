@@ -48,14 +48,28 @@ export const getExerciseGoalSummary =
       return response.data;
     } catch (error: any) {
       if (axios.isAxiosError(error)) {
-        if (error.response?.status === 404) {
+        const status = error.response?.status;
+        const errorCode = error.response?.data?.code;
+        
+        // 404: 목표 없음 (일반적인 경우)
+        if (status === 404) {
           if (__DEV__) {
             console.log("[GOAL][GET] 목표 없음 (404)");
           }
           return null;
         }
+        
+        // 400 + COMMON_001: 목표 없음 (백엔드가 목표 없을 때 400을 반환하는 경우)
+        if (status === 400 && errorCode === "COMMON_001") {
+          if (__DEV__) {
+            console.log("[GOAL][GET] 목표 없음 (400 - COMMON_001)");
+          }
+          return null;
+        }
+        
         console.error("[GOAL][GET] API 에러:", {
-          status: error.response?.status,
+          status,
+          errorCode,
           data: error.response?.data,
           message: error.message,
         });

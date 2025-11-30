@@ -10,8 +10,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
-import { getLatestInBody } from "../../utils/inbodyApi";
+import { getLatestInBody, getInBodyByDate } from "../../utils/inbodyApi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { eventBus } from "../../utils/eventBus";
 
 const InBodyScreen = ({ navigation }: any) => {
   const [inBodyData, setInBodyData] = useState<any>(null);
@@ -210,6 +211,54 @@ const InBodyScreen = ({ navigation }: any) => {
       fetchInBodyData();
     }, [fetchInBodyData])
   );
+
+  // 인바디 업데이트 이벤트 구독
+  useEffect(() => {
+    const unsubscribe = eventBus.on("inbodyUpdated", async (payload) => {
+      console.log("[INBODY SCREEN] 인바디 업데이트 이벤트 수신, 데이터 새로고침", payload);
+      
+      // 저장된 날짜가 있으면 해당 날짜의 데이터를 조회, 없으면 최신 데이터 조회
+      if (payload.measurementDate) {
+        try {
+          setLoading(true);
+          console.log("[INBODY SCREEN] 저장된 날짜의 데이터 조회:", payload.measurementDate);
+          const response = await getInBodyByDate(payload.measurementDate);
+          
+          // 응답 구조 처리
+          const inBodyData = response?.success ? response.inBody : response;
+          
+          if (inBodyData && inBodyData.measurementDate) {
+            const normalizedDate = inBodyData.measurementDate.includes(".")
+              ? inBodyData.measurementDate
+              : inBodyData.measurementDate.replace(/-/g, ".");
+            
+            setInBodyData({
+              ...inBodyData,
+              measurementDate: normalizedDate,
+            });
+            console.log("[INBODY SCREEN] 저장된 날짜의 데이터 로드 완료");
+          } else {
+            // 날짜로 조회 실패 시 최신 데이터 조회
+            console.log("[INBODY SCREEN] 날짜로 조회 실패, 최신 데이터 조회");
+            fetchInBodyData();
+          }
+        } catch (error: any) {
+          console.error("[INBODY SCREEN] 날짜로 데이터 조회 실패, 최신 데이터 조회:", error);
+          // 날짜로 조회 실패 시 최신 데이터 조회
+          fetchInBodyData();
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        // 날짜 정보가 없으면 최신 데이터 조회
+        fetchInBodyData();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [fetchInBodyData]);
 
 
   // API 데이터에서 값 추출 헬퍼 함수
