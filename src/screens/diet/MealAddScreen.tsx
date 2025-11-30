@@ -476,6 +476,8 @@ const MealAddScreen = ({navigation, route}: any) => {
       carbs: Math.max(0, Math.round(carbs * 10) / 10), // 소수점 1자리
       protein: Math.max(0, Math.round(protein * 10) / 10),
       fat: Math.max(0, Math.round(fat * 10) / 10), // 소수점 1자리
+      // food_id 전달 (검색 또는 직접 입력에서 받은 음식 ID)
+      id: food.id || undefined,
       // optional 필드들은 제외 (sodium, cholesterol, sugar, fiber)
     };
     
@@ -577,6 +579,11 @@ const MealAddScreen = ({navigation, route}: any) => {
           fiber: finalFiber,
         };
         
+        // food_id 전달 (검색 또는 직접 입력에서 받은 음식 ID)
+        if (food.id !== undefined && food.id !== null && food.id > 0) {
+          foodData.id = food.id;
+        }
+        
         // optional 필드들 (값이 있을 때만 추가, undefined 제거)
         if (food.imageUrl) {
           foodData.imageUrl = food.imageUrl;
@@ -652,32 +659,62 @@ const MealAddScreen = ({navigation, route}: any) => {
         dateToUse.getDate() === today.getDate();
 
       if (isEditMode && mealData?.id) {
-        // 수정 모드: PUT 요청 (API가 없으면 일단 추가 API 사용)
-        await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
-        Alert.alert('성공', '식사가 수정되었습니다.', [
-          {
-            text: '확인',
-            onPress: async () => {
-              // 해당 날짜의 진행률 가져오기
-              let dateProgress: DailyProgressWeekItem | null = null;
-              try {
-                if (isToday) {
-                  dateProgress = await fetchTodayProgress();
-                } else {
-                  dateProgress = await fetchDateProgress(mealDate);
+        // 수정 모드: 기존 식단 삭제 후 새로 추가하는 방식
+        console.log('🔄 식단 수정 모드: 기존 식단 삭제 후 새로 추가');
+        console.log('삭제할 식단 ID:', mealData.id);
+        
+        // Step 1: 기존 식단 삭제
+        try {
+          await mealAPI.deleteMeal(mealData.id);
+          console.log('✅ 기존 식사 삭제 완료:', mealData.id);
+        } catch (deleteError: any) {
+          console.error('❌ 기존 식사 삭제 실패:', deleteError);
+          
+          // 404 에러는 이미 삭제된 것으로 간주하고 계속 진행
+          if (deleteError.status === 404) {
+            console.log('⚠️ 식단이 이미 삭제되었거나 존재하지 않음, 계속 진행');
+          } else {
+            // 다른 에러는 사용자에게 알림
+            const deleteErrorMessage = deleteError.message || '기존 식단 삭제에 실패했습니다.';
+            Alert.alert('경고', `${deleteErrorMessage}\n새로운 식단을 추가하려고 시도합니다.`);
+          }
+          // 삭제 실패해도 계속 진행 (새로 추가 시도)
+        }
+        
+        // Step 2: 새로 추가 (일반 추가와 동일한 로직)
+        try {
+          await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
+          console.log('✅ 식단 수정 완료 (삭제 후 추가)');
+          
+          Alert.alert('성공', '식사가 수정되었습니다.', [
+            {
+              text: '확인',
+              onPress: async () => {
+                // 해당 날짜의 진행률 가져오기
+                let dateProgress: DailyProgressWeekItem | null = null;
+                try {
+                  if (isToday) {
+                    dateProgress = await fetchTodayProgress();
+                  } else {
+                    dateProgress = await fetchDateProgress(mealDate);
+                  }
+                } catch (error) {
+                  console.error('진행률 조회 실패:', error);
                 }
-              } catch (error) {
-                console.error('진행률 조회 실패:', error);
-              }
-              // StatsScreen으로 돌아가기 (탭바 유지)
-              navigation.navigate('Stats', { 
-                activeTab: 1, // 식단기록 탭 활성화
-                updatedProgress: dateProgress,
-                updatedDate: mealDate 
-              });
+                // StatsScreen으로 돌아가기 (탭바 유지)
+                navigation.navigate('Stats', { 
+                  activeTab: 1, // 식단기록 탭 활성화
+                  updatedProgress: dateProgress,
+                  updatedDate: mealDate 
+                });
+              },
             },
-          },
-        ]);
+          ]);
+        } catch (addError: any) {
+          // 추가 실패 시 에러 처리
+          console.error('❌ 식단 추가 실패 (수정 모드):', addError);
+          throw addError; // 외부 catch 블록에서 처리
+        }
       } else {
         // 추가 모드
         await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
@@ -782,13 +819,17 @@ const MealAddScreen = ({navigation, route}: any) => {
       console.log('업로드 응답:', JSON.stringify(response, null, 2));
       
       // ai_result가 있는 경우 (사진 업로드 응답)
+      // 응답 형식: { "ai_result": [{ "food_id": 162608, "name": "...", "name_ko": "...", ... }] }
+      // 다중 음식 감지 지원: ai_result는 배열로 여러 음식을 반환할 수 있음
       if (response.ai_result) {
-        // ai_result가 배열인 경우 첫 번째 항목 사용
-        const aiResult = Array.isArray(response.ai_result) 
-          ? response.ai_result[0] 
-          : response.ai_result;
+        const aiResults = Array.isArray(response.ai_result) 
+          ? response.ai_result 
+          : [response.ai_result];
         
-        if (aiResult) {
+        if (aiResults.length > 0) {
+          // 첫 번째 음식 사용 (다중 음식인 경우 사용자가 선택할 수 있도록 개선 가능)
+          const aiResult = aiResults[0];
+          
           // 숫자 타입 보장 및 검증
           const calories = typeof aiResult.calories === 'number' 
             ? aiResult.calories 
@@ -807,10 +848,14 @@ const MealAddScreen = ({navigation, route}: any) => {
             : parseFloat(String(aiResult.weight || 100)) || 100;
           
           // 이름은 한국어 우선, 없으면 영어
-          const name = aiResult.name_ko || aiResult.name_en || aiResult.name || '음식';
+          // API 응답: name_ko (한국어), name (영어)
+          const name = aiResult.name_ko || aiResult.name || '음식';
+          
+          // food_id 사용 (API 응답의 food_id 필드)
+          const foodId = aiResult.food_id || aiResult.id || 0;
           
           foodData = {
-            id: aiResult.id || Date.now(),
+            id: foodId, // food_id (검색/직접 입력과 동일하게 사용)
             name: name,
             calories: Math.max(0, calories),
             carbs: Math.max(0, carbs),
@@ -820,13 +865,20 @@ const MealAddScreen = ({navigation, route}: any) => {
           };
           
           console.log('사진 업로드로 변환된 음식 데이터:', foodData);
+          console.log('원본 AI 응답:', aiResult);
+          
+          // 다중 음식 감지 시 로그
+          if (aiResults.length > 1) {
+            console.log(`⚠️ 다중 음식 감지됨 (${aiResults.length}개), 첫 번째 음식만 추가됨`);
+            console.log('감지된 모든 음식:', aiResults.map((r: any) => r.name_ko || r.name));
+          }
         }
       } else if (Array.isArray(response)) {
         // 배열인 경우 첫 번째 음식 사용
         if (response.length > 0) {
           const item = response[0];
           foodData = {
-            id: item.id || Date.now(),
+            id: item.id || 0, // food_id (없으면 0, 신규 음식으로 처리)
             name: item.name || '음식',
             calories: item.calories || 0,
             carbs: item.carbs || 0,
@@ -839,7 +891,7 @@ const MealAddScreen = ({navigation, route}: any) => {
         // foods 배열이 있는 경우
         const item = response.foods[0];
         foodData = {
-          id: item.id || Date.now(),
+          id: item.id || 0, // food_id (없으면 0, 신규 음식으로 처리)
           name: item.name || item.foodName || '음식',
           calories: item.calories || 0,
           carbs: item.carbs || 0,
@@ -850,7 +902,7 @@ const MealAddScreen = ({navigation, route}: any) => {
       } else if (response.name) {
         // 직접 음식 객체인 경우
         foodData = {
-          id: response.id || Date.now(),
+          id: response.id || 0, // food_id (없으면 0, 신규 음식으로 처리)
           name: response.name,
           calories: response.calories || 0,
           carbs: response.carbs || 0,
@@ -947,10 +999,9 @@ const MealAddScreen = ({navigation, route}: any) => {
     setFoods(prev => prev.filter(food => food.id !== foodId));
   };
 
-  // 소수점 한 자리 포맷팅 (소수점이 0이면 정수로 표시)
-  const formatDecimal = (value: number): string => {
-    const fixed = value.toFixed(1);
-    return fixed.endsWith('.0') ? fixed.slice(0, -2) : fixed;
+  // 정수 포맷팅 (소수점 제거)
+  const formatInteger = (value: number): string => {
+    return Math.round(value).toString();
   };
 
   return (
@@ -1018,28 +1069,28 @@ const MealAddScreen = ({navigation, route}: any) => {
         {/* 칼로리 요약 */}
         <View style={styles.calorieSummary}>
           <View style={styles.calorieMain}>
-            <Text style={styles.calorieNumber}>{formatDecimal(totalCalories)}</Text>
+            <Text style={styles.calorieNumber}>{formatInteger(totalCalories)}</Text>
             <Text style={styles.calorieUnit}>
               {' '}
-              / {formatDecimal(targetCalories)}kcal
+              / {formatInteger(targetCalories)}kcal
             </Text>
           </View>
           <View style={styles.nutritionInline}>
             <View style={styles.nutritionInlineItem}>
               <Text style={styles.nutritionInlineLabel}>탄수화물</Text>
               <Text style={styles.nutritionInlineValue}>
-                {formatDecimal(totalCarbs)} / {formatDecimal(targetCarbs)}g
+                {formatInteger(totalCarbs)} / {formatInteger(targetCarbs)}g
               </Text>
             </View>
             <View style={styles.nutritionInlineItem}>
               <Text style={styles.nutritionInlineLabel}>단백질</Text>
               <Text style={styles.nutritionInlineValue}>
-                {formatDecimal(totalProtein)} / {formatDecimal(targetProtein)}g
+                {formatInteger(totalProtein)} / {formatInteger(targetProtein)}g
               </Text>
             </View>
             <View style={styles.nutritionInlineItem}>
               <Text style={styles.nutritionInlineLabel}>지방</Text>
-              <Text style={styles.nutritionInlineValue}>{formatDecimal(totalFat)} / {formatDecimal(targetFat)}g</Text>
+              <Text style={styles.nutritionInlineValue}>{formatInteger(totalFat)} / {formatInteger(targetFat)}g</Text>
             </View>
           </View>
         </View>
@@ -1059,7 +1110,7 @@ const MealAddScreen = ({navigation, route}: any) => {
                 <View style={styles.foodItemHeader}>
                   <Text style={styles.foodName} numberOfLines={2}>{food.name}</Text>
                   <View style={styles.foodCaloriesContainer}>
-                    <Text style={styles.foodCalories}>{food.calories}kcal</Text>
+                    <Text style={styles.foodCalories}>{Math.round(food.calories)}kcal</Text>
                     <TouchableOpacity
                       style={styles.foodDeleteButton}
                       onPress={(e) => {

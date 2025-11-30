@@ -133,6 +133,8 @@ export interface AddMealFoodRequest {
   fiber?: number;
   imageUrl?: string;
   aiConfidenceScore?: number;
+  id?: number; // food_id (검색 또는 직접 입력에서 받은 음식 ID)
+  food_id?: number; // food_id (API 호출 시 사용)
 }
 
 export interface AddMealRequest {

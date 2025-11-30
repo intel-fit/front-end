@@ -12,82 +12,16 @@ import type {
   AddManualFoodRequest,
 } from '../types';
 
-// ============================================
-// 공통 헬퍼 함수
-// ============================================
-
-/**
- * 인증 헤더 생성
- */
-const getAuthHeaders = async (additionalHeaders: HeadersInit = {}): Promise<HeadersInit> => {
-  const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-  const headers: HeadersInit = {
-    'accept': 'application/json',
-    ...additionalHeaders,
-  };
-  
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  
-  return headers;
-};
-
-/**
- * 에러 응답 처리
- */
-const handleErrorResponse = async (response: Response, apiName: string): Promise<never> => {
-  let errorMessage = `HTTP error! status: ${response.status}`;
-  let errorData: any = {};
-  
-  try {
-    const errorText = await response.text();
-    console.error(`❌ ${apiName} 에러 응답:`, errorText);
-    
-    if (errorText) {
-      try {
-        errorData = JSON.parse(errorText);
-        // 서버가 반환하는 메시지 우선 사용
-        if (errorData.message) {
-          errorMessage = errorData.message;
-        } else if (errorData.detail) {
-          if (Array.isArray(errorData.detail)) {
-            errorMessage = errorData.detail.map((err: any) => err.msg || JSON.stringify(err)).join(', ');
-          } else if (typeof errorData.detail === 'string') {
-            errorMessage = errorData.detail;
-          }
-        } else if (errorData.error) {
-          errorMessage = errorData.error;
-        }
-      } catch (parseError) {
-        errorMessage = errorText || errorMessage;
-      }
-    }
-  } catch (readError) {
-    console.error(`에러 응답 읽기 실패 (${apiName}):`, readError);
-  }
-  
-  // 상태 코드별 에러 처리
-  if (response.status === 401) {
-    throw new Error('인증이 필요합니다. 다시 로그인해주세요.');
-  } else if (response.status === 500) {
-    throw new Error(errorMessage || '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
-  } else if (response.status === 422) {
-    throw new Error(errorMessage || '입력값이 올바르지 않습니다.');
-  }
-  
-  throw new Error(errorMessage);
-};
-
 /**
  * userId 가져오기 (AsyncStorage 또는 JWT에서)
+ * 실제 사용자 ID 문자열 (예: "aaaa")을 반환
  */
 const getUserId = async (): Promise<string> => {
   // AsyncStorage에서 먼저 확인
   let userId = await AsyncStorage.getItem('userId');
   
   if (!userId) {
-    // JWT 토큰에서 userPk 추출 시도
+    // JWT 토큰에서 sub (실제 사용자 ID) 추출 시도
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
     if (token) {
       try {
@@ -100,7 +34,12 @@ const getUserId = async (): Promise<string> => {
             .join('')
         );
         const payload = JSON.parse(jsonPayload);
-        if (payload.userPk) {
+        // sub 필드가 있으면 사용 (실제 사용자 ID 문자열)
+        if (payload.sub) {
+          userId = payload.sub;
+          await AsyncStorage.setItem('userId', userId);
+        } else if (payload.userPk) {
+          // sub가 없으면 userPk를 문자열로 사용 (하위 호환성)
           userId = String(payload.userPk);
           await AsyncStorage.setItem('userId', userId);
         }
@@ -117,67 +56,99 @@ const getUserId = async (): Promise<string> => {
   return userId;
 };
 
-/**
- * AI API 호출 공통 함수
- */
-const callAIAPI = async <T>(
-  endpoint: string,
-  options: RequestInit = {},
-  apiName: string
-): Promise<T> => {
-  try {
-    const headers = await getAuthHeaders(options.headers as HeadersInit);
-    const url = `${AI_API_BASE_URL}${endpoint}`;
-    
-    console.log(`📡 ${apiName} 요청:`, url);
-    
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        ...headers,
-        ...options.headers,
-      },
-    });
-    
-    if (!response.ok) {
-      await handleErrorResponse(response, apiName);
-    }
-    
-    const data = await response.json();
-    console.log(`✅ ${apiName} 성공`);
-    return data;
-  } catch (error: any) {
-    console.error(`❌ ${apiName} 오류:`, error);
-    
-    // 네트워크 에러 처리
-    if (error.message && error.message.includes('Network request failed')) {
-      throw new Error('네트워크 연결에 실패했습니다. 인터넷 연결을 확인해주세요.');
-    }
-    
-    throw error;
-  }
-};
-
-// ============================================
-// 식단 기록 API
-// ============================================
-
 export const mealAPI = {
-  // ============================================
-  // 기본 식단 API (AI 서버로 마이그레이션)
-  // ============================================
-  
   /**
    * 일별 식단 조회
    * AI 서버의 /food/get_meals API 사용
+   * GET /food/get_meals?user_id={user_id}&date={date}
+   * 
+   * 응답: [{ meal_id, meal_name, time_taken, items: [...] }] (200 OK)
+   * 에러: 422 Validation Error (user_id 또는 date 파라미터 누락/잘못됨)
    */
   getDailyMeals: async (date: string): Promise<DailyMealsResponse> => {
     const user_id = await getUserId();
-    const meals = await callAIAPI<any[]>(
-      `/food/get_meals?user_id=${encodeURIComponent(user_id)}&date=${encodeURIComponent(date)}`,
-      { method: 'GET' },
-      '일별 식단 조회'
-    );
+    
+    // 날짜 형식 검증
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new Error('날짜 형식이 올바르지 않습니다. yyyy-MM-dd 형식을 사용해주세요.');
+    }
+    
+    // JWT 토큰 가져오기
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      'accept': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const url = `${AI_API_BASE_URL}/food/get_meals?user_id=${encodeURIComponent(user_id)}&date=${encodeURIComponent(date)}`;
+    console.log(`📡 일별 식단 조회 요청: ${url}`);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+    });
+    
+    if (!response.ok) {
+      let errorMessage = `HTTP error! status: ${response.status}`;
+      
+      // 422 Validation Error 처리
+      if (response.status === 422) {
+        try {
+          const errorData = await response.json();
+          if (errorData.detail && Array.isArray(errorData.detail)) {
+            const errorMessages = errorData.detail.map((err: any) => {
+              const field = err.loc && Array.isArray(err.loc)
+                ? err.loc.filter((loc: any) => typeof loc === 'string').join('.')
+                : 'unknown';
+              return `${field}: ${err.msg || '검증 오류'}`;
+            });
+            errorMessage = errorMessages.join(', ');
+          } else if (errorData.detail && typeof errorData.detail === 'string') {
+            errorMessage = errorData.detail;
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          }
+        } catch (parseError) {
+          const errorText = await response.text();
+          console.error(`❌ 일별 식단 조회 422 에러 응답:`, errorText);
+          errorMessage = '요청 파라미터가 올바르지 않습니다. user_id와 date를 확인해주세요.';
+        }
+      } else {
+        // 다른 에러 처리
+        try {
+          const errorText = await response.text();
+          console.error(`❌ 일별 식단 조회 에러 응답:`, errorText);
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.message || errorData.detail || errorMessage;
+        } catch (e) {
+          const errorText = await response.text();
+          if (errorText) {
+            errorMessage = errorText;
+          }
+        }
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
+    const meals = await response.json();
+    console.log(`✅ 일별 식단 조회 성공:`, meals.length, '개 식사');
+    
+    // 빈 배열인 경우 처리
+    if (!Array.isArray(meals)) {
+      console.warn('일별 식단 조회 응답이 배열이 아닙니다:', meals);
+      return {
+        date: date,
+        meals: [],
+        dailyTotalCalories: 0,
+        dailyTotalCarbs: 0,
+        dailyTotalProtein: 0,
+        dailyTotalFat: 0,
+      };
+    }
     
     // AI 서버 응답을 기존 형식으로 변환
     const dailyMeals: DailyMealsResponse = {
@@ -227,57 +198,92 @@ export const mealAPI = {
 
   /**
    * 식사 추가
-   * AI 서버의 /food/add_food_to_meal API 사용
+   * AI 서버의 /food/meal/create_full API 사용
    */
   addMeal: async (mealData: AddMealRequest): Promise<AddMealResponse> => {
     const user_id = await getUserId();
     
-    // 각 음식을 개별적으로 추가
-    const results = [];
-    for (const food of mealData.foods) {
-      const formData = new FormData();
-      formData.append('user_id', user_id);
-      formData.append('date', mealData.mealDate);
-      formData.append('meal_name', mealData.mealType);
-      formData.append('quantity_g', food.servingSize.toString());
-      
-      if (food.imageUrl) {
-        // 이미지 URL이 있으면 file로 추가 (실제로는 URL을 전달해야 할 수도 있음)
-        // 여기서는 manual_food로 처리
-        formData.append('manual_food', JSON.stringify({
-          name: food.foodName,
-          calories: food.calories,
-          carbs: food.carbs,
-          protein: food.protein,
-          fat: food.fat,
-        }));
-      } else {
-        formData.append('manual_food', JSON.stringify({
-          name: food.foodName,
-          calories: food.calories,
-          carbs: food.carbs,
-          protein: food.protein,
-          fat: food.fat,
-        }));
-      }
-      
-      const result = await callAIAPI<any>(
-        '/food/add_food_to_meal',
-        {
-          method: 'POST',
-          body: formData,
-        },
-        '식사 추가'
-      );
-      results.push(result);
+    // meal_name을 소문자로 변환 (서버가 소문자를 기대)
+    const mealNameMap: Record<string, string> = {
+      'BREAKFAST': 'breakfast',
+      'LUNCH': 'lunch',
+      'DINNER': 'dinner',
+      'SNACK': 'snack',
+      'OTHER': 'other',
+    };
+    const mealName = mealNameMap[mealData.mealType] || mealData.mealType.toLowerCase();
+    
+    // JWT 토큰 가져오기
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      'accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
+    
+    // time_taken은 현재 시간으로 설정 (ISO 8601 형식)
+    const timeTaken = new Date().toISOString();
+    
+    // items 배열 구성
+    // food_id는 검색(/food/search) 또는 직접 입력(/food/add_manual_food)에서 받은 id를 사용
+    const items = mealData.foods.map((food, index) => {
+      // food.id 또는 food.food_id가 있으면 사용, 없으면 0 (신규 음식인 경우)
+      const foodId = (food as any).id || (food as any).food_id || 0;
+      
+      const item = {
+        food_id: foodId, // 검색 또는 직접 입력에서 받은 음식 ID
+        food_name: food.foodName,
+        quantity_g: food.servingSize,
+        calories: food.calories,
+        carbs: food.carbs,
+        protein: food.protein,
+        fat: food.fat,
+      };
+      
+      console.log(`음식 ${index + 1} (${food.foodName}) - food_id: ${foodId}`);
+      
+      return item;
+    });
+    
+    const requestBody = {
+      user_id: user_id,
+      date: mealData.mealDate,
+      meal_name: mealName,
+      time_taken: timeTaken,
+      items: items,
+    };
+    
+    console.log(`📡 식사 추가 요청: ${AI_API_BASE_URL}/food/meal/create_full`);
+    console.log(`요청 데이터:`, JSON.stringify(requestBody, null, 2));
+    
+    const response = await fetch(`${AI_API_BASE_URL}/food/meal/create_full`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(requestBody),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ 식사 추가 에러 응답:`, errorText);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    console.log(`✅ 식사 추가 성공:`, result);
+    
+    // 응답에서 meal_id와 meal_item_id 추출
+    const mealId = result.meal_id || result.id || 0;
+    const mealItems = result.items || result.foods || [];
     
     // 응답 형식 변환
     return {
       success: true,
       message: '식사가 추가되었습니다.',
       meal: {
-        id: 0,
+        id: mealId,
         mealDate: mealData.mealDate,
         mealType: mealData.mealType,
         mealTypeName: mealData.mealType,
@@ -285,22 +291,22 @@ export const mealAPI = {
         totalCarbs: mealData.foods.reduce((sum, f) => sum + f.carbs, 0),
         totalProtein: mealData.foods.reduce((sum, f) => sum + f.protein, 0),
         totalFat: mealData.foods.reduce((sum, f) => sum + f.fat, 0),
-        foods: mealData.foods.map((f, idx) => ({
-          id: idx,
-          foodName: f.foodName,
-          servingSize: f.servingSize,
-          calories: f.calories,
-          carbs: f.carbs,
-          protein: f.protein,
-          fat: f.fat,
-          sodium: f.sodium || 0,
-          cholesterol: f.cholesterol || 0,
-          sugar: f.sugar || 0,
-          fiber: f.fiber || 0,
-          imageUrl: f.imageUrl || '',
-          aiConfidenceScore: f.aiConfidenceScore || 0,
+        foods: mealItems.map((item: any, idx: number) => ({
+          id: item.meal_item_id || item.id || idx,
+          foodName: item.food_name || mealData.foods[idx]?.foodName || '',
+          servingSize: item.quantity_g || mealData.foods[idx]?.servingSize || 0,
+          calories: item.calories || mealData.foods[idx]?.calories || 0,
+          carbs: item.carbs || mealData.foods[idx]?.carbs || 0,
+          protein: item.protein || mealData.foods[idx]?.protein || 0,
+          fat: item.fat || mealData.foods[idx]?.fat || 0,
+          sodium: mealData.foods[idx]?.sodium || 0,
+          cholesterol: mealData.foods[idx]?.cholesterol || 0,
+          sugar: mealData.foods[idx]?.sugar || 0,
+          fiber: mealData.foods[idx]?.fiber || 0,
+          imageUrl: mealData.foods[idx]?.imageUrl || '',
+          aiConfidenceScore: mealData.foods[idx]?.aiConfidenceScore || 0,
         })),
-        createdAt: new Date().toISOString(),
+        createdAt: result.time_taken || timeTaken,
       },
     };
   },
@@ -311,16 +317,283 @@ export const mealAPI = {
    */
   deleteMeal: async (mealId: number): Promise<{success: boolean; message: string}> => {
     const user_id = await getUserId();
-    await callAIAPI<any>(
-      `/food/delete_meal?meal_id=${mealId}&user_id=${encodeURIComponent(user_id)}`,
-      { method: 'DELETE' },
-      '식사 삭제'
-    );
+    
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      'accept': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const url = `${AI_API_BASE_URL}/food/delete_meal?meal_id=${mealId}&user_id=${encodeURIComponent(user_id)}`;
+    console.log(`📡 식사 삭제 요청: ${url}`);
+    
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers,
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ 식사 삭제 에러 응답:`, errorText);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    console.log(`✅ 식사 삭제 성공`);
     
     return {
       success: true,
       message: '식사가 삭제되었습니다.',
     };
+  },
+
+  /**
+   * 식사 항목 삭제
+   * AI 서버의 /food/delete_meal_item API 사용
+   */
+  deleteMealItem: async (meal_item_id: number): Promise<any> => {
+    const user_id = await getUserId();
+    
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      'accept': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const url = `${AI_API_BASE_URL}/food/delete_meal_item?meal_item_id=${meal_item_id}&user_id=${encodeURIComponent(user_id)}`;
+    console.log(`📡 식사 항목 삭제 요청: ${url}`);
+    
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers,
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ 식사 항목 삭제 에러 응답:`, errorText);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    console.log(`✅ 식사 항목 삭제 성공`);
+    return await response.json();
+  },
+
+  /**
+   * 식사 항목 수정
+   * AI 서버의 /food/update_meal_item API 사용
+   */
+  updateMealItem: async (
+    meal_item_id: number,
+    quantity_g?: number | null,
+    servings?: number | null
+  ): Promise<any> => {
+    const user_id = await getUserId();
+    
+    const formData = new URLSearchParams();
+    
+    if (quantity_g !== undefined && quantity_g !== null) {
+      formData.append('quantity_g', quantity_g.toString());
+    }
+    if (servings !== undefined && servings !== null) {
+      formData.append('servings', servings.toString());
+    }
+    
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      'accept': 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const url = `${AI_API_BASE_URL}/food/update_meal_item?meal_item_id=${meal_item_id}&user_id=${encodeURIComponent(user_id)}`;
+    console.log(`📡 식사 항목 수정 요청: ${url}`);
+    
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers,
+      body: formData.toString(),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ 식사 항목 수정 에러 응답:`, errorText);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    console.log(`✅ 식사 항목 수정 성공`);
+    return await response.json();
+  },
+
+  /**
+   * 식사 이름 수정
+   * AI 서버의 /food/meal/update_name API 사용
+   */
+  updateMealName: async (meal_id: number, meal_name: string): Promise<any> => {
+    const user_id = await getUserId();
+    
+    // meal_name을 소문자로 변환
+    const mealNameMap: Record<string, string> = {
+      'BREAKFAST': 'breakfast',
+      'LUNCH': 'lunch',
+      'DINNER': 'dinner',
+      'SNACK': 'snack',
+      'OTHER': 'other',
+    };
+    const mealName = mealNameMap[meal_name] || meal_name.toLowerCase();
+    
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      'accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const url = `${AI_API_BASE_URL}/food/meal/update_name`;
+    console.log(`📡 식사 이름 수정 요청: ${url}`);
+    
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        meal_id,
+        user_id,
+        meal_name: mealName,
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ 식사 이름 수정 에러 응답:`, errorText);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    console.log(`✅ 식사 이름 수정 성공`);
+    return await response.json();
+  },
+
+  /**
+   * 식사 날짜 수정
+   * AI 서버의 /food/meal/update_date API 사용
+   */
+  updateMealDate: async (meal_id: number, date: string): Promise<any> => {
+    const user_id = await getUserId();
+    
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      'accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const url = `${AI_API_BASE_URL}/food/meal/update_date`;
+    console.log(`📡 식사 날짜 수정 요청: ${url}`);
+    
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        meal_id,
+        user_id,
+        date,
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ 식사 날짜 수정 에러 응답:`, errorText);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    console.log(`✅ 식사 날짜 수정 성공`);
+    return await response.json();
+  },
+
+  /**
+   * 식사 시간 수정
+   * AI 서버의 /food/meal/update_time API 사용
+   */
+  updateMealTime: async (meal_id: number, time_taken: string): Promise<any> => {
+    const user_id = await getUserId();
+    
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      'accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const url = `${AI_API_BASE_URL}/food/meal/update_time`;
+    console.log(`📡 식사 시간 수정 요청: ${url}`);
+    
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        meal_id,
+        user_id,
+        time_taken,
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ 식사 시간 수정 에러 응답:`, errorText);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    console.log(`✅ 식사 시간 수정 성공`);
+    return await response.json();
+  },
+
+  /**
+   * 일일 목표 조회
+   * AI 서버의 /food/daily_goal API 사용
+   */
+  getDailyGoal: async (): Promise<any> => {
+    const user_id = await getUserId();
+    
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      'accept': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const url = `${AI_API_BASE_URL}/food/daily_goal?user_id=${encodeURIComponent(user_id)}`;
+    console.log(`📡 일일 목표 조회 요청: ${url}`);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ 일일 목표 조회 에러 응답:`, errorText);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    console.log(`✅ 일일 목표 조회 성공`);
+    return await response.json();
   },
 
   /**
@@ -331,12 +604,46 @@ export const mealAPI = {
     const user_id = await getUserId();
     const today = new Date().toISOString().split('T')[0];
     
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      'accept': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const url = `${AI_API_BASE_URL}/food/nutrition-goal/get?user_id=${encodeURIComponent(user_id)}&date_str=${encodeURIComponent(today)}`;
+    console.log(`📡 영양 목표 조회 요청: ${url}`);
+    
     try {
-      const goal = await callAIAPI<any>(
-        `/food/nutrition-goal/get?user_id=${encodeURIComponent(user_id)}&date_str=${encodeURIComponent(today)}`,
-        { method: 'GET' },
-        '영양 목표 조회'
-      );
+      const response = await fetch(url, {
+        method: 'GET',
+        headers,
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ 영양 목표 조회 에러 응답:`, errorText);
+        
+        // 404 에러인 경우 기본값 반환
+        if (response.status === 404) {
+          return {
+            id: 0,
+            targetCalories: 0,
+            targetCarbs: 0,
+            targetProtein: 0,
+            targetFat: 0,
+            goalType: 'AUTO',
+            goalTypeDescription: '자동 계산',
+          };
+        }
+        
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const goal = await response.json();
+      console.log(`✅ 영양 목표 조회 성공`);
       
       // AI 서버 응답을 기존 형식으로 변환
       return {
@@ -373,19 +680,37 @@ export const mealAPI = {
     const user_id = await getUserId();
     const today = new Date().toISOString().split('T')[0];
     
-    await callAIAPI<string>(
-      '/food/nutrition-goal/manual-calorie',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: user_id,
-          target_calorie: goalData.targetCalories,
-          date: today,
-        }),
-      },
-      '영양 목표 설정'
-    );
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      'accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const url = `${AI_API_BASE_URL}/food/nutrition-goal/manual-calorie`;
+    console.log(`📡 영양 목표 설정 요청: ${url}`);
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        user_id: user_id,
+        target_calorie: goalData.targetCalories,
+        date: today,
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ 영양 목표 설정 에러 응답:`, errorText);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    console.log(`✅ 영양 목표 설정 성공`);
     
     // 응답 형식 변환
     return {
@@ -403,40 +728,146 @@ export const mealAPI = {
     };
   },
 
-  // ============================================
-  // 음식 검색 및 추가 API (AI 서버)
-  // ============================================
-
   /**
    * 음식 검색
+   * AI 서버의 /food/search API 사용
+   * GET /food/search?name={name}
+   * 
+   * 응답: SearchFoodResponse[] (200 OK)
+   * 에러: 422 Validation Error (name 파라미터 누락 등)
    */
   searchFood: async (name: string): Promise<SearchFoodResponse[]> => {
-    return callAIAPI<SearchFoodResponse[]>(
-      `/food/search?name=${encodeURIComponent(name)}`,
-      { method: 'GET' },
-      '음식 검색'
-    );
+    // name 파라미터 검증
+    if (!name || name.trim().length === 0) {
+      throw new Error('검색할 음식 이름을 입력해주세요.');
+    }
+    
+    const url = `${AI_API_BASE_URL}/food/search?name=${encodeURIComponent(name)}`;
+    console.log(`📡 음식 검색 요청: ${url}`);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'accept': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      let errorMessage = `HTTP error! status: ${response.status}`;
+      
+      // 422 Validation Error 처리
+      if (response.status === 422) {
+        try {
+          const errorData = await response.json();
+          if (errorData.detail && Array.isArray(errorData.detail)) {
+            const errorMessages = errorData.detail.map((err: any) => {
+              const field = err.loc ? err.loc.join('.') : 'unknown';
+              return `${field}: ${err.msg || '검증 오류'}`;
+            });
+            errorMessage = errorMessages.join(', ');
+          } else if (errorData.detail && typeof errorData.detail === 'string') {
+            errorMessage = errorData.detail;
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          }
+        } catch (parseError) {
+          const errorText = await response.text();
+          console.error(`❌ 음식 검색 422 에러 응답:`, errorText);
+          errorMessage = '검색 요청이 올바르지 않습니다.';
+        }
+      } else {
+        const errorText = await response.text();
+        console.error(`❌ 음식 검색 에러 응답:`, errorText);
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.message || errorData.detail || errorMessage;
+        } catch (e) {
+          // JSON 파싱 실패 시 원본 텍스트 사용
+        }
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
+    const data = await response.json();
+    console.log(`✅ 음식 검색 성공:`, data.length, '개 결과');
+    return data;
   },
 
   /**
    * 직접 음식 입력
+   * AI 서버의 /food/add_manual_food API 사용
+   * POST /food/add_manual_food
+   * 
+   * 요청 Body: { name, weight, calories, carbs, protein, fat }
+   * 응답: SearchFoodResponse (200 OK)
+   * 에러: 422 Validation Error (필수 필드 누락, 값 범위 초과 등)
    */
   addManualFood: async (foodData: AddManualFoodRequest): Promise<SearchFoodResponse> => {
-    return callAIAPI<SearchFoodResponse>(
-      '/food/add_manual_food',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(foodData),
+    const url = `${AI_API_BASE_URL}/food/add_manual_food`;
+    console.log(`📡 직접 음식 입력 요청: ${url}`);
+    console.log(`요청 데이터:`, JSON.stringify(foodData, null, 2));
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'Content-Type': 'application/json',
       },
-      '직접 음식 입력'
-    );
+      body: JSON.stringify(foodData),
+    });
+    
+    if (!response.ok) {
+      let errorMessage = `HTTP error! status: ${response.status}`;
+      
+      // 422 Validation Error 처리
+      if (response.status === 422) {
+        try {
+          const errorData = await response.json();
+          if (errorData.detail && Array.isArray(errorData.detail)) {
+            const errorMessages = errorData.detail.map((err: any) => {
+              const field = err.loc && Array.isArray(err.loc) 
+                ? err.loc.filter((loc: any) => typeof loc === 'string').join('.')
+                : 'unknown';
+              return `${field}: ${err.msg || '검증 오류'}`;
+            });
+            errorMessage = errorMessages.join(', ');
+          } else if (errorData.detail && typeof errorData.detail === 'string') {
+            errorMessage = errorData.detail;
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          }
+        } catch (parseError) {
+          const errorText = await response.text();
+          console.error(`❌ 직접 음식 입력 422 에러 응답:`, errorText);
+          errorMessage = '입력한 음식 정보가 올바르지 않습니다.';
+        }
+      } else {
+        // 다른 에러 처리
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorData.detail || errorMessage;
+        } catch (e) {
+          const errorText = await response.text();
+          console.error(`❌ 직접 음식 입력 에러 응답:`, errorText);
+          if (errorText) {
+            errorMessage = errorText;
+          }
+        }
+      }
+      
+      console.error(`❌ 직접 음식 입력 실패:`, errorMessage);
+      throw new Error(errorMessage);
+    }
+    
+    const data = await response.json();
+    console.log(`✅ 직접 음식 입력 성공:`, data);
+    return data;
   },
 
-  /**
-   * 사진으로 음식 업로드
-   * Azure + Gemini 기반 AI 음식 인식
-   */
+  //사진으로 음식 업로드
+  // POST /food/upload_food - Azure + Gemini 기반 AI 음식 인식
+  // 큰 이미지 자동 리사이즈 (800px 기준), 동일 이미지 해시로 캐싱
   uploadFood: async (imageUri: string): Promise<any> => {
     let resizedUri: string | null = null;
     
@@ -445,27 +876,41 @@ export const mealAPI = {
       try {
         const manipResult = await ImageManipulator.manipulateAsync(
           imageUri,
-          [{ resize: { width: 800 } }],
+          [{ resize: { width: 800 } }], // 800px 기준으로 리사이즈
           { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
         );
         resizedUri = manipResult.uri;
         console.log('이미지 리사이즈 성공:', resizedUri);
       } catch (resizeError: any) {
         console.warn('이미지 리사이즈 실패, 원본 사용:', resizeError.message);
-        resizedUri = null;
+        resizedUri = null; // 리사이즈 실패 시 원본 사용
       }
       
+      // 리사이즈된 URI가 없으면 원본 사용
       const uploadUri = resizedUri || imageUri;
+      
+      // FormData 생성
       const formData = new FormData();
       
-      // 파일명 및 타입 설정
+      // 파일명 추출 (안전하게 처리)
+      // 원본 URI에서 확장자 확인 (리사이즈된 경우 jpg, 원본인 경우 원본 확장자)
       const originalFilename = imageUri.split('/').pop() || 'photo.jpg';
+      const uploadFilename = uploadUri.split('/').pop() || originalFilename;
+      
+      // 원본 파일의 확장자 확인
       let fileExtension = 'jpg';
-      const match = /\.(\w+)$/.exec(originalFilename.toLowerCase());
-      if (match) {
-        fileExtension = match[1];
+      const originalMatch = /\.(\w+)$/.exec(originalFilename.toLowerCase());
+      if (originalMatch) {
+        fileExtension = originalMatch[1];
+      } else {
+        // 리사이즈된 파일의 확장자 확인
+        const uploadMatch = /\.(\w+)$/.exec(uploadFilename.toLowerCase());
+        if (uploadMatch) {
+          fileExtension = uploadMatch[1];
+        }
       }
       
+      // MIME 타입 설정
       const mimeTypes: Record<string, string> = {
         jpg: 'image/jpeg',
         jpeg: 'image/jpeg',
@@ -474,41 +919,125 @@ export const mealAPI = {
         webp: 'image/webp',
       };
       const type = mimeTypes[fileExtension] || 'image/jpeg';
+      
+      // 파일명 정리 (특수문자 제거)
+      // 리사이즈된 경우 jpg 확장자, 원본인 경우 원본 확장자 유지
       const finalExtension = resizedUri ? 'jpg' : fileExtension;
       const cleanFilename = `photo.${finalExtension}`.replace(/[^a-zA-Z0-9._-]/g, '_');
       
+      // multipart/form-data로 file 필드 추가
+      // React Native에서는 uri, name, type이 필요
       formData.append('file', {
         uri: uploadUri,
         name: cleanFilename,
         type: type,
       } as any);
 
-      console.log('📷 음식 이미지 업로드 요청:', {
+      console.log('음식 이미지 업로드 요청:', {
         originalUri: imageUri,
         uploadUri: uploadUri,
         isResized: resizedUri !== null,
         filename: cleanFilename,
+        type,
+        fileExtension,
       });
 
-      const headers = await getAuthHeaders();
+      // JWT 토큰 가져오기
+      const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+      const headers: HeadersInit = {
+        'accept': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      // API 호출
       const response = await fetch(`${AI_API_BASE_URL}/food/upload_food`, {
         method: 'POST',
         headers,
         body: formData,
       });
       
+      // 에러 응답 처리
       if (!response.ok) {
-        await handleErrorResponse(response, '음식 이미지 업로드');
+        let errorData: any = {};
+        let errorText = '';
+        try {
+          errorText = await response.text();
+          console.error('에러 응답 원본:', errorText);
+          if (errorText) {
+            try {
+              errorData = JSON.parse(errorText);
+            } catch (parseError) {
+              // JSON이 아닌 경우 텍스트 그대로 사용
+              errorData = { message: errorText };
+            }
+          }
+        } catch (parseError) {
+          console.error('에러 응답 파싱 실패:', parseError);
+        }
+        
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        
+        // 400 Bad Request 처리
+        if (response.status === 400) {
+          if (errorData.detail) {
+            if (Array.isArray(errorData.detail)) {
+              errorMessage = errorData.detail.map((err: any) => err.msg || JSON.stringify(err)).join(', ');
+            } else if (typeof errorData.detail === 'string') {
+              errorMessage = errorData.detail;
+            }
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (errorText) {
+            errorMessage = errorText;
+          } else {
+            errorMessage = '잘못된 요청입니다. 파일 형식을 확인해주세요.';
+          }
+        }
+        // 422 Validation Error 처리
+        else if (response.status === 422) {
+          if (errorData.detail) {
+            if (Array.isArray(errorData.detail)) {
+              const errorMessages = errorData.detail.map((err: any) => {
+                const field = err.loc && Array.isArray(err.loc)
+                  ? err.loc.filter((loc: any) => typeof loc === 'string').join('.')
+                  : 'unknown';
+                return `${field}: ${err.msg || '검증 오류'}`;
+              });
+              errorMessage = errorMessages.join(', ');
+            } else if (typeof errorData.detail === 'string') {
+              errorMessage = errorData.detail;
+            }
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          } else {
+            errorMessage = '업로드한 파일이 올바르지 않습니다. 이미지 파일을 확인해주세요.';
+          }
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+        
+        console.error('에러 상세:', {
+          status: response.status,
+          errorData,
+          errorText,
+          errorMessage,
+        });
+        
+        throw new Error(errorMessage);
       }
       
+      // 성공 응답 파싱 (application/json)
       const jsonData = await response.json();
-      console.log('✅ 음식 이미지 업로드 성공:', jsonData);
+      console.log('업로드 응답 파싱 성공:', jsonData);
       return jsonData;
       
     } catch (error: any) {
       console.error('사진 업로드 API 오류:', error);
       
-      // 네트워크 에러 처리
+      // 네트워크 에러인 경우
       if (error.message && error.message.includes('Network request failed')) {
         throw new Error('네트워크 연결에 실패했습니다. 인터넷 연결을 확인해주세요.');
       }
@@ -527,6 +1056,7 @@ export const mealAPI = {
           const formData = new FormData();
           const originalFilename = imageUri.split('/').pop() || 'photo.jpg';
           
+          // 확장자 확인 및 타입 설정
           let fileExtension = 'jpg';
           const match = /\.(\w+)$/.exec(originalFilename.toLowerCase());
           if (match) {
@@ -541,6 +1071,7 @@ export const mealAPI = {
             webp: 'image/webp',
           };
           const type = mimeTypes[fileExtension] || 'image/jpeg';
+          
           const cleanFilename = originalFilename.replace(/[^a-zA-Z0-9._-]/g, '_') || 'photo.jpg';
           
           formData.append('file', {
@@ -549,19 +1080,42 @@ export const mealAPI = {
             type: type,
           } as any);
 
-          const headers = await getAuthHeaders();
+          console.log('원본 이미지로 재시도:', {
+            uri: imageUri,
+            filename: cleanFilename,
+            type,
+          });
+
+          // JWT 토큰 가져오기
+          const retryToken = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+          const retryHeaders: HeadersInit = {
+            'accept': 'application/json',
+          };
+          
+          if (retryToken) {
+            retryHeaders['Authorization'] = `Bearer ${retryToken}`;
+          }
+          
           const response = await fetch(`${AI_API_BASE_URL}/food/upload_food`, {
             method: 'POST',
-            headers,
+            headers: retryHeaders,
             body: formData,
           });
           
           if (!response.ok) {
-            await handleErrorResponse(response, '음식 이미지 업로드 (재시도)');
+            const errorText = await response.text();
+            console.error('재시도 실패 응답:', errorText);
+            let errorData: any = {};
+            try {
+              errorData = JSON.parse(errorText);
+            } catch (e) {
+              errorData = { message: errorText };
+            }
+            throw new Error(errorData.message || errorData.detail || `HTTP error! status: ${response.status}`);
           }
           
           const jsonData = await response.json();
-          console.log('✅ 원본 이미지 업로드 성공:', jsonData);
+          console.log('원본 이미지 업로드 성공:', jsonData);
           return jsonData;
         } catch (retryError: any) {
           console.error('원본 이미지 재시도 실패:', retryError);
@@ -569,234 +1123,12 @@ export const mealAPI = {
         }
       }
       
-      throw error;
+      // 이미 에러 메시지가 있는 경우 그대로 전달
+      if (error.message) {
+        throw error;
+      }
+      
+      throw new Error('사진 업로드에 실패했습니다. 다시 시도해주세요.');
     }
-  },
-
-  // ============================================
-  // 식사 관리 API (AI 서버)
-  // ============================================
-
-  /**
-   * 식사에 음식 추가
-   */
-  addFoodToMeal: async (params: {
-    user_id: string;
-    date: string;
-    quantity_g?: number | null;
-    servings?: number | null;
-    meal_id?: number | null;
-    meal_name?: string | null;
-    time_taken?: string | null;
-    food_id?: number | null;
-    manual_food?: string | null;
-    file?: any;
-  }): Promise<any> => {
-    const formData = new FormData();
-    
-    formData.append('user_id', params.user_id);
-    formData.append('date', params.date);
-    if (params.quantity_g !== undefined && params.quantity_g !== null) {
-      formData.append('quantity_g', params.quantity_g.toString());
-    }
-    if (params.servings !== undefined && params.servings !== null) {
-      formData.append('servings', params.servings.toString());
-    }
-    if (params.meal_id !== undefined && params.meal_id !== null) {
-      formData.append('meal_id', params.meal_id.toString());
-    }
-    if (params.meal_name) {
-      formData.append('meal_name', params.meal_name);
-    }
-    if (params.time_taken) {
-      formData.append('time_taken', params.time_taken);
-    }
-    if (params.food_id !== undefined && params.food_id !== null) {
-      formData.append('food_id', params.food_id.toString());
-    }
-    if (params.manual_food) {
-      formData.append('manual_food', params.manual_food);
-    }
-    if (params.file) {
-      formData.append('file', params.file);
-    }
-
-    return callAIAPI(
-      '/food/add_food_to_meal',
-      {
-        method: 'POST',
-        body: formData,
-      },
-      '식사에 음식 추가'
-    );
-  },
-
-  /**
-   * 식사 조회
-   */
-  getMeals: async (user_id: string, date: string): Promise<any[]> => {
-    return callAIAPI<any[]>(
-      `/food/get_meals?user_id=${encodeURIComponent(user_id)}&date=${encodeURIComponent(date)}`,
-      { method: 'GET' },
-      '식사 조회'
-    );
-  },
-
-  /**
-   * 식사 항목 삭제
-   */
-  deleteMealItem: async (meal_item_id: number, user_id: string): Promise<any> => {
-    return callAIAPI<any>(
-      `/food/delete_meal_item?meal_item_id=${meal_item_id}&user_id=${encodeURIComponent(user_id)}`,
-      { method: 'DELETE' },
-      '식사 항목 삭제'
-    );
-  },
-
-  /**
-   * 식사 항목 수정
-   */
-  updateMealItem: async (
-    meal_item_id: number,
-    user_id: string,
-    quantity_g?: number | null,
-    servings?: number | null
-  ): Promise<any> => {
-    const formData = new URLSearchParams();
-    
-    if (quantity_g !== undefined && quantity_g !== null) {
-      formData.append('quantity_g', quantity_g.toString());
-    }
-    if (servings !== undefined && servings !== null) {
-      formData.append('servings', servings.toString());
-    }
-
-    return callAIAPI<any>(
-      `/food/update_meal_item?meal_item_id=${meal_item_id}&user_id=${encodeURIComponent(user_id)}`,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: formData.toString(),
-      },
-      '식사 항목 수정'
-    );
-  },
-
-  /**
-   * 식사 삭제 (AI API 경로 사용)
-   */
-  deleteMealAI: async (meal_id: number, user_id: string): Promise<any> => {
-    return callAIAPI<any>(
-      `/food/delete_meal?meal_id=${meal_id}&user_id=${encodeURIComponent(user_id)}`,
-      { method: 'DELETE' },
-      '식사 삭제'
-    );
-  },
-
-  /**
-   * 식사 이름 수정
-   */
-  updateMealName: async (params: {
-    meal_id: number;
-    user_id: string;
-    meal_name: string;
-  }): Promise<any> => {
-    return callAIAPI<any>(
-      '/food/meal/update_name',
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params),
-      },
-      '식사 이름 수정'
-    );
-  },
-
-  /**
-   * 식사 날짜 수정
-   */
-  updateMealDate: async (params: {
-    meal_id: number;
-    user_id: string;
-    date: string;
-  }): Promise<any> => {
-    return callAIAPI<any>(
-      '/food/meal/update_date',
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params),
-      },
-      '식사 날짜 수정'
-    );
-  },
-
-  /**
-   * 식사 시간 수정
-   */
-  updateMealTime: async (params: {
-    meal_id: number;
-    user_id: string;
-    time_taken: string;
-  }): Promise<any> => {
-    return callAIAPI<any>(
-      '/food/meal/update_time',
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params),
-      },
-      '식사 시간 수정'
-    );
-  },
-
-  // ============================================
-  // 영양 목표 API (AI 서버)
-  // ============================================
-
-  /**
-   * 일일 목표 조회
-   */
-  getDailyGoal: async (user_id: string): Promise<any> => {
-    return callAIAPI<any>(
-      `/food/daily_goal?user_id=${encodeURIComponent(user_id)}`,
-      { method: 'GET' },
-      '일일 목표 조회'
-    );
-  },
-
-  /**
-   * 수동 칼로리 설정
-   */
-  setManualCalorie: async (params: {
-    user_id: string;
-    target_calorie: number;
-    date: string;
-  }): Promise<string> => {
-    return callAIAPI<string>(
-      '/food/nutrition-goal/manual-calorie',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params),
-      },
-      '수동 칼로리 설정'
-    );
-  },
-
-  /**
-   * 저장된 영양 목표 조회
-   */
-  getSavedNutritionGoal: async (user_id: string, date_str?: string | null): Promise<any> => {
-    let endpoint = `/food/nutrition-goal/get?user_id=${encodeURIComponent(user_id)}`;
-    if (date_str) {
-      endpoint += `&date_str=${encodeURIComponent(date_str)}`;
-    }
-    
-    return callAIAPI<any>(
-      endpoint,
-      { method: 'GET' },
-      '저장된 영양 목표 조회'
-    );
   },
 };
