@@ -659,41 +659,62 @@ const MealAddScreen = ({navigation, route}: any) => {
         dateToUse.getDate() === today.getDate();
 
       if (isEditMode && mealData?.id) {
-        // 수정 모드: 기존 식단 삭제 후 새로 추가
+        // 수정 모드: 기존 식단 삭제 후 새로 추가하는 방식
+        console.log('🔄 식단 수정 모드: 기존 식단 삭제 후 새로 추가');
+        console.log('삭제할 식단 ID:', mealData.id);
+        
+        // Step 1: 기존 식단 삭제
         try {
           await mealAPI.deleteMeal(mealData.id);
-          console.log('기존 식사 삭제 완료:', mealData.id);
+          console.log('✅ 기존 식사 삭제 완료:', mealData.id);
         } catch (deleteError: any) {
-          console.error('기존 식사 삭제 실패:', deleteError);
-          // 삭제 실패해도 계속 진행 (이미 삭제되었을 수 있음)
+          console.error('❌ 기존 식사 삭제 실패:', deleteError);
+          
+          // 404 에러는 이미 삭제된 것으로 간주하고 계속 진행
+          if (deleteError.status === 404) {
+            console.log('⚠️ 식단이 이미 삭제되었거나 존재하지 않음, 계속 진행');
+          } else {
+            // 다른 에러는 사용자에게 알림
+            const deleteErrorMessage = deleteError.message || '기존 식단 삭제에 실패했습니다.';
+            Alert.alert('경고', `${deleteErrorMessage}\n새로운 식단을 추가하려고 시도합니다.`);
+          }
+          // 삭제 실패해도 계속 진행 (새로 추가 시도)
         }
         
-        // 새로 추가
-        await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
-        Alert.alert('성공', '식사가 수정되었습니다.', [
-          {
-            text: '확인',
-            onPress: async () => {
-              // 해당 날짜의 진행률 가져오기
-              let dateProgress: DailyProgressWeekItem | null = null;
-              try {
-                if (isToday) {
-                  dateProgress = await fetchTodayProgress();
-                } else {
-                  dateProgress = await fetchDateProgress(mealDate);
+        // Step 2: 새로 추가 (일반 추가와 동일한 로직)
+        try {
+          await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
+          console.log('✅ 식단 수정 완료 (삭제 후 추가)');
+          
+          Alert.alert('성공', '식사가 수정되었습니다.', [
+            {
+              text: '확인',
+              onPress: async () => {
+                // 해당 날짜의 진행률 가져오기
+                let dateProgress: DailyProgressWeekItem | null = null;
+                try {
+                  if (isToday) {
+                    dateProgress = await fetchTodayProgress();
+                  } else {
+                    dateProgress = await fetchDateProgress(mealDate);
+                  }
+                } catch (error) {
+                  console.error('진행률 조회 실패:', error);
                 }
-              } catch (error) {
-                console.error('진행률 조회 실패:', error);
-              }
-              // StatsScreen으로 돌아가기 (탭바 유지)
-              navigation.navigate('Stats', { 
-                activeTab: 1, // 식단기록 탭 활성화
-                updatedProgress: dateProgress,
-                updatedDate: mealDate 
-              });
+                // StatsScreen으로 돌아가기 (탭바 유지)
+                navigation.navigate('Stats', { 
+                  activeTab: 1, // 식단기록 탭 활성화
+                  updatedProgress: dateProgress,
+                  updatedDate: mealDate 
+                });
+              },
             },
-          },
-        ]);
+          ]);
+        } catch (addError: any) {
+          // 추가 실패 시 에러 처리
+          console.error('❌ 식단 추가 실패 (수정 모드):', addError);
+          throw addError; // 외부 catch 블록에서 처리
+        }
       } else {
         // 추가 모드
         await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
@@ -791,134 +812,118 @@ const MealAddScreen = ({navigation, route}: any) => {
     try {
       const response = await mealAPI.uploadFood(imageUri);
       
-      // API 응답 형식: { ai_result: [{ food_id, name, name_ko, calories, carbs, protein, fat, weight, ... }] }
+      // API 응답에서 음식 정보 추출 (응답 형식에 따라 조정 필요)
+      // 예상 응답 형식: { ai_result: {...} }, { foods: [...] }, 또는 직접 음식 배열
       let foodData: Food | null = null;
       
-      console.log('📸 사진 업로드 응답:', JSON.stringify(response, null, 2));
+      console.log('업로드 응답:', JSON.stringify(response, null, 2));
       
-      // ai_result 배열이 있는 경우 (실제 API 응답 형식)
-      if (response.ai_result && Array.isArray(response.ai_result) && response.ai_result.length > 0) {
-        // 첫 번째 음식 사용 (다중 음식 감지 시 첫 번째만 사용)
-        const aiResult = response.ai_result[0];
+      // ai_result가 있는 경우 (사진 업로드 응답)
+      // 응답 형식: { "ai_result": [{ "food_id": 162608, "name": "...", "name_ko": "...", ... }] }
+      // 다중 음식 감지 지원: ai_result는 배열로 여러 음식을 반환할 수 있음
+      if (response.ai_result) {
+        const aiResults = Array.isArray(response.ai_result) 
+          ? response.ai_result 
+          : [response.ai_result];
         
-        // 숫자 타입 보장 및 검증
-        const foodId = typeof aiResult.food_id === 'number' 
-          ? aiResult.food_id 
-          : (typeof aiResult.id === 'number' ? aiResult.id : 0);
-        
-        const calories = typeof aiResult.calories === 'number' 
-          ? aiResult.calories 
-          : parseFloat(String(aiResult.calories || 0)) || 0;
-        const carbs = typeof aiResult.carbs === 'number' 
-          ? aiResult.carbs 
-          : parseFloat(String(aiResult.carbs || 0)) || 0;
-        const protein = typeof aiResult.protein === 'number' 
-          ? aiResult.protein 
-          : parseFloat(String(aiResult.protein || 0)) || 0;
-        const fat = typeof aiResult.fat === 'number' 
-          ? aiResult.fat 
-          : parseFloat(String(aiResult.fat || 0)) || 0;
-        
-        // weight 우선, 없으면 total_weight 사용, 둘 다 없으면 100g 기본값
-        let weight = 100;
-        if (typeof aiResult.weight === 'number' && aiResult.weight > 0) {
-          weight = aiResult.weight;
-        } else if (typeof aiResult.total_weight === 'number' && aiResult.total_weight > 0) {
-          weight = aiResult.total_weight;
+        if (aiResults.length > 0) {
+          // 첫 번째 음식 사용 (다중 음식인 경우 사용자가 선택할 수 있도록 개선 가능)
+          const aiResult = aiResults[0];
+          
+          // 숫자 타입 보장 및 검증
+          const calories = typeof aiResult.calories === 'number' 
+            ? aiResult.calories 
+            : parseFloat(String(aiResult.calories || 0)) || 0;
+          const carbs = typeof aiResult.carbs === 'number' 
+            ? aiResult.carbs 
+            : parseFloat(String(aiResult.carbs || 0)) || 0;
+          const protein = typeof aiResult.protein === 'number' 
+            ? aiResult.protein 
+            : parseFloat(String(aiResult.protein || 0)) || 0;
+          const fat = typeof aiResult.fat === 'number' 
+            ? aiResult.fat 
+            : parseFloat(String(aiResult.fat || 0)) || 0;
+          const weight = typeof aiResult.weight === 'number' 
+            ? aiResult.weight 
+            : parseFloat(String(aiResult.weight || 100)) || 100;
+          
+          // 이름은 한국어 우선, 없으면 영어
+          // API 응답: name_ko (한국어), name (영어)
+          const name = aiResult.name_ko || aiResult.name || '음식';
+          
+          // food_id 사용 (API 응답의 food_id 필드)
+          const foodId = aiResult.food_id || aiResult.id || 0;
+          
+          foodData = {
+            id: foodId, // food_id (검색/직접 입력과 동일하게 사용)
+            name: name,
+            calories: Math.max(0, calories),
+            carbs: Math.max(0, carbs),
+            protein: Math.max(0, protein),
+            fat: Math.max(0, fat),
+            weight: Math.max(1, weight), // weight는 최소 1
+          };
+          
+          console.log('사진 업로드로 변환된 음식 데이터:', foodData);
+          console.log('원본 AI 응답:', aiResult);
+          
+          // 다중 음식 감지 시 로그
+          if (aiResults.length > 1) {
+            console.log(`⚠️ 다중 음식 감지됨 (${aiResults.length}개), 첫 번째 음식만 추가됨`);
+            console.log('감지된 모든 음식:', aiResults.map((r: any) => r.name_ko || r.name));
+          }
         }
-        
-        // 이름은 한국어 우선, 없으면 영어
-        const name = aiResult.name_ko || aiResult.name || '음식';
-        
-        foodData = {
-          id: foodId, // food_id 사용 (식단 추가 시 필요)
-          name: name,
-          calories: Math.max(0, calories),
-          carbs: Math.max(0, carbs),
-          protein: Math.max(0, protein),
-          fat: Math.max(0, fat),
-          weight: Math.max(1, weight), // weight는 최소 1g
-        };
-        
-        console.log('✅ 사진 업로드로 변환된 음식 데이터:', {
-          food_id: foodId,
-          name: name,
-          calories: foodData.calories,
-          carbs: foodData.carbs,
-          protein: foodData.protein,
-          fat: foodData.fat,
-          weight: foodData.weight,
-        });
-        
-        // 다중 음식 감지 시 알림 (선택사항)
-        if (response.ai_result.length > 1) {
-          console.log(`⚠️ 다중 음식 감지됨 (${response.ai_result.length}개), 첫 번째 음식만 추가됩니다.`);
+      } else if (Array.isArray(response)) {
+        // 배열인 경우 첫 번째 음식 사용
+        if (response.length > 0) {
+          const item = response[0];
+          foodData = {
+            id: item.id || 0, // food_id (없으면 0, 신규 음식으로 처리)
+            name: item.name || '음식',
+            calories: item.calories || 0,
+            carbs: item.carbs || 0,
+            protein: item.protein || 0,
+            fat: item.fat || 0,
+            weight: item.weight || 100,
+          };
         }
-      } else if (response.ai_result && !Array.isArray(response.ai_result)) {
-        // ai_result가 객체인 경우 (하위 호환성)
-        const aiResult = response.ai_result;
-        const foodId = aiResult.food_id || aiResult.id || 0;
-        const name = aiResult.name_ko || aiResult.name || '음식';
-        const weight = aiResult.weight || aiResult.total_weight || 100;
-        
-        foodData = {
-          id: foodId,
-          name: name,
-          calories: Math.max(0, aiResult.calories || 0),
-          carbs: Math.max(0, aiResult.carbs || 0),
-          protein: Math.max(0, aiResult.protein || 0),
-          fat: Math.max(0, aiResult.fat || 0),
-          weight: Math.max(1, weight),
-        };
-      } else if (Array.isArray(response) && response.length > 0) {
-        // 배열인 경우 첫 번째 음식 사용 (하위 호환성)
-        const item = response[0];
-        foodData = {
-          id: item.food_id || item.id || 0,
-          name: item.name_ko || item.name || '음식',
-          calories: Math.max(0, item.calories || 0),
-          carbs: Math.max(0, item.carbs || 0),
-          protein: Math.max(0, item.protein || 0),
-          fat: Math.max(0, item.fat || 0),
-          weight: Math.max(1, item.weight || 100),
-        };
       } else if (response.foods && Array.isArray(response.foods) && response.foods.length > 0) {
-        // foods 배열이 있는 경우 (하위 호환성)
+        // foods 배열이 있는 경우
         const item = response.foods[0];
         foodData = {
-          id: item.food_id || item.id || 0,
-          name: item.name_ko || item.name || item.foodName || '음식',
-          calories: Math.max(0, item.calories || 0),
-          carbs: Math.max(0, item.carbs || 0),
-          protein: Math.max(0, item.protein || 0),
-          fat: Math.max(0, item.fat || 0),
-          weight: Math.max(1, item.weight || item.servingSize || 100),
+          id: item.id || 0, // food_id (없으면 0, 신규 음식으로 처리)
+          name: item.name || item.foodName || '음식',
+          calories: item.calories || 0,
+          carbs: item.carbs || 0,
+          protein: item.protein || 0,
+          fat: item.fat || 0,
+          weight: item.weight || item.servingSize || 100,
         };
-      } else if (response.name || response.name_ko) {
-        // 직접 음식 객체인 경우 (하위 호환성)
+      } else if (response.name) {
+        // 직접 음식 객체인 경우
         foodData = {
-          id: response.food_id || response.id || 0,
-          name: response.name_ko || response.name || '음식',
-          calories: Math.max(0, response.calories || 0),
-          carbs: Math.max(0, response.carbs || 0),
-          protein: Math.max(0, response.protein || 0),
-          fat: Math.max(0, response.fat || 0),
-          weight: Math.max(1, response.weight || response.total_weight || response.servingSize || 100),
+          id: response.id || 0, // food_id (없으면 0, 신규 음식으로 처리)
+          name: response.name,
+          calories: response.calories || 0,
+          carbs: response.carbs || 0,
+          protein: response.protein || 0,
+          fat: response.fat || 0,
+          weight: response.weight || response.servingSize || 100,
         };
       }
 
       if (foodData) {
         // 상태 업데이트를 즉시 처리 (UI 블로킹 최소화)
         setFoods(prev => [...prev, foodData!]);
-        console.log(`✅ 음식 추가 완료: ${foodData.name} (food_id: ${foodData.id})`);
+        // Alert 제거 - UI 블로킹 방지, 음식이 추가된 것을 화면에서 확인 가능
       } else {
         // 에러는 나중에 표시
         setTimeout(() => {
-          Alert.alert('알림', '음식 정보를 가져올 수 없습니다. 응답 형식을 확인해주세요.');
+          Alert.alert('알림', '음식 정보를 가져올 수 없습니다.');
         }, 100);
       }
     } catch (error: any) {
-      console.error('❌ 사진 업로드 오류:', error);
+      console.error('사진 업로드 오류:', error);
       // 에러는 나중에 표시
       setTimeout(() => {
         Alert.alert('오류', error.message || '사진 업로드에 실패했습니다. 다시 시도해주세요.');
@@ -994,10 +999,9 @@ const MealAddScreen = ({navigation, route}: any) => {
     setFoods(prev => prev.filter(food => food.id !== foodId));
   };
 
-  // 소수점 한 자리 포맷팅 (소수점이 0이면 정수로 표시)
-  const formatDecimal = (value: number): string => {
-    const fixed = value.toFixed(1);
-    return fixed.endsWith('.0') ? fixed.slice(0, -2) : fixed;
+  // 정수 포맷팅 (소수점 제거)
+  const formatInteger = (value: number): string => {
+    return Math.round(value).toString();
   };
 
   return (
@@ -1065,28 +1069,28 @@ const MealAddScreen = ({navigation, route}: any) => {
         {/* 칼로리 요약 */}
         <View style={styles.calorieSummary}>
           <View style={styles.calorieMain}>
-            <Text style={styles.calorieNumber}>{formatDecimal(totalCalories)}</Text>
+            <Text style={styles.calorieNumber}>{formatInteger(totalCalories)}</Text>
             <Text style={styles.calorieUnit}>
               {' '}
-              / {formatDecimal(targetCalories)}kcal
+              / {formatInteger(targetCalories)}kcal
             </Text>
           </View>
           <View style={styles.nutritionInline}>
             <View style={styles.nutritionInlineItem}>
               <Text style={styles.nutritionInlineLabel}>탄수화물</Text>
               <Text style={styles.nutritionInlineValue}>
-                {formatDecimal(totalCarbs)} / {formatDecimal(targetCarbs)}g
+                {formatInteger(totalCarbs)} / {formatInteger(targetCarbs)}g
               </Text>
             </View>
             <View style={styles.nutritionInlineItem}>
               <Text style={styles.nutritionInlineLabel}>단백질</Text>
               <Text style={styles.nutritionInlineValue}>
-                {formatDecimal(totalProtein)} / {formatDecimal(targetProtein)}g
+                {formatInteger(totalProtein)} / {formatInteger(targetProtein)}g
               </Text>
             </View>
             <View style={styles.nutritionInlineItem}>
               <Text style={styles.nutritionInlineLabel}>지방</Text>
-              <Text style={styles.nutritionInlineValue}>{formatDecimal(totalFat)} / {formatDecimal(targetFat)}g</Text>
+              <Text style={styles.nutritionInlineValue}>{formatInteger(totalFat)} / {formatInteger(targetFat)}g</Text>
             </View>
           </View>
         </View>
@@ -1106,7 +1110,7 @@ const MealAddScreen = ({navigation, route}: any) => {
                 <View style={styles.foodItemHeader}>
                   <Text style={styles.foodName} numberOfLines={2}>{food.name}</Text>
                   <View style={styles.foodCaloriesContainer}>
-                    <Text style={styles.foodCalories}>{food.calories}kcal</Text>
+                    <Text style={styles.foodCalories}>{Math.round(food.calories)}kcal</Text>
                     <TouchableOpacity
                       style={styles.foodDeleteButton}
                       onPress={(e) => {
