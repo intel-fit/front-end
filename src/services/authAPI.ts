@@ -1,3 +1,4 @@
+// src/services/authAPI.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   request,
@@ -11,17 +12,17 @@ import {
  */
 const decodeJWT = (token: string): any => {
   try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const base64Url = token.split(".")[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
     const jsonPayload = decodeURIComponent(
       atob(base64)
-        .split('')
-        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
     );
     return JSON.parse(jsonPayload);
   } catch (error) {
-    console.error('[AUTH] JWT 디코딩 실패:', error);
+    console.error("[AUTH] JWT 디코딩 실패:", error);
     return null;
   }
 };
@@ -67,7 +68,6 @@ export const authAPI = {
     } catch (error: any) {
       console.error("이메일 인증코드 발송 에러:", error);
 
-      // 서버 내부 오류 (500)
       if (
         error.status === 500 ||
         error.message?.includes("500") ||
@@ -78,7 +78,6 @@ export const authAPI = {
         );
       }
 
-      // 잘못된 요청 (400) - 이메일 형식 오류
       if (error.status === 400 || error.message?.includes("400")) {
         throw new Error("잘못된 이메일 형식입니다");
       }
@@ -131,6 +130,7 @@ export const authAPI = {
     refreshToken?: string;
     tokenType?: string;
     expiresIn?: number;
+    membershipType?: "FREE" | "PREMIUM";
   }> => {
     try {
       const response = await request<{
@@ -140,31 +140,41 @@ export const authAPI = {
         refreshToken?: string;
         tokenType?: string;
         expiresIn?: number;
+        membershipType?: "FREE" | "PREMIUM";
       }>("/api/users/login", {
         method: "POST",
         body: JSON.stringify({ userId, password }),
       });
 
-      // 응답 받은 토큰을 AsyncStorage에 저장 (다음 요청부터 자동 사용)
       if (response.accessToken) {
         await AsyncStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken);
-        
-        // JWT에서 userPk 추출하여 저장
+
         const payload = decodeJWT(response.accessToken);
         if (payload && payload.userPk) {
-          await AsyncStorage.setItem('userId', String(payload.userPk));
-          console.log('[AUTH] userId 저장 완료:', payload.userPk);
+          await AsyncStorage.setItem("userId", String(payload.userPk));
+          console.log("[AUTH] userId 저장 완료:", payload.userPk);
         } else {
-          console.warn('[AUTH] JWT에서 userPk를 찾을 수 없습니다');
+          console.warn("[AUTH] JWT에서 userPk를 찾을 수 없습니다");
         }
       }
+
       if (response.refreshToken) {
         await AsyncStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken);
       }
 
+      if (response.membershipType) {
+        await AsyncStorage.setItem("membershipType", response.membershipType);
+        console.log(
+          "[AUTH] membershipType 저장 완료:",
+          response.membershipType
+        );
+      } else {
+        await AsyncStorage.setItem("membershipType", "FREE");
+        console.log("[AUTH] membershipType 기본값(FREE) 저장");
+      }
+
       return response;
     } catch (error: any) {
-      // 인증 실패 (401) - 아이디/비밀번호 오류
       if (
         error.status === 401 ||
         error.message?.includes("401") ||
@@ -234,7 +244,6 @@ export const authAPI = {
         }),
       });
     } catch (error: any) {
-      // 임시 비밀번호 오류 또는 만료 (400)
       if (
         error.status === 400 ||
         error.message?.includes("400") ||
@@ -243,7 +252,6 @@ export const authAPI = {
         throw new Error("임시 비밀번호가 올바르지 않거나 만료되었습니다");
       }
 
-      // 사용자를 찾을 수 없음 (404)
       if (
         error.status === 404 ||
         error.message?.includes("404") ||
@@ -263,7 +271,6 @@ export const authAPI = {
   logout: async (): Promise<void> => {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
 
-    // 서버에 로그아웃 요청 (실패해도 계속 진행)
     if (token) {
       try {
         await request("/api/users/logout", {
@@ -272,15 +279,15 @@ export const authAPI = {
         });
       } catch (error) {
         console.error("Logout error:", error);
-        // 서버 요청 실패해도 로컬 토큰은 삭제
       }
     }
 
-    // 로컬 저장소에서 토큰 및 userId 삭제
     await AsyncStorage.removeItem(ACCESS_TOKEN_KEY);
     await AsyncStorage.removeItem(REFRESH_TOKEN_KEY);
-    await AsyncStorage.removeItem('userId');
-    await AsyncStorage.removeItem('userName');
+    await AsyncStorage.removeItem("userId");
+    await AsyncStorage.removeItem("userName");
+    await AsyncStorage.removeItem("membershipType");
+    await AsyncStorage.removeItem("chatbot_tokens");
   },
 
   /**
@@ -295,13 +302,11 @@ export const authAPI = {
     tokenType?: string;
     expiresIn?: number;
   }> => {
-    // 저장된 refreshToken 가져오기
     const refreshToken = await AsyncStorage.getItem(REFRESH_TOKEN_KEY);
     if (!refreshToken) {
       throw new Error("No refresh token available");
     }
 
-    // 서버에 토큰 재발급 요청
     const response = await request<{
       success: boolean;
       message: string;
@@ -313,15 +318,13 @@ export const authAPI = {
       body: JSON.stringify({ refreshToken }),
     });
 
-    // 새로 받은 accessToken 저장
     if (response.accessToken) {
       await AsyncStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken);
-      
-      // JWT에서 userPk 추출하여 저장
+
       const payload = decodeJWT(response.accessToken);
       if (payload && payload.userPk) {
-        await AsyncStorage.setItem('userId', String(payload.userPk));
-        console.log('[AUTH] userId 재저장 완료 (토큰 갱신):', payload.userPk);
+        await AsyncStorage.setItem("userId", String(payload.userPk));
+        console.log("[AUTH] userId 재저장 완료 (토큰 갱신):", payload.userPk);
       }
     }
 
@@ -342,8 +345,9 @@ export const authAPI = {
    */
   isAuthenticated: async (): Promise<boolean> => {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-    return !!token; // 토큰이 있으면 true, 없으면 false
+    return !!token;
   },
+
   /**
    * 사용자 프로필 조회
    */
@@ -451,9 +455,9 @@ export const authAPI = {
       }),
     });
   },
+
   /**
    * 회원탈퇴
-
    */
   deleteAccount: async (
     password: string,
@@ -474,15 +478,132 @@ export const authAPI = {
         }),
       });
 
-      // 탈퇴 성공 시 토큰 삭제
       if (response.success) {
         await AsyncStorage.removeItem(ACCESS_TOKEN_KEY);
         await AsyncStorage.removeItem(REFRESH_TOKEN_KEY);
+        await AsyncStorage.removeItem("userId");
+        await AsyncStorage.removeItem("userName");
+        await AsyncStorage.removeItem("membershipType");
+        await AsyncStorage.removeItem("chatbot_tokens");
       }
 
       return response;
     } catch (error: any) {
       console.error("회원탈퇴 에러:", error);
+      throw error;
+    }
+  },
+
+  // ========================================
+  // ✅ 멤버십 관련 API (신규 추가)
+  // ========================================
+
+  /**
+   * 토큰 초기화 (테스트용)
+   * 모든 토큰을 기본값으로 초기화
+   * - 챗봇 토큰: 3개
+   * - 식단 추천 토큰: 1개
+   * - 운동 추천 토큰: 1개
+   */
+  resetTokens: async (): Promise<string> => {
+    try {
+      const response = await request<{ message: string }>(
+        "/api/users/tokens/reset",
+        {
+          method: "POST",
+        }
+      );
+
+      // 로컬 스토리지도 초기화
+      await AsyncStorage.setItem("chatbot_tokens", "3");
+
+      console.log("[AUTH] 토큰 초기화 완료:", response);
+      return response.message || "토큰이 기본값으로 초기화되었습니다.";
+    } catch (error: any) {
+      console.error("토큰 초기화 에러:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * 프리미엄으로 업그레이드
+   * 무료 → 프리미엄으로 변경
+   */
+  upgradeToPremium: async (): Promise<string> => {
+    try {
+      const response = await request<{ message: string }>(
+        "/api/users/membership/premium",
+        {
+          method: "POST",
+        }
+      );
+
+      // AsyncStorage도 업데이트
+      await AsyncStorage.setItem("membershipType", "PREMIUM");
+      console.log("[AUTH] 프리미엄 업그레이드 완료:", response);
+
+      return response.message || "멤버십이 프리미엄으로 변경되었습니다.";
+    } catch (error: any) {
+      console.error("프리미엄 업그레이드 에러:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * 무료로 다운그레이드
+   * 프리미엄 → 무료로 변경
+   */
+  downgradeToFree: async (): Promise<string> => {
+    try {
+      const response = await request<{ message: string }>(
+        "/api/users/membership/free",
+        {
+          method: "POST",
+        }
+      );
+
+      // AsyncStorage도 업데이트
+      await AsyncStorage.setItem("membershipType", "FREE");
+      await AsyncStorage.setItem("chatbot_tokens", "3");
+      console.log("[AUTH] 무료 플랜 전환 완료:", response);
+
+      return response.message || "멤버십이 무료 플랜으로 변경되었습니다.";
+    } catch (error: any) {
+      console.error("무료 플랜 전환 에러:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * 멤버십 토글 (테스트용)
+   * 현재 상태를 확인하고 반대로 변경
+   * FREE ↔ PREMIUM
+   */
+  toggleMembership: async (): Promise<{
+    newType: "FREE" | "PREMIUM";
+    message: string;
+  }> => {
+    try {
+      // 현재 멤버십 타입 확인
+      const currentType = await AsyncStorage.getItem("membershipType");
+
+      let message: string;
+      let newType: "FREE" | "PREMIUM";
+
+      if (currentType === "PREMIUM") {
+        // 프리미엄 → 무료
+        message = await authAPI.downgradeToFree();
+        newType = "FREE";
+      } else {
+        // 무료 → 프리미엄
+        message = await authAPI.upgradeToPremium();
+        newType = "PREMIUM";
+      }
+
+      console.log("[AUTH] 멤버십 토글 완료:", currentType, "→", newType);
+      return { newType, message };
+    } catch (error: any) {
+      console.error("멤버십 토글 에러:", error);
       throw error;
     }
   },
@@ -540,7 +661,6 @@ export const authAPI = {
       id: number;
       planName: string;
       isSaved: boolean;
-      // ... 전체 식단 정보
     };
   }> => {
     return request<{

@@ -1,57 +1,70 @@
 // src/services/chatAPI.ts
-import { API_BASE_URL } from "./apiConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ACCESS_TOKEN_KEY } from "./apiConfig";
+import { ACCESS_TOKEN_KEY, API_BASE_URL } from "./apiConfig";
 
 interface ChatResponse {
-  ai_reply?: string;
+  reply?: string;
   user_id?: string;
-  question?: string;
-  latest_score?: number | null;
-  context?: any;
+  mode?: string;
+  coach_style?: string;
+  emotion_detected?: string;
+  debug?: any;
   message?: string;
   detail?: string;
+  success?: boolean;
+  code?: string;
   [key: string]: any;
+}
+
+export interface ChatHistoryItem {
+  userMessage: string;
+  aiResponse: string;
+  mode: string;
+  coachStyle: string;
+  emotionDetected: string;
+  createdAt: string;
 }
 
 export const chatAPI = {
   /**
    * AI 코치와 채팅
-   * @param userId - 사용자 ID
+   * @param userId - 사용자 ID (string)
    * @param message - 사용자 메시지
    * @param mode - 채팅 카테고리 (auto | exercise | nutrition)
    * @param coachStyle - 대화 스타일 (pro | friend | soft | drill)
    */
   sendMessage: async (
-    userId: number,
+    userId: string,
     message: string,
     mode: string = "auto",
     coachStyle: string = "friend"
   ): Promise<string> => {
-    try {
-      console.log("💬 채팅 요청:", {
-        userId,
-        message,
-        mode, // ✅ 추가
-        coachStyle, // ✅ 추가
-      });
+    const startTime = Date.now();
 
+    try {
+      // 토큰 확인
       const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
 
       if (!token) {
         throw new Error("로그인이 필요합니다.");
       }
 
-      const url = `${API_BASE_URL}/api/ai/coach/chat`;
-      console.log("🌐 요청 URL:", url);
-
+      // 요청 본문
       const requestBody = {
         message: message,
-        mode: mode, // ✅ 추가
-        coach_style: coachStyle, // ✅ 추가
+        mode: mode,
+        coachStyle: coachStyle,
       };
 
-      console.log("📤 요청 본문:", JSON.stringify(requestBody));
+      console.log("🤖 챗봇 요청:", {
+        userId,
+        message: message.substring(0, 50) + (message.length > 50 ? "..." : ""),
+        mode,
+        coachStyle,
+      });
+
+      // ✅ API_BASE_URL 사용으로 변경
+      const url = `${API_BASE_URL}/api/ai/coach/chat`;
 
       const response = await fetch(url, {
         method: "POST",
@@ -62,32 +75,35 @@ export const chatAPI = {
         body: JSON.stringify(requestBody),
       });
 
-      console.log("✅ 응답 상태:", response.status);
+      const responseTime = Date.now() - startTime;
 
-      // ✅ 응답 텍스트 먼저 확인
+      // 응답 텍스트 읽기
       const responseText = await response.text();
-      console.log("📥 응답 원본:", responseText);
 
+      // JSON 파싱
       let data: ChatResponse;
       try {
         data = JSON.parse(responseText);
-        console.log("✅ 파싱된 응답:", JSON.stringify(data, null, 2));
       } catch (parseError) {
-        console.error("❌ JSON 파싱 실패:", parseError);
+        console.error("❌ JSON 파싱 실패:", responseText);
         throw new Error("서버 응답을 처리할 수 없습니다.");
       }
 
+      // 에러 응답 처리
       if (!response.ok) {
-        console.error("❌ 상세 에러:", JSON.stringify(data, null, 2));
+        console.error("❌ 챗봇 API 에러:", {
+          status: response.status,
+          code: data.code,
+          message: data.message,
+        });
 
-        // Gemini API 429 에러 처리
+        // 특정 에러 처리
         if (response.status === 500 && data.detail?.includes("429")) {
           throw new Error(
             "AI 서버의 일일 사용량이 초과되었습니다. 잠시 후 다시 시도해주세요."
           );
         }
 
-        // 인증 오류
         if (response.status === 401 || response.status === 403) {
           throw new Error("인증이 만료되었습니다. 다시 로그인해주세요.");
         }
@@ -97,27 +113,77 @@ export const chatAPI = {
         );
       }
 
-      // ✅ ai_reply를 최우선으로 추출
-      const botMessage =
-        data.ai_reply ||
-        data.message ||
-        data.question || // fallback
-        (typeof data === "string" ? data : null);
-
-      console.log("🤖 추출된 봇 메시지:", botMessage);
+      // 성공 응답 처리
+      const botMessage = data.reply || data.message || null;
 
       if (!botMessage) {
-        console.warn("⚠️ 예상치 못한 응답 형식:", data);
-        console.warn("⚠️ 응답 타입:", typeof data);
-        console.warn("⚠️ 응답 키:", Object.keys(data));
+        console.error("❌ 응답에 메시지 없음:", data);
         throw new Error("AI 응답을 찾을 수 없습니다.");
       }
 
+      console.log("✅ 챗봇 응답 성공:", {
+        responseTime: `${responseTime}ms`,
+        messageLength: botMessage.length,
+      });
+
       return botMessage;
     } catch (error: any) {
-      console.error("❌ 챗봇 API 호출 에러:", error);
-      console.error("❌ 에러 스택:", error.stack);
+      console.error("❌ 챗봇 에러:", {
+        message: error.message,
+        type: error.constructor.name,
+      });
+
       throw new Error(error.message || "채팅 중 오류가 발생했습니다.");
+    }
+  }, // ← ✅ 쉼표 추가!
+
+  /**
+   * 챗봇 히스토리 조회
+   * @param limit - 조회할 대화 개수 (선택사항)
+   */
+  getChatHistory: async (limit?: number): Promise<ChatHistoryItem[]> => {
+    try {
+      const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY); // ← ✅ ACCESS_TOKEN_KEY 사용
+
+      if (!token) {
+        throw new Error("로그인이 필요합니다.");
+      }
+
+      // ✅ limit이 있으면 쿼리 파라미터 추가
+      const url = limit
+        ? `${API_BASE_URL}/api/ai/coach/chat/history?limit=${limit}`
+        : `${API_BASE_URL}/api/ai/coach/chat/history`;
+
+      console.log("📜 챗봇 히스토리 요청:", { url, limit });
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // ← ✅ Authorization 대문자 A
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error("❌ 히스토리 조회 실패:", {
+          status: response.status,
+          data,
+        });
+        throw new Error(
+          data.message || "챗봇 히스토리를 불러오는데 실패했습니다."
+        );
+      }
+
+      console.log("✅ 챗봇 히스토리 조회 성공:", {
+        count: data.length,
+      });
+
+      return data;
+    } catch (error: any) {
+      console.error("❌ 챗봇 히스토리 에러:", error);
+      throw error;
     }
   },
 };
