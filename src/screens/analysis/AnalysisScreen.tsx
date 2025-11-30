@@ -29,7 +29,7 @@ import {
 } from "../../utils/exerciseApi";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ACCESS_TOKEN_KEY, API_BASE_URL } from "../../services/apiConfig";
+import { ACCESS_TOKEN_KEY, API_BASE_URL, AI_API_BASE_URL } from "../../services/apiConfig";
 import MacroDonut from "../../components/charts/MacroDonut";
 import { authAPI } from "../../services";
 import {
@@ -37,6 +37,7 @@ import {
   InBodyPayload,
 } from "../../utils/inbodyApi";
 import { eventBus } from "../../utils/eventBus";
+import { initTestUser } from "../../utils/testApi";
 
 interface MealComparison {
   thisWeekStart: string;
@@ -236,6 +237,10 @@ const AnalysisScreen = ({ navigation }: any) => {
   const [localCompletionByNameDate, setLocalCompletionByNameDate] = useState<
     Record<string, boolean>
   >({});
+  const [exerciseWeeklyGraph, setExerciseWeeklyGraph] = useState<string | null>(null);
+  const [exerciseGraphLoading, setExerciseGraphLoading] = useState(false);
+  const [nutritionWeeklyGraph, setNutritionWeeklyGraph] = useState<string | null>(null);
+  const [nutritionGraphLoading, setNutritionGraphLoading] = useState(false);
 
   // 건강점수 state (추후 API 연결)
   const [healthScore] = useState(90);
@@ -771,12 +776,23 @@ const AnalysisScreen = ({ navigation }: any) => {
       if (__DEV__) {
         console.log("[ANALYSIS] 운동 기록", { count: workouts.length });
       }
-    } catch (error) {
-      console.error(
-        "[ANALYSIS] 운동 기록 조회 실패:",
-        (error as Error)?.message
-      );
-      setWorkoutHistory([]);
+    } catch (error: any) {
+      const status = error?.response?.status;
+      // 404나 데이터 없음은 정상 (에러 표시 안 함)
+      if (status === 404 || status === 400) {
+        if (__DEV__) {
+          console.log("[ANALYSIS] 운동 기록 없음 (정상)");
+        }
+        setWorkoutHistory([]);
+      } else {
+        // 실제 서버 오류나 네트워크 오류만 로그
+        console.error(
+          "[ANALYSIS] 운동 기록 조회 실패:",
+          error?.response?.status,
+          error?.response?.data?.message || error?.message
+        );
+        setWorkoutHistory([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -862,15 +878,35 @@ const AnalysisScreen = ({ navigation }: any) => {
       );
       setMealComparison(response.data);
     } catch (error: any) {
-      console.error(
-        "[ANALYSIS] 식단 비교 조회 실패:",
-        error?.response?.data?.message || error?.message
-      );
-      setMealComparison(null);
-      setMealError(
-        error?.response?.data?.message ||
-          "식단 분석 데이터를 불러오지 못했습니다."
-      );
+      const status = error?.response?.status;
+      // 404나 데이터 없음은 정상 (에러 표시 안 함)
+      if (status === 404 || status === 400) {
+        if (__DEV__) {
+          console.log("[ANALYSIS] 식단 비교 데이터 없음 (정상)");
+        }
+        setMealComparison(null);
+        setMealError(null);
+      } else if (status === 401 || status === 403) {
+        // 인증/권한 오류는 표시
+        setMealComparison(null);
+        setMealError("로그인이 필요합니다.");
+      } else if (status >= 500) {
+        // 서버 내부 오류는 로그만 (사용자에게는 표시 안 함)
+        console.error(
+          "[ANALYSIS] 식단 비교 조회 실패 (서버 오류):",
+          error?.response?.data?.message || error?.message
+        );
+        setMealComparison(null);
+        setMealError(null);
+      } else {
+        // 기타 에러는 로그만
+        console.error(
+          "[ANALYSIS] 식단 비교 조회 실패:",
+          error?.response?.data?.message || error?.message
+        );
+        setMealComparison(null);
+        setMealError(null);
+      }
     } finally {
       setMealLoading(false);
     }
@@ -884,6 +920,296 @@ const AnalysisScreen = ({ navigation }: any) => {
       setUserIdLoaded(true);
     }
   }, []);
+
+  // 운동 주간 그래프 로드
+  const loadExerciseWeeklyGraph = useCallback(async () => {
+    if (!userId) {
+      console.log("[ANALYSIS] 운동 주간 그래프: userId 없음");
+      setExerciseWeeklyGraph(null);
+      return;
+    }
+
+    try {
+      setExerciseGraphLoading(true);
+      const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+      const url = `${AI_API_BASE_URL}/analytics/exercise/weekly-graph/${userId}`;
+      console.log("[ANALYSIS] 운동 주간 그래프 요청:", { url, userId, hasToken: !!token });
+      
+      const response = await axios.get<any>(
+        url,
+        {
+          headers: {
+            Authorization: `Bearer ${token || ""}`,
+            Accept: "application/json",
+          },
+        }
+      );
+      
+      console.log("[ANALYSIS] 운동 주간 그래프 원본 응답:", {
+        status: response.status,
+        statusText: response.statusText,
+        dataType: typeof response.data,
+        dataLength: typeof response.data === 'string' ? response.data.length : (response.data ? 'object' : 'null/undefined'),
+        data: response.data,
+      });
+      
+      // 응답 데이터 추출 (객체 또는 문자열)
+      let graphData: string | null = null;
+      if (typeof response.data === 'string') {
+        const data = response.data.trim();
+        if (data === '') {
+          console.log("[ANALYSIS] 운동 주간 그래프: 빈 문자열 응답");
+          graphData = null;
+        } else if (data.startsWith('http') || data.startsWith('data:image')) {
+          graphData = data;
+        } else if (data.startsWith('PNG') || data.charCodeAt(0) === 0x89 || data.includes('PNG')) {
+          // PNG 바이너리 데이터인 경우 base64로 변환
+          try {
+            // 바이너리 문자열을 바이트 배열로 변환 후 base64 인코딩
+            const bytes = new Uint8Array(data.length);
+            for (let i = 0; i < data.length; i++) {
+              bytes[i] = data.charCodeAt(i) & 0xff;
+            }
+            // 바이트 배열을 바이너리 문자열로 변환
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) {
+              binary += String.fromCharCode(bytes[i]);
+            }
+            // base64 인코딩
+            if (typeof btoa !== 'undefined') {
+              graphData = `data:image/png;base64,${btoa(binary)}`;
+            } else {
+              try {
+                const { Buffer } = require('buffer');
+                graphData = `data:image/png;base64,${Buffer.from(bytes).toString('base64')}`;
+              } catch (bufferError) {
+                console.error("[ANALYSIS] Buffer 사용 실패:", bufferError);
+                graphData = null;
+              }
+            }
+          } catch (e) {
+            console.error("[ANALYSIS] PNG base64 변환 실패:", e);
+            graphData = null;
+          }
+        } else {
+          // base64 문자열인 경우
+          graphData = `data:image/png;base64,${data}`;
+        }
+      } else if (response.data && typeof response.data === 'object') {
+        // 객체인 경우 이미지 데이터 추출 시도
+        // 가능한 필드명: image, data, graph, url, base64 등
+        if ('image' in response.data && typeof response.data.image === 'string') {
+          graphData = response.data.image.startsWith('data:') 
+            ? response.data.image 
+            : `data:image/png;base64,${response.data.image}`;
+        } else if ('data' in response.data && typeof response.data.data === 'string') {
+          graphData = response.data.data.startsWith('data:') 
+            ? response.data.data 
+            : `data:image/png;base64,${response.data.data}`;
+        } else if ('graph' in response.data && typeof response.data.graph === 'string') {
+          graphData = response.data.graph.startsWith('data:') 
+            ? response.data.graph 
+            : `data:image/png;base64,${response.data.graph}`;
+        } else if ('url' in response.data && typeof response.data.url === 'string') {
+          graphData = response.data.url;
+        } else {
+          // 객체의 첫 번째 문자열 값 찾기
+          const firstStringValue = Object.values(response.data).find(v => typeof v === 'string') as string | undefined;
+          if (firstStringValue) {
+            graphData = firstStringValue.startsWith('data:') || firstStringValue.startsWith('http')
+              ? firstStringValue
+              : `data:image/png;base64,${firstStringValue}`;
+          } else {
+            graphData = null;
+          }
+        }
+      }
+      
+      console.log("[ANALYSIS] 운동 주간 그래프 응답:", {
+        hasData: !!graphData,
+        responseDataType: typeof response.data,
+        responseDataKeys: response.data && typeof response.data === 'object' ? Object.keys(response.data) : 'N/A',
+        responseDataLength: typeof response.data === 'string' ? response.data.length : 'N/A',
+        graphDataLength: graphData ? graphData.length : 0,
+        graphDataPrefix: graphData ? graphData.substring(0, 50) : '',
+        isBase64: graphData ? graphData.startsWith('data:image') : false,
+      });
+      
+      setExerciseWeeklyGraph(graphData);
+    } catch (error: any) {
+      const status = error?.response?.status;
+      // 404나 데이터 없음은 정상 (에러 표시 안 함)
+      if (status === 404 || status === 400) {
+        if (__DEV__) {
+          console.log("[ANALYSIS] 운동 주간 그래프 없음 (정상)");
+        }
+        setExerciseWeeklyGraph(null);
+      } else if (status >= 500) {
+        // 서버 내부 오류만 로그
+        console.error(
+          "[ANALYSIS] 운동 주간 그래프 조회 실패 (서버 오류):",
+          error?.response?.data?.message || error?.message
+        );
+        setExerciseWeeklyGraph(null);
+      } else {
+        // 기타 에러는 로그만
+        if (__DEV__) {
+          console.warn(
+            "[ANALYSIS] 운동 주간 그래프 조회 실패:",
+            error?.response?.data?.message || error?.message
+          );
+        }
+        setExerciseWeeklyGraph(null);
+      }
+    } finally {
+      setExerciseGraphLoading(false);
+    }
+  }, [userId]);
+
+  // 식단 주간 그래프 로드
+  const loadNutritionWeeklyGraph = useCallback(async () => {
+    if (!userId) {
+      console.log("[ANALYSIS] 식단 주간 그래프: userId 없음");
+      setNutritionWeeklyGraph(null);
+      return;
+    }
+
+    try {
+      setNutritionGraphLoading(true);
+      const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+      const url = `${AI_API_BASE_URL}/analytics/nutrition/weekly-graph/${userId}`;
+      console.log("[ANALYSIS] 식단 주간 그래프 요청:", { url, userId, hasToken: !!token });
+      
+      const response = await axios.get<any>(
+        url,
+        {
+          headers: {
+            Authorization: `Bearer ${token || ""}`,
+            Accept: "application/json",
+          },
+        }
+      );
+      
+      console.log("[ANALYSIS] 식단 주간 그래프 원본 응답:", {
+        status: response.status,
+        statusText: response.statusText,
+        dataType: typeof response.data,
+        dataLength: typeof response.data === 'string' ? response.data.length : (response.data ? 'object' : 'null/undefined'),
+        data: response.data,
+      });
+      
+      // 응답 데이터 추출 (객체 또는 문자열)
+      let graphData: string | null = null;
+      if (typeof response.data === 'string') {
+        const data = response.data.trim();
+        if (data === '') {
+          console.log("[ANALYSIS] 식단 주간 그래프: 빈 문자열 응답");
+          graphData = null;
+        } else if (data.startsWith('http') || data.startsWith('data:image')) {
+          graphData = data;
+        } else if (data.startsWith('PNG') || data.charCodeAt(0) === 0x89 || data.includes('PNG')) {
+          // PNG 바이너리 데이터인 경우 base64로 변환
+          try {
+            // 바이너리 문자열을 바이트 배열로 변환 후 base64 인코딩
+            const bytes = new Uint8Array(data.length);
+            for (let i = 0; i < data.length; i++) {
+              bytes[i] = data.charCodeAt(i) & 0xff;
+            }
+            // 바이트 배열을 바이너리 문자열로 변환
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) {
+              binary += String.fromCharCode(bytes[i]);
+            }
+            // base64 인코딩
+            if (typeof btoa !== 'undefined') {
+              graphData = `data:image/png;base64,${btoa(binary)}`;
+            } else {
+              try {
+                const { Buffer } = require('buffer');
+                graphData = `data:image/png;base64,${Buffer.from(bytes).toString('base64')}`;
+              } catch (bufferError) {
+                console.error("[ANALYSIS] Buffer 사용 실패:", bufferError);
+                graphData = null;
+              }
+            }
+          } catch (e) {
+            console.error("[ANALYSIS] PNG base64 변환 실패:", e);
+            graphData = null;
+          }
+        } else {
+          // base64 문자열인 경우
+          graphData = `data:image/png;base64,${data}`;
+        }
+      } else if (response.data && typeof response.data === 'object') {
+        // 객체인 경우 이미지 데이터 추출 시도
+        // 가능한 필드명: image, data, graph, url, base64 등
+        if ('image' in response.data && typeof response.data.image === 'string') {
+          graphData = response.data.image.startsWith('data:') 
+            ? response.data.image 
+            : `data:image/png;base64,${response.data.image}`;
+        } else if ('data' in response.data && typeof response.data.data === 'string') {
+          graphData = response.data.data.startsWith('data:') 
+            ? response.data.data 
+            : `data:image/png;base64,${response.data.data}`;
+        } else if ('graph' in response.data && typeof response.data.graph === 'string') {
+          graphData = response.data.graph.startsWith('data:') 
+            ? response.data.graph 
+            : `data:image/png;base64,${response.data.graph}`;
+        } else if ('url' in response.data && typeof response.data.url === 'string') {
+          graphData = response.data.url;
+        } else {
+          // 객체의 첫 번째 문자열 값 찾기
+          const firstStringValue = Object.values(response.data).find(v => typeof v === 'string') as string | undefined;
+          if (firstStringValue) {
+            graphData = firstStringValue.startsWith('data:') || firstStringValue.startsWith('http')
+              ? firstStringValue
+              : `data:image/png;base64,${firstStringValue}`;
+          } else {
+            graphData = null;
+          }
+        }
+      }
+      
+      console.log("[ANALYSIS] 식단 주간 그래프 응답:", {
+        hasData: !!graphData,
+        responseDataType: typeof response.data,
+        responseDataKeys: response.data && typeof response.data === 'object' ? Object.keys(response.data) : 'N/A',
+        responseDataLength: typeof response.data === 'string' ? response.data.length : 'N/A',
+        graphDataLength: graphData ? graphData.length : 0,
+        graphDataPrefix: graphData ? graphData.substring(0, 50) : '',
+        isBase64: graphData ? graphData.startsWith('data:image') : false,
+      });
+      
+      setNutritionWeeklyGraph(graphData);
+    } catch (error: any) {
+      const status = error?.response?.status;
+      // 404나 데이터 없음은 정상 (에러 표시 안 함)
+      if (status === 404 || status === 400) {
+        if (__DEV__) {
+          console.log("[ANALYSIS] 식단 주간 그래프 없음 (정상)");
+        }
+        setNutritionWeeklyGraph(null);
+      } else if (status >= 500) {
+        // 서버 내부 오류만 로그
+        console.error(
+          "[ANALYSIS] 식단 주간 그래프 조회 실패 (서버 오류):",
+          error?.response?.data?.message || error?.message
+        );
+        setNutritionWeeklyGraph(null);
+      } else {
+        // 기타 에러는 로그만
+        if (__DEV__) {
+          console.warn(
+            "[ANALYSIS] 식단 주간 그래프 조회 실패:",
+            error?.response?.data?.message || error?.message
+          );
+        }
+        setNutritionWeeklyGraph(null);
+      }
+    } finally {
+      setNutritionGraphLoading(false);
+    }
+  }, [userId]);
 
   const loadUserName = useCallback(async () => {
     let cachedName: string | null = null;
@@ -976,20 +1302,49 @@ const AnalysisScreen = ({ navigation }: any) => {
     }
   }, [userIdLoaded, loadLocalCompletions]);
 
+  // userId가 로드된 후 그래프 로드
+  useEffect(() => {
+    if (userIdLoaded && userId) {
+      console.log("[ANALYSIS] userId 로드 완료, 그래프 로드 시작:", userId);
+      loadExerciseWeeklyGraph();
+      loadNutritionWeeklyGraph();
+    }
+  }, [userIdLoaded, userId, loadExerciseWeeklyGraph, loadNutritionWeeklyGraph]);
+
   // 화면 포커스 시 운동 기록 새로고침
   useFocusEffect(
     useCallback(() => {
+      // 다른 데이터는 순차적으로 로드
       loadWorkoutHistory();
       loadMealComparison();
       loadUserName();
       loadLatestInBodyDate();
       loadLocalCompletions();
+      
+      // userId가 있으면 그래프도 로드
+      if (userId) {
+        loadExerciseWeeklyGraph();
+        loadNutritionWeeklyGraph();
+      }
+      
+      // 테스트용: 테스트 유저 초기화 (확인 후 제거 예정)
+      const testInit = async () => {
+        try {
+          await initTestUser();
+        } catch (error) {
+          // 테스트용이므로 에러는 무시
+        }
+      };
+      testInit();
     }, [
       loadWorkoutHistory,
       loadMealComparison,
       loadLatestInBodyDate,
       loadUserName,
       loadLocalCompletions,
+      loadExerciseWeeklyGraph,
+      loadNutritionWeeklyGraph,
+      userId,
     ])
   );
 
@@ -1234,6 +1589,37 @@ const AnalysisScreen = ({ navigation }: any) => {
           <Text style={styles.exerciseSummary}>
             {`${displayName}의 최근 운동 중량 변화와 1RM을 확인해보세요.`}
           </Text>
+          
+          {/* 운동 주간 그래프 */}
+          {exerciseGraphLoading ? (
+            <View style={styles.graphLoadingContainer}>
+              <ActivityIndicator size="small" color="#d6ff4b" />
+              <Text style={styles.loadingText}>그래프 불러오는 중...</Text>
+            </View>
+          ) : exerciseWeeklyGraph && exerciseWeeklyGraph.trim() !== '' ? (
+            <View style={styles.weeklyGraphContainer}>
+              <Text style={styles.graphTitle}>주간 운동 분석</Text>
+              {exerciseWeeklyGraph.startsWith('http') || exerciseWeeklyGraph.startsWith('data:image') ? (
+                <Image
+                  source={{ uri: exerciseWeeklyGraph }}
+                  style={styles.weeklyGraphImage}
+                  resizeMode="contain"
+                  onError={(e) => {
+                    console.error("[ANALYSIS] 운동 그래프 이미지 로드 실패:", e.nativeEvent.error);
+                  }}
+                />
+              ) : exerciseWeeklyGraph.startsWith('<svg') || exerciseWeeklyGraph.includes('svg') ? (
+                <View style={styles.weeklyGraphSvgContainer}>
+                  <Text style={styles.graphPlaceholder}>그래프 데이터</Text>
+                </View>
+              ) : (
+                <View style={styles.weeklyGraphPlaceholder}>
+                  <Text style={styles.graphPlaceholderText}>{exerciseWeeklyGraph}</Text>
+                </View>
+              )}
+            </View>
+          ) : null}
+
           {loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color="#d6ff4b" />
@@ -1340,6 +1726,37 @@ const AnalysisScreen = ({ navigation }: any) => {
         {/* 식단 분석 섹션 */}
         <View style={styles.dietSection}>
           <Text style={styles.sectionTitle}>식단 분석</Text>
+          
+          {/* 식단 주간 그래프 */}
+          {nutritionGraphLoading ? (
+            <View style={styles.graphLoadingContainer}>
+              <ActivityIndicator size="small" color="#d6ff4b" />
+              <Text style={styles.loadingText}>그래프 불러오는 중...</Text>
+            </View>
+          ) : nutritionWeeklyGraph && nutritionWeeklyGraph.trim() !== '' ? (
+            <View style={styles.weeklyGraphContainer}>
+              <Text style={styles.graphTitle}>주간 식단 분석</Text>
+              {nutritionWeeklyGraph.startsWith('http') || nutritionWeeklyGraph.startsWith('data:image') ? (
+                <Image
+                  source={{ uri: nutritionWeeklyGraph }}
+                  style={styles.weeklyGraphImage}
+                  resizeMode="contain"
+                  onError={(e) => {
+                    console.error("[ANALYSIS] 식단 그래프 이미지 로드 실패:", e.nativeEvent.error);
+                  }}
+                />
+              ) : nutritionWeeklyGraph.startsWith('<svg') || nutritionWeeklyGraph.includes('svg') ? (
+                <View style={styles.weeklyGraphSvgContainer}>
+                  <Text style={styles.graphPlaceholder}>그래프 데이터</Text>
+                </View>
+              ) : (
+                <View style={styles.weeklyGraphPlaceholder}>
+                  <Text style={styles.graphPlaceholderText}>{nutritionWeeklyGraph}</Text>
+                </View>
+              )}
+            </View>
+          ) : null}
+
           {mealLoading ? (
             <View style={styles.mealLoadingContainer}>
               <ActivityIndicator size="small" color="#d6ff4b" />
@@ -1844,6 +2261,58 @@ const styles = StyleSheet.create({
     color: "#ccff00",
     textAlign: "right",
     minWidth: 80,
+  },
+  weeklyGraphContainer: {
+    backgroundColor: "#1e1e1e",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#333333",
+  },
+  graphTitle: {
+    fontSize: 14.4,
+    fontWeight: "600",
+    color: "#ffffff",
+    marginBottom: 12,
+  },
+  weeklyGraphImage: {
+    width: "100%",
+    height: 200,
+    borderRadius: 8,
+    backgroundColor: "#ffffff",
+  },
+  weeklyGraphSvgContainer: {
+    width: "100%",
+    height: 200,
+    backgroundColor: "#ffffff",
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  weeklyGraphPlaceholder: {
+    width: "100%",
+    minHeight: 200,
+    backgroundColor: "#ffffff",
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  graphPlaceholder: {
+    fontSize: 12,
+    color: "#666666",
+  },
+  graphPlaceholderText: {
+    fontSize: 12,
+    color: "#666666",
+    textAlign: "center",
+  },
+  graphLoadingContainer: {
+    paddingVertical: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
   },
   dietSection: {
     backgroundColor: "#2a2a2a",

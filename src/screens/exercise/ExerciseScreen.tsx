@@ -2958,39 +2958,57 @@ const ExerciseScreen = ({ navigation }: any) => {
         {/* 서버 기록 섹션 제거됨 */}
       </ScrollView>
 
-      {showAddOptions && (
-        <TouchableWithoutFeedback onPress={() => setShowAddOptions(false)}>
-          <View style={styles.fabBackdrop} />
-        </TouchableWithoutFeedback>
-      )}
-      <View style={styles.fabWrapper}>
-        {showAddOptions && (
-          <View style={styles.fabOptions}>
-            <TouchableOpacity
-              style={styles.fabOptionButton}
-              onPress={handleStretchOptionSelect}
-            >
-              <Text style={styles.fabOptionText}>스트레칭</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.fabOptionButton}
-              onPress={handleWorkoutOptionSelect}
-            >
-              <Text style={styles.fabOptionText}>운동 추가</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        <TouchableOpacity
-          style={styles.fabButton}
-          onPress={() => setShowAddOptions((prev) => !prev)}
-        >
-          <Icon
-            name={showAddOptions ? "close" : "add"}
-            size={28}
-            color={colors.black}
-          />
-        </TouchableOpacity>
-      </View>
+      {/* 오늘 날짜일 때만 + 버튼 표시 */}
+      {(() => {
+        const today = new Date();
+        const todayStr = formatDateToString(today);
+        const selectedDateStr = selectedDate
+          ? formatDateToString(selectedDate)
+          : null;
+        const isToday = selectedDateStr === todayStr;
+
+        if (!isToday) {
+          return null; // 오늘이 아니면 + 버튼 숨김
+        }
+
+        return (
+          <>
+            {showAddOptions && (
+              <TouchableWithoutFeedback onPress={() => setShowAddOptions(false)}>
+                <View style={styles.fabBackdrop} />
+              </TouchableWithoutFeedback>
+            )}
+            <View style={styles.fabWrapper}>
+              {showAddOptions && (
+                <View style={styles.fabOptions}>
+                  <TouchableOpacity
+                    style={styles.fabOptionButton}
+                    onPress={handleStretchOptionSelect}
+                  >
+                    <Text style={styles.fabOptionText}>스트레칭</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.fabOptionButton}
+                    onPress={handleWorkoutOptionSelect}
+                  >
+                    <Text style={styles.fabOptionText}>운동 추가</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              <TouchableOpacity
+                style={styles.fabButton}
+                onPress={() => setShowAddOptions((prev) => !prev)}
+              >
+                <Icon
+                  name={showAddOptions ? "close" : "add"}
+                  size={28}
+                  color={colors.black}
+                />
+              </TouchableOpacity>
+            </View>
+          </>
+        );
+      })()}
 
       <ExerciseModal
         isOpen={isModalOpen}

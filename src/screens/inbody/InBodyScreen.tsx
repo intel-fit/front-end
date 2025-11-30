@@ -10,14 +10,15 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
-import { getLatestInBody, getInBodyByDate } from "../../utils/inbodyApi";
+import { getLatestInBody } from "../../utils/inbodyApi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { eventBus } from "../../utils/eventBus";
 
-const InBodyScreen = ({ navigation }: any) => {
+const InBodyScreen = ({ navigation, route }: any) => {
   const [inBodyData, setInBodyData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState<string | null>(null);
+  const fromPhotoUpload = route?.params?.fromPhotoUpload;
 
 
   const parseNumericValue = useCallback((value: any): number | undefined => {
@@ -180,6 +181,20 @@ const InBodyScreen = ({ navigation }: any) => {
           measurementDate: normalizedDate,
         });
         console.log("[INBODY SCREEN] 인바디 데이터 설정 완료");
+        console.log("[INBODY SCREEN] 부위별 근육 데이터:", {
+          rightArmMuscle: latest?.rightArmMuscle,
+          leftArmMuscle: latest?.leftArmMuscle,
+          trunkMuscle: latest?.trunkMuscle,
+          rightLegMuscle: latest?.rightLegMuscle,
+          leftLegMuscle: latest?.leftLegMuscle,
+        });
+        console.log("[INBODY SCREEN] 부위별 체지방 데이터:", {
+          rightArmFat: latest?.rightArmFat,
+          leftArmFat: latest?.leftArmFat,
+          trunkFat: latest?.trunkFat,
+          rightLegFat: latest?.rightLegFat,
+          leftLegFat: latest?.leftLegFat,
+        });
       } else {
         console.warn("[INBODY][FETCH][LATEST] 유효한 데이터가 없습니다.", {
           response,
@@ -212,53 +227,78 @@ const InBodyScreen = ({ navigation }: any) => {
     }, [fetchInBodyData])
   );
 
+  // 날짜 정규화 헬퍼 함수 (YYYY-MM-DD 형식으로 통일)
+  const normalizeDateForComparison = useCallback((date: string): string => {
+    if (!date) return "";
+    // 점(.)을 하이픈(-)으로 변경
+    return date.replace(/\./g, "-");
+  }, []);
+
   // 인바디 업데이트 이벤트 구독
   useEffect(() => {
     const unsubscribe = eventBus.on("inbodyUpdated", async (payload) => {
       console.log("[INBODY SCREEN] 인바디 업데이트 이벤트 수신, 데이터 새로고침", payload);
       
-      // 저장된 날짜가 있으면 해당 날짜의 데이터를 조회, 없으면 최신 데이터 조회
-      if (payload.measurementDate) {
-        try {
-          setLoading(true);
-          console.log("[INBODY SCREEN] 저장된 날짜의 데이터 조회:", payload.measurementDate);
-          const response = await getInBodyByDate(payload.measurementDate);
+      try {
+        setLoading(true);
+        
+        // 최신 기록 조회
+        const latestRecord = await getLatestInBody();
+        
+        if (latestRecord) {
+          const latestData = latestRecord?.success ? latestRecord.inBody : latestRecord;
           
-          // 응답 구조 처리
-          const inBodyData = response?.success ? response.inBody : response;
+          // 저장된 날짜가 있으면 날짜 비교
+          if (payload.measurementDate && latestData?.measurementDate) {
+            const normalizedLatestDate = normalizeDateForComparison(latestData.measurementDate);
+            const normalizedPayloadDate = normalizeDateForComparison(payload.measurementDate);
+            
+            if (normalizedLatestDate === normalizedPayloadDate) {
+              // 날짜가 일치하면 최신 기록 사용
+              const normalizedDate = latestData.measurementDate.includes(".")
+                ? latestData.measurementDate
+                : latestData.measurementDate.replace(/-/g, ".");
+              
+              setInBodyData({
+                ...latestData,
+                measurementDate: normalizedDate,
+              });
+              console.log("[INBODY SCREEN] 저장된 날짜의 데이터 로드 완료");
+              return;
+            } else {
+              console.log("[INBODY SCREEN] 최신 기록의 날짜가 일치하지 않음, 최신 데이터 사용");
+            }
+          }
           
-          if (inBodyData && inBodyData.measurementDate) {
-            const normalizedDate = inBodyData.measurementDate.includes(".")
-              ? inBodyData.measurementDate
-              : inBodyData.measurementDate.replace(/-/g, ".");
+          // 날짜가 일치하지 않거나 저장된 날짜 정보가 없으면 최신 데이터 사용
+          if (latestData && latestData.measurementDate) {
+            const normalizedDate = latestData.measurementDate.includes(".")
+              ? latestData.measurementDate
+              : latestData.measurementDate.replace(/-/g, ".");
             
             setInBodyData({
-              ...inBodyData,
+              ...latestData,
               measurementDate: normalizedDate,
             });
-            console.log("[INBODY SCREEN] 저장된 날짜의 데이터 로드 완료");
+            console.log("[INBODY SCREEN] 최신 데이터 로드 완료");
           } else {
-            // 날짜로 조회 실패 시 최신 데이터 조회
-            console.log("[INBODY SCREEN] 날짜로 조회 실패, 최신 데이터 조회");
-            fetchInBodyData();
+            setInBodyData(null);
           }
-        } catch (error: any) {
-          console.error("[INBODY SCREEN] 날짜로 데이터 조회 실패, 최신 데이터 조회:", error);
-          // 날짜로 조회 실패 시 최신 데이터 조회
-          fetchInBodyData();
-        } finally {
-          setLoading(false);
+        } else {
+          setInBodyData(null);
         }
-      } else {
-        // 날짜 정보가 없으면 최신 데이터 조회
-        fetchInBodyData();
+      } catch (error: any) {
+        console.error("[INBODY SCREEN] 데이터 조회 실패:", error);
+        setInBodyData(null);
+      } finally {
+        setLoading(false);
       }
     });
 
     return () => {
       unsubscribe();
     };
-  }, [fetchInBodyData]);
+  }, [normalizeDateForComparison]);
 
 
   // API 데이터에서 값 추출 헬퍼 함수
@@ -366,52 +406,92 @@ const InBodyScreen = ({ navigation }: any) => {
     const candidates = [
       {
         label: "오른팔",
-        keys: collectCandidateValues([
+        keys: [
           inBodyData.rightArmMuscle,
+          inBodyData.muscleFatAnalysis?.rightArmMuscle,
+          inBodyData.segmentalMuscleMass?.rightArm,
           mass.rightArm,
           analysis.rightArm,
           analysis.rightArmValue,
-        ]),
+          ...collectCandidateValues([
+            inBodyData.rightArmMuscle,
+            mass.rightArm,
+            analysis.rightArm,
+            analysis.rightArmValue,
+          ]),
+        ],
         status: resolveStatusLabel(analysis.rightArm),
       },
       {
         label: "왼팔",
-        keys: collectCandidateValues([
+        keys: [
           inBodyData.leftArmMuscle,
+          inBodyData.muscleFatAnalysis?.leftArmMuscle,
+          inBodyData.segmentalMuscleMass?.leftArm,
           mass.leftArm,
           analysis.leftArm,
           analysis.leftArmValue,
-        ]),
+          ...collectCandidateValues([
+            inBodyData.leftArmMuscle,
+            mass.leftArm,
+            analysis.leftArm,
+            analysis.leftArmValue,
+          ]),
+        ],
         status: resolveStatusLabel(analysis.leftArm),
       },
       {
         label: "몸통",
-        keys: collectCandidateValues([
+        keys: [
           inBodyData.trunkMuscle,
+          inBodyData.muscleFatAnalysis?.trunkMuscle,
+          inBodyData.segmentalMuscleMass?.trunk,
           mass.trunk,
           analysis.trunk,
           analysis.trunkValue,
-        ]),
+          ...collectCandidateValues([
+            inBodyData.trunkMuscle,
+            mass.trunk,
+            analysis.trunk,
+            analysis.trunkValue,
+          ]),
+        ],
         status: resolveStatusLabel(analysis.trunk),
       },
       {
         label: "오른다리",
-        keys: collectCandidateValues([
+        keys: [
           inBodyData.rightLegMuscle,
+          inBodyData.muscleFatAnalysis?.rightLegMuscle,
+          inBodyData.segmentalMuscleMass?.rightLeg,
           mass.rightLeg,
           analysis.rightLeg,
           analysis.rightLegValue,
-        ]),
+          ...collectCandidateValues([
+            inBodyData.rightLegMuscle,
+            mass.rightLeg,
+            analysis.rightLeg,
+            analysis.rightLegValue,
+          ]),
+        ],
         status: resolveStatusLabel(analysis.rightLeg),
       },
       {
         label: "왼다리",
-        keys: collectCandidateValues([
+        keys: [
           inBodyData.leftLegMuscle,
+          inBodyData.muscleFatAnalysis?.leftLegMuscle,
+          inBodyData.segmentalMuscleMass?.leftLeg,
           mass.leftLeg,
           analysis.leftLeg,
           analysis.leftLegValue,
-        ]),
+          ...collectCandidateValues([
+            inBodyData.leftLegMuscle,
+            mass.leftLeg,
+            analysis.leftLeg,
+            analysis.leftLegValue,
+          ]),
+        ],
         status: resolveStatusLabel(analysis.leftLeg),
       },
     ];
@@ -431,19 +511,18 @@ const InBodyScreen = ({ navigation }: any) => {
     return resolved.map((item) => {
       const hasNumericValue =
         item.numericValue !== undefined && !Number.isNaN(item.numericValue);
-      const fallbackStatus = item.status || "정보 없음";
       const percentage = resolveBarPercentage(
         hasNumericValue ? item.numericValue : undefined,
-        fallbackStatus
+        "표준"
       );
 
       return {
         label: item.label,
         value: hasNumericValue
           ? `${item.numericValue.toFixed(1)}kg`
-          : fallbackStatus,
+          : "N/A",
         percentage,
-        status: fallbackStatus,
+        status: "표준",
       };
     });
   }, [inBodyData, parseNumericValue, resolveBarPercentage]);
@@ -485,7 +564,16 @@ const InBodyScreen = ({ navigation }: any) => {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity
+          onPress={() => {
+            if (fromPhotoUpload) {
+              // 사진 입력 후 저장한 경우 분석하기 페이지로 이동
+              navigation.navigate("Analysis");
+            } else {
+              // 일반적인 경우 이전 화면으로 돌아가기
+              navigation.goBack();
+            }
+          }}>
           <Icon name="chevron-back" size={28} color="#ffffff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>인바디 정보</Text>
@@ -503,13 +591,101 @@ const InBodyScreen = ({ navigation }: any) => {
           </View>
         ) : inBodyData ? (
           <>
-            {inBodyData.measurementDate && (
-              <View style={styles.measurementInfo}>
-                <Text style={styles.measurementInfoText}>
-                  최근 측정일 {inBodyData.measurementDate}
-                </Text>
+            {/* 기본 정보 */}
+            <View style={styles.analysisSection}>
+              <Text style={styles.sectionTitle}>기본 정보</Text>
+              <View style={styles.metricList}>
+                {inBodyData.measurementDate && (
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricName}>검사일</Text>
+                    <Text style={styles.metricValue}>
+                      {inBodyData.measurementDate}
+                    </Text>
+                    <Text style={styles.metricRange}></Text>
+                  </View>
+                )}
+                {inBodyData.gender && (
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricName}>성별</Text>
+                    <Text style={styles.metricValue}>
+                      {inBodyData.gender}
+                    </Text>
+                    <Text style={styles.metricRange}></Text>
+                  </View>
+                )}
+                {inBodyData.age && (
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricName}>나이</Text>
+                    <Text style={styles.metricValue}>
+                      {extractValue(inBodyData.age)}
+                    </Text>
+                    <Text style={styles.metricRange}>세</Text>
+                  </View>
+                )}
+                {inBodyData.height && (
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricName}>신장</Text>
+                    <Text style={styles.metricValue}>
+                      {extractValue(inBodyData.height)}
+                    </Text>
+                    <Text style={styles.metricRange}>cm</Text>
+                  </View>
+                )}
+                {inBodyData.weight && (
+                  <View style={[styles.metricItem, styles.metricItemLast]}>
+                    <Text style={styles.metricName}>체중</Text>
+                    <Text style={styles.metricValue}>
+                      {extractValue(inBodyData.weight || inBodyData.bodyComposition?.weight || inBodyData.muscleFatAnalysis?.weight)}
+                    </Text>
+                    <Text style={styles.metricRange}>kg</Text>
+                  </View>
+                )}
               </View>
-            )}
+            </View>
+
+            {/* 핵심 수치 */}
+            <View style={styles.analysisSection}>
+              <Text style={styles.sectionTitle}>핵심 수치</Text>
+              <View style={styles.metricList}>
+                <View style={styles.metricItem}>
+                  <Text style={styles.metricName}>골격근량</Text>
+                  <Text style={styles.metricValue}>
+                    {extractValue(inBodyData.skeletalMuscleMass || inBodyData.muscleFatAnalysis?.skeletalMuscleMass)}
+                  </Text>
+                  <Text style={styles.metricRange}>kg</Text>
+                </View>
+                <View style={styles.metricItem}>
+                  <Text style={styles.metricName}>체지방량</Text>
+                  <Text style={styles.metricValue}>
+                    {extractValue(inBodyData.bodyFatMass || inBodyData.muscleFatAnalysis?.bodyFatMass || inBodyData.bodyComposition?.bodyFatMass)}
+                  </Text>
+                  <Text style={styles.metricRange}>kg</Text>
+                </View>
+                <View style={styles.metricItem}>
+                  <Text style={styles.metricName}>체지방률</Text>
+                  <Text style={styles.metricValue}>
+                    {extractValue(inBodyData.bodyFatPercentage || inBodyData.obesityAnalysis?.bodyFatPercentage)}
+                  </Text>
+                  <Text style={styles.metricRange}>%</Text>
+                </View>
+                <View style={styles.metricItem}>
+                  <Text style={styles.metricName}>BMI</Text>
+                  <Text style={styles.metricValue}>
+                    {extractValue(inBodyData.bmi || inBodyData.obesityAnalysis?.bmi)}
+                  </Text>
+                  <Text style={styles.metricRange}>kg/m²</Text>
+                </View>
+                {inBodyData.visceralFatLevel && (
+                  <View style={[styles.metricItem, styles.metricItemLast]}>
+                    <Text style={styles.metricName}>내장지방 레벨</Text>
+                    <Text style={styles.metricValue}>
+                      {extractValue(inBodyData.visceralFatLevel)}
+                    </Text>
+                    <Text style={styles.metricRange}></Text>
+                  </View>
+                )}
+              </View>
+            </View>
 
                 {/* 체성분 분석 */}
                 <View style={styles.analysisSection}>
@@ -655,22 +831,106 @@ const InBodyScreen = ({ navigation }: any) => {
                 {/* 부위별 근육 분석 */}
                 <View style={styles.analysisSection}>
                   <Text style={styles.sectionTitle}>부위별 근육 분석</Text>
-                  <View style={styles.barChartList}>
-                    <View style={styles.barLabelsHeader}>
-                      <Text style={styles.barRangeLabel}>표준이하</Text>
-                      <Text style={styles.barRangeLabel}>표준</Text>
-                      <Text style={styles.barRangeLabel}>표준이상</Text>
-                    </View>
+                  <View style={styles.metricList}>
                     {segmentalMuscleItems.map((item, index) => (
-                      <BarChartItem
+                      <View
                         key={item.label}
-                        label={item.label}
-                        value={item.value}
-                        percentage={item.percentage}
-                        status={item.status}
-                        isLast={index === segmentalMuscleItems.length - 1}
-                      />
+                        style={[
+                          styles.metricItem,
+                          index === segmentalMuscleItems.length - 1 && styles.metricItemLast,
+                        ]}>
+                        <Text style={styles.metricName}>{item.label}</Text>
+                        <Text style={styles.metricValue}>{item.value}</Text>
+                        <Text style={styles.metricRange}></Text>
+                      </View>
                     ))}
+                  </View>
+                </View>
+
+                {/* 부위별 체지방 분석 */}
+                <View style={styles.analysisSection}>
+                  <Text style={styles.sectionTitle}>부위별 체지방 분석</Text>
+                  <View style={styles.metricList}>
+                    <View style={styles.metricItem}>
+                      <Text style={styles.metricName}>오른팔 체지방</Text>
+                      <Text style={styles.metricValue}>
+                        {(() => {
+                          const value = inBodyData.rightArmFat ?? 
+                                       inBodyData.muscleFatAnalysis?.rightArmFat ??
+                                       inBodyData.segmentalFatRatio?.rightArm ??
+                                       inBodyData.segmentalBodyFat?.rightArm;
+                          const numValue = parseNumericValue(value);
+                          return numValue !== undefined
+                            ? `${numValue.toFixed(1)}kg`
+                            : "N/A";
+                        })()}
+                      </Text>
+                      <Text style={styles.metricRange}></Text>
+                    </View>
+                    <View style={styles.metricItem}>
+                      <Text style={styles.metricName}>왼팔 체지방</Text>
+                      <Text style={styles.metricValue}>
+                        {(() => {
+                          const value = inBodyData.leftArmFat ?? 
+                                       inBodyData.muscleFatAnalysis?.leftArmFat ??
+                                       inBodyData.segmentalFatRatio?.leftArm ??
+                                       inBodyData.segmentalBodyFat?.leftArm;
+                          const numValue = parseNumericValue(value);
+                          return numValue !== undefined
+                            ? `${numValue.toFixed(1)}kg`
+                            : "N/A";
+                        })()}
+                      </Text>
+                      <Text style={styles.metricRange}></Text>
+                    </View>
+                    <View style={styles.metricItem}>
+                      <Text style={styles.metricName}>몸통 체지방</Text>
+                      <Text style={styles.metricValue}>
+                        {(() => {
+                          const value = inBodyData.trunkFat ?? 
+                                       inBodyData.muscleFatAnalysis?.trunkFat ??
+                                       inBodyData.segmentalFatRatio?.trunk ??
+                                       inBodyData.segmentalBodyFat?.trunk;
+                          const numValue = parseNumericValue(value);
+                          return numValue !== undefined
+                            ? `${numValue.toFixed(1)}kg`
+                            : "N/A";
+                        })()}
+                      </Text>
+                      <Text style={styles.metricRange}></Text>
+                    </View>
+                    <View style={styles.metricItem}>
+                      <Text style={styles.metricName}>오른다리 체지방</Text>
+                      <Text style={styles.metricValue}>
+                        {(() => {
+                          const value = inBodyData.rightLegFat ?? 
+                                       inBodyData.muscleFatAnalysis?.rightLegFat ??
+                                       inBodyData.segmentalFatRatio?.rightLeg ??
+                                       inBodyData.segmentalBodyFat?.rightLeg;
+                          const numValue = parseNumericValue(value);
+                          return numValue !== undefined
+                            ? `${numValue.toFixed(1)}kg`
+                            : "N/A";
+                        })()}
+                      </Text>
+                      <Text style={styles.metricRange}></Text>
+                    </View>
+                    <View style={[styles.metricItem, styles.metricItemLast]}>
+                      <Text style={styles.metricName}>왼다리 체지방</Text>
+                      <Text style={styles.metricValue}>
+                        {(() => {
+                          const value = inBodyData.leftLegFat ?? 
+                                       inBodyData.muscleFatAnalysis?.leftLegFat ??
+                                       inBodyData.segmentalFatRatio?.leftLeg ??
+                                       inBodyData.segmentalBodyFat?.leftLeg;
+                          const numValue = parseNumericValue(value);
+                          return numValue !== undefined
+                            ? `${numValue.toFixed(1)}kg`
+                            : "N/A";
+                        })()}
+                      </Text>
+                      <Text style={styles.metricRange}></Text>
+                    </View>
                   </View>
                 </View>
               </>
