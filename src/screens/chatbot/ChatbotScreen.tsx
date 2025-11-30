@@ -1,4 +1,3 @@
-// ChatbotScreen.tsx
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -13,9 +12,10 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
-import { colors } from "../../theme/colors";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { authAPI } from "../../services";
 import { chatAPI } from "../../services/chatAPI";
+import ChatbotSettingsModal from "../../components/modals/ChatbotSettingsModal";
 
 interface Message {
   type: "user" | "bot";
@@ -28,23 +28,82 @@ const ChatbotScreen = ({ navigation }: any) => {
   const [isLoading, setIsLoading] = useState(false);
   const [userId, setUserId] = useState<number>(0);
 
-  // ✅ 컴포넌트 마운트 시 userId만 가져오기
-  useEffect(() => {
-    const loadUserId = async () => {
-      try {
-        const profile = await authAPI.getProfile();
-        setUserId(profile.id);
-        console.log("✅ 사용자 ID 로드:", profile.id);
-      } catch (error) {
-        console.error("❌ 프로필 로드 실패:", error);
-        Alert.alert("오류", "사용자 정보를 불러올 수 없습니다.", [
-          { text: "확인", onPress: () => navigation.goBack() },
-        ]);
-      }
-    };
+  // ✅ 설정 상태
+  const [chatMode, setChatMode] = useState<"auto" | "exercise" | "nutrition">(
+    "auto"
+  );
+  const [coachStyle, setCoachStyle] = useState<
+    "pro" | "friend" | "soft" | "drill"
+  >("friend");
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
+  useEffect(() => {
+    loadSettings();
     loadUserId();
   }, []);
+
+  // ✅ 설정 로드
+  const loadSettings = async () => {
+    try {
+      const savedMode = await AsyncStorage.getItem("chatbot_mode");
+      const savedStyle = await AsyncStorage.getItem("chatbot_style");
+
+      if (savedMode) setChatMode(savedMode as any);
+      if (savedStyle) setCoachStyle(savedStyle as any);
+
+      console.log("✅ 챗봇 설정 로드:", { mode: savedMode, style: savedStyle });
+    } catch (error) {
+      console.error("설정 로드 실패:", error);
+    }
+  };
+
+  const loadUserId = async () => {
+    try {
+      const profile = await authAPI.getProfile();
+      setUserId(profile.id);
+      console.log("✅ 사용자 ID 로드:", profile.id);
+    } catch (error) {
+      console.error("❌ 프로필 로드 실패:", error);
+      Alert.alert("오류", "사용자 정보를 불러올 수 없습니다.", [
+        { text: "확인", onPress: () => navigation.goBack() },
+      ]);
+    }
+  };
+
+  // ✅ 설정 저장 핸들러
+  const handleSaveSettings = async (mode: string, style: string) => {
+    try {
+      await AsyncStorage.setItem("chatbot_mode", mode);
+      await AsyncStorage.setItem("chatbot_style", style);
+
+      setChatMode(mode as any);
+      setCoachStyle(style as any);
+
+      console.log("✅ 챗봇 설정 저장:", { mode, style });
+
+      // 설정 변경 알림 메시지
+      const modeText =
+        mode === "auto" ? "자동" : mode === "exercise" ? "운동" : "영양";
+      const styleText =
+        style === "pro"
+          ? "프로페셔널"
+          : style === "friend"
+          ? "친근한 친구"
+          : style === "soft"
+          ? "부드럽게"
+          : "엄격한 코치";
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          type: "bot",
+          text: `설정이 변경되었습니다!\n카테고리: ${modeText}\n스타일: ${styleText}`,
+        },
+      ]);
+    } catch (error) {
+      console.error("설정 저장 실패:", error);
+    }
+  };
 
   const handleSend = async () => {
     if (inputValue.trim() === "" || !userId) return;
@@ -55,7 +114,13 @@ const ChatbotScreen = ({ navigation }: any) => {
     setIsLoading(true);
 
     try {
-      const botResponse = await chatAPI.sendMessage(userId, userMessage);
+      // ✅ mode와 coach_style을 API에 전달
+      const botResponse = await chatAPI.sendMessage(
+        userId,
+        userMessage,
+        chatMode,
+        coachStyle
+      );
       setMessages((prev) => [...prev, { type: "bot", text: botResponse }]);
     } catch (error: any) {
       console.error("메시지 전송 에러:", error);
@@ -67,7 +132,6 @@ const ChatbotScreen = ({ navigation }: any) => {
 
       setMessages((prev) => [...prev, { type: "bot", text: errorMessage }]);
 
-      // 인증 오류시 로그인 화면으로
       if (
         error.message?.includes("로그인") ||
         error.message?.includes("인증")
@@ -106,7 +170,13 @@ const ChatbotScreen = ({ navigation }: any) => {
     setIsLoading(true);
 
     try {
-      const botResponse = await chatAPI.sendMessage(userId, message);
+      // ✅ mode와 coach_style을 API에 전달
+      const botResponse = await chatAPI.sendMessage(
+        userId,
+        message,
+        chatMode,
+        coachStyle
+      );
       setMessages((prev) => [...prev, { type: "bot", text: botResponse }]);
     } catch (error: any) {
       console.error("메시지 전송 에러:", error);
@@ -122,8 +192,36 @@ const ChatbotScreen = ({ navigation }: any) => {
     }
   };
 
-  // 탭 네비게이션에서 사용될 때는 헤더 숨김
   const isInTab = navigation?.getState?.()?.type === "tab";
+
+  // ✅ 현재 설정 텍스트
+  const getModeText = () => {
+    switch (chatMode) {
+      case "auto":
+        return "자동";
+      case "exercise":
+        return "운동";
+      case "nutrition":
+        return "영양";
+      default:
+        return "자동";
+    }
+  };
+
+  const getStyleText = () => {
+    switch (coachStyle) {
+      case "pro":
+        return "프로";
+      case "friend":
+        return "친구";
+      case "soft":
+        return "부드럽게";
+      case "drill":
+        return "코치";
+      default:
+        return "친구";
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -133,9 +231,12 @@ const ChatbotScreen = ({ navigation }: any) => {
             <Text style={styles.backIcon}>←</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>AI 챗봇</Text>
-          <View style={{ width: 40 }} />
+          <TouchableOpacity onPress={() => setIsSettingsModalOpen(true)}>
+            <Icon name="settings-outline" size={24} color={NEW_COLORS.text} />
+          </TouchableOpacity>
         </View>
       )}
+
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -144,9 +245,37 @@ const ChatbotScreen = ({ navigation }: any) => {
         <View style={styles.mainContent}>
           {messages.length === 0 ? (
             <>
-              <View style={styles.welcomeSection}>
-                <Text style={styles.title}>안녕하세요!</Text>
-                <Text style={styles.subtitle}>어떻게 도와드릴까요?</Text>
+              {/* ✅ 환영 화면에 설정 버튼 추가 */}
+              <View style={styles.welcomeHeader}>
+                <View style={styles.welcomeSection}>
+                  <Text style={styles.title}>안녕하세요!</Text>
+                  <Text style={styles.subtitle}>어떻게 도와드릴까요?</Text>
+                </View>
+
+                {/* ✅ 설정 버튼 */}
+                <TouchableOpacity
+                  style={styles.settingsButton}
+                  onPress={() => setIsSettingsModalOpen(true)}
+                >
+                  <Icon
+                    name="settings-outline"
+                    size={28}
+                    color={NEW_COLORS.accent}
+                  />
+                  <Text style={styles.settingsButtonText}>채팅 설정</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* 현재 설정 표시 */}
+              <View style={styles.currentSettingsBadge}>
+                <Icon
+                  name="checkmark-circle"
+                  size={16}
+                  color={NEW_COLORS.accent}
+                />
+                <Text style={styles.currentSettingsBadgeText}>
+                  {getModeText()} · {getStyleText()}
+                </Text>
               </View>
 
               <View style={styles.botImageContainer}>
@@ -163,7 +292,7 @@ const ChatbotScreen = ({ navigation }: any) => {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.actionBtn, styles.highlighted]}
+                  style={[styles.actionBtn]}
                   onPress={() => handleQuickSelect("food")}
                 >
                   <Text style={styles.actionIcon}>🍗</Text>
@@ -180,37 +309,63 @@ const ChatbotScreen = ({ navigation }: any) => {
               </View>
             </>
           ) : (
-            <ScrollView
-              style={styles.messagesContainer}
-              contentContainerStyle={styles.messagesContent}
-            >
-              {messages.map((msg, index) => (
-                <View
-                  key={index}
-                  style={[
-                    styles.message,
-                    msg.type === "user"
-                      ? styles.userMessage
-                      : styles.botMessage,
-                  ]}
-                >
-                  <Text
-                    style={
-                      msg.type === "user"
-                        ? styles.userMessageText
-                        : styles.botMessageText
-                    }
-                  >
-                    {msg.text}
+            <>
+              {/* ✅ 대화 중일 때도 설정 버튼 표시 */}
+              <View style={styles.chatHeader}>
+                <View style={styles.currentSettingsInline}>
+                  <Icon
+                    name="radio-button-on"
+                    size={12}
+                    color={NEW_COLORS.accent}
+                  />
+                  <Text style={styles.currentSettingsInlineText}>
+                    {getModeText()} · {getStyleText()}
                   </Text>
                 </View>
-              ))}
-              {isLoading && (
-                <View style={[styles.message, styles.botMessage]}>
-                  <Text style={styles.loadingText}>...</Text>
-                </View>
-              )}
-            </ScrollView>
+                <TouchableOpacity
+                  style={styles.settingsButtonSmall}
+                  onPress={() => setIsSettingsModalOpen(true)}
+                >
+                  <Icon
+                    name="settings-outline"
+                    size={20}
+                    color={NEW_COLORS.text_secondary}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                style={styles.messagesContainer}
+                contentContainerStyle={styles.messagesContent}
+              >
+                {messages.map((msg, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.message,
+                      msg.type === "user"
+                        ? styles.userMessage
+                        : styles.botMessage,
+                    ]}
+                  >
+                    <Text
+                      style={
+                        msg.type === "user"
+                          ? styles.userMessageText
+                          : styles.botMessageText
+                      }
+                    >
+                      {msg.text}
+                    </Text>
+                  </View>
+                ))}
+                {isLoading && (
+                  <View style={[styles.message, styles.botMessage]}>
+                    <Text style={styles.loadingText}>...</Text>
+                  </View>
+                )}
+              </ScrollView>
+            </>
           )}
         </View>
 
@@ -221,21 +376,41 @@ const ChatbotScreen = ({ navigation }: any) => {
             value={inputValue}
             onChangeText={setInputValue}
             onSubmitEditing={handleSend}
-            placeholderTextColor={colors.textLight}
+            placeholderTextColor={NEW_COLORS.text_secondary}
           />
           <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
             <Text style={styles.sendIcon}>➤</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* ✅ 설정 모달 */}
+      <ChatbotSettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        currentMode={chatMode}
+        currentStyle={coachStyle}
+        onSave={handleSaveSettings}
+      />
     </SafeAreaView>
   );
+};
+
+// ✅ NEW_COLORS 추가
+const NEW_COLORS = {
+  background: "#1a1a1a",
+  text: "#f0f0f0",
+  text_secondary: "#a0a0a0",
+  accent: "#e3ff7c",
+  card_bg: "#252525",
+  separator: "#3a3a3a",
+  delete_color: "#ff6b6b",
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: NEW_COLORS.background,
   },
   header: {
     flexDirection: "row",
@@ -244,22 +419,17 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    position: "relative",
+    borderBottomColor: NEW_COLORS.separator,
   },
   backIcon: {
     fontSize: 24,
-    color: colors.text,
+    color: NEW_COLORS.text,
     fontWeight: "bold",
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: colors.text,
-    position: "absolute",
-    left: 0,
-    right: 0,
-    textAlign: "center",
+    color: NEW_COLORS.text,
   },
   keyboardView: {
     flex: 1,
@@ -268,19 +438,55 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
   },
+  welcomeHeader: {
+    alignItems: "center",
+    marginTop: 20,
+  },
   welcomeSection: {
     alignItems: "center",
-    marginTop: 40,
   },
   title: {
     fontSize: 32,
     fontWeight: "bold",
-    color: colors.text,
+    color: NEW_COLORS.text,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 18,
-    color: colors.textLight,
+    color: NEW_COLORS.text_secondary,
+  },
+  settingsButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: NEW_COLORS.card_bg,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: NEW_COLORS.accent,
+  },
+  settingsButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: NEW_COLORS.accent,
+  },
+  currentSettingsBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: `${NEW_COLORS.accent}20`,
+    borderRadius: 16,
+    marginTop: 16,
+  },
+  currentSettingsBadgeText: {
+    fontSize: 12,
+    color: NEW_COLORS.accent,
+    fontWeight: "500",
   },
   botImageContainer: {
     alignItems: "center",
@@ -296,18 +502,18 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     flex: 1,
-    backgroundColor: colors.cardBackground,
+    backgroundColor: NEW_COLORS.card_bg,
     padding: 20,
     borderRadius: 20,
     alignItems: "center",
-    shadowColor: colors.shadow,
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
   highlighted: {
-    backgroundColor: colors.primary,
+    backgroundColor: NEW_COLORS.accent,
   },
   actionIcon: {
     fontSize: 32,
@@ -316,7 +522,32 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: 14,
     fontWeight: "600",
-    color: colors.text,
+    color: NEW_COLORS.text,
+  },
+  chatHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingBottom: 12,
+    marginBottom: 8,
+  },
+  currentSettingsInline: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: NEW_COLORS.card_bg,
+    borderRadius: 12,
+  },
+  currentSettingsInlineText: {
+    fontSize: 11,
+    color: NEW_COLORS.text_secondary,
+  },
+  settingsButtonSmall: {
+    padding: 8,
+    backgroundColor: NEW_COLORS.card_bg,
+    borderRadius: 12,
   },
   messagesContainer: {
     flex: 1,
@@ -332,51 +563,51 @@ const styles = StyleSheet.create({
   },
   userMessage: {
     alignSelf: "flex-end",
-    backgroundColor: colors.primary,
+    backgroundColor: NEW_COLORS.accent,
   },
   botMessage: {
     alignSelf: "flex-start",
-    backgroundColor: colors.cardBackground,
+    backgroundColor: NEW_COLORS.card_bg,
   },
   userMessageText: {
-    color: colors.white,
+    color: "#000000",
     fontSize: 16,
   },
   botMessageText: {
-    color: colors.text,
+    color: NEW_COLORS.text,
     fontSize: 16,
   },
   loadingText: {
-    color: colors.textLight,
+    color: NEW_COLORS.text_secondary,
     fontSize: 16,
   },
   inputContainer: {
     flexDirection: "row",
     padding: 16,
-    backgroundColor: colors.cardBackground,
+    backgroundColor: NEW_COLORS.card_bg,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: NEW_COLORS.separator,
     gap: 12,
   },
   messageInput: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: NEW_COLORS.background,
     borderRadius: 24,
     paddingHorizontal: 20,
     paddingVertical: 12,
     fontSize: 16,
-    color: colors.text,
+    color: NEW_COLORS.text,
   },
   sendBtn: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: colors.primary,
+    backgroundColor: NEW_COLORS.accent,
     justifyContent: "center",
     alignItems: "center",
   },
   sendIcon: {
-    color: colors.white,
+    color: "#000000",
     fontSize: 20,
   },
 });

@@ -31,11 +31,8 @@ import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ACCESS_TOKEN_KEY, API_BASE_URL, AI_API_BASE_URL } from "../../services/apiConfig";
 import MacroDonut from "../../components/charts/MacroDonut";
-import { authAPI } from "../../services";
-import {
-  getLatestInBody,
-  InBodyPayload,
-} from "../../utils/inbodyApi";
+import { authAPI, healthScoreAPI } from "../../services";
+import { getLatestInBody, InBodyPayload } from "../../utils/inbodyApi";
 import { eventBus } from "../../utils/eventBus";
 import { initTestUser } from "../../utils/testApi";
 
@@ -58,6 +55,11 @@ interface MacroRatio {
   protein?: number | null;
   carbs?: number | null;
   fat?: number | null;
+}
+
+interface ScoreTrendItem {
+  date: string;
+  score: number;
 }
 
 const ACTIVITY_STORAGE_BASE_KEY = "user_activities_v1";
@@ -242,8 +244,12 @@ const AnalysisScreen = ({ navigation }: any) => {
   const [nutritionWeeklyGraph, setNutritionWeeklyGraph] = useState<string | null>(null);
   const [nutritionGraphLoading, setNutritionGraphLoading] = useState(false);
 
-  // 건강점수 state (추후 API 연결)
-  const [healthScore] = useState(90);
+  // 건강점수 state
+  const [healthScore, setHealthScore] = useState<number>(0);
+  const [healthScoreTrend, setHealthScoreTrend] = useState<ScoreTrendItem[]>(
+    []
+  );
+  const [healthScoreLoading, setHealthScoreLoading] = useState(true);
 
   const displayName = useMemo(
     () => (userName ? `${userName}님` : "회원님"),
@@ -1292,6 +1298,29 @@ const AnalysisScreen = ({ navigation }: any) => {
     setLatestInBodyDate(null);
   }, [userId, userIdLoaded]);
 
+  const loadHealthScore = useCallback(async () => {
+    try {
+      setHealthScoreLoading(true);
+
+      const dailyTrend = await healthScoreAPI.getDailyTrend();
+
+      if (dailyTrend.length > 0) {
+        const latestScore = dailyTrend[dailyTrend.length - 1].score;
+        setHealthScore(latestScore);
+        setHealthScoreTrend(dailyTrend);
+      } else {
+        setHealthScore(0);
+        setHealthScoreTrend([]);
+      }
+    } catch (error) {
+      console.error("[ANALYSIS] 건강점수 로드 실패:", error);
+      setHealthScore(0);
+      setHealthScoreTrend([]);
+    } finally {
+      setHealthScoreLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadUserId();
   }, [loadUserId]);
@@ -1327,6 +1356,8 @@ const AnalysisScreen = ({ navigation }: any) => {
         loadNutritionWeeklyGraph();
       }
       
+      loadHealthScore();
+      
       // 테스트용: 테스트 유저 초기화 (확인 후 제거 예정)
       const testInit = async () => {
         try {
@@ -1344,6 +1375,7 @@ const AnalysisScreen = ({ navigation }: any) => {
       loadLocalCompletions,
       loadExerciseWeeklyGraph,
       loadNutritionWeeklyGraph,
+      loadHealthScore,
       userId,
     ])
   );
@@ -1532,25 +1564,50 @@ const AnalysisScreen = ({ navigation }: any) => {
           </Text>
         </View>
 
-        {/* 건강점수 섹션 - 새로 추가 */}
-        <View style={styles.healthScoreSection}>
+        {/* 건강점수 섹션 */}
+        <TouchableOpacity
+          style={styles.healthScoreSection}
+          onPress={() => navigation.navigate("HealthScoreTrend")}
+          activeOpacity={0.7}
+        >
           <View style={styles.healthScoreContent}>
-            <HealthScoreCircle score={healthScore} size={100} />
+            {healthScoreLoading ? (
+              <View style={styles.healthScoreLoading}>
+                <ActivityIndicator size="small" color="#E3FF7C" />
+              </View>
+            ) : (
+              <HealthScoreCircle score={healthScore} size={100} />
+            )}
             <View style={styles.healthScoreTextArea}>
               <Text style={styles.healthScoreLabel}>
                 {userName || "회원"}님의
               </Text>
               <Text style={styles.healthScoreTitle}>건강점수</Text>
-              <View style={styles.healthScoreBadge}>
-                <Icon name="trophy" size={14} color="#E3FF7C" />
-                <Text style={styles.healthScoreBadgeText}>상위 10%</Text>
-              </View>
+              {healthScore > 0 ? (
+                <View style={styles.healthScoreBadge}>
+                  <Icon name="trophy" size={14} color="#E3FF7C" />
+                  <Text style={styles.healthScoreBadgeText}>
+                    {healthScore >= 90
+                      ? "상위 10%"
+                      : healthScore >= 80
+                      ? "상위 20%"
+                      : "평균"}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.healthScoreNoData}>데이터 없음</Text>
+              )}
             </View>
           </View>
-          <Text style={styles.healthScoreHint}>
-            꾸준한 기록으로 건강점수를 높여보세요!
-          </Text>
-        </View>
+          <View style={styles.healthScoreFooter}>
+            <Text style={styles.healthScoreHint}>
+              {healthScoreTrend.length > 0
+                ? "터치하여 상세 그래프 보기"
+                : "꾸준한 기록으로 건강점수를 높여보세요!"}
+            </Text>
+            <Icon name="chevron-forward" size={16} color="#666" />
+          </View>
+        </TouchableOpacity>
 
         {/* 인바디 기록/분석 섹션 */}
         <View style={styles.inbodySection}>
@@ -2078,10 +2135,24 @@ const styles = StyleSheet.create({
   healthScoreHint: {
     fontSize: 12,
     color: "#888888",
-    textAlign: "center",
     letterSpacing: 0.2,
   },
-  // ===== 기존 스타일 유지 =====
+  healthScoreLoading: {
+    width: 100,
+    height: 100,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  healthScoreNoData: {
+    fontSize: 12,
+    color: "#888888",
+    fontWeight: "500",
+  },
+  healthScoreFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   inbodySection: {
     backgroundColor: "#2a2a2a",
     borderRadius: 12,

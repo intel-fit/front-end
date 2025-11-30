@@ -8,10 +8,10 @@ export type RootStackParamList = {
   Main: undefined;
   Chatbot: undefined;
   Diet: undefined;
-  MealAdd: {selectedFood?: any} | undefined;
+  MealAdd: { selectedFood?: any } | undefined;
   FoodSearch: undefined;
-  MealDetail: {mealId?: string} | undefined;
-  ExerciseDetail: {exerciseId?: string} | undefined;
+  MealDetail: { mealId?: string } | undefined;
+  ExerciseDetail: { exerciseId?: string } | undefined;
   Calendar: undefined;
   Goal: undefined;
   Exercise: undefined;
@@ -21,9 +21,15 @@ export type RootStackParamList = {
   MealRecommendHistory: undefined;
   RoutineRecommend: undefined;
   RoutineRecommendNew: undefined;
+  TempMealRecommend: undefined;
   InBody: undefined;
   FoodAddOptions: undefined;
   InBodyManual: undefined;
+  HealthScoreTrend: undefined;
+  // Payment
+  PaymentSuccess: undefined;
+  PaymentFail: undefined;
+  PaymentCancel: undefined;
 };
 
 export type MainTabParamList = {
@@ -33,4 +39,3 @@ export type MainTabParamList = {
   Analysis: undefined;
   MyPage: undefined;
 };
-
