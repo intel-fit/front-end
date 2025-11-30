@@ -188,6 +188,26 @@ const MyPageScreen = ({ navigation }: any) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🌟 추천 내역</Text>
           <View style={styles.sectionLinks}>
+            {/* ✅ 새로 추가: 1일 임시 식단 추천 */}
+            <TouchableOpacity
+              style={styles.linkItem}
+              onPress={() => navigation.navigate("TempMealRecommend")}
+            >
+              <View style={styles.linkItemWithBadge}>
+                <Text style={styles.linkText}>1일 임시 식단 추천</Text>
+                <View style={styles.newBadge}>
+                  <Text style={styles.newBadgeText}>NEW</Text>
+                </View>
+              </View>
+              <Icon
+                name="chevron-forward"
+                size={18}
+                color={NEW_COLORS.text_secondary}
+              />
+            </TouchableOpacity>
+
+            <View style={styles.subSeparator} />
+
             <TouchableOpacity
               style={styles.linkItem}
               onPress={() => navigation.navigate("RoutineRecommend")}
@@ -212,6 +232,50 @@ const MyPageScreen = ({ navigation }: any) => {
                 size={18}
                 color={NEW_COLORS.text_secondary}
               />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.separator} />
+
+        {/* ✅ 테스트 섹션 (개발 전용) */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            🧪 결제 화면 테스트 (개발 전용)
+          </Text>
+          <View style={styles.sectionLinks}>
+            <TouchableOpacity
+              style={styles.linkItem}
+              onPress={() => navigation.navigate("PaymentSuccess")}
+            >
+              <Text style={[styles.linkText, { color: "#4ade80" }]}>
+                ✅ 결제 성공 화면
+              </Text>
+              <Icon name="chevron-forward" size={18} color="#4ade80" />
+            </TouchableOpacity>
+
+            <View style={styles.subSeparator} />
+
+            <TouchableOpacity
+              style={styles.linkItem}
+              onPress={() => navigation.navigate("PaymentFail")}
+            >
+              <Text style={[styles.linkText, { color: "#ef4444" }]}>
+                ❌ 결제 실패 화면
+              </Text>
+              <Icon name="chevron-forward" size={18} color="#ef4444" />
+            </TouchableOpacity>
+
+            <View style={styles.subSeparator} />
+
+            <TouchableOpacity
+              style={styles.linkItem}
+              onPress={() => navigation.navigate("PaymentCancel")}
+            >
+              <Text style={[styles.linkText, { color: "#f59e0b" }]}>
+                🚫 결제 취소 화면
+              </Text>
+              <Icon name="chevron-forward" size={18} color="#f59e0b" />
             </TouchableOpacity>
           </View>
         </View>
@@ -256,6 +320,7 @@ const MyPageScreen = ({ navigation }: any) => {
       <MyPlanModal
         isOpen={isMyPlanModalOpen}
         onClose={() => setIsMyPlanModalOpen(false)}
+        navigation={navigation}
       />
       <PaymentMethodModal
         isOpen={isPaymentMethodModalOpen}
@@ -432,6 +497,23 @@ const styles = StyleSheet.create({
   deleteText: {
     color: NEW_COLORS.delete_color,
     fontWeight: "500",
+  },
+  // ✅ 새로 추가: NEW 뱃지 스타일
+  linkItemWithBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  newBadge: {
+    backgroundColor: NEW_COLORS.accent,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  newBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#000",
   },
 });
 

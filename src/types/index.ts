@@ -48,7 +48,7 @@ export interface AddManualFoodRequest {
 export interface Meal {
   id: string;
   date: string;
-  type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  type: "breakfast" | "lunch" | "dinner" | "snack";
   foods: Food[];
   totalCalories: number;
   totalCarbs: number;
@@ -99,7 +99,7 @@ export interface DailyMealFood {
 export interface DailyMeal {
   id: number;
   mealDate: string;
-  mealType: 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'OTHER';
+  mealType: "BREAKFAST" | "LUNCH" | "DINNER" | "SNACK" | "OTHER";
   mealTypeName: string;
   totalCalories: number;
   totalCarbs: number;
@@ -139,7 +139,7 @@ export interface AddMealFoodRequest {
 
 export interface AddMealRequest {
   mealDate: string; // yyyy-MM-dd 형식
-  mealType: 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'OTHER';
+  mealType: "BREAKFAST" | "LUNCH" | "DINNER" | "SNACK" | "OTHER";
   foods: AddMealFoodRequest[];
   memo?: string;
 }
@@ -174,7 +174,7 @@ export interface SetNutritionGoalRequest {
   targetCarbs: number;
   targetProtein: number;
   targetFat: number;
-  goalType?: 'AUTO' | 'MANUAL';
+  goalType?: "AUTO" | "MANUAL";
 }
 
 // 영양 목표 설정 응답 타입
@@ -184,7 +184,39 @@ export interface SetNutritionGoalResponse {
   goal?: NutritionGoal;
   data?: NutritionGoal;
 }
+export interface RecommendedNutritionGoal {
+  tdee: number;
+  goal_kcal: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  ratio: {
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+}
+export interface UserPreferencesResponse {
+  success?: boolean;
+  message?: string;
+  userId?: number;
+  dislikedFoods: string[];
+  preferredFoods: string[];
+}
 
+// 비선호 음식 추가 응답 타입
+export interface AddDislikedFoodResponse {
+  success: boolean;
+  message?: string;
+  dislikedFoods: string[];
+}
+
+// 비선호 음식 삭제 응답 타입
+export interface RemoveDislikedFoodResponse {
+  success: boolean;
+  message?: string;
+  dislikedFoods: string[];
+}
 // 홈 화면 응답 타입
 export interface HomeResponse {
   userSummary: {
@@ -240,4 +272,3 @@ export interface HomeResponse {
   };
   aiChatbotAvailable: boolean;
 }
-
