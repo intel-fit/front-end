@@ -344,12 +344,11 @@ const SignupScreen = ({navigation}: any) => {
       // workoutDaysPerWeek를 "1일", "2일" 형식으로 변환
       const workoutDaysFormatted = formData.workoutDaysPerWeek ? `${formData.workoutDaysPerWeek}일` : '';
       
-      // 유연성 향상, 체력증진, 자세교정은 빈 값으로 전송
-      const healthGoalValue = ['FLEXIBILITY', 'ENDURANCE', 'POSTURE'].includes(formData.healthGoal) 
-        ? '' 
-        : formData.healthGoal;
+      // 벌크업, 다이어트, 린매스업, 유지만 데이터로 전송, 나머지는 요청에서 제외
+      const allowedHealthGoals = ['BULK', 'DIET', 'LEAN_MASS', 'MAINTENANCE'];
+      const isValidHealthGoal = allowedHealthGoals.includes(formData.healthGoal);
       
-      const signupData = {
+      const signupData: any = {
         userId: formData.username,
         name: formData.name,
         email: formData.email,
@@ -363,9 +362,13 @@ const SignupScreen = ({navigation}: any) => {
         height: Number(formData.height),
         weight: Number(formData.weight),
         weightGoal: Number(formData.weightGoal),
-        healthGoal: healthGoalValue,
         workoutDaysPerWeek: workoutDaysFormatted,
       };
+      
+      // 허용된 헬스 목적만 요청에 포함
+      if (isValidHealthGoal) {
+        signupData.healthGoal = formData.healthGoal;
+      }
 
       console.log('회원가입 요청 데이터:', signupData);
       const response = await authAPI.signup(signupData);
@@ -437,6 +440,7 @@ const SignupScreen = ({navigation}: any) => {
     {label: '벌크업', value: 'BULK'},
     {label: '다이어트', value: 'DIET'},
     {label: '린매스업', value: 'LEAN_MASS'},
+    {label: '유지', value: 'MAINTENANCE'},
     {label: '유연성 향상', value: 'FLEXIBILITY'},
     {label: '체력증진', value: 'ENDURANCE'},
     {label: '자세 교정', value: 'POSTURE'},
