@@ -13,7 +13,8 @@ import {colors} from '../../theme/colors';
 import {useDate} from '../../contexts/DateContext';
 import {mealAPI} from '../../services';
 import {useFocusEffect} from '@react-navigation/native';
-import {fetchWeeklyProgress, fetchMonthlyProgress} from '../../utils/exerciseApi';
+// 진행률 API 호출 제거
+// import {fetchWeeklyProgress, fetchMonthlyProgress} from '../../utils/exerciseApi';
 import type {DailyMealsResponse, DailyMeal, NutritionGoal, DailyProgressWeekItem} from '../../types';
 import NutritionGoalModal from '../../components/modals/NutritionGoalModal';
 
@@ -28,10 +29,11 @@ const DietScreen = ({navigation, route}: any) => {
   const [loading, setLoading] = useState(false);
   const [nutritionGoal, setNutritionGoal] = useState<NutritionGoal | null>(null);
   const [isNutritionModalOpen, setIsNutritionModalOpen] = useState(false);
+  // 진행률 API 사용 안 함 - 빈 배열로 유지
   const [weeklyProgress, setWeeklyProgress] = useState<DailyProgressWeekItem[]>([]);
   const [monthlyProgress, setMonthlyProgress] = useState<DailyProgressWeekItem[]>([]);
-  // 각 날짜별 식단 칼로리 캐시 (캘린더 표시용)
-  const [dailyCaloriesCache, setDailyCaloriesCache] = useState<Record<string, number>>({});
+  // 칼로리 캐시 사용 안 함
+  // const [dailyCaloriesCache, setDailyCaloriesCache] = useState<Record<string, number>>({});
 
   // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
   const formatDateToString = (date: Date): string => {
@@ -41,62 +43,27 @@ const DietScreen = ({navigation, route}: any) => {
     return `${year}-${month}-${day}`;
   };
 
-  // 주간 데이터 로드
+  // 주간 데이터 로드 (비활성화)
   const loadWeeklyProgress = async () => {
-    try {
-      const data = await fetchWeeklyProgress();
-      setWeeklyProgress(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error('주간 진행률 로드 실패:', e);
-      setWeeklyProgress([]);
-    }
+    // API 호출 제거 - 진행률 데이터 사용 안 함
+    setWeeklyProgress([]);
   };
 
-  // 월별 데이터 로드
+  // 월별 데이터 로드 (비활성화)
   const loadMonthlyProgress = async (year: number, month: number) => {
-    try {
-      const yearMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
-      const data = await fetchMonthlyProgress(yearMonth);
-      setMonthlyProgress(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error('월별 진행률 로드 실패:', e);
-      setMonthlyProgress([]);
-    }
+    // API 호출 제거 - 진행률 데이터 사용 안 함
+    setMonthlyProgress([]);
   };
 
-  // 특정 날짜의 진행률 데이터 가져오기
+  // 특정 날짜의 진행률 데이터 가져오기 (비활성화 - 항상 빈 값 반환)
   const getDayProgress = (date: Date): DailyProgressWeekItem | undefined => {
+    // 진행률 API 사용 안 함 - 항상 빈 값 반환
     const dateStr = formatDateToString(date);
-    // 먼저 월별 데이터에서 찾고, 없으면 주간 데이터에서 찾기
-    let progress = monthlyProgress.find(item => item.date === dateStr) 
-      || weeklyProgress.find(item => item.date === dateStr);
-    
-    // 진행률 데이터가 없으면 기본 구조 생성
-    if (!progress) {
-      progress = {
-        date: dateStr,
-        exerciseRate: 0,
-        totalCalorie: 0,
-      };
-    }
-    
-    // 진행률 API에서 칼로리가 없거나 0인 경우, 캐시된 식단 칼로리 사용
-    const cachedCalories = dailyCaloriesCache[dateStr];
-    // 현재 선택된 날짜이고 dailyMealsData가 있으면 그것을 우선 사용
-    const isSelectedDate = selectedDate && dateStr === formatDateToString(selectedDate);
-    const caloriesToUse = isSelectedDate && dailyMealsData 
-      ? dailyMealsData.dailyTotalCalories 
-      : cachedCalories;
-    
-    // 칼로리가 0이거나 없고, 캐시나 현재 데이터에 칼로리가 있으면 사용
-    if ((!progress.totalCalorie || progress.totalCalorie === 0) && caloriesToUse && caloriesToUse > 0) {
-      return {
-        ...progress,
-        totalCalorie: caloriesToUse,
-      };
-    }
-    
-    return progress;
+    return {
+      date: dateStr,
+      exerciseRate: 0,
+      totalCalorie: 0,
+    };
   };
 
 
@@ -107,13 +74,7 @@ const DietScreen = ({navigation, route}: any) => {
       const dateString = formatDateToString(date);
       const data = await mealAPI.getDailyMeals(dateString);
       setDailyMealsData(data);
-      // 캘린더 표시를 위해 칼로리 캐시에 저장
-      if (data && data.dailyTotalCalories > 0) {
-        setDailyCaloriesCache(prev => ({
-          ...prev,
-          [dateString]: data.dailyTotalCalories,
-        }));
-      }
+      // 칼로리 캐시 사용 안 함
     } catch (error: any) {
       console.error('일별 식단 조회 실패:', error);
       // 에러 발생 시 빈 데이터로 설정
@@ -198,8 +159,7 @@ const DietScreen = ({navigation, route}: any) => {
       if (dateStr) {
         const date = new Date(dateStr);
         setSelectedDate(date);
-        // 식사 추가 후 해당 달의 월별 진행률 API 호출
-        loadMonthlyProgress(date.getFullYear(), date.getMonth());
+        // 진행률 API 호출 제거
       }
       
       // params 초기화
@@ -213,50 +173,37 @@ const DietScreen = ({navigation, route}: any) => {
     React.useCallback(() => {
       const dateToFetch = selectedDate || new Date();
       fetchDailyMeals(dateToFetch);
-      loadWeeklyProgress();
-      loadMonthlyProgress(dateToFetch.getFullYear(), dateToFetch.getMonth());
+      // 진행률 API 호출 제거
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedDate])
   );
 
   // 초기 데이터 로드
   useEffect(() => {
-    const dateToFetch = selectedDate || new Date();
-    loadWeeklyProgress();
-    loadMonthlyProgress(dateToFetch.getFullYear(), dateToFetch.getMonth());
+    // 진행률 API 호출 제거
   }, []);
 
-  // monthBase가 변경될 때 월별 데이터 로드 (달력이 펼쳐져 있을 때만)
+  // monthBase가 변경될 때 월별 데이터 로드 (비활성화)
   useEffect(() => {
-    if (showMonthView) {
-      loadMonthlyProgress(monthBase.getFullYear(), monthBase.getMonth());
-    }
+    // 진행률 API 호출 제거
   }, [monthBase, showMonthView]);
 
-  // 달력을 펼치거나 접을 때 해당 달의 월별 데이터 가져오기
+  // 달력을 펼치거나 접을 때 해당 달의 월별 데이터 가져오기 (비활성화)
   useEffect(() => {
-    const dateToFetch = selectedDate || new Date();
-    if (showMonthView) {
-      // 달력을 펼칠 때 monthBase의 달 데이터 가져오기
-      loadMonthlyProgress(monthBase.getFullYear(), monthBase.getMonth());
-    } else {
-      // 달력을 접을 때 선택된 날짜의 달 데이터 가져오기 (주간 달력 표시 시)
-      loadMonthlyProgress(dateToFetch.getFullYear(), dateToFetch.getMonth());
-    }
+    // 진행률 API 호출 제거
   }, [showMonthView, selectedDate]);
 
-  // 선택된 날짜가 변경될 때 해당 달의 월별 데이터 가져오기
+  // 선택된 날짜가 변경될 때 해당 달의 월별 데이터 가져오기 (비활성화)
   useEffect(() => {
-    const dateToFetch = selectedDate || new Date();
-    loadMonthlyProgress(dateToFetch.getFullYear(), dateToFetch.getMonth());
+    // 진행률 API 호출 제거
   }, [selectedDate]);
 
 
 
-  // 영양 목표 로드 (목표가 없으면 API에서 자동 생성)
+  // 영양 목표 로드 (일일 목표 조회 API 사용)
   const loadNutritionGoal = async () => {
     try {
-      const data = await mealAPI.getNutritionGoal();
+      const data = await mealAPI.getDailyGoal();
       setNutritionGoal(data);
     } catch (e: any) {
       console.error('영양 목표 로드 실패:', e);
@@ -265,7 +212,7 @@ const DietScreen = ({navigation, route}: any) => {
         // API에서 자동 생성되므로 잠시 후 재시도
         setTimeout(async () => {
           try {
-            const retryData = await mealAPI.getNutritionGoal();
+            const retryData = await mealAPI.getDailyGoal();
             setNutritionGoal(retryData);
           } catch (retryError) {
             console.error('영양 목표 재시도 실패:', retryError);

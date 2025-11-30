@@ -17,43 +17,59 @@ import type {
  * 실제 사용자 ID 문자열 (예: "aaaa")을 반환
  */
 const getUserId = async (): Promise<string> => {
-  // AsyncStorage에서 먼저 확인
-  let userId = await AsyncStorage.getItem('userId');
-  
-  if (!userId) {
-    // JWT 토큰에서 sub (실제 사용자 ID) 추출 시도
-    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-    if (token) {
-      try {
-        const base64Url = token.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(
-          atob(base64)
-            .split('')
-            .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-            .join('')
-        );
-        const payload = JSON.parse(jsonPayload);
-        // sub 필드가 있으면 사용 (실제 사용자 ID 문자열)
-        if (payload.sub) {
-          userId = payload.sub;
-          await AsyncStorage.setItem('userId', userId);
-        } else if (payload.userPk) {
-          // sub가 없으면 userPk를 문자열로 사용 (하위 호환성)
-          userId = String(payload.userPk);
-          await AsyncStorage.setItem('userId', userId);
-        }
-      } catch (e) {
-        console.error('JWT 디코딩 실패:', e);
+  // JWT 토큰에서 먼저 확인 (가장 최신 정보)
+  const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+  if (token) {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      const payload = JSON.parse(jsonPayload);
+      console.log('🔍 JWT Payload:', payload);
+      
+      // sub 필드가 있으면 우선 사용 (실제 사용자 ID 문자열, 예: "aaaa")
+      if (payload.sub) {
+        const userId = String(payload.sub); // 문자열로 변환
+        console.log('✅ JWT에서 sub 추출:', userId);
+        await AsyncStorage.setItem('userId', userId);
+        return userId;
       }
+      
+      // sub가 없으면 다른 필드 확인
+      if (payload.userId) {
+        const userId = String(payload.userId);
+        console.log('✅ JWT에서 userId 추출:', userId);
+        await AsyncStorage.setItem('userId', userId);
+        return userId;
+      }
+      
+      // userPk는 숫자일 수 있으므로 마지막 옵션
+      if (payload.userPk) {
+        const userId = String(payload.userPk);
+        console.log('⚠️ JWT에서 userPk 추출 (숫자):', userId);
+        await AsyncStorage.setItem('userId', userId);
+        return userId;
+      }
+    } catch (e) {
+      console.error('❌ JWT 디코딩 실패:', e);
     }
   }
   
-  if (!userId) {
-    throw new Error('사용자 ID를 찾을 수 없습니다. 다시 로그인해주세요.');
+  // JWT에서 추출 실패 시 AsyncStorage에서 확인
+  let userId = await AsyncStorage.getItem('userId');
+  if (userId) {
+    console.log('✅ AsyncStorage에서 userId 가져옴:', userId);
+    return userId;
   }
   
-  return userId;
+  // 모두 실패한 경우
+  console.error('❌ 사용자 ID를 찾을 수 없습니다.');
+  throw new Error('사용자 ID를 찾을 수 없습니다. 다시 로그인해주세요.');
 };
 
 export const mealAPI = {
@@ -163,7 +179,9 @@ export const mealAPI = {
         totalProtein: meal.items?.reduce((sum: number, item: any) => sum + (item.protein || 0), 0) || 0,
         totalFat: meal.items?.reduce((sum: number, item: any) => sum + (item.fat || 0), 0) || 0,
         foods: meal.items?.map((item: any) => ({
-          id: item.meal_item_id,
+          id: item.food_id || item.id || 0, // food_id 사용 (meal_item_id가 아님)
+          food_id: item.food_id || item.id || 0, // food_id 명시적으로 저장
+          meal_item_id: item.meal_item_id || item.id || 0, // meal_item_id도 저장 (참고용)
           foodName: item.food_name,
           servingSize: item.quantity_g || 0,
           calories: item.calories || 0,
@@ -338,14 +356,20 @@ export const mealAPI = {
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`❌ 식사 삭제 에러 응답:`, errorText);
-      throw new Error(`HTTP error! status: ${response.status}`);
+      
+      // 에러 객체에 status 포함
+      const error: any = new Error(`HTTP error! status: ${response.status}`);
+      error.status = response.status;
+      error.message = errorText || `식사 삭제에 실패했습니다. (상태 코드: ${response.status})`;
+      throw error;
     }
     
-    console.log(`✅ 식사 삭제 성공`);
+    const result = await response.json().catch(() => ({})); // JSON 파싱 실패 시 빈 객체
+    console.log(`✅ 식사 삭제 성공:`, result);
     
     return {
       success: true,
-      message: '식사가 삭제되었습니다.',
+      message: result.message || '식사가 삭제되었습니다.',
     };
   },
 
@@ -563,10 +587,10 @@ export const mealAPI = {
   },
 
   /**
-   * 일일 목표 조회
+   * 일일 목표 조회 (영양 목표 가져오기)
    * AI 서버의 /food/daily_goal API 사용
    */
-  getDailyGoal: async (): Promise<any> => {
+  getDailyGoal: async (): Promise<NutritionGoal> => {
     const user_id = await getUserId();
     
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
@@ -581,28 +605,95 @@ export const mealAPI = {
     const url = `${AI_API_BASE_URL}/food/daily_goal?user_id=${encodeURIComponent(user_id)}`;
     console.log(`📡 일일 목표 조회 요청: ${url}`);
     
-    const response = await fetch(url, {
-      method: 'GET',
-      headers,
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`❌ 일일 목표 조회 에러 응답:`, errorText);
-      throw new Error(`HTTP error! status: ${response.status}`);
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers,
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ 일일 목표 조회 에러 응답:`, errorText);
+        
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        
+        // 422 Validation Error 처리
+        if (response.status === 422) {
+          try {
+            const errorData = JSON.parse(errorText);
+            if (errorData.detail && Array.isArray(errorData.detail)) {
+              const errorMessages = errorData.detail.map((err: any) => {
+                const field = err.loc && Array.isArray(err.loc)
+                  ? err.loc.filter((loc: any) => typeof loc === 'string').join('.')
+                  : 'unknown';
+                return `${field}: ${err.msg || '검증 오류'}`;
+              });
+              errorMessage = errorMessages.join(', ');
+            } else if (errorData.detail && typeof errorData.detail === 'string') {
+              errorMessage = errorData.detail;
+            }
+          } catch (parseError) {
+            errorMessage = '요청 파라미터가 올바르지 않습니다. user_id를 확인해주세요.';
+          }
+        }
+        
+        // 404 에러인 경우 기본값 반환
+        if (response.status === 404) {
+          return {
+            id: 0,
+            targetCalories: 0,
+            targetCarbs: 0,
+            targetProtein: 0,
+            targetFat: 0,
+            goalType: 'AUTO',
+            goalTypeDescription: '자동 계산',
+          };
+        }
+        
+        throw new Error(errorMessage);
+      }
+      
+      const goal = await response.json();
+      console.log(`✅ 일일 목표 조회 성공:`, goal);
+      
+      // AI 서버 응답 형식: { target_calorie, protein_g, fat_g, carbs_g, tdee } 또는 { user_id, exists, target_calorie, protein_g, fat_g, carbs_g }
+      // 기존 형식으로 변환
+      const nutritionGoal: NutritionGoal = {
+        id: goal.id || 0,
+        targetCalories: goal.target_calorie || goal.targetCalories || 0,
+        targetCarbs: goal.carbs_g || goal.target_carbs || goal.targetCarbs || 0,
+        targetProtein: goal.protein_g || goal.target_protein || goal.targetProtein || 0,
+        targetFat: goal.fat_g || goal.target_fat || goal.targetFat || 0,
+        goalType: goal.goal_type || goal.goalType || 'AUTO',
+        goalTypeDescription: goal.goal_type_description || goal.goalTypeDescription || '자동 계산',
+      };
+      
+      console.log('변환된 영양 목표:', nutritionGoal);
+      return nutritionGoal;
+    } catch (error: any) {
+      // 404 에러인 경우 기본값 반환
+      if (error.message?.includes('404') || error.message?.includes('찾을 수 없')) {
+        return {
+          id: 0,
+          targetCalories: 0,
+          targetCarbs: 0,
+          targetProtein: 0,
+          targetFat: 0,
+          goalType: 'AUTO',
+          goalTypeDescription: '자동 계산',
+        };
+      }
+      throw error;
     }
-    
-    console.log(`✅ 일일 목표 조회 성공`);
-    return await response.json();
   },
 
   /**
-   * 영양 목표 조회
+   * 영양 목표 조회 (AI 추천 - 프리미엄 기능)
    * AI 서버의 /food/nutrition-goal/get API 사용
+   * 저장된 DailyNutritionGoal 조회 전용 API (자동 계산 실행하지 않음)
    */
   getNutritionGoal: async (): Promise<NutritionGoal> => {
     const user_id = await getUserId();
-    const today = new Date().toISOString().split('T')[0];
     
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
     const headers: HeadersInit = {
@@ -613,8 +704,8 @@ export const mealAPI = {
       headers['Authorization'] = `Bearer ${token}`;
     }
     
-    const url = `${AI_API_BASE_URL}/food/nutrition-goal/get?user_id=${encodeURIComponent(user_id)}&date_str=${encodeURIComponent(today)}`;
-    console.log(`📡 영양 목표 조회 요청: ${url}`);
+    const url = `${AI_API_BASE_URL}/food/nutrition-goal/get?user_id=${encodeURIComponent(user_id)}`;
+    console.log(`📡 영양 목표 조회 요청 (AI 추천): ${url}`);
     
     try {
       const response = await fetch(url, {
@@ -643,17 +734,18 @@ export const mealAPI = {
       }
       
       const goal = await response.json();
-      console.log(`✅ 영양 목표 조회 성공`);
+      console.log(`✅ 영양 목표 조회 성공 (AI 추천):`, goal);
       
-      // AI 서버 응답을 기존 형식으로 변환
+      // AI 서버 응답 형식: { user_id, exists, target_calorie, protein_g, fat_g, carbs_g }
+      // 기존 형식으로 변환
       return {
         id: goal.id || 0,
         targetCalories: goal.target_calorie || goal.targetCalories || 0,
-        targetCarbs: goal.target_carbs || goal.targetCarbs || 0,
-        targetProtein: goal.target_protein || goal.targetProtein || 0,
-        targetFat: goal.target_fat || goal.targetFat || 0,
+        targetCarbs: goal.carbs_g || goal.target_carbs || goal.targetCarbs || 0,
+        targetProtein: goal.protein_g || goal.target_protein || goal.targetProtein || 0,
+        targetFat: goal.fat_g || goal.target_fat || goal.targetFat || 0,
         goalType: goal.goal_type || goal.goalType || 'AUTO',
-        goalTypeDescription: goal.goal_type_description || goal.goalTypeDescription || '자동 계산',
+        goalTypeDescription: goal.goal_type_description || goal.goalTypeDescription || 'AI 추천',
       };
     } catch (error: any) {
       // 404 에러인 경우 기본값 반환
@@ -673,12 +765,11 @@ export const mealAPI = {
   },
 
   /**
-   * 영양 목표 설정
+   * 영양 목표 설정 (칼로리만 입력하면 나머지 자동 계산)
    * AI 서버의 /food/nutrition-goal/manual-calorie API 사용
    */
   setNutritionGoal: async (goalData: SetNutritionGoalRequest): Promise<SetNutritionGoalResponse> => {
     const user_id = await getUserId();
-    const today = new Date().toISOString().split('T')[0];
     
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
     const headers: HeadersInit = {
@@ -693,38 +784,128 @@ export const mealAPI = {
     const url = `${AI_API_BASE_URL}/food/nutrition-goal/manual-calorie`;
     console.log(`📡 영양 목표 설정 요청: ${url}`);
     
+    // 칼로리만 전송 (나머지는 서버에서 자동 계산)
+    const requestBody = {
+      user_id: user_id,
+      target_calorie: goalData.targetCalories,
+    };
+    
+    console.log(`요청 데이터:`, JSON.stringify(requestBody, null, 2));
+    
     const response = await fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        user_id: user_id,
-        target_calorie: goalData.targetCalories,
-        date: today,
-      }),
+      body: JSON.stringify(requestBody),
     });
     
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`❌ 영양 목표 설정 에러 응답:`, errorText);
-      throw new Error(`HTTP error! status: ${response.status}`);
+      
+      let errorMessage = `HTTP error! status: ${response.status}`;
+      
+      // 404 에러 처리 (User not found)
+      if (response.status === 404) {
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.detail) {
+            if (typeof errorData.detail === 'string') {
+              errorMessage = errorData.detail;
+            } else if (Array.isArray(errorData.detail) && errorData.detail.length > 0) {
+              errorMessage = errorData.detail[0].msg || errorData.detail;
+            }
+          }
+        } catch (parseError) {
+          errorMessage = '사용자를 찾을 수 없습니다. 다시 로그인해주세요.';
+        }
+        if (!errorMessage || errorMessage.includes('404')) {
+          errorMessage = '사용자를 찾을 수 없습니다. 다시 로그인해주세요.';
+        }
+      } else if (response.status === 422) {
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.detail && Array.isArray(errorData.detail)) {
+            const errorMessages = errorData.detail.map((err: any) => {
+              const field = err.loc && Array.isArray(err.loc)
+                ? err.loc.filter((loc: any) => typeof loc === 'string').join('.')
+                : 'unknown';
+              return `${field}: ${err.msg || '검증 오류'}`;
+            });
+            errorMessage = errorMessages.join(', ');
+          } else if (errorData.detail && typeof errorData.detail === 'string') {
+            errorMessage = errorData.detail;
+          }
+        } catch (parseError) {
+          errorMessage = '요청 데이터가 올바르지 않습니다.';
+        }
+      } else {
+        // 다른 에러 처리
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.detail) {
+            if (typeof errorData.detail === 'string') {
+              errorMessage = errorData.detail;
+            } else if (Array.isArray(errorData.detail) && errorData.detail.length > 0) {
+              errorMessage = errorData.detail[0].msg || errorData.detail;
+            }
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          }
+        } catch (parseError) {
+          // JSON 파싱 실패 시 원본 텍스트 사용
+          if (errorText) {
+            errorMessage = errorText;
+          }
+        }
+      }
+      
+      throw new Error(errorMessage);
     }
     
     const result = await response.json();
-    console.log(`✅ 영양 목표 설정 성공`);
+    console.log(`✅ 영양 목표 설정 성공:`, result);
+    
+    // 서버 응답 형식: { user_id, target_calorie, protein_g, fat_g, carbs_g }
+    let goal: NutritionGoal;
+    
+    if (typeof result === 'string') {
+      // 응답이 문자열인 경우 (드물지만 가능), 목표를 다시 조회하여 전체 정보 가져오기
+      console.log('응답이 문자열이므로 최신 목표를 조회합니다.');
+      const updatedGoal = await mealAPI.getDailyGoal();
+      goal = {
+        id: updatedGoal.id || 0,
+        targetCalories: updatedGoal.targetCalories || goalData.targetCalories,
+        targetCarbs: updatedGoal.targetCarbs || 0,
+        targetProtein: updatedGoal.targetProtein || 0,
+        targetFat: updatedGoal.targetFat || 0,
+        goalType: 'MANUAL',
+        goalTypeDescription: '수동 설정',
+      };
+    } else {
+      // 응답이 객체인 경우 (일반적인 경우)
+      // 응답 형식: { user_id, target_calorie, protein_g, fat_g, carbs_g }
+      goal = {
+        id: result.id || 0,
+        targetCalories: result.target_calorie || result.targetCalories || goalData.targetCalories,
+        targetCarbs: result.carbs_g || result.target_carbs || result.targetCarbs || 0,
+        targetProtein: result.protein_g || result.target_protein || result.targetProtein || 0,
+        targetFat: result.fat_g || result.target_fat || result.targetFat || 0,
+        goalType: 'MANUAL',
+        goalTypeDescription: '수동 설정',
+      };
+      console.log('서버 응답에서 계산된 영양소:', {
+        calories: goal.targetCalories,
+        carbs: goal.targetCarbs,
+        protein: goal.targetProtein,
+        fat: goal.targetFat,
+      });
+    }
     
     // 응답 형식 변환
     return {
       success: true,
       message: '영양 목표가 설정되었습니다.',
-      goal: {
-        id: 0,
-        targetCalories: goalData.targetCalories,
-        targetCarbs: goalData.targetCarbs,
-        targetProtein: goalData.targetProtein,
-        targetFat: goalData.targetFat,
-        goalType: goalData.goalType || 'MANUAL',
-        goalTypeDescription: '수동 설정',
-      },
+      goal: goal,
     };
   },
 
