@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { authAPI } from "../../services";
 import AIAnalysisModal from "../../components/modals/AIAnalysisModal";
 import MyPlanModal from "../../components/modals/MyPlanModal";
@@ -22,6 +23,9 @@ import DeleteAccountModal from "../../components/modals/DeleteAccountModal";
 const MyPageScreen = ({ navigation }: any) => {
   const [profileData, setProfileData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [currentMembershipType, setCurrentMembershipType] = useState<
+    "FREE" | "PREMIUM"
+  >("FREE"); // ✅ 추가
 
   // 모달 상태
   const [isAIAnalysisModalOpen, setIsAIAnalysisModalOpen] = useState(false);
@@ -38,6 +42,7 @@ const MyPageScreen = ({ navigation }: any) => {
 
   useEffect(() => {
     fetchProfile();
+    loadMembershipType(); // ✅ 추가
   }, []);
 
   const fetchProfile = async () => {
@@ -51,6 +56,83 @@ const MyPageScreen = ({ navigation }: any) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // ✅ 멤버십 타입 로드
+  const loadMembershipType = async () => {
+    try {
+      const membershipType = await AsyncStorage.getItem("membershipType");
+      if (membershipType) {
+        setCurrentMembershipType(membershipType as "FREE" | "PREMIUM");
+      }
+    } catch (error) {
+      console.error("멤버십 타입 로드 실패:", error);
+    }
+  };
+
+  // ✅ 테스트용 멤버십 전환 함수
+  const handleToggleMembership = async () => {
+    const newType = currentMembershipType === "FREE" ? "PREMIUM" : "FREE";
+
+    Alert.alert(
+      "멤버십 전환",
+      `${
+        newType === "PREMIUM" ? "프리미엄" : "무료"
+      } 플랜으로 전환하시겠습니까?`,
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "전환",
+          onPress: async () => {
+            try {
+              console.log(
+                "🔄 멤버십 전환 시작:",
+                currentMembershipType,
+                "→",
+                newType
+              );
+
+              // 1. 멤버십 전환
+              const result = await authAPI.toggleMembership();
+
+              // ✅ 2. 프리미엄으로 전환한 경우 토큰 초기화 (무제한 활성화)
+              if (result.newType === "PREMIUM") {
+                try {
+                  await authAPI.resetTokens();
+                  console.log("✅ 프리미엄 전환 + 토큰 초기화 완료");
+                } catch (tokenError) {
+                  console.warn("⚠️ 토큰 초기화 실패 (무시):", tokenError);
+                }
+              }
+
+              setCurrentMembershipType(result.newType);
+
+              Alert.alert(
+                "전환 완료 ✅",
+                result.message +
+                  (result.newType === "PREMIUM" ? "\n\n 전환 완료" : ""),
+                [
+                  {
+                    text: "확인",
+                    onPress: () => {
+                      loadMembershipType();
+                    },
+                  },
+                ]
+              );
+
+              console.log("✅ 멤버십 전환 완료:", result);
+            } catch (error: any) {
+              console.error("❌ 멤버십 전환 실패:", error);
+              Alert.alert(
+                "오류",
+                error.message || "멤버십 전환에 실패했습니다."
+              );
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleLogout = () => {
@@ -134,9 +216,31 @@ const MyPageScreen = ({ navigation }: any) => {
                   {profileData?.name || "사용자"}님
                 </Text>
               </View>
-              <Text style={styles.userTitle}>
-                {getMembershipTypeText(profileData?.membershipType || "FREE")}
-              </Text>
+              <View style={styles.membershipBadgeContainer}>
+                <Text style={styles.userTitle}>
+                  {getMembershipTypeText(currentMembershipType)}
+                </Text>
+                {/* ✅ 현재 멤버십 상태 표시 */}
+                <View
+                  style={[
+                    styles.membershipStatusBadge,
+                    currentMembershipType === "PREMIUM" &&
+                      styles.premiumStatusBadge,
+                  ]}
+                >
+                  <Icon
+                    name={
+                      currentMembershipType === "PREMIUM" ? "star" : "person"
+                    }
+                    size={12}
+                    color={
+                      currentMembershipType === "PREMIUM"
+                        ? "#FFD700"
+                        : NEW_COLORS.text_secondary
+                    }
+                  />
+                </View>
+              </View>
             </View>
           </View>
 
@@ -146,6 +250,92 @@ const MyPageScreen = ({ navigation }: any) => {
           >
             <Icon name="pencil" size={18} color={NEW_COLORS.text} />
           </TouchableOpacity>
+        </View>
+
+        <View style={styles.separator} />
+
+        {/* ✅ 테스트 섹션 - 가장 위로 이동 */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🧪 개발 테스트 (개발 전용)</Text>
+          <View style={styles.sectionLinks}>
+            {/* ✅ 멤버십 전환 버튼 */}
+            <TouchableOpacity
+              style={styles.linkItem}
+              onPress={handleToggleMembership}
+            >
+              <View style={styles.linkItemWithBadge}>
+                <Text
+                  style={[
+                    styles.linkText,
+                    {
+                      color:
+                        currentMembershipType === "PREMIUM"
+                          ? "#FFD700"
+                          : NEW_COLORS.accent,
+                    },
+                  ]}
+                >
+                  {currentMembershipType === "FREE" ? "🆓 → 💎" : "💎 → 🆓"}{" "}
+                  무료/유료 전환
+                </Text>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    currentMembershipType === "PREMIUM" && styles.premiumBadge,
+                  ]}
+                >
+                  <Text style={styles.statusBadgeText}>
+                    {currentMembershipType === "FREE" ? "FREE" : "PREMIUM"}
+                  </Text>
+                </View>
+              </View>
+              <Icon
+                name="swap-horizontal"
+                size={20}
+                color={
+                  currentMembershipType === "PREMIUM"
+                    ? "#FFD700"
+                    : NEW_COLORS.accent
+                }
+              />
+            </TouchableOpacity>
+
+            <View style={styles.subSeparator} />
+
+            <TouchableOpacity
+              style={styles.linkItem}
+              onPress={() => navigation.navigate("PaymentSuccess")}
+            >
+              <Text style={[styles.linkText, { color: "#4ade80" }]}>
+                ✅ 결제 성공 화면
+              </Text>
+              <Icon name="chevron-forward" size={18} color="#4ade80" />
+            </TouchableOpacity>
+
+            <View style={styles.subSeparator} />
+
+            <TouchableOpacity
+              style={styles.linkItem}
+              onPress={() => navigation.navigate("PaymentFail")}
+            >
+              <Text style={[styles.linkText, { color: "#ef4444" }]}>
+                ❌ 결제 실패 화면
+              </Text>
+              <Icon name="chevron-forward" size={18} color="#ef4444" />
+            </TouchableOpacity>
+
+            <View style={styles.subSeparator} />
+
+            <TouchableOpacity
+              style={styles.linkItem}
+              onPress={() => navigation.navigate("PaymentCancel")}
+            >
+              <Text style={[styles.linkText, { color: "#f59e0b" }]}>
+                🚫 결제 취소 화면
+              </Text>
+              <Icon name="chevron-forward" size={18} color="#f59e0b" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.separator} />
@@ -188,7 +378,6 @@ const MyPageScreen = ({ navigation }: any) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🌟 추천 내역</Text>
           <View style={styles.sectionLinks}>
-            {/* ✅ 새로 추가: 1일 임시 식단 추천 */}
             <TouchableOpacity
               style={styles.linkItem}
               onPress={() => navigation.navigate("TempMealRecommend")}
@@ -232,50 +421,6 @@ const MyPageScreen = ({ navigation }: any) => {
                 size={18}
                 color={NEW_COLORS.text_secondary}
               />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.separator} />
-
-        {/* ✅ 테스트 섹션 (개발 전용) */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            🧪 결제 화면 테스트 (개발 전용)
-          </Text>
-          <View style={styles.sectionLinks}>
-            <TouchableOpacity
-              style={styles.linkItem}
-              onPress={() => navigation.navigate("PaymentSuccess")}
-            >
-              <Text style={[styles.linkText, { color: "#4ade80" }]}>
-                ✅ 결제 성공 화면
-              </Text>
-              <Icon name="chevron-forward" size={18} color="#4ade80" />
-            </TouchableOpacity>
-
-            <View style={styles.subSeparator} />
-
-            <TouchableOpacity
-              style={styles.linkItem}
-              onPress={() => navigation.navigate("PaymentFail")}
-            >
-              <Text style={[styles.linkText, { color: "#ef4444" }]}>
-                ❌ 결제 실패 화면
-              </Text>
-              <Icon name="chevron-forward" size={18} color="#ef4444" />
-            </TouchableOpacity>
-
-            <View style={styles.subSeparator} />
-
-            <TouchableOpacity
-              style={styles.linkItem}
-              onPress={() => navigation.navigate("PaymentCancel")}
-            >
-              <Text style={[styles.linkText, { color: "#f59e0b" }]}>
-                🚫 결제 취소 화면
-              </Text>
-              <Icon name="chevron-forward" size={18} color="#f59e0b" />
             </TouchableOpacity>
           </View>
         </View>
@@ -442,10 +587,26 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: NEW_COLORS.text,
   },
+  // ✅ 멤버십 배지 컨테이너
+  membershipBadgeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   userTitle: {
     fontSize: 14,
     color: NEW_COLORS.accent,
     fontWeight: "500",
+  },
+  // ✅ 멤버십 상태 배지
+  membershipStatusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    backgroundColor: NEW_COLORS.separator,
+  },
+  premiumStatusBadge: {
+    backgroundColor: "#FFD70020",
   },
   editProfileButton: {
     padding: 8,
@@ -498,7 +659,6 @@ const styles = StyleSheet.create({
     color: NEW_COLORS.delete_color,
     fontWeight: "500",
   },
-  // ✅ 새로 추가: NEW 뱃지 스타일
   linkItemWithBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -514,6 +674,21 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
     color: "#000",
+  },
+  // ✅ 상태 배지 스타일
+  statusBadge: {
+    backgroundColor: NEW_COLORS.separator,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  premiumBadge: {
+    backgroundColor: "#FFD70020",
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: NEW_COLORS.accent,
   },
 });
 
