@@ -1,3 +1,4 @@
+// src/screens/diet/MealRecommendScreen.tsx
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
