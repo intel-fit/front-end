@@ -659,41 +659,62 @@ const MealAddScreen = ({navigation, route}: any) => {
         dateToUse.getDate() === today.getDate();
 
       if (isEditMode && mealData?.id) {
-        // 수정 모드: 기존 식단 삭제 후 새로 추가
+        // 수정 모드: 기존 식단 삭제 후 새로 추가하는 방식
+        console.log('🔄 식단 수정 모드: 기존 식단 삭제 후 새로 추가');
+        console.log('삭제할 식단 ID:', mealData.id);
+        
+        // Step 1: 기존 식단 삭제
         try {
           await mealAPI.deleteMeal(mealData.id);
-          console.log('기존 식사 삭제 완료:', mealData.id);
+          console.log('✅ 기존 식사 삭제 완료:', mealData.id);
         } catch (deleteError: any) {
-          console.error('기존 식사 삭제 실패:', deleteError);
-          // 삭제 실패해도 계속 진행 (이미 삭제되었을 수 있음)
+          console.error('❌ 기존 식사 삭제 실패:', deleteError);
+          
+          // 404 에러는 이미 삭제된 것으로 간주하고 계속 진행
+          if (deleteError.status === 404) {
+            console.log('⚠️ 식단이 이미 삭제되었거나 존재하지 않음, 계속 진행');
+          } else {
+            // 다른 에러는 사용자에게 알림
+            const deleteErrorMessage = deleteError.message || '기존 식단 삭제에 실패했습니다.';
+            Alert.alert('경고', `${deleteErrorMessage}\n새로운 식단을 추가하려고 시도합니다.`);
+          }
+          // 삭제 실패해도 계속 진행 (새로 추가 시도)
         }
         
-        // 새로 추가
-        await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
-        Alert.alert('성공', '식사가 수정되었습니다.', [
-          {
-            text: '확인',
-            onPress: async () => {
-              // 해당 날짜의 진행률 가져오기
-              let dateProgress: DailyProgressWeekItem | null = null;
-              try {
-                if (isToday) {
-                  dateProgress = await fetchTodayProgress();
-                } else {
-                  dateProgress = await fetchDateProgress(mealDate);
+        // Step 2: 새로 추가 (일반 추가와 동일한 로직)
+        try {
+          await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
+          console.log('✅ 식단 수정 완료 (삭제 후 추가)');
+          
+          Alert.alert('성공', '식사가 수정되었습니다.', [
+            {
+              text: '확인',
+              onPress: async () => {
+                // 해당 날짜의 진행률 가져오기
+                let dateProgress: DailyProgressWeekItem | null = null;
+                try {
+                  if (isToday) {
+                    dateProgress = await fetchTodayProgress();
+                  } else {
+                    dateProgress = await fetchDateProgress(mealDate);
+                  }
+                } catch (error) {
+                  console.error('진행률 조회 실패:', error);
                 }
-              } catch (error) {
-                console.error('진행률 조회 실패:', error);
-              }
-              // StatsScreen으로 돌아가기 (탭바 유지)
-              navigation.navigate('Stats', { 
-                activeTab: 1, // 식단기록 탭 활성화
-                updatedProgress: dateProgress,
-                updatedDate: mealDate 
-              });
+                // StatsScreen으로 돌아가기 (탭바 유지)
+                navigation.navigate('Stats', { 
+                  activeTab: 1, // 식단기록 탭 활성화
+                  updatedProgress: dateProgress,
+                  updatedDate: mealDate 
+                });
+              },
             },
-          },
-        ]);
+          ]);
+        } catch (addError: any) {
+          // 추가 실패 시 에러 처리
+          console.error('❌ 식단 추가 실패 (수정 모드):', addError);
+          throw addError; // 외부 catch 블록에서 처리
+        }
       } else {
         // 추가 모드
         await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
@@ -978,10 +999,9 @@ const MealAddScreen = ({navigation, route}: any) => {
     setFoods(prev => prev.filter(food => food.id !== foodId));
   };
 
-  // 소수점 한 자리 포맷팅 (소수점이 0이면 정수로 표시)
-  const formatDecimal = (value: number): string => {
-    const fixed = value.toFixed(1);
-    return fixed.endsWith('.0') ? fixed.slice(0, -2) : fixed;
+  // 정수 포맷팅 (소수점 제거)
+  const formatInteger = (value: number): string => {
+    return Math.round(value).toString();
   };
 
   return (
@@ -1049,28 +1069,28 @@ const MealAddScreen = ({navigation, route}: any) => {
         {/* 칼로리 요약 */}
         <View style={styles.calorieSummary}>
           <View style={styles.calorieMain}>
-            <Text style={styles.calorieNumber}>{formatDecimal(totalCalories)}</Text>
+            <Text style={styles.calorieNumber}>{formatInteger(totalCalories)}</Text>
             <Text style={styles.calorieUnit}>
               {' '}
-              / {formatDecimal(targetCalories)}kcal
+              / {formatInteger(targetCalories)}kcal
             </Text>
           </View>
           <View style={styles.nutritionInline}>
             <View style={styles.nutritionInlineItem}>
               <Text style={styles.nutritionInlineLabel}>탄수화물</Text>
               <Text style={styles.nutritionInlineValue}>
-                {formatDecimal(totalCarbs)} / {formatDecimal(targetCarbs)}g
+                {formatInteger(totalCarbs)} / {formatInteger(targetCarbs)}g
               </Text>
             </View>
             <View style={styles.nutritionInlineItem}>
               <Text style={styles.nutritionInlineLabel}>단백질</Text>
               <Text style={styles.nutritionInlineValue}>
-                {formatDecimal(totalProtein)} / {formatDecimal(targetProtein)}g
+                {formatInteger(totalProtein)} / {formatInteger(targetProtein)}g
               </Text>
             </View>
             <View style={styles.nutritionInlineItem}>
               <Text style={styles.nutritionInlineLabel}>지방</Text>
-              <Text style={styles.nutritionInlineValue}>{formatDecimal(totalFat)} / {formatDecimal(targetFat)}g</Text>
+              <Text style={styles.nutritionInlineValue}>{formatInteger(totalFat)} / {formatInteger(targetFat)}g</Text>
             </View>
           </View>
         </View>
@@ -1090,7 +1110,7 @@ const MealAddScreen = ({navigation, route}: any) => {
                 <View style={styles.foodItemHeader}>
                   <Text style={styles.foodName} numberOfLines={2}>{food.name}</Text>
                   <View style={styles.foodCaloriesContainer}>
-                    <Text style={styles.foodCalories}>{food.calories}kcal</Text>
+                    <Text style={styles.foodCalories}>{Math.round(food.calories)}kcal</Text>
                     <TouchableOpacity
                       style={styles.foodDeleteButton}
                       onPress={(e) => {

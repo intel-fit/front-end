@@ -554,10 +554,10 @@ const DietScreen = ({navigation, route}: any) => {
           {/* 칼로리 헤더: 현재 칼로리 / 목표 칼로리, 달성률 */}
           <View style={styles.calorieHeader}>
             <View style={styles.calorieMain}>
-              <Text style={styles.calorieNumber}>{nutritionData.total}</Text>
+              <Text style={styles.calorieNumber}>{Math.round(nutritionData.total)}</Text>
               <Text style={styles.calorieUnit}>
                 {' '}
-                / {nutritionData.target}kcal
+                / {Math.round(nutritionData.target)}kcal
               </Text>
             </View>
             <View style={styles.calorieHeaderRight}>
@@ -593,7 +593,7 @@ const DietScreen = ({navigation, route}: any) => {
               <View style={styles.nutritionRow}>
                 <Text style={styles.nutritionLabel}>탄수화물</Text>
                 <Text style={styles.nutritionValue}>
-                  {nutritionData.carbs.current} / {nutritionData.carbs.target}g
+                  {Math.round(nutritionData.carbs.current)} / {Math.round(nutritionData.carbs.target)}g
                 </Text>
               </View>
               <View style={styles.nutritionProgress}>
@@ -618,7 +618,7 @@ const DietScreen = ({navigation, route}: any) => {
               <View style={styles.nutritionRow}>
                 <Text style={styles.nutritionLabel}>단백질</Text>
                 <Text style={styles.nutritionValue}>
-                  {nutritionData.protein.current} / {nutritionData.protein.target}g
+                  {Math.round(nutritionData.protein.current)} / {Math.round(nutritionData.protein.target)}g
                 </Text>
               </View>
               <View style={styles.nutritionProgress}>
@@ -643,7 +643,7 @@ const DietScreen = ({navigation, route}: any) => {
               <View style={styles.nutritionRow}>
                 <Text style={styles.nutritionLabel}>지방</Text>
                 <Text style={styles.nutritionValue}>
-                  {nutritionData.fat.current} / {nutritionData.fat.target}g
+                  {Math.round(nutritionData.fat.current)} / {Math.round(nutritionData.fat.target)}g
                 </Text>
               </View>
               <View style={styles.nutritionProgress}>
@@ -704,7 +704,7 @@ const DietScreen = ({navigation, route}: any) => {
                     </View>
                     {/* 해당 식사의 총 칼로리 및 삭제 버튼 */}
                     <View style={styles.mealRight}>
-                      <Text style={styles.mealCalories}>{meal.calories} kcal</Text>
+                      <Text style={styles.mealCalories}>{Math.round(meal.calories)} kcal</Text>
                       {originalMeal && (
                         <TouchableOpacity
                           style={styles.deleteButton}
