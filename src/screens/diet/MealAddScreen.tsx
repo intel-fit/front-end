@@ -476,6 +476,8 @@ const MealAddScreen = ({navigation, route}: any) => {
       carbs: Math.max(0, Math.round(carbs * 10) / 10), // 소수점 1자리
       protein: Math.max(0, Math.round(protein * 10) / 10),
       fat: Math.max(0, Math.round(fat * 10) / 10), // 소수점 1자리
+      // food_id 전달 (검색 또는 직접 입력에서 받은 음식 ID)
+      id: food.id || undefined,
       // optional 필드들은 제외 (sodium, cholesterol, sugar, fiber)
     };
     
@@ -577,6 +579,11 @@ const MealAddScreen = ({navigation, route}: any) => {
           fiber: finalFiber,
         };
         
+        // food_id 전달 (검색 또는 직접 입력에서 받은 음식 ID)
+        if (food.id !== undefined && food.id !== null && food.id > 0) {
+          foodData.id = food.id;
+        }
+        
         // optional 필드들 (값이 있을 때만 추가, undefined 제거)
         if (food.imageUrl) {
           foodData.imageUrl = food.imageUrl;
@@ -652,7 +659,16 @@ const MealAddScreen = ({navigation, route}: any) => {
         dateToUse.getDate() === today.getDate();
 
       if (isEditMode && mealData?.id) {
-        // 수정 모드: PUT 요청 (API가 없으면 일단 추가 API 사용)
+        // 수정 모드: 기존 식단 삭제 후 새로 추가
+        try {
+          await mealAPI.deleteMeal(mealData.id);
+          console.log('기존 식사 삭제 완료:', mealData.id);
+        } catch (deleteError: any) {
+          console.error('기존 식사 삭제 실패:', deleteError);
+          // 삭제 실패해도 계속 진행 (이미 삭제되었을 수 있음)
+        }
+        
+        // 새로 추가
         await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
         Alert.alert('성공', '식사가 수정되었습니다.', [
           {
@@ -775,103 +791,134 @@ const MealAddScreen = ({navigation, route}: any) => {
     try {
       const response = await mealAPI.uploadFood(imageUri);
       
-      // API 응답에서 음식 정보 추출 (응답 형식에 따라 조정 필요)
-      // 예상 응답 형식: { ai_result: {...} }, { foods: [...] }, 또는 직접 음식 배열
+      // API 응답 형식: { ai_result: [{ food_id, name, name_ko, calories, carbs, protein, fat, weight, ... }] }
       let foodData: Food | null = null;
       
-      console.log('업로드 응답:', JSON.stringify(response, null, 2));
+      console.log('📸 사진 업로드 응답:', JSON.stringify(response, null, 2));
       
-      // ai_result가 있는 경우 (사진 업로드 응답)
-      if (response.ai_result) {
-        // ai_result가 배열인 경우 첫 번째 항목 사용
-        const aiResult = Array.isArray(response.ai_result) 
-          ? response.ai_result[0] 
-          : response.ai_result;
+      // ai_result 배열이 있는 경우 (실제 API 응답 형식)
+      if (response.ai_result && Array.isArray(response.ai_result) && response.ai_result.length > 0) {
+        // 첫 번째 음식 사용 (다중 음식 감지 시 첫 번째만 사용)
+        const aiResult = response.ai_result[0];
         
-        if (aiResult) {
-          // 숫자 타입 보장 및 검증
-          const calories = typeof aiResult.calories === 'number' 
-            ? aiResult.calories 
-            : parseFloat(String(aiResult.calories || 0)) || 0;
-          const carbs = typeof aiResult.carbs === 'number' 
-            ? aiResult.carbs 
-            : parseFloat(String(aiResult.carbs || 0)) || 0;
-          const protein = typeof aiResult.protein === 'number' 
-            ? aiResult.protein 
-            : parseFloat(String(aiResult.protein || 0)) || 0;
-          const fat = typeof aiResult.fat === 'number' 
-            ? aiResult.fat 
-            : parseFloat(String(aiResult.fat || 0)) || 0;
-          const weight = typeof aiResult.weight === 'number' 
-            ? aiResult.weight 
-            : parseFloat(String(aiResult.weight || 100)) || 100;
-          
-          // 이름은 한국어 우선, 없으면 영어
-          const name = aiResult.name_ko || aiResult.name_en || aiResult.name || '음식';
-          
-          foodData = {
-            id: aiResult.id || Date.now(),
-            name: name,
-            calories: Math.max(0, calories),
-            carbs: Math.max(0, carbs),
-            protein: Math.max(0, protein),
-            fat: Math.max(0, fat),
-            weight: Math.max(1, weight), // weight는 최소 1
-          };
-          
-          console.log('사진 업로드로 변환된 음식 데이터:', foodData);
+        // 숫자 타입 보장 및 검증
+        const foodId = typeof aiResult.food_id === 'number' 
+          ? aiResult.food_id 
+          : (typeof aiResult.id === 'number' ? aiResult.id : 0);
+        
+        const calories = typeof aiResult.calories === 'number' 
+          ? aiResult.calories 
+          : parseFloat(String(aiResult.calories || 0)) || 0;
+        const carbs = typeof aiResult.carbs === 'number' 
+          ? aiResult.carbs 
+          : parseFloat(String(aiResult.carbs || 0)) || 0;
+        const protein = typeof aiResult.protein === 'number' 
+          ? aiResult.protein 
+          : parseFloat(String(aiResult.protein || 0)) || 0;
+        const fat = typeof aiResult.fat === 'number' 
+          ? aiResult.fat 
+          : parseFloat(String(aiResult.fat || 0)) || 0;
+        
+        // weight 우선, 없으면 total_weight 사용, 둘 다 없으면 100g 기본값
+        let weight = 100;
+        if (typeof aiResult.weight === 'number' && aiResult.weight > 0) {
+          weight = aiResult.weight;
+        } else if (typeof aiResult.total_weight === 'number' && aiResult.total_weight > 0) {
+          weight = aiResult.total_weight;
         }
-      } else if (Array.isArray(response)) {
-        // 배열인 경우 첫 번째 음식 사용
-        if (response.length > 0) {
-          const item = response[0];
-          foodData = {
-            id: item.id || Date.now(),
-            name: item.name || '음식',
-            calories: item.calories || 0,
-            carbs: item.carbs || 0,
-            protein: item.protein || 0,
-            fat: item.fat || 0,
-            weight: item.weight || 100,
-          };
+        
+        // 이름은 한국어 우선, 없으면 영어
+        const name = aiResult.name_ko || aiResult.name || '음식';
+        
+        foodData = {
+          id: foodId, // food_id 사용 (식단 추가 시 필요)
+          name: name,
+          calories: Math.max(0, calories),
+          carbs: Math.max(0, carbs),
+          protein: Math.max(0, protein),
+          fat: Math.max(0, fat),
+          weight: Math.max(1, weight), // weight는 최소 1g
+        };
+        
+        console.log('✅ 사진 업로드로 변환된 음식 데이터:', {
+          food_id: foodId,
+          name: name,
+          calories: foodData.calories,
+          carbs: foodData.carbs,
+          protein: foodData.protein,
+          fat: foodData.fat,
+          weight: foodData.weight,
+        });
+        
+        // 다중 음식 감지 시 알림 (선택사항)
+        if (response.ai_result.length > 1) {
+          console.log(`⚠️ 다중 음식 감지됨 (${response.ai_result.length}개), 첫 번째 음식만 추가됩니다.`);
         }
+      } else if (response.ai_result && !Array.isArray(response.ai_result)) {
+        // ai_result가 객체인 경우 (하위 호환성)
+        const aiResult = response.ai_result;
+        const foodId = aiResult.food_id || aiResult.id || 0;
+        const name = aiResult.name_ko || aiResult.name || '음식';
+        const weight = aiResult.weight || aiResult.total_weight || 100;
+        
+        foodData = {
+          id: foodId,
+          name: name,
+          calories: Math.max(0, aiResult.calories || 0),
+          carbs: Math.max(0, aiResult.carbs || 0),
+          protein: Math.max(0, aiResult.protein || 0),
+          fat: Math.max(0, aiResult.fat || 0),
+          weight: Math.max(1, weight),
+        };
+      } else if (Array.isArray(response) && response.length > 0) {
+        // 배열인 경우 첫 번째 음식 사용 (하위 호환성)
+        const item = response[0];
+        foodData = {
+          id: item.food_id || item.id || 0,
+          name: item.name_ko || item.name || '음식',
+          calories: Math.max(0, item.calories || 0),
+          carbs: Math.max(0, item.carbs || 0),
+          protein: Math.max(0, item.protein || 0),
+          fat: Math.max(0, item.fat || 0),
+          weight: Math.max(1, item.weight || 100),
+        };
       } else if (response.foods && Array.isArray(response.foods) && response.foods.length > 0) {
-        // foods 배열이 있는 경우
+        // foods 배열이 있는 경우 (하위 호환성)
         const item = response.foods[0];
         foodData = {
-          id: item.id || Date.now(),
-          name: item.name || item.foodName || '음식',
-          calories: item.calories || 0,
-          carbs: item.carbs || 0,
-          protein: item.protein || 0,
-          fat: item.fat || 0,
-          weight: item.weight || item.servingSize || 100,
+          id: item.food_id || item.id || 0,
+          name: item.name_ko || item.name || item.foodName || '음식',
+          calories: Math.max(0, item.calories || 0),
+          carbs: Math.max(0, item.carbs || 0),
+          protein: Math.max(0, item.protein || 0),
+          fat: Math.max(0, item.fat || 0),
+          weight: Math.max(1, item.weight || item.servingSize || 100),
         };
-      } else if (response.name) {
-        // 직접 음식 객체인 경우
+      } else if (response.name || response.name_ko) {
+        // 직접 음식 객체인 경우 (하위 호환성)
         foodData = {
-          id: response.id || Date.now(),
-          name: response.name,
-          calories: response.calories || 0,
-          carbs: response.carbs || 0,
-          protein: response.protein || 0,
-          fat: response.fat || 0,
-          weight: response.weight || response.servingSize || 100,
+          id: response.food_id || response.id || 0,
+          name: response.name_ko || response.name || '음식',
+          calories: Math.max(0, response.calories || 0),
+          carbs: Math.max(0, response.carbs || 0),
+          protein: Math.max(0, response.protein || 0),
+          fat: Math.max(0, response.fat || 0),
+          weight: Math.max(1, response.weight || response.total_weight || response.servingSize || 100),
         };
       }
 
       if (foodData) {
         // 상태 업데이트를 즉시 처리 (UI 블로킹 최소화)
         setFoods(prev => [...prev, foodData!]);
-        // Alert 제거 - UI 블로킹 방지, 음식이 추가된 것을 화면에서 확인 가능
+        console.log(`✅ 음식 추가 완료: ${foodData.name} (food_id: ${foodData.id})`);
       } else {
         // 에러는 나중에 표시
         setTimeout(() => {
-          Alert.alert('알림', '음식 정보를 가져올 수 없습니다.');
+          Alert.alert('알림', '음식 정보를 가져올 수 없습니다. 응답 형식을 확인해주세요.');
         }, 100);
       }
     } catch (error: any) {
-      console.error('사진 업로드 오류:', error);
+      console.error('❌ 사진 업로드 오류:', error);
       // 에러는 나중에 표시
       setTimeout(() => {
         Alert.alert('오류', error.message || '사진 업로드에 실패했습니다. 다시 시도해주세요.');
