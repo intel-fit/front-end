@@ -19,7 +19,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import { recommendedMealAPI, userPreferencesAPI } from "../../services";
 import { LinearGradient } from "expo-linear-gradient";
-
 const { width } = Dimensions.get("window");
 
 const LOADING_MESSAGES = [
@@ -236,31 +235,45 @@ const loadingStyles = StyleSheet.create({
   },
 });
 
-// ✅ 임시 식단 → UI 데이터 변환
 const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
   console.log(`🔄 ${dayIndex}일차 변환 시작`);
 
-  // ✅ SNACK 처리를 위한 로직 추가
   let breakfast, lunch, dinner;
 
   if (tempDay.meals && tempDay.meals.length > 0) {
-    // mealType으로 찾기
     breakfast = tempDay.meals.find((m: any) => m.mealType === "BREAKFAST");
     lunch = tempDay.meals.find((m: any) => m.mealType === "LUNCH");
     dinner = tempDay.meals.find((m: any) => m.mealType === "DINNER");
 
-    // ✅ BREAKFAST, LUNCH, DINNER가 없으면 SNACK을 순서대로 매핑
     if (!breakfast && !lunch && !dinner) {
-      console.log(`⚠️ ${dayIndex}일차는 SNACK만 있음 - 순서대로 매핑`);
+      console.log(`⚠️ ${dayIndex}일차는 SNACK만 있음 - 변환 시작`);
 
       const snacks = tempDay.meals.filter((m: any) => m.mealType === "SNACK");
 
-      if (snacks.length >= 1) breakfast = snacks[0];
-      if (snacks.length >= 2) lunch = snacks[1];
-      if (snacks.length >= 3) dinner = snacks[2];
+      if (snacks.length >= 1) {
+        breakfast = {
+          ...snacks[0],
+          mealType: "BREAKFAST",
+          mealTypeName: "아침",
+        };
+      }
+      if (snacks.length >= 2) {
+        lunch = {
+          ...snacks[1],
+          mealType: "LUNCH",
+          mealTypeName: "점심",
+        };
+      }
+      if (snacks.length >= 3) {
+        dinner = {
+          ...snacks[2],
+          mealType: "DINNER",
+          mealTypeName: "저녁",
+        };
+      }
 
       console.log(
-        `✅ SNACK 매핑 완료: 아침=${!!breakfast}, 점심=${!!lunch}, 저녁=${!!dinner}`
+        `✅ SNACK 변환 완료: 아침=${!!breakfast}, 점심=${!!lunch}, 저녁=${!!dinner}`
       );
     }
   }
@@ -379,6 +392,18 @@ const MealRecommendScreen = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
+        // ✅ ==================== 여기에 테스트 코드 추가 시작 ====================
+        console.log("========== GET 테스트 시작 ==========");
+        try {
+          const result = await userPreferencesAPI.getUserPreferences();
+          console.log("✅ GET 성공:", result);
+          console.log("✅ 비선호 음식:", result.dislikedFoods);
+        } catch (testError) {
+          console.error("❌ GET 실패:", testError);
+        }
+        console.log("========== GET 테스트 완료 ==========");
+        // ✅ ==================== 테스트 코드 추가 끝 ====================
+
         // ✅ 비선호 음식만 가져오기
         const dislikedFoods = await userPreferencesAPI.getDislikedFoods();
         setExcludedIngredients(dislikedFoods);
@@ -569,23 +594,50 @@ const MealRecommendScreen = () => {
     try {
       setLoading(true);
 
-      // ✅ 현재 목록 기반으로 서버에 추가
-      const result = await userPreferencesAPI.addDislikedFoods(
-        excludedIngredients,
-        [trimmed]
-      );
+      // ✅ 먼저 서버에 시도
+      try {
+        const result = await userPreferencesAPI.addDislikedFoods(
+          excludedIngredients,
+          [trimmed]
+        );
 
-      // ✅ 서버 응답으로 상태 업데이트
-      setExcludedIngredients(result.updatedList);
+        // ✅ 서버 성공 시
+        setExcludedIngredients(result.updatedList);
+        await AsyncStorage.setItem(
+          "excludedIngredients",
+          JSON.stringify(result.updatedList)
+        );
 
-      // ✅ 로컬 스토리지 백업
-      await AsyncStorage.setItem(
-        "excludedIngredients",
-        JSON.stringify(result.updatedList)
-      );
+        setNewIngredient("");
+        console.log("✅ 비선호 음식 추가 완료 (서버):", result.updatedList);
+        return; // 성공하면 종료
+      } catch (serverError: any) {
+        console.warn("⚠️ 서버 저장 실패, 로컬만 저장:", serverError.message);
 
-      setNewIngredient("");
-      console.log("✅ 비선호 음식 추가 완료:", result.updatedList);
+        // ✅ 500 에러면 로컬에만 저장 (임시 조치)
+        if (
+          serverError.message?.includes("서버 내부 오류") ||
+          serverError.status === 500
+        ) {
+          const updatedList = [...excludedIngredients, trimmed];
+          setExcludedIngredients(updatedList);
+          await AsyncStorage.setItem(
+            "excludedIngredients",
+            JSON.stringify(updatedList)
+          );
+
+          setNewIngredient("");
+          Alert.alert(
+            "일부 성공",
+            "식재료가 기기에 저장되었습니다.\n(서버 동기화는 백엔드 수정 후 가능합니다)"
+          );
+          console.log("✅ 비선호 음식 추가 완료 (로컬만):", updatedList);
+          return;
+        }
+
+        // 다른 에러는 throw
+        throw serverError;
+      }
     } catch (error: any) {
       console.error("비선호 음식 추가 실패:", error);
       Alert.alert("오류", error.message || "식재료 추가에 실패했습니다.");

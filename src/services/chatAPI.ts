@@ -17,10 +17,24 @@ interface ChatResponse {
 export const chatAPI = {
   /**
    * AI 코치와 채팅
+   * @param userId - 사용자 ID
+   * @param message - 사용자 메시지
+   * @param mode - 채팅 카테고리 (auto | exercise | nutrition)
+   * @param coachStyle - 대화 스타일 (pro | friend | soft | drill)
    */
-  sendMessage: async (userId: number, message: string): Promise<string> => {
+  sendMessage: async (
+    userId: number,
+    message: string,
+    mode: string = "auto",
+    coachStyle: string = "friend"
+  ): Promise<string> => {
     try {
-      console.log("💬 채팅 요청:", { userId, message });
+      console.log("💬 채팅 요청:", {
+        userId,
+        message,
+        mode, // ✅ 추가
+        coachStyle, // ✅ 추가
+      });
 
       const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
 
@@ -33,6 +47,8 @@ export const chatAPI = {
 
       const requestBody = {
         message: message,
+        mode: mode, // ✅ 추가
+        coach_style: coachStyle, // ✅ 추가
       };
 
       console.log("📤 요청 본문:", JSON.stringify(requestBody));

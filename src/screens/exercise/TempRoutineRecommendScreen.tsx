@@ -1,4 +1,4 @@
-// src/screens/RoutineRecommendNewScreen.tsx
+// src/screens/exercise/TempRoutineRecommendScreen.tsx
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -189,13 +189,11 @@ const getExerciseIcon = (category: string, muscleName: string) => {
 
   return muscleIcons[muscleName] || "💪";
 };
+
 const transformAIExerciseToUI = (apiResponse: any) => {
   const { plan } = apiResponse;
-
-  // ✅ 7일치 빈 배열 초기화
   const weekRoutines: any[] = Array.from({ length: 7 }, () => []);
 
-  // 요일 매핑
   const dayNameToIndex: { [key: string]: number } = {
     월요일: 0,
     화요일: 1,
@@ -210,13 +208,11 @@ const transformAIExerciseToUI = (apiResponse: any) => {
   console.log("플랜 이름:", plan.planName);
   console.log("루틴 개수:", plan.routines.length);
 
-  // 각 routine 처리
   plan.routines.forEach((routine: any, idx: number) => {
     console.log(`\n[루틴 ${idx + 1}] ${routine.routineName}`);
     console.log("요일:", routine.dayOfWeek);
     console.log("운동 개수:", routine.items?.length || 0);
 
-    // ✅ dayOfWeek는 단일 문자열 (쉼표 구분 아님)
     const dayIndex = dayNameToIndex[routine.dayOfWeek];
 
     if (dayIndex === undefined) {
@@ -224,18 +220,15 @@ const transformAIExerciseToUI = (apiResponse: any) => {
       return;
     }
 
-    // items를 운동 순서대로 정렬
     const sortedItems = [...(routine.items || [])].sort(
       (a: any, b: any) => (a.exerciseOrder || 0) - (b.exerciseOrder || 0)
     );
 
-    // UI 형식으로 변환
     const exercises = sortedItems.map((item: any) => {
       let name = "";
       let detail = "";
       let icon = "";
 
-      // ✅ 유산소 운동
       if (item.cardioTypeName) {
         name = item.cardioTypeName;
         icon = "🏃";
@@ -251,10 +244,7 @@ const transformAIExerciseToUI = (apiResponse: any) => {
           details.push(`${item.targetCaloriesBurn}kcal`);
         }
         detail = details.join(" · ");
-      }
-
-      // ✅ 무산소 운동
-      else if (item.resistanceExerciseTypeName) {
+      } else if (item.resistanceExerciseTypeName) {
         name = item.resistanceExerciseTypeName;
         icon = getExerciseIcon("RESISTANCE", item.muscleGroupName || "");
 
@@ -283,7 +273,6 @@ const transformAIExerciseToUI = (apiResponse: any) => {
       };
     });
 
-    // ✅ 해당 요일에 운동 할당
     weekRoutines[dayIndex] = [...weekRoutines[dayIndex], ...exercises];
   });
 
@@ -299,7 +288,7 @@ const transformAIExerciseToUI = (apiResponse: any) => {
   return weekRoutines;
 };
 
-const RoutineRecommendNewScreen = ({ navigation }: any) => {
+const TempRoutineRecommendScreen = ({ navigation }: any) => {
   const [showRoutine, setShowRoutine] = useState(false);
   const [selectedDay, setSelectedDay] = useState(0);
   const [showWeakPanel, setShowWeakPanel] = useState(false);
@@ -311,6 +300,14 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
   const [savedRoutines, setSavedRoutines] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentPlanId, setCurrentPlanId] = useState<number | null>(null);
+
+  // ✅ 추가: 무료/프리미엄 회원 상태
+  const [isFreeUser, setIsFreeUser] = useState<boolean>(true);
+  const [hasUsedWeeklyRecommendation, setHasUsedWeeklyRecommendation] =
+    useState<boolean>(false);
+  const [selectedPeriod, setSelectedPeriod] = useState<"daily" | "weekly">(
+    "daily"
+  );
 
   const [weekRoutines, setWeekRoutines] = useState([
     [
@@ -345,27 +342,84 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
 
   useEffect(() => {
     loadSavedRoutines();
+    loadUserData(); // ✅ 추가
   }, []);
+
+  // ✅ 추가: 사용자 데이터 로드
+  const loadUserData = async () => {
+    try {
+      const testType = await AsyncStorage.getItem("testRoutineMembershipType");
+      setIsFreeUser(testType !== "PREMIUM");
+
+      const lastUsedDate = await AsyncStorage.getItem(
+        "lastRoutineRecommendDate"
+      );
+      if (lastUsedDate) {
+        const lastDate = new Date(lastUsedDate);
+        const today = new Date();
+        const weekStart = getWeekStart(today);
+
+        if (lastDate >= weekStart && testType !== "PREMIUM") {
+          setHasUsedWeeklyRecommendation(true);
+        }
+      }
+    } catch (error) {
+      console.error("사용자 데이터 로드 실패:", error);
+    }
+  };
+
+  // ✅ 추가: 주의 시작일 계산
+  const getWeekStart = (date: Date): Date => {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(d.setDate(diff));
+  };
+
+  // ✅ 추가: 회원 등급 테스트 전환
+  const toggleMembershipTest = async () => {
+    const newType = isFreeUser ? "PREMIUM" : "FREE";
+    await AsyncStorage.setItem("testRoutineMembershipType", newType);
+    setIsFreeUser(!isFreeUser);
+
+    if (newType === "FREE") {
+      const lastUsedDate = await AsyncStorage.getItem(
+        "lastRoutineRecommendDate"
+      );
+      if (lastUsedDate) {
+        const lastDate = new Date(lastUsedDate);
+        const today = new Date();
+        const weekStart = getWeekStart(today);
+
+        if (lastDate >= weekStart) {
+          setHasUsedWeeklyRecommendation(true);
+        }
+      }
+    } else {
+      setHasUsedWeeklyRecommendation(false);
+    }
+
+    Alert.alert(
+      "테스트 모드",
+      `${newType === "FREE" ? "무료" : "프리미엄"} 회원으로 전환되었습니다.`
+    );
+  };
 
   const loadSavedRoutines = async () => {
     try {
-      // 서버에서 불러오기
       const serverResponse =
         await recommendedExerciseAPI.getSavedExercisePlans();
       const serverPlans = serverResponse.plans || [];
 
-      // 로컬에서 불러오기
       const stored = await AsyncStorage.getItem("savedRoutines");
       const localPlans = stored ? JSON.parse(stored) : [];
 
-      // 합치기
       const allPlans = [...serverPlans, ...localPlans];
 
       setSavedRoutines(allPlans);
       console.log(`📋 총 ${allPlans.length}개 루틴 로드 완료`);
     } catch (error) {
       console.log("저장된 루틴 불러오기 실패:", error);
-      // 실패해도 로컬 데이터라도 보여주기
       try {
         const stored = await AsyncStorage.getItem("savedRoutines");
         if (stored) setSavedRoutines(JSON.parse(stored));
@@ -400,14 +454,22 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
       },
     ]);
   };
-  // RoutineRecommendNewScreen.tsx
+
   const handleGetRoutine = async () => {
+    // ✅ 추가: 무료 회원 제한 체크
+    if (hasUsedWeeklyRecommendation && isFreeUser) {
+      Alert.alert(
+        "알림",
+        "이번 주 무료 추천을 이미 사용했습니다.\n다음 주에 다시 시도해주세요."
+      );
+      return;
+    }
+
     setLoading(true);
 
     try {
       console.log("🏋️ 운동 루틴 추천 시작");
 
-      // ✅ 1단계: 프로필 확인
       let userProfile;
       try {
         userProfile = await recommendedExerciseAPI.getProfile();
@@ -422,7 +484,6 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
           return;
         }
 
-        // 프로필이 없으면 그냥 알림만
         if (error.status === 404) {
           Alert.alert("프로필 설정 필요", "먼저 프로필을 설정해주세요.", [
             { text: "확인", style: "cancel" },
@@ -434,7 +495,6 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
         throw error;
       }
 
-      // ✅ 2단계: 필수 정보 확인 (필드명 수정!)
       if (
         !userProfile?.height ||
         !userProfile?.weight ||
@@ -450,12 +510,11 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
         return;
       }
 
-      // ✅ 3단계: 운동 플랜 생성
       console.log("💪 운동 플랜 생성 요청");
       console.log("📊 프로필 정보:", {
         height: userProfile.height,
         weight: userProfile.weight,
-        healthGoal: userProfile.healthGoal, // ← 필드명 수정
+        healthGoal: userProfile.healthGoal,
         workoutDaysPerWeek: userProfile.workoutDaysPerWeek,
       });
 
@@ -472,12 +531,20 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
         const planId = apiResponse.plan.id;
         setCurrentPlanId(planId);
 
-        // ✅ 응답 변환
         const convertedRoutines = transformAIExerciseToUI(apiResponse);
 
         setWeekRoutines(convertedRoutines);
         setShowRoutine(true);
         setSelectedDay(0);
+
+        // ✅ 추가: 무료 회원 사용 기록
+        if (isFreeUser) {
+          await AsyncStorage.setItem(
+            "lastRoutineRecommendDate",
+            new Date().toISOString()
+          );
+          setHasUsedWeeklyRecommendation(true);
+        }
 
         Alert.alert(
           "성공",
@@ -504,8 +571,8 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
       setLoading(false);
     }
   };
+
   const handleSaveRoutine = async () => {
-    // ✅ 1. 먼저 토큰 확인
     const token = await AsyncStorage.getItem("access_token");
     console.log("🔑 현재 토큰:", token ? "존재함" : "❌ 없음");
 
@@ -516,14 +583,13 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
         [
           {
             text: "확인",
-            onPress: () => navigation.navigate("Login"), // 로그인 화면 이름에 맞게 수정
+            onPress: () => navigation.navigate("Login"),
           },
         ]
       );
       return;
     }
 
-    // planId가 있으면 서버에 저장
     if (currentPlanId) {
       try {
         setLoading(true);
@@ -551,7 +617,6 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
       } catch (error: any) {
         console.error("❌ 서버 저장 실패:", error);
 
-        // 401 에러 처리
         if (error.status === 401 || error.message?.includes("인증")) {
           Alert.alert(
             "로그인 필요",
@@ -571,7 +636,6 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
         setLoading(false);
       }
     } else {
-      // planId가 없으면 로컬에만 저장 (기존 코드 유지)
       const currentDate = new Date();
       const savedRoutine = {
         id: Date.now(),
@@ -707,6 +771,9 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
     );
   };
 
+  // ✅ isDisabled 변수 선언
+  const isDisabled = loading || (hasUsedWeeklyRecommendation && isFreeUser);
+
   return (
     <View style={styles.container}>
       <LinearGradient
@@ -731,7 +798,17 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
             </View>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>운동 루틴</Text>
-          <View style={{ width: 40 }} />
+          {/* ✅ 추가: 테스트 버튼 */}
+          <TouchableOpacity
+            onPress={toggleMembershipTest}
+            style={styles.testButton}
+          >
+            <View style={styles.iconButton}>
+              <Text style={styles.testButtonText}>
+                {isFreeUser ? "🆓" : "⭐"}
+              </Text>
+            </View>
+          </TouchableOpacity>
         </View>
 
         {!showRoutine ? (
@@ -755,26 +832,308 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
                 AI가 당신의 목표에 맞는{"\n"}완벽한 루틴을 설계합니다
               </Text>
 
-              <View style={styles.buttonGroup}>
-                <TouchableOpacity
-                  style={styles.primaryButton}
-                  onPress={handleGetRoutine}
-                  disabled={loading}
-                  activeOpacity={0.9}
-                >
+              {/* ✅ 추가: 무료 회원 배너 */}
+              {isFreeUser && (
+                <View style={styles.freeUserBannerContainer}>
                   <LinearGradient
-                    colors={["#e3ff7c", "#a8e063"]}
-                    style={styles.primaryButtonGradient}
+                    colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
+                    style={styles.freeUserBanner}
+                  >
+                    <View style={styles.freeUserBadge}>
+                      <LinearGradient
+                        colors={["#e3ff7c", "#a8e063"]}
+                        style={styles.freeUserBadgeGradient}
+                      >
+                        <Icon name="gift-outline" size={16} color="#111827" />
+                        <Text style={styles.freeUserBadgeText}>무료 회원</Text>
+                      </LinearGradient>
+                    </View>
+
+                    <Text style={styles.freeUserTitle}>
+                      일주일에 단 한 번만 추천 가능!
+                    </Text>
+
+                    <View style={styles.remainingCount}>
+                      <View style={styles.remainingCountInner}>
+                        <Icon
+                          name="calendar-outline"
+                          size={16}
+                          color="#e3ff7c"
+                        />
+                        <Text style={styles.remainingText}>
+                          이번 주 남은 추천:{" "}
+                          <Text style={styles.remainingNumber}>
+                            {hasUsedWeeklyRecommendation ? "0회" : "1회"}
+                          </Text>
+                        </Text>
+                      </View>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.premiumButton}
+                      onPress={() => {
+                        Alert.alert(
+                          "프리미엄 업그레이드",
+                          "매일 무제한 루틴 추천을 받으시겠습니까?",
+                          [
+                            { text: "나중에", style: "cancel" },
+                            {
+                              text: "업그레이드",
+                              onPress: () => {
+                                Alert.alert(
+                                  "준비 중",
+                                  "프리미엄 기능은 곧 출시됩니다!"
+                                );
+                              },
+                            },
+                          ]
+                        );
+                      }}
+                      activeOpacity={0.9}
+                    >
+                      <LinearGradient
+                        colors={["#e3ff7c", "#a8e063"]}
+                        style={styles.premiumButtonGradient}
+                      >
+                        <Icon name="star" size={16} color="#111827" />
+                        <Text style={styles.premiumButtonText}>
+                          프리미엄으로 매일 추천받기
+                        </Text>
+                        <Icon name="arrow-forward" size={16} color="#111827" />
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </LinearGradient>
+                </View>
+              )}
+
+              {/* ✅ 추가: 기간 선택 섹션 */}
+              <View style={styles.periodSection}>
+                <View style={styles.sectionHeader}>
+                  <Icon name="calendar-outline" size={22} color="#e3ff7c" />
+                  <Text style={styles.sectionTitle}>루틴 기간</Text>
+                </View>
+
+                <View style={styles.periodButtons}>
+                  {/* 1일 버튼 */}
+                  <TouchableOpacity
+                    style={styles.periodButtonContainer}
+                    onPress={() => setSelectedPeriod("daily")}
+                    activeOpacity={0.8}
+                  >
+                    {selectedPeriod === "daily" ? (
+                      <LinearGradient
+                        colors={["#e3ff7c", "#a8e063"]}
+                        style={styles.periodButton}
+                      >
+                        <Icon
+                          name="barbell-outline"
+                          size={28}
+                          color="#111827"
+                        />
+                        <Text style={styles.periodButtonTextActive}>
+                          1일 루틴
+                        </Text>
+                        <Text style={styles.periodButtonSubtextActive}>
+                          오늘 하루
+                        </Text>
+                      </LinearGradient>
+                    ) : (
+                      <View style={styles.periodButton}>
+                        <Icon
+                          name="barbell-outline"
+                          size={28}
+                          color="#e3ff7c"
+                        />
+                        <Text style={styles.periodButtonText}>1일 루틴</Text>
+                        <Text style={styles.periodButtonSubtext}>
+                          오늘 하루
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  {/* 7일 버튼 - 무료 회원은 잠김 */}
+                  <TouchableOpacity
+                    style={[
+                      styles.periodButtonContainer,
+                      isFreeUser && styles.periodButtonLocked,
+                    ]}
+                    onPress={() => {
+                      if (isFreeUser) {
+                        Alert.alert(
+                          "프리미엄 기능",
+                          "7일 루틴 추천은 프리미엄 회원 전용입니다.\n업그레이드하시겠습니까?",
+                          [
+                            { text: "취소", style: "cancel" },
+                            {
+                              text: "업그레이드",
+                              onPress: () => {
+                                Alert.alert(
+                                  "준비 중",
+                                  "프리미엄 기능은 곧 출시됩니다!"
+                                );
+                              },
+                            },
+                          ]
+                        );
+                      } else {
+                        setSelectedPeriod("weekly");
+                      }
+                    }}
+                    disabled={isFreeUser}
+                    activeOpacity={0.8}
+                  >
+                    {isFreeUser && (
+                      <View style={styles.lockOverlay}>
+                        <Icon name="lock-closed" size={32} color="#e3ff7c" />
+                      </View>
+                    )}
+
+                    {selectedPeriod === "weekly" && !isFreeUser ? (
+                      <LinearGradient
+                        colors={["#e3ff7c", "#a8e063"]}
+                        style={styles.periodButton}
+                      >
+                        <Icon name="calendar" size={28} color="#111827" />
+                        <Text style={styles.periodButtonTextActive}>
+                          7일 루틴
+                        </Text>
+                        <View style={styles.premiumTag}>
+                          <Icon name="star" size={10} color="#111827" />
+                          <Text style={styles.premiumTagTextActive}>
+                            프리미엄
+                          </Text>
+                        </View>
+                      </LinearGradient>
+                    ) : (
+                      <View style={styles.periodButton}>
+                        <Icon
+                          name="calendar"
+                          size={28}
+                          color={isFreeUser ? "#666" : "#e3ff7c"}
+                        />
+                        <Text
+                          style={[
+                            styles.periodButtonText,
+                            isFreeUser && styles.periodButtonTextLocked,
+                          ]}
+                        >
+                          7일 루틴
+                        </Text>
+                        <View style={styles.premiumTag}>
+                          <Icon name="star" size={10} color="#e3ff7c" />
+                          <Text style={styles.premiumTagText}>프리미엄</Text>
+                        </View>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* ✅ 추가: 안내 메시지 */}
+              {isFreeUser && (
+                <View style={styles.infoBox}>
+                  <LinearGradient
+                    colors={["rgba(227,255,124,0.1)", "rgba(168,224,99,0.05)"]}
+                    style={styles.infoBoxGradient}
                   >
                     <Icon
-                      name="flash"
+                      name="information-circle-outline"
                       size={20}
-                      color="#111827"
-                      style={{ marginRight: 8 }}
+                      color="#e3ff7c"
                     />
-                    <Text style={styles.primaryButtonText}>추천 루틴 받기</Text>
+                    <View style={styles.infoTextContainer}>
+                      <Text style={styles.infoText}>
+                        💡 무료 회원은 일주일에 1회만 루틴을 추천받을 수
+                        있습니다.
+                      </Text>
+                      <Text style={styles.infoSubtext}>
+                        매일 새로운 루틴을 추천받으려면 프리미엄으로
+                        업그레이드하세요!
+                      </Text>
+                    </View>
                   </LinearGradient>
+                </View>
+              )}
+
+              <View style={styles.buttonGroup}>
+                <TouchableOpacity
+                  style={[
+                    styles.primaryButton,
+                    isDisabled && styles.disabledButtonShadow,
+                  ]}
+                  onPress={handleGetRoutine}
+                  disabled={isDisabled}
+                  activeOpacity={0.9}
+                >
+                  {isDisabled ? (
+                    <LinearGradient
+                      colors={["#4b5563", "#374151"]}
+                      style={styles.primaryButtonGradient}
+                    >
+                      {loading ? (
+                        <>
+                          <ActivityIndicator size="small" color="#ffffff" />
+                          <Text
+                            style={[
+                              styles.primaryButtonTextDisabled,
+                              { color: "#ffffff" },
+                            ]}
+                          >
+                            생성 중...
+                          </Text>
+                        </>
+                      ) : (
+                        <>
+                          <Icon
+                            name="checkmark-circle-outline"
+                            size={20}
+                            color="#ffffff"
+                          />
+                          <Text
+                            style={[
+                              styles.primaryButtonTextDisabled,
+                              { color: "#ffffff" },
+                            ]}
+                          >
+                            이번 주 추천 완료
+                          </Text>
+                        </>
+                      )}
+                    </LinearGradient>
+                  ) : (
+                    <LinearGradient
+                      colors={["#e3ff7c", "#a8e063"]}
+                      style={styles.primaryButtonGradient}
+                    >
+                      <Icon
+                        name="flash"
+                        size={20}
+                        color="#111827"
+                        style={{ marginRight: 8 }}
+                      />
+                      <Text style={styles.primaryButtonText}>
+                        추천 루틴 받기
+                      </Text>
+                    </LinearGradient>
+                  )}
                 </TouchableOpacity>
+
+                {/* ✅ 추가: 사용 완료 안내 */}
+                {hasUsedWeeklyRecommendation && isFreeUser && (
+                  <View style={styles.usedNotice}>
+                    <LinearGradient
+                      colors={["rgba(74,222,128,0.15)", "rgba(74,222,128,0.1)"]}
+                      style={styles.usedNoticeGradient}
+                    >
+                      <Icon name="checkmark-circle" size={20} color="#4ade80" />
+                      <Text style={styles.usedNoticeText}>
+                        이번 주 무료 추천을 모두 사용했습니다. 다음 주 월요일에
+                        다시 추천받을 수 있습니다.
+                      </Text>
+                    </LinearGradient>
+                  </View>
+                )}
 
                 <View style={styles.optionCard}>
                   <TouchableOpacity
@@ -1138,7 +1497,7 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
           </ScrollView>
         )}
 
-        {/* Modal Components */}
+        {/* Modal Components (기존과 동일) */}
         <Modal
           visible={showWeakPanel}
           transparent={true}
@@ -1452,6 +1811,14 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     letterSpacing: 0.5,
   },
+  // ✅ 추가: 테스트 버튼
+  testButton: {
+    width: 40,
+    height: 40,
+  },
+  testButtonText: {
+    fontSize: 18,
+  },
   content: {
     flex: 1,
   },
@@ -1498,6 +1865,226 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     letterSpacing: 0.3,
   },
+
+  // ✅ 추가: 무료 회원 배너
+  freeUserBannerContainer: {
+    width: "100%",
+    marginBottom: 24,
+    borderRadius: 20,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  freeUserBanner: {
+    padding: 20,
+    gap: 12,
+    borderRadius: 20,
+  },
+  freeUserBadge: {
+    alignSelf: "flex-start",
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  freeUserBadgeGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  freeUserBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#111827",
+    letterSpacing: 0.5,
+  },
+  freeUserTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#e3ff7c",
+    letterSpacing: 0.3,
+  },
+  remainingCount: {
+    alignSelf: "flex-start",
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  remainingCountInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  remainingText: {
+    fontSize: 14,
+    color: "#ffffff",
+    fontWeight: "500",
+  },
+  remainingNumber: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#e3ff7c",
+  },
+  premiumButton: {
+    borderRadius: 12,
+    overflow: "hidden",
+    marginTop: 4,
+    shadowColor: "#e3ff7c",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  premiumButtonGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+  },
+  premiumButtonText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
+    letterSpacing: 0.3,
+  },
+
+  // ✅ 추가: 기간 선택 섹션
+  periodSection: {
+    width: "100%",
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#ffffff",
+    letterSpacing: 0.3,
+  },
+  periodButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  periodButtonContainer: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  periodButton: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    padding: 20,
+    borderRadius: 16,
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  periodButtonLocked: {
+    opacity: 0.6,
+  },
+  periodButtonText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#e3ff7c",
+    letterSpacing: 0.3,
+  },
+  periodButtonTextActive: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+    letterSpacing: 0.3,
+  },
+  periodButtonTextLocked: {
+    color: "#6b7280",
+  },
+  periodButtonSubtext: {
+    fontSize: 12,
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  periodButtonSubtextActive: {
+    fontSize: 12,
+    color: "#374151",
+    fontWeight: "600",
+  },
+  lockOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 16,
+    zIndex: 1,
+  },
+  premiumTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(227,255,124,0.1)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  premiumTagText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#e3ff7c",
+    letterSpacing: 0.5,
+  },
+  premiumTagTextActive: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#111827",
+    letterSpacing: 0.5,
+  },
+
+  // ✅ 추가: 안내 박스
+  infoBox: {
+    width: "100%",
+    marginBottom: 20,
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  infoBoxGradient: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(227,255,124,0.2)",
+    borderRadius: 14,
+  },
+  infoTextContainer: {
+    flex: 1,
+    gap: 6,
+  },
+  infoText: {
+    fontSize: 13,
+    color: "#e3ff7c",
+    lineHeight: 18,
+    fontWeight: "500",
+    letterSpacing: 0.2,
+  },
+  infoSubtext: {
+    fontSize: 12,
+    color: "#9ca3af",
+    lineHeight: 16,
+    letterSpacing: 0.2,
+  },
+
   buttonGroup: {
     width: "100%",
     gap: 16,
@@ -1524,6 +2111,44 @@ const styles = StyleSheet.create({
     color: "#111827",
     letterSpacing: 0.5,
   },
+  // ✅ 추가: 비활성화 버튼 텍스트
+  primaryButtonTextDisabled: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#6b7280",
+    letterSpacing: 0.3,
+  },
+  // ✅ 추가: 비활성화 버튼 그림자
+  disabledButtonShadow: {
+    shadowOpacity: 0,
+    elevation: 0,
+    shadowColor: "transparent",
+  },
+
+  // ✅ 추가: 사용 완료 안내
+  usedNotice: {
+    borderRadius: 14,
+    overflow: "hidden",
+    marginBottom: 12,
+  },
+  usedNoticeGradient: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "rgba(74,222,128,0.3)",
+    borderRadius: 14,
+  },
+  usedNoticeText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#4ade80",
+    lineHeight: 18,
+    fontWeight: "500",
+    letterSpacing: 0.2,
+  },
+
   optionCard: {
     width: "100%",
   },
@@ -1589,13 +2214,6 @@ const styles = StyleSheet.create({
   savedRoutines: {
     width: "100%",
     marginTop: 40,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#ffffff",
-    marginBottom: 16,
-    letterSpacing: 0.5,
   },
   savedRoutineItem: {
     marginBottom: 12,
@@ -1959,4 +2577,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default RoutineRecommendNewScreen;
+export default TempRoutineRecommendScreen;
