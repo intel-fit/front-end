@@ -22,12 +22,9 @@ interface InBodyManualFormProps {
     height: string;
     weight: string;
     smm: string;
-    muscleMass: string;
     bfm: string;
     pbf: string;
-    score: string;
     vfa: string;
-    bmr: string;
     rArm: string;
     lArm: string;
     trunk: string;
@@ -41,14 +38,9 @@ interface InBodyManualFormProps {
     tbw: string;
     protein: string;
     mineral: string;
-    pbfStd: string;
-    obesityDegree: string;
-    ecw: string;
-    wtCtrl: string;
-    fatCtrl: string;
-    musCtrl: string;
   }>;
   inBodyDates?: string[];
+  onDateChange?: (date: string, currentFormData?: any) => void;
 }
 
 // iOS 숫자패드 상단에 표시될 액세서리 뷰의 고유 ID
@@ -81,6 +73,7 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
   onSubmit,
   defaultValues,
   inBodyDates,
+  onDateChange,
 }) => {
   const scrollViewRef = useRef<ScrollView>(null);
   const ageInputRef = useRef<TextInput>(null);
@@ -123,12 +116,9 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
     height: "",
     weight: "",
     smm: "",
-    muscleMass: "",
     bfm: "",
     pbf: "",
-    score: "",
     vfa: "",
-    bmr: "",
     rArm: "",
     lArm: "",
     trunk: "",
@@ -142,12 +132,6 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
     tbw: "",
     protein: "",
     mineral: "",
-    pbfStd: "",
-    obesityDegree: "",
-    ecw: "",
-    wtCtrl: "",
-    fatCtrl: "",
-    musCtrl: "",
   });
 
   const [calendarVisible, setCalendarVisible] = useState(false);
@@ -169,10 +153,13 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
   // apply defaults on mount/update
   React.useEffect(() => {
     if (defaultValues && typeof defaultValues === "object") {
+      console.log("[INBODY FORM] defaultValues 적용:", defaultValues);
       setV((s) => ({ ...s, ...(defaultValues as any) }));
       if (typeof defaultValues.age === "string") {
         ageTextRef.current = defaultValues.age;
       }
+    } else {
+      console.log("[INBODY FORM] defaultValues 없음 또는 유효하지 않음:", defaultValues);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(defaultValues ?? {})]);
@@ -188,6 +175,14 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
     ).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
     handle("date", dateStr);
     setCalendarVisible(false);
+    // 부모 컴포넌트에 날짜 변경 알림 (현재 폼 데이터 포함)
+    const currentFormData = {
+      ...v,
+      date: dateStr,
+      age: ageTextRef.current,
+      bmi,
+    };
+    onDateChange?.(dateStr, currentFormData);
   };
 
   const bmi = useMemo(() => {
@@ -357,24 +352,6 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
             </View>
           </View>
 
-          {/* 근육량(Muscle Mass) */}
-          <View style={styles.field}>
-            <Text style={styles.lab}>근육량(Muscle Mass)</Text>
-            <View style={styles.unitBox}>
-              <TextInput
-                style={styles.inpRight}
-                value={v.muscleMass}
-                onChangeText={(t) => handle("muscleMass", t)}
-                keyboardType="decimal-pad"
-                placeholderTextColor="#666"
-                placeholder="골격근량과 동일 또는 다를 수 있음"
-                blurOnSubmit={false}
-                inputAccessoryViewID={ACCESSORY_ID}
-              />
-              <Text style={styles.unit}>kg</Text>
-            </View>
-          </View>
-
           {/* 체지방량 */}
           <View style={styles.field}>
             <Text style={styles.lab}>체지방량(BFM)</Text>
@@ -428,22 +405,8 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
           </View>
         </View>
 
-        {/* 점수/내장지방/BMR */}
+        {/* 내장지방 레벨 */}
         <View style={styles.sec}>
-          <View style={styles.field}>
-            <Text style={styles.lab}>인바디 점수</Text>
-            <TextInput
-              style={styles.inp}
-              value={v.score}
-              onChangeText={(t) => handle("score", t)}
-              keyboardType="decimal-pad"
-              placeholderTextColor="#666"
-              // ✅ 수정
-              blurOnSubmit={false}
-              inputAccessoryViewID={ACCESSORY_ID}
-            />
-          </View>
-
           <View style={styles.field}>
             <Text style={styles.lab}>내장지방 레벨</Text>
             <View style={styles.unitBox}>
@@ -459,23 +422,6 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
                 inputAccessoryViewID={ACCESSORY_ID}
               />
               {/* 단위 없음: 레벨(정수) */}
-            </View>
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.lab}>BMR</Text>
-            <View style={styles.unitBox}>
-              <TextInput
-                style={styles.inpRight}
-                value={v.bmr}
-                onChangeText={(t) => handle("bmr", t)}
-                keyboardType="decimal-pad"
-                placeholderTextColor="#666"
-                // ✅ 수정
-                blurOnSubmit={false}
-                inputAccessoryViewID={ACCESSORY_ID}
-              />
-              <Text style={styles.unit}>kcal</Text>
             </View>
           </View>
         </View>
@@ -591,134 +537,6 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
           </View>
         </View>
 
-        {/* 비만 분석 */}
-        <View style={styles.sec}>
-          <Text style={styles.h3}>비만 분석</Text>
-
-          <View style={styles.field}>
-            <Text style={styles.lab}>체지방률 표준(%)</Text>
-            <View style={styles.unitBox}>
-              <TextInput
-                style={styles.inpRight}
-                value={v.pbfStd}
-                onChangeText={(t) => handle("pbfStd", t)}
-                keyboardType="decimal-pad"
-                placeholderTextColor="#666"
-                blurOnSubmit={false}
-                inputAccessoryViewID={ACCESSORY_ID}
-              />
-              <Text style={styles.unit}>%</Text>
-            </View>
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.lab}>비만도(%)</Text>
-            <View style={styles.unitBox}>
-              <TextInput
-                style={styles.inpRight}
-                value={v.obesityDegree}
-                onChangeText={(t) => handle("obesityDegree", t)}
-                keyboardType="decimal-pad"
-                placeholderTextColor="#666"
-                blurOnSubmit={false}
-                inputAccessoryViewID={ACCESSORY_ID}
-              />
-              <Text style={styles.unit}>%</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* 수분비/체중조절 */}
-        <View style={styles.sec}>
-          <View style={styles.field}>
-            <Text style={styles.lab}>세포외수분비(ECW/TBW)</Text>
-            <TextInput
-              style={styles.inp}
-              value={v.ecw}
-              onChangeText={(t) => handle("ecw", t)}
-              keyboardType="decimal-pad"
-              placeholderTextColor="#666"
-              // ✅ 수정
-              blurOnSubmit={false}
-              inputAccessoryViewID={ACCESSORY_ID}
-            />
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.lab}>체중조절(±kg)</Text>
-            <View style={styles.unitBox}>
-              <TextInput
-                ref={(ref) => {
-                  inputRefs.current["wtCtrl"] = ref;
-                }}
-                style={styles.inpRight}
-                value={v.wtCtrl}
-                onChangeText={(t) => {
-                  // ± 기호와 숫자만 허용
-                  const filtered = t.replace(/[^+\-0-9.]/g, "");
-                  handle("wtCtrl", filtered);
-                }}
-                keyboardType="default"
-                placeholderTextColor="#666"
-                blurOnSubmit={false}
-                inputAccessoryViewID={ACCESSORY_ID}
-                placeholder="예: +2.5 또는 -3.0"
-                onFocus={() => handleInputFocus("wtCtrl")}
-              />
-              <Text style={styles.unit}>kg</Text>
-            </View>
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.lab}>지방조절(kg)</Text>
-            <View style={styles.unitBox}>
-              <TextInput
-                ref={(ref) => {
-                  inputRefs.current["fatCtrl"] = ref;
-                }}
-                style={styles.inpRight}
-                value={v.fatCtrl}
-                onChangeText={(t) => {
-                  // ± 기호와 숫자만 허용
-                  const filtered = t.replace(/[^+\-0-9.]/g, "");
-                  handle("fatCtrl", filtered);
-                }}
-                keyboardType="default"
-                placeholderTextColor="#666"
-                blurOnSubmit={false}
-                inputAccessoryViewID={ACCESSORY_ID}
-                placeholder="예: +1.5 또는 -2.0"
-                onFocus={() => handleInputFocus("fatCtrl")}
-              />
-              <Text style={styles.unit}>kg</Text>
-            </View>
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.lab}>근육조절(kg)</Text>
-            <View style={styles.unitBox}>
-              <TextInput
-                ref={(ref) => {
-                  inputRefs.current["musCtrl"] = ref;
-                }}
-                style={styles.inpRight}
-                value={v.musCtrl}
-                onChangeText={(t) => {
-                  // ± 기호와 숫자만 허용
-                  const filtered = t.replace(/[^+\-0-9.]/g, "");
-                  handle("musCtrl", filtered);
-                }}
-                keyboardType="default"
-                placeholderTextColor="#666"
-                blurOnSubmit={false}
-                inputAccessoryViewID={ACCESSORY_ID}
-                placeholder="예: +0.5 또는 -1.0"
-                onFocus={() => handleInputFocus("musCtrl")}
-              />
-              <Text style={styles.unit}>kg</Text>
-            </View>
-          </View>
-        </View>
 
         {/* 저장 버튼 */}
         <TouchableOpacity style={styles.submit} onPress={handleSubmit}>
@@ -729,13 +547,13 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
       {/* ✅ InputAccessoryView는 ScrollView 밖에 렌더링되어야 합니다. */}
       {DoneBar}
 
-      {/* 날짜 선택 달력 모달: 저장된 날짜가 없으면 전체 날짜 선택 가능 */}
+      {/* 날짜 선택 달력 모달: 수기 입력 모드에서는 모든 날짜 선택 가능 */}
       <InBodyCalendarModal
         visible={calendarVisible}
         onClose={() => setCalendarVisible(false)}
         onSelectDate={handleDateSelect}
         selectedDate={v.date ? new Date(v.date) : new Date()}
-        inBodyDates={normalizedInBodyDates}
+        inBodyDates={[]}
       />
     </>
   );

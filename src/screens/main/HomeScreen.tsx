@@ -15,6 +15,7 @@ import { ROUTES } from "../../constants/routes";
 import { useDate } from "../../contexts/DateContext";
 import { homeAPI } from "../../services";
 import { getTodayWorkoutTime } from "../../utils/exerciseApi";
+import { getLatestInBody } from "../../utils/inbodyApi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { DailyProgressWeekItem, HomeResponse } from "../../types";
 
@@ -25,6 +26,7 @@ const HomeScreen = ({ navigation }: any) => {
   );
   const [homeData, setHomeData] = useState<HomeResponse | null>(null);
   const [todayWorkoutSeconds, setTodayWorkoutSeconds] = useState(0);
+  const [inBodyData, setInBodyData] = useState<any>(null);
   const isLoadingRef = useRef(false);
 
   // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
@@ -106,6 +108,22 @@ const HomeScreen = ({ navigation }: any) => {
     }
   };
 
+  // 최신 인바디 데이터 로드
+  const loadInBodyData = async () => {
+    try {
+      const latestRecord = await getLatestInBody();
+      if (latestRecord) {
+        const latestData = latestRecord?.success ? latestRecord.inBody : latestRecord;
+        setInBodyData(latestData);
+      } else {
+        setInBodyData(null);
+      }
+    } catch (e: any) {
+      console.error("인바디 데이터 로드 실패:", e);
+      setInBodyData(null);
+    }
+  };
+
   // 화면 포커스 시 데이터 로드
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
@@ -119,6 +137,7 @@ const HomeScreen = ({ navigation }: any) => {
         loadWeeklyProgress(),
         loadHomeData(),
         loadTodayWorkoutTime(),
+        loadInBodyData(),
       ]).finally(() => {
         isLoadingRef.current = false;
       });
@@ -383,7 +402,9 @@ const HomeScreen = ({ navigation }: any) => {
             <View style={styles.exerciseStatColumn}>
               <Text style={styles.exerciseStatLabel}>완료 운동</Text>
               <View style={styles.exerciseStatValueRow}>
-                <Text style={styles.exerciseStatValue}>7/10</Text>
+                <Text style={styles.exerciseStatValue}>
+                  {homeData?.todayExercise?.exerciseCount ?? 0}
+                </Text>
                 <Text style={styles.exerciseStatUnit}>개</Text>
               </View>
             </View>
@@ -394,17 +415,39 @@ const HomeScreen = ({ navigation }: any) => {
         <View style={styles.bodyStatsContainer}>
           <View style={[styles.bodyStatCard]}>
             <Text style={styles.bodyStatLabel}>체중</Text>
-            <Text style={styles.bodyStatValue}>52kg</Text>
+            <Text style={styles.bodyStatValue}>
+              {inBodyData?.weight 
+                ? `${inBodyData.weight.toFixed(1)}kg`
+                : inBodyData?.bodyComposition?.weight
+                ? `${parseFloat(String(inBodyData.bodyComposition.weight).replace(/[^\d.]/g, '')).toFixed(1)}kg`
+                : inBodyData?.muscleFatAnalysis?.weight
+                ? `${inBodyData.muscleFatAnalysis.weight.toFixed(1)}kg`
+                : "-"}
+            </Text>
           </View>
 
           <View style={[styles.bodyStatCard]}>
             <Text style={styles.bodyStatLabel}>골격근량</Text>
-            <Text style={styles.bodyStatValue}>17.3kg</Text>
+            <Text style={styles.bodyStatValue}>
+              {inBodyData?.skeletalMuscleMass
+                ? `${inBodyData.skeletalMuscleMass.toFixed(1)}kg`
+                : inBodyData?.muscleFatAnalysis?.skeletalMuscleMass
+                ? `${inBodyData.muscleFatAnalysis.skeletalMuscleMass.toFixed(1)}kg`
+                : "-"}
+            </Text>
           </View>
 
           <View style={[styles.bodyStatCard, { marginRight: 0 }]}>
             <Text style={styles.bodyStatLabel}>체지방량</Text>
-            <Text style={styles.bodyStatValue}>21.4%</Text>
+            <Text style={styles.bodyStatValue}>
+              {inBodyData?.bodyFatMass
+                ? `${inBodyData.bodyFatMass.toFixed(1)}kg`
+                : inBodyData?.muscleFatAnalysis?.bodyFatMass
+                ? `${inBodyData.muscleFatAnalysis.bodyFatMass.toFixed(1)}kg`
+                : inBodyData?.bodyComposition?.bodyFatMass
+                ? `${parseFloat(String(inBodyData.bodyComposition.bodyFatMass).replace(/[^\d.]/g, '')).toFixed(1)}kg`
+                : "-"}
+            </Text>
           </View>
         </View>
 

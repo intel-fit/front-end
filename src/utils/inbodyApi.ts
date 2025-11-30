@@ -110,6 +110,11 @@ export const getLatestInBody = async (): Promise<any> => {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
     const url = `${INBODY_API_URL}/latest`;
 
+    console.log("[INBODY][GET LATEST] API 요청:", {
+      url,
+      hasToken: !!token,
+    });
+
     const response = await axios.get(url, {
       headers: {
         Authorization: `Bearer ${token || ""}`,
@@ -118,24 +123,39 @@ export const getLatestInBody = async (): Promise<any> => {
       },
     });
 
+    console.log("[INBODY][GET LATEST] API 응답 성공:", {
+      status: response.status,
+      hasData: !!response.data,
+      dataKeys: response.data ? Object.keys(response.data) : [],
+    });
+
     return response.data;
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
-      if (status === 400) {
-        if (__DEV__) {
-          console.log("[INBODY][GET LATEST] 데이터 없음 (400)", {
-            status,
-            data: error.response?.data,
-          });
-        }
+      const errorData = error.response?.data;
+      
+      // 400 또는 404는 데이터 없음으로 처리
+      if (status === 400 || status === 404) {
+        console.log("[INBODY][GET LATEST] 데이터 없음:", {
+          status,
+          errorCode: errorData?.code,
+          errorMessage: errorData?.message,
+          data: errorData,
+        });
         return null;
       }
+      
       console.error("[INBODY][GET LATEST] API 에러:", {
         message: error.message,
         status,
         statusText: error.response?.statusText,
-        data: error.response?.data,
+        errorCode: errorData?.code,
+        errorMessage: errorData?.message,
+        data: errorData,
+        requestUrl: error.config?.url,
+        requestMethod: error.config?.method,
+        requestHeaders: error.config?.headers,
       });
     } else {
       console.error("[INBODY][GET LATEST] 예상치 못한 에러:", error);

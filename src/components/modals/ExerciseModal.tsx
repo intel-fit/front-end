@@ -21,7 +21,6 @@ import {
   fetchExercises as fetchExerciseApi,
   fetchExerciseDetail,
   toggleWorkoutSession,
-  postWorkoutTime,
   getTodayWorkoutTime,
 } from "../../utils/exerciseApi";
 import ExerciseSetItem from "../ExerciseSetItem";
@@ -1337,25 +1336,6 @@ const getExerciseDisplayName = React.useCallback(
     }
     
     setShowInstructions(false);
-    
-    // 타이머 종료 시 운동 시간 누적
-    const saveWorkoutTime = async () => {
-      try {
-        const userIdStr = await AsyncStorage.getItem("userId");
-        if (userIdStr && workoutTimerSeconds > 0) {
-          const userId = parseInt(userIdStr, 10);
-          await postWorkoutTime(userId, workoutTimerSeconds);
-          console.log(`[WORKOUT][TIME] 운동 시간 누적 완료: ${workoutTimerSeconds}초`);
-        }
-      } catch (error) {
-        console.error('[WORKOUT][TIME] 운동 시간 누적 실패:', error);
-      }
-    };
-    
-    if (workoutTimerSeconds > 0) {
-      saveWorkoutTime();
-    }
-    
     stopWorkoutTimer(true);
   };
 

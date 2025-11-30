@@ -4,6 +4,9 @@ type EventMap = {
     exerciseName?: string | null;
     workoutDate?: string | null;
   };
+  inbodyUpdated: {
+    measurementDate?: string | null;
+  };
 };
 
 type EventKey = keyof EventMap;
