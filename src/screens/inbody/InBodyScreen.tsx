@@ -6,200 +6,18 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Svg, { Path, Circle, Line, Text as SvgText, G } from "react-native-svg";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { getLatestInBody } from "../../utils/inbodyApi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const InBodyScreen = ({ navigation }: any) => {
-  const [activeTab, setActiveTab] = useState<"info" | "graph">("info");
-  const [selectedFilter, setSelectedFilter] = useState("체중");
-  const [selectedPointIndex, setSelectedPointIndex] = useState<number | null>(
-    null
-  );
-  const [tooltipPosition, setTooltipPosition] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
   const [inBodyData, setInBodyData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState<string | null>(null);
-  const displayName = useMemo(
-    () => (userName ? `${userName}님` : "회원님"),
-    [userName]
-  );
 
-  // 그래프 데이터 (실제 API 데이터 기반)
-  const graphData = useMemo(() => {
-    const getValue = (data: any): number | null => {
-      if (!data) return null;
-
-      switch (selectedFilter) {
-        case "체중":
-          return data.muscleFatAnalysis?.weight || data.weight || null;
-        case "체지방량":
-          return (
-            data.muscleFatAnalysis?.bodyFatMass || data.bodyFatMass || null
-          );
-        case "골격근량":
-          return (
-            data.muscleFatAnalysis?.skeletalMuscleMass ||
-            data.skeletalMuscleMass ||
-            null
-          );
-        default:
-          return null;
-      }
-    };
-
-    const value = getValue(inBodyData);
-    if (value === null || value === undefined || !inBodyData) {
-      return [];
-    }
-
-    const measurementDate = inBodyData.measurementDate?.replace(/\./g, "-");
-    const dateObj = measurementDate ? new Date(measurementDate) : null;
-
-    const label =
-      dateObj && !isNaN(dateObj.getTime())
-        ? `${String(dateObj.getMonth() + 1).padStart(2, "0")}/${String(
-            dateObj.getDate()
-          ).padStart(2, "0")}`
-        : "최근";
-
-    return [
-      {
-        x: label,
-        y: value,
-        date: inBodyData.measurementDate ?? label,
-      },
-    ];
-  }, [inBodyData, selectedFilter]);
-
-  const screenWidth = Dimensions.get("window").width;
-  const chartWidth = Math.min(screenWidth - 40, 400);
-  const padding = { top: 20, right: 28, bottom: 26, left: 42 };
-  const width = chartWidth;
-  const height = 210;
-  const smoothness = 0.22;
-  const lastPointIndex = graphData.length > 0 ? graphData.length - 1 : null;
-
-  // Y축 범위 동적 계산
-  const { minY, maxY, yTicks, baseline } = useMemo(() => {
-    if (graphData.length === 0) {
-      return {
-        minY: 0,
-        maxY: 100,
-        yTicks: [100, 80, 60, 40, 20],
-        baseline: 0,
-      };
-    }
-
-    const allValues = graphData.map((d) => d.y);
-    const minValue = Math.min(...allValues);
-    const maxValue = Math.max(...allValues);
-    const range = maxValue - minValue;
-    const paddingValue = Math.max(range * 0.1, 1); // 최소 1의 여백
-
-    const calculatedMinY = Math.max(0, minValue - paddingValue);
-    const calculatedMaxY = maxValue + paddingValue;
-
-    // Y축 눈금 생성 (5개 정도)
-    const ticks: number[] = [];
-    const step = (calculatedMaxY - calculatedMinY) / 4;
-    for (let i = 0; i <= 4; i++) {
-      ticks.push(Math.round((calculatedMaxY - step * i) * 10) / 10);
-    }
-
-    return {
-      minY: calculatedMinY,
-      maxY: calculatedMaxY,
-      yTicks: ticks,
-      baseline: calculatedMinY,
-    };
-  }, [graphData]);
-
-  const iw = width - padding.left - padding.right;
-  const ih = height - padding.top - padding.bottom;
-  const scaleX = (i: number) =>
-    graphData.length > 1
-      ? padding.left + (iw * i) / (graphData.length - 1)
-      : padding.left + iw / 2;
-  const scaleY = (v: number) =>
-    padding.top + ih * (1 - (v - minY) / (maxY - minY));
-
-  // 부드러운 곡선 경로 생성
-  const pathSmooth = (points: { x: number; y: number }[], k = 0.22) => {
-    if (points.length < 2) return "";
-    const cps = (
-      p0: { x: number; y: number },
-      p1: { x: number; y: number },
-      p2: { x: number; y: number },
-      t: number
-    ) => ({
-      x: p1.x + (p2.x - p0.x) * t,
-      y: p1.y + (p2.y - p0.y) * t,
-    });
-
-    let d = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 0; i < points.length - 1; i++) {
-      const p0 = points[i - 1] ?? points[i];
-      const p1 = points[i];
-      const p2 = points[i + 1];
-      const p3 = points[i + 2] ?? p2;
-      const c1 = cps(p0, p1, p2, k);
-      const c2 = cps(p1, p2, p3, -k);
-      d += ` C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${p2.x} ${p2.y}`;
-    }
-    return d;
-  };
-
-  const graphPoints = useMemo(
-    () => graphData.map((d, i) => ({ x: scaleX(i), y: scaleY(d.y) })),
-    [graphData]
-  );
-
-  const pathData = useMemo(
-    () => pathSmooth(graphPoints, smoothness),
-    [graphPoints]
-  );
-
-  // 그래프 관련 함수들
-  const handlePointPress = (index: number) => {
-    setSelectedPointIndex(index);
-    const point = graphPoints[index];
-    setTooltipPosition({
-      x: (point.x / width) * 100,
-      y: ((point.y - 30) / height) * 100,
-    });
-  };
-
-  const handleChartHostPress = () => {
-    if (
-      lastPointIndex !== null &&
-      selectedPointIndex !== null &&
-      selectedPointIndex !== lastPointIndex
-    ) {
-      setSelectedPointIndex(null);
-      setTooltipPosition(null);
-    }
-  };
-
-  const formatAdjustmentValue = useCallback((rawValue: any) => {
-    if (rawValue === null || rawValue === undefined) return undefined;
-    if (typeof rawValue === "number" && isFinite(rawValue)) {
-      return `${Math.round(rawValue * 10) / 10}kg`;
-    }
-    if (typeof rawValue === "string") {
-      const trimmed = rawValue.trim();
-      return trimmed.length > 0 ? trimmed : undefined;
-    }
-    return String(rawValue);
-  }, []);
 
   const parseNumericValue = useCallback((value: any): number | undefined => {
     if (value === null || value === undefined) return undefined;
@@ -299,100 +117,33 @@ const InBodyScreen = ({ navigation }: any) => {
     [parseRangeRatio]
   );
 
-  const formatAdjustmentDetail = useCallback(
-    (rawValue: any, label: string) => {
-      if (rawValue === null || rawValue === undefined) {
-        return `${label} 조절 정보가 없습니다.`;
-      }
 
-      const sanitized =
-        typeof rawValue === "string" ? rawValue.replace(/\s+/g, "") : rawValue;
-      const numeric = parseNumericValue(sanitized);
-
-      if (numeric === undefined) {
-        const valueStr = formatAdjustmentValue(rawValue);
-        return valueStr
-          ? `${label} 조절 권장량 ${valueStr}을 참고해주세요.`
-          : `${label} 조절 정보가 없습니다.`;
-      }
-
-      if (Math.abs(numeric) < 0.1) {
-        return `${label}은 현재 수준을 유지하면 충분해요.`;
-      }
-
-      const direction = numeric < 0 ? "감량" : "증가";
-      return `${Math.abs(numeric).toFixed(1)}kg ${direction}이 필요합니다.`;
-    },
-    [formatAdjustmentValue, parseNumericValue]
-  );
-
-  const filterMessages = useMemo(() => {
-    const weightControl = inBodyData?.weightControl || {};
-
-    const weightTarget = formatAdjustmentValue(weightControl.targetWeight);
-    const weightAdjustmentValue = formatAdjustmentValue(
-      weightControl.weightAdjustment
-    );
-    const fatAdjustmentValue = formatAdjustmentValue(
-      weightControl.fatAdjustment
-    );
-    const muscleAdjustmentValue = formatAdjustmentValue(
-      weightControl.muscleAdjustment
-    );
-
-    const weightTextParts: string[] = [];
-    if (weightTarget) weightTextParts.push(`목표 체중 ${weightTarget}`);
-    if (weightAdjustmentValue)
-      weightTextParts.push(`권장 조절량 ${weightAdjustmentValue}`);
-
-    return {
-      체중: {
-        tag: "체중 조절",
-        text:
-          weightTextParts.length > 0
-            ? weightTextParts.join(" · ")
-            : "체중 조절 데이터를 입력해주세요.",
-        detail: formatAdjustmentDetail(weightControl.weightAdjustment, "체중"),
-      },
-      체지방량: {
-        tag: "지방량 조절",
-        text: fatAdjustmentValue
-          ? `권장 체지방 조절량 ${fatAdjustmentValue}`
-          : "체지방 조절 데이터를 입력해주세요.",
-        detail: formatAdjustmentDetail(weightControl.fatAdjustment, "체지방"),
-      },
-      골격근량: {
-        tag: "근육량 조절",
-        text: muscleAdjustmentValue
-          ? `권장 근육 조절량 ${muscleAdjustmentValue}`
-          : "근육 조절 데이터를 입력해주세요.",
-        detail: formatAdjustmentDetail(weightControl.muscleAdjustment, "근육"),
-      },
-    } as const;
-  }, [formatAdjustmentDetail, formatAdjustmentValue, inBodyData]);
-
-  const currentMessage = useMemo(() => {
-    const key = selectedFilter as keyof typeof filterMessages;
-    return filterMessages[key] ?? filterMessages["체중"];
-  }, [filterMessages, selectedFilter]);
-
-  useEffect(() => {
-    if (!inBodyData) return;
-
-    console.log("[INBODY][WEIGHT CONTROL]", {
-      selectedFilter,
-      weightControl: inBodyData.weightControl,
-      currentMessage,
-    });
-  }, [inBodyData, selectedFilter, currentMessage]);
 
   // API로 최신 인바디 정보 조회 (항상 가장 최신 저장 이력 표시)
   const fetchInBodyData = useCallback(async () => {
     try {
       setLoading(true);
 
+      console.log("[INBODY SCREEN] 최신 인바디 데이터 조회 시작");
       const response = await getLatestInBody();
+      
+      console.log("[INBODY SCREEN] API 응답:", {
+        hasResponse: !!response,
+        responseType: typeof response,
+        isSuccess: response?.success,
+        hasInBody: !!response?.inBody,
+        responseKeys: response ? Object.keys(response) : [],
+      });
+
+      // 응답 구조 처리: { success: true, inBody: {...} } 또는 직접 inBody 객체
       const latest = response?.success ? response.inBody : response;
+
+      console.log("[INBODY SCREEN] 처리된 latest 데이터:", {
+        hasLatest: !!latest,
+        hasMeasurementDate: !!latest?.measurementDate,
+        measurementDate: latest?.measurementDate,
+        latestKeys: latest ? Object.keys(latest) : [],
+      });
 
       if (latest && latest.measurementDate) {
         const normalizedDate = latest.measurementDate.includes(".")
@@ -427,17 +178,29 @@ const InBodyScreen = ({ navigation }: any) => {
           ...latest,
           measurementDate: normalizedDate,
         });
+        console.log("[INBODY SCREEN] 인바디 데이터 설정 완료");
       } else {
         console.warn("[INBODY][FETCH][LATEST] 유효한 데이터가 없습니다.", {
           response,
+          latest,
+          hasMeasurementDate: latest?.measurementDate,
         });
         setInBodyData(null);
       }
-    } catch (error) {
-      console.error("[INBODY SCREEN] API 데이터 로드 실패:", error);
+    } catch (error: any) {
+      console.error("[INBODY SCREEN] API 데이터 로드 실패:", {
+        message: error?.message,
+        status: error?.response?.status,
+        statusText: error?.response?.statusText,
+        errorCode: error?.response?.data?.code,
+        errorMessage: error?.response?.data?.message,
+        data: error?.response?.data,
+        stack: error?.stack,
+      });
       setInBodyData(null);
     } finally {
       setLoading(false);
+      console.log("[INBODY SCREEN] 로딩 완료");
     }
   }, []);
 
@@ -448,22 +211,6 @@ const InBodyScreen = ({ navigation }: any) => {
     }, [fetchInBodyData])
   );
 
-  // 컴포넌트 마운트 시 마지막 포인트를 활성화
-  useEffect(() => {
-    if (
-      graphPoints.length > 0 &&
-      lastPointIndex !== null &&
-      activeTab === "graph"
-    ) {
-      const lastPoint = graphPoints[lastPointIndex];
-      if (!lastPoint) return;
-      setSelectedPointIndex(lastPointIndex);
-      setTooltipPosition({
-        x: (lastPoint.x / width) * 100,
-        y: ((lastPoint.y - 30) / height) * 100,
-      });
-    }
-  }, [graphPoints, lastPointIndex, activeTab, width, height]);
 
   // API 데이터에서 값 추출 헬퍼 함수
   const extractValue = (value: string | number | undefined): string => {
@@ -685,9 +432,6 @@ const InBodyScreen = ({ navigation }: any) => {
     console.log("[INBODY][SEGMENTAL] 계산된 항목", segmentalMuscleItems);
   }, [segmentalMuscleItems]);
 
-  const handleGraphClick = () => {
-    setActiveTab("graph");
-  };
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -703,55 +447,20 @@ const InBodyScreen = ({ navigation }: any) => {
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
       >
-        {/* 탭 네비게이션 */}
-        <View style={styles.tabNavigation}>
-          <TouchableOpacity
-            style={styles.tab}
-            onPress={() => setActiveTab("info")}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === "info" && styles.tabTextActive,
-              ]}
-            >
-              인바디 정보
-            </Text>
-            {activeTab === "info" && <View style={styles.tabIndicator} />}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.tab}
-            onPress={() => handleGraphClick()}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === "graph" && styles.tabTextActive,
-              ]}
-            >
-              그래프
-            </Text>
-            {activeTab === "graph" && <View style={styles.tabIndicator} />}
-          </TouchableOpacity>
-        </View>
-
-        {/* 인바디 정보 탭 컨텐츠 */}
-        {activeTab === "info" && (
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#E3FF7C" />
+            <Text style={styles.loadingText}>데이터 로딩 중...</Text>
+          </View>
+        ) : inBodyData ? (
           <>
-            {loading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#E3FF7C" />
-                <Text style={styles.loadingText}>데이터 로딩 중...</Text>
+            {inBodyData.measurementDate && (
+              <View style={styles.measurementInfo}>
+                <Text style={styles.measurementInfoText}>
+                  최근 측정일 {inBodyData.measurementDate}
+                </Text>
               </View>
-            ) : inBodyData ? (
-              <>
-                {inBodyData.measurementDate && (
-                  <View style={styles.measurementInfo}>
-                    <Text style={styles.measurementInfoText}>
-                      최근 측정일 {inBodyData.measurementDate}
-                    </Text>
-                  </View>
-                )}
+            )}
 
                 {/* 체성분 분석 */}
                 <View style={styles.analysisSection}>
@@ -924,219 +633,6 @@ const InBodyScreen = ({ navigation }: any) => {
                 </Text>
               </View>
             )}
-          </>
-        )}
-
-        {/* 그래프 탭 컨텐츠 */}
-        {activeTab === "graph" && (
-          <>
-            {/* Filter Buttons */}
-            <View style={styles.filterButtons}>
-              <TouchableOpacity
-                style={[
-                  styles.filterBtn,
-                  selectedFilter === "체중" && styles.filterBtnActive,
-                ]}
-                onPress={() => setSelectedFilter("체중")}
-              >
-                <Text
-                  style={[
-                    styles.filterBtnText,
-                    selectedFilter === "체중" && styles.filterBtnTextActive,
-                  ]}
-                >
-                  체중
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.filterBtn,
-                  selectedFilter === "체지방량" && styles.filterBtnActive,
-                ]}
-                onPress={() => setSelectedFilter("체지방량")}
-              >
-                <Text
-                  style={[
-                    styles.filterBtnText,
-                    selectedFilter === "체지방량" && styles.filterBtnTextActive,
-                  ]}
-                >
-                  체지방량
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.filterBtn,
-                  selectedFilter === "골격근량" && styles.filterBtnActive,
-                ]}
-                onPress={() => setSelectedFilter("골격근량")}
-              >
-                <Text
-                  style={[
-                    styles.filterBtnText,
-                    selectedFilter === "골격근량" && styles.filterBtnTextActive,
-                  ]}
-                >
-                  골격근량
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* 사용자 메시지 */}
-            <View style={styles.userMessage}>
-              <Text style={styles.userMessageText}>
-                <Text style={styles.highlightName}>{displayName}</Text>
-                {` 오늘도 꾸준한 기록으로 멋진 변화를 만들어봐요! 💪`}
-              </Text>
-            </View>
-
-            {/* 그래프 섹션 */}
-            <View style={styles.graphSection}>
-              <View style={styles.chartContainer}>
-                <Text style={styles.chartTitle}>체중 변화</Text>
-                <TouchableOpacity
-                  style={styles.chartHost}
-                  activeOpacity={1}
-                  onPress={handleChartHostPress}
-                >
-                  <Svg
-                    width={width}
-                    height={height}
-                    viewBox={`0 0 ${width} ${height}`}
-                    style={styles.svg}
-                  >
-                    {/* Y축 라벨 */}
-                    {yTicks.map((t) => (
-                      <React.Fragment key={t}>
-                        <SvgText
-                          x={6}
-                          y={scaleY(t) + 3}
-                          fontSize={10}
-                          fill="#bdbdbd"
-                          fontFamily="System"
-                        >
-                          {t.toFixed(1)}kg
-                        </SvgText>
-                        {/* baseline만 점선 */}
-                        {t === baseline && (
-                          <Line
-                            x1={padding.left}
-                            x2={width - padding.right}
-                            y1={scaleY(baseline)}
-                            y2={scaleY(baseline)}
-                            stroke="#8f8f8f55"
-                            strokeDasharray="6 6"
-                          />
-                        )}
-                      </React.Fragment>
-                    ))}
-
-                    {/* X축 라벨 */}
-                    {graphData.map((d, i) => (
-                      <SvgText
-                        key={i}
-                        x={scaleX(i)}
-                        y={height - 6}
-                        fontSize={10}
-                        fill="#bdbdbd"
-                        fontFamily="System"
-                        textAnchor="middle"
-                      >
-                        {d.x}
-                      </SvgText>
-                    ))}
-
-                    {/* 라인 경로 */}
-                    <Path
-                      d={pathData}
-                      fill="none"
-                      stroke="#ffffff"
-                      strokeWidth={2}
-                    />
-
-                    {/* 포인트(원) */}
-                    <G>
-                      {graphPoints.map((point, i) => {
-                        const isActive =
-                          i === lastPointIndex || selectedPointIndex === i;
-                        return (
-                          <React.Fragment key={i}>
-                            {/* Glow 효과 */}
-                            {isActive && (
-                              <>
-                                <Circle
-                                  cx={point.x}
-                                  cy={point.y}
-                                  r={7}
-                                  fill="#E3FF7C"
-                                  opacity={0.3}
-                                />
-                                <Circle
-                                  cx={point.x}
-                                  cy={point.y}
-                                  r={6}
-                                  fill="#E3FF7C"
-                                  opacity={0.4}
-                                />
-                              </>
-                            )}
-                            <Circle
-                              cx={point.x}
-                              cy={point.y}
-                              r={5}
-                              fill="#0e0e0e"
-                              stroke="#E3FF7C"
-                              strokeWidth={2}
-                              onPress={() => handlePointPress(i)}
-                            />
-                          </React.Fragment>
-                        );
-                      })}
-                    </G>
-                  </Svg>
-
-                  {/* 툴팁 */}
-                  {tooltipPosition && selectedPointIndex !== null && (
-                    <View
-                      style={[
-                        styles.tooltip,
-                        {
-                          left: `${tooltipPosition.x}%`,
-                          top: `${tooltipPosition.y}%`,
-                          transform: [{ translateX: -25 }, { translateY: 0 }],
-                        },
-                      ]}
-                    >
-                      <Text style={styles.tooltipText}>
-                        {graphData[selectedPointIndex].y.toFixed(1)}kg
-                      </Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* 체중 조절 섹션 */}
-            <View style={styles.weightControlSection}>
-              <View style={styles.weightControlTag}>
-                <Text style={styles.weightControlTagText}>
-                  {currentMessage.tag}
-                </Text>
-              </View>
-              <View style={styles.weightControlContent}>
-                <View style={styles.trainerAvatar}>
-                  <Text style={styles.trainerAvatarText}>👨‍💼</Text>
-                </View>
-                <View style={styles.weightInfo}>
-                  <Text style={styles.weightText}>{currentMessage.text}</Text>
-                  <Text style={styles.weightDetail}>
-                    {currentMessage.detail}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </>
-        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -1202,34 +698,6 @@ const styles = StyleSheet.create({
     width: "100%",
     paddingHorizontal: 20,
     paddingBottom: 100,
-  },
-  tabNavigation: {
-    flexDirection: "row",
-    marginBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#333333",
-  },
-  tab: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 12,
-    position: "relative",
-  },
-  tabText: {
-    fontSize: 14.4,
-    color: "#aaaaaa",
-  },
-  tabTextActive: {
-    color: "#ffffff",
-    fontWeight: "600",
-  },
-  tabIndicator: {
-    position: "absolute",
-    bottom: 0,
-    width: 80,
-    height: 2,
-    backgroundColor: "#E3FF7C",
-    alignSelf: "center",
   },
   analysisSection: {
     marginBottom: 24,
@@ -1350,134 +818,6 @@ const styles = StyleSheet.create({
     color: "#E3FF7C",
     minWidth: 40,
     textAlign: "right",
-  },
-  filterButtons: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 24,
-  },
-  filterBtn: {
-    flex: 1,
-    backgroundColor: "#333333",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 5,
-    alignItems: "center",
-    minWidth: 0,
-  },
-  filterBtnActive: {
-    backgroundColor: "#E3FF7C",
-  },
-  filterBtnText: {
-    fontSize: 14.4,
-    color: "#aaaaaa",
-  },
-  filterBtnTextActive: {
-    color: "#1c1c1c",
-  },
-  userMessage: {
-    marginBottom: 24,
-  },
-  userMessageText: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: "#ffffff",
-  },
-  highlightName: {
-    color: "#E3FF7C",
-    fontWeight: "600",
-  },
-  graphSection: {
-    backgroundColor: "#2a2a2a",
-    borderRadius: 12,
-    padding: 20,
-    paddingLeft: 10,
-    paddingBottom: 50,
-    marginBottom: 24,
-  },
-  chartContainer: {
-    maxWidth: 420,
-    width: "100%",
-    marginLeft: 0,
-  },
-  chartTitle: {
-    fontWeight: "600",
-    marginBottom: 12,
-    marginLeft: 2,
-    fontSize: 14,
-    color: "#cfcfcf",
-  },
-  chartHost: {
-    position: "relative",
-    width: "100%",
-    aspectRatio: 400 / 210,
-    marginLeft: -5,
-  },
-  svg: {
-    width: "100%",
-    height: "auto",
-  },
-  tooltip: {
-    position: "absolute",
-    backgroundColor: "#E3FF7C",
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderRadius: 8,
-    zIndex: 10,
-  },
-  tooltipText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#0b0b0b",
-  },
-  weightControlSection: {
-    backgroundColor: "#2a2a2a",
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 24,
-  },
-  weightControlTag: {
-    alignSelf: "flex-start",
-    backgroundColor: "#333333",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  weightControlTagText: {
-    fontSize: 12.8,
-    fontWeight: "500",
-    color: "#ffffff",
-  },
-  weightControlContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-  },
-  trainerAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 1,
-    borderColor: "#666666",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  trainerAvatarText: {
-    fontSize: 28.8,
-  },
-  weightInfo: {
-    flex: 1,
-    gap: 8,
-  },
-  weightText: {
-    fontSize: 16,
-    color: "#ffffff",
-    fontWeight: "500",
-  },
-  weightDetail: {
-    fontSize: 14.4,
-    color: "#cccccc",
   },
   loadingContainer: {
     flex: 1,

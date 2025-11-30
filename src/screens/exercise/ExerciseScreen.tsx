@@ -1389,19 +1389,25 @@ const ExerciseScreen = ({ navigation }: any) => {
         }
       });
 
+      // 운동 시간 계산 (초 단위)
+      // todayTotalWorkoutSeconds는 오늘의 총 운동 시간이므로 현재 세션의 시간으로 사용
+      const workoutSeconds = todayTotalWorkoutSeconds || 0;
+
       console.log("[WORKOUT][SAVE] 운동 저장 시작:", {
         userId: userIdNum,
         saveTitle: trimmedTitle,
         exerciseCount: completedExercises.length,
         intensityList,
         feedbackList,
+        seconds: workoutSeconds,
       });
 
       const response = await saveWorkoutTitle(
         userIdNum,
         trimmedTitle,
         intensityList,
-        feedbackList
+        feedbackList,
+        workoutSeconds
       );
 
       console.log("[WORKOUT][SAVE] 운동 저장 성공:", {

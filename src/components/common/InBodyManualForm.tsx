@@ -49,6 +49,7 @@ interface InBodyManualFormProps {
     musCtrl: string;
   }>;
   inBodyDates?: string[];
+  onDateChange?: (date: string) => void;
 }
 
 // iOS 숫자패드 상단에 표시될 액세서리 뷰의 고유 ID
@@ -81,6 +82,7 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
   onSubmit,
   defaultValues,
   inBodyDates,
+  onDateChange,
 }) => {
   const scrollViewRef = useRef<ScrollView>(null);
   const ageInputRef = useRef<TextInput>(null);
@@ -188,6 +190,8 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
     ).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
     handle("date", dateStr);
     setCalendarVisible(false);
+    // 부모 컴포넌트에 날짜 변경 알림
+    onDateChange?.(dateStr);
   };
 
   const bmi = useMemo(() => {
@@ -729,13 +733,13 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
       {/* ✅ InputAccessoryView는 ScrollView 밖에 렌더링되어야 합니다. */}
       {DoneBar}
 
-      {/* 날짜 선택 달력 모달: 저장된 날짜가 없으면 전체 날짜 선택 가능 */}
+      {/* 날짜 선택 달력 모달: 수기 입력 모드에서는 모든 날짜 선택 가능 */}
       <InBodyCalendarModal
         visible={calendarVisible}
         onClose={() => setCalendarVisible(false)}
         onSelectDate={handleDateSelect}
         selectedDate={v.date ? new Date(v.date) : new Date()}
-        inBodyDates={normalizedInBodyDates}
+        inBodyDates={[]}
       />
     </>
   );

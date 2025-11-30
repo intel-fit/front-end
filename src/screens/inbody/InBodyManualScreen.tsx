@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import InBodyManualForm from "../../components/common/InBodyManualForm";
-import { postInBody, patchInBody, InBodyPayload } from "../../utils/inbodyApi";
+import { postInBody, patchInBody, getInBodyByDate, InBodyPayload } from "../../utils/inbodyApi";
 import { eventBus } from "../../utils/eventBus";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -20,6 +20,9 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
   const inBodyId: number | string | undefined = route?.params?.inBodyId;
   const defaultValues = route?.params?.defaultValues;
   const [inBodyDates, setInBodyDates] = useState<string[]>([]);
+  const [formKey, setFormKey] = useState(0); // 폼 리마운트를 위한 key
+  const [currentDefaultValues, setCurrentDefaultValues] = useState(defaultValues);
+  const [currentInBodyId, setCurrentInBodyId] = useState<number | string | undefined>(inBodyId);
 
   const normalizeDate = useCallback(
     (date: string) => (date.includes(".") ? date : date.replace(/-/g, ".")),
@@ -118,6 +121,124 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
   // 검증 가이드 생성 함수
   const getValidationGuide = (_payload?: InBodyPayload) => "";
 
+  // API 응답을 폼 defaultValues 형식으로 변환
+  const convertInBodyToFormValues = useCallback((inBodyData: any) => {
+    if (!inBodyData) return {};
+
+    const bodyComposition = inBodyData.bodyComposition || {};
+    const muscleFatAnalysis = inBodyData.muscleFatAnalysis || {};
+    const obesityAnalysis = inBodyData.obesityAnalysis || {};
+
+    // 날짜 변환 (YYYY.MM.DD -> YYYY-MM-DD)
+    const measurementDate = inBodyData.measurementDate
+      ? inBodyData.measurementDate.replace(/\./g, "-")
+      : "";
+
+    // 나이에서 숫자만 추출
+    const age = inBodyData.age
+      ? inBodyData.age.replace(/[^0-9]/g, "")
+      : "";
+
+    // 신장에서 숫자만 추출
+    const height = inBodyData.height
+      ? inBodyData.height.replace(/[^0-9.]/g, "")
+      : "";
+
+    // 성별 변환
+    const gender = inBodyData.gender === "남성" ? "male" : "female";
+
+    return {
+      date: measurementDate,
+      gender,
+      age,
+      height,
+      weight: inBodyData.weight?.toString() || bodyComposition.weight?.toString()?.split(" ")[0] || muscleFatAnalysis.weight?.toString() || "",
+      smm: inBodyData.skeletalMuscleMass?.toString() || muscleFatAnalysis.skeletalMuscleMass?.toString() || "",
+      muscleMass: inBodyData.muscleMass?.toString() || "",
+      bfm: inBodyData.bodyFatMass?.toString() || bodyComposition.bodyFatMass?.toString()?.split(" ")[0] || muscleFatAnalysis.bodyFatMass?.toString() || "",
+      pbf: inBodyData.bodyFatPercentage?.toString() || obesityAnalysis.bodyFatPercentage?.toString() || "",
+      vfa: inBodyData.visceralFatLevel?.toString()?.split(" ")[0] || "",
+      bmr: inBodyData.basalMetabolicRate?.toString() || "",
+      rArm: inBodyData.rightArmMuscle?.toString() || "",
+      lArm: inBodyData.leftArmMuscle?.toString() || "",
+      trunk: inBodyData.trunkMuscle?.toString() || "",
+      rLeg: inBodyData.rightLegMuscle?.toString() || "",
+      lLeg: inBodyData.leftLegMuscle?.toString() || "",
+      rArmFat: inBodyData.rightArmFat?.toString() || "",
+      lArmFat: inBodyData.leftArmFat?.toString() || "",
+      trunkFat: inBodyData.trunkFat?.toString() || "",
+      rLegFat: inBodyData.rightLegFat?.toString() || "",
+      lLegFat: inBodyData.leftLegFat?.toString() || "",
+      tbw: inBodyData.totalBodyWater?.toString() || bodyComposition.totalBodyWater?.toString()?.split(" ")[0] || "",
+      protein: inBodyData.protein?.toString() || bodyComposition.protein?.toString()?.split(" ")[0] || "",
+      mineral: inBodyData.mineral?.toString() || bodyComposition.mineral?.toString()?.split(" ")[0] || "",
+      pbfStd: inBodyData.bodyFatPercentageStandard?.toString() || "",
+      obesityDegree: inBodyData.obesityDegree?.toString() || "",
+    };
+  }, []);
+
+  // 날짜 변경 핸들러
+  const handleDateChange = useCallback(async (date: string) => {
+    try {
+      console.log("[INBODY] 날짜 변경, 기존 기록 확인 중:", date);
+      const existingRecord = await getInBodyByDate(date);
+      
+      if (existingRecord?.success && existingRecord?.inBody) {
+        const inBodyData = existingRecord.inBody;
+        const recordId = inBodyData.id;
+        console.log("[INBODY] 기존 기록 발견, ID:", recordId);
+        
+        // 기존 기록 ID 저장
+        setCurrentInBodyId(recordId);
+        
+        // API 응답을 폼 형식으로 변환
+        const formValues = convertInBodyToFormValues(inBodyData);
+        setCurrentDefaultValues(formValues);
+        
+        // 폼 리마운트하여 새 값 적용
+        setFormKey((prev) => prev + 1);
+        
+        Alert.alert(
+          "기존 기록 발견",
+          "해당 날짜에 기존 인바디 기록이 있습니다.\n기록을 수정할 수 있습니다.",
+          [{ text: "확인" }]
+        );
+      } else if (existingRecord?.id) {
+        // 응답 형식이 다른 경우
+        const recordId = existingRecord.id;
+        console.log("[INBODY] 기존 기록 발견, ID:", recordId);
+        
+        // 기존 기록 ID 저장
+        setCurrentInBodyId(recordId);
+        
+        const formValues = convertInBodyToFormValues(existingRecord);
+        setCurrentDefaultValues(formValues);
+        setFormKey((prev) => prev + 1);
+        
+        Alert.alert(
+          "기존 기록 발견",
+          "해당 날짜에 기존 인바디 기록이 있습니다.\n기록을 수정할 수 있습니다.",
+          [{ text: "확인" }]
+        );
+      } else {
+        // 기존 기록이 없으면 폼 초기화 및 ID 초기화
+        setCurrentInBodyId(undefined);
+        setCurrentDefaultValues({ date });
+        setFormKey((prev) => prev + 1);
+      }
+    } catch (error: any) {
+      // 404는 기록이 없는 것이므로 정상
+      if (error?.response?.status !== 404) {
+        console.warn("[INBODY] 날짜 변경 시 기존 기록 확인 중 에러:", error);
+      } else {
+        // 기록이 없으면 폼 초기화 및 ID 초기화
+        setCurrentInBodyId(undefined);
+        setCurrentDefaultValues({ date });
+        setFormKey((prev) => prev + 1);
+      }
+    }
+  }, [convertInBodyToFormValues]);
+
   const handleSubmit = async (data: any) => {
     // 에러 처리에서 사용할 수 있도록 변수 선언
     let finalPayload: InBodyPayload | undefined;
@@ -132,29 +253,27 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
         data.date || new Date().toISOString().slice(0, 10);
       const measurementDate = measurementDateRaw; // 하이픈 형식 그대로 사용 (YYYY-MM-DD)
 
-      // 숫자 파싱 헬퍼 함수 (NaN, Infinity 체크, 소수점 정밀도 조정)
-      const parseNumber = (value: string | undefined): number | undefined => {
-        if (!value || value.trim() === "") return undefined;
+      // 숫자 파싱 헬퍼 함수 (입력하지 않은 필드는 null로 반환)
+      const parseNumber = (value: string | undefined): number | null => {
+        if (!value || value.trim() === "") return null;
         const num = parseFloat(value);
-        if (isNaN(num) || !isFinite(num)) return undefined;
+        if (isNaN(num) || !isFinite(num)) return null;
         // 소수점 2자리로 반올림하여 부동소수점 오차 제거
         return Math.round(num * 100) / 100;
       };
 
-      // API 스펙에 따르면 muscleMass와 skeletalMuscleMass를 동시에 전송해야 함
       // bodyFatPercentage는 퍼센트 값(0~100)으로 전송
       const normalizePercent = (
-        num: number | undefined
-      ): number | undefined => {
-        if (num === undefined) return undefined;
+        num: number | null
+      ): number | null => {
+        if (num === null) return null;
         // 사용자가 0~1 소수로 입력한 경우(예: 0.23) → 퍼센트로 환산
         if (num <= 1) return +(num * 100).toFixed(2);
         return +num.toFixed(2);
       };
-      // muscleMass가 입력되지 않으면 skeletalMuscleMass와 동일한 값으로 설정
+      
       const smmValue = parseNumber(data.smm);
-      const muscleMassValue =
-        parseNumber(data.muscleMass) ?? smmValue;
+      const muscleMassValue = parseNumber(data.muscleMass) ?? smmValue;
       
       console.log("[INBODY] 파싱된 값:", {
         smm: smmValue,
@@ -189,152 +308,67 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
         bmi: parseNumber(data.bmi),
       };
 
-      // undefined 필드 제거 (서버에 불필요한 필드 전송 방지)
-      let cleanPayload = Object.fromEntries(
-        Object.entries(payload).filter(([_, value]) => value !== undefined)
-      ) as InBodyPayload;
-
-      // muscleMass가 없으면 skeletalMuscleMass와 동일한 값으로 설정 (cleanPayload 생성 전에 처리)
-      if (cleanPayload.skeletalMuscleMass && !cleanPayload.muscleMass) {
-        cleanPayload.muscleMass = cleanPayload.skeletalMuscleMass;
+      // muscleMass가 null이면 skeletalMuscleMass와 동일한 값으로 설정
+      if (payload.muscleMass === null && payload.skeletalMuscleMass !== null) {
+        payload.muscleMass = payload.skeletalMuscleMass;
       }
 
       // 에러 처리에서 사용할 수 있도록 변수 저장
-      finalPayload = cleanPayload;
-
-      // muscleMass가 비어 있으면 골격근량과 동일하게 설정
-      if (!cleanPayload.muscleMass) {
-        cleanPayload.muscleMass = cleanPayload.skeletalMuscleMass;
-      }
-
-      // 검사일이 없으면 오늘 날짜로 자동 설정
-      if (!cleanPayload.measurementDate) {
-        cleanPayload.measurementDate = new Date().toISOString().slice(0, 10);
-      }
+      finalPayload = payload;
 
       console.log(
         "[INBODY] 최종 페이로드:",
-        JSON.stringify(cleanPayload, null, 2)
+        JSON.stringify(payload, null, 2)
       );
 
-      // undefined 필드 제거 헬퍼
-      const removeUndefined = (obj: any): InBodyPayload => {
-        return Object.fromEntries(
-          Object.entries(obj).filter(([_, value]) => value !== undefined)
-        ) as InBodyPayload;
-      };
-
-      let response: any;
-      try {
-        // API 호출 직전 최종 확인
-        const finalPayloadForApi = { ...cleanPayload };
-        if (finalPayloadForApi.skeletalMuscleMass && !finalPayloadForApi.muscleMass) {
-          finalPayloadForApi.muscleMass = finalPayloadForApi.skeletalMuscleMass;
-        }
-        console.log("[INBODY] API 전송 페이로드:", JSON.stringify(finalPayloadForApi, null, 2));
-        
-        response = inBodyId
-          ? await patchInBody(inBodyId, finalPayloadForApi)
-          : await postInBody(finalPayloadForApi);
-      } catch (e: any) {
-        // 400 또는 500이면 서버 스펙 불일치 가능성 → 대체 포맷으로 재시도
-        const is400 = e?.response?.status === 400;
-        const is500 = e?.response?.status === 500;
-        if (!is400 && !is500) throw e;
-
-        // 대안 1: 날짜를 점(.) 포맷으로 변경 시도
-        const alt1: InBodyPayload = removeUndefined({
-          ...cleanPayload,
-          measurementDate: (
-            cleanPayload.measurementDate || measurementDate
-          ).replace(/-/g, "."),
-          muscleMass: cleanPayload.muscleMass ?? cleanPayload.skeletalMuscleMass,
-        });
-
+      // 같은 날짜에 기존 기록이 있는지 확인
+      // 날짜 변경 시 이미 확인한 ID가 있으면 사용, 없으면 다시 확인
+      let existingInBodyId: number | string | undefined = currentInBodyId || inBodyId;
+      if (!existingInBodyId && payload.measurementDate) {
         try {
-          console.log(
-            "[INBODY] 대안1 페이로드:",
-            JSON.stringify(alt1, null, 2)
-          );
-          response = inBodyId
-            ? await patchInBody(inBodyId, alt1)
-            : await postInBody(alt1);
-          console.log("[INBODY] 대안1 페이로드 성공");
-        } catch (e2: any) {
-          // 대안 2: 날짜 하이픈(-) + 모든 필드 포함
-          try {
-            const alt2: InBodyPayload = removeUndefined({
-              ...cleanPayload,
-              muscleMass: cleanPayload.muscleMass ?? cleanPayload.skeletalMuscleMass,
-            });
-
-            console.log(
-              "[INBODY] 대안2 페이로드:",
-              JSON.stringify(alt2, null, 2)
-            );
-            response = inBodyId
-              ? await patchInBody(inBodyId, alt2)
-              : await postInBody(alt2);
-            console.log("[INBODY] 대안2 페이로드 성공");
-          } catch (e3: any) {
-            // 대안 3: muscleMass만 전송 (skeletalMuscleMass 제외)
-            try {
-              const alt3: InBodyPayload = removeUndefined({
-                measurementDate:
-                  cleanPayload.measurementDate || measurementDate,
-                weight: cleanPayload.weight,
-                muscleMass:
-                  cleanPayload.muscleMass ?? cleanPayload.skeletalMuscleMass,
-                // skeletalMuscleMass 제외
-              });
-              console.log(
-                "[INBODY] 대안3 페이로드 (muscleMass만):",
-                JSON.stringify(alt3, null, 2)
-              );
-              response = inBodyId
-                ? await patchInBody(inBodyId, alt3)
-                : await postInBody(alt3);
-              console.log("[INBODY] 대안3 페이로드 성공");
-            } catch (e4: any) {
-              // 대안 4: skeletalMuscleMass만 전송 (muscleMass 제외)
-              const alt4: InBodyPayload = removeUndefined({
-                measurementDate:
-                  cleanPayload.measurementDate || measurementDate,
-                weight: cleanPayload.weight,
-                skeletalMuscleMass:
-                  cleanPayload.skeletalMuscleMass ?? cleanPayload.muscleMass,
-                // muscleMass 제외
-              });
-              console.log(
-                "[INBODY] 대안4 페이로드 (skeletalMuscleMass만):",
-                JSON.stringify(alt4, null, 2)
-              );
-              response = inBodyId
-                ? await patchInBody(inBodyId, alt4)
-                : await postInBody(alt4);
-              console.log("[INBODY] 대안4 페이로드 성공");
-            }
+          console.log("[INBODY] 기존 기록 확인 중:", payload.measurementDate);
+          const existingRecord = await getInBodyByDate(payload.measurementDate);
+          if (existingRecord?.success && existingRecord?.inBody?.id) {
+            existingInBodyId = existingRecord.inBody.id;
+            console.log("[INBODY] 기존 기록 발견, ID:", existingInBodyId);
+          } else if (existingRecord?.id) {
+            existingInBodyId = existingRecord.id;
+            console.log("[INBODY] 기존 기록 발견, ID:", existingInBodyId);
+          }
+        } catch (error: any) {
+          // 404는 기록이 없는 것이므로 정상
+          if (error?.response?.status !== 404) {
+            console.warn("[INBODY] 기존 기록 확인 중 에러:", error);
           }
         }
       }
 
+      let response: any;
+      try {
+        response = existingInBodyId
+          ? await patchInBody(existingInBodyId, payload)
+          : await postInBody(payload);
+      } catch (e: any) {
+        throw e;
+      }
+
       if (response.success) {
         eventBus.emit("inbodyUpdated");
-        const inBodyId = response.inBody?.id ?? "N/A";
+        const savedInBodyId = response.inBody?.id ?? existingInBodyId ?? "N/A";
         await storeManualPayload(
-          cleanPayload.measurementDate || measurementDate,
-          cleanPayload
+          payload.measurementDate || measurementDate,
+          payload
         );
         await loadInBodyDates();
-        console.log("[INBODY] 등록된 인바디 ID:", inBodyId);
+        console.log("[INBODY] 등록된 인바디 ID:", savedInBodyId);
         Alert.alert(
-          inBodyId ? "수정 완료" : "저장 완료",
+          existingInBodyId ? "수정 완료" : "저장 완료",
           `${
             response.message ||
-            (inBodyId
+            (existingInBodyId
               ? "인바디 정보가 수정되었습니다."
               : "인바디 정보가 저장되었습니다.")
-          }\n\n인바디 ID: ${inBodyId}`,
+          }\n\n인바디 ID: ${savedInBodyId}`,
           [
             {
               text: "확인",
@@ -468,9 +502,11 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
         </View>
       )}
       <InBodyManualForm
+        key={formKey}
         onSubmit={handleSubmit}
-        defaultValues={defaultValues}
+        defaultValues={currentDefaultValues || defaultValues}
         inBodyDates={inBodyDates}
+        onDateChange={handleDateChange}
       />
     </SafeAreaView>
   );
