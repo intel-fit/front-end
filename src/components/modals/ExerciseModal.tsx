@@ -306,7 +306,8 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   }, [instructionImageUrl, selectedExercise, exerciseData, prefetchInstructionImage]);
 
   useEffect(() => {
-    if (isOpen && currentMode === "detail" && mode !== "edit" && !isCompleted) {
+    // 모달이 열리고 완료된 운동이 아닐 때 자동으로 타이머 시작
+    if (isOpen && !isCompleted && (currentMode === "add" || currentMode === "edit" || currentMode === "detail")) {
       startWorkoutTimer();
     }
   }, [isOpen, currentMode, mode, isCompleted, startWorkoutTimer]);

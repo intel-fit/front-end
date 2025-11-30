@@ -986,9 +986,28 @@ const ExerciseScreen = ({ navigation }: any) => {
         }
       });
 
-      setSavedWorkouts(mergedGroups);
+      // 오늘 날짜에 저장된 운동 제목 필터링 (새로운 세션 저장 시 제외)
+      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      const filteredGroups = mergedGroups.filter((group) => {
+        // 그룹의 세션들 중 오늘 날짜에 저장된 것이 있는지 확인
+        const hasTodaySession = group.sessions?.some((session) => {
+          // session의 records에서 workoutDate 확인
+          return session.records?.some((record) => {
+            if (record.workoutDate) {
+              const recordDate = record.workoutDate.slice(0, 10); // YYYY-MM-DD 형식으로 변환
+              return recordDate === today;
+            }
+            return false;
+          });
+        });
+        // 오늘 날짜에 저장된 세션이 있으면 제외
+        return !hasTodaySession;
+      });
+
+      setSavedWorkouts(filteredGroups);
 
       const sessionTitleMapFresh = new Map<string, string>();
+      // filteredGroups 대신 mergedGroups 사용 (모든 세션 정보는 유지)
       mergedGroups.forEach((group) => {
         const normalizedTitle = (group.title || "").trim();
         group.sessions?.forEach((session) => {
@@ -1040,11 +1059,17 @@ const ExerciseScreen = ({ navigation }: any) => {
       if (__DEV__) {
         console.log(
           "[GROUP] 저장된 운동 제목 로드:",
-          mergedGroups.map((w) => ({
+          filteredGroups.map((w) => ({
             title: w.title,
             sessionCount: w.sessions?.length || 0,
             sessionIds: w.sessions?.map((s) => s.sessionId) || [],
           }))
+        );
+        console.log(
+          "[GROUP] 오늘 저장된 운동 제목 (제외됨):",
+          mergedGroups
+            .filter((g) => !filteredGroups.includes(g))
+            .map((w) => w.title)
         );
       }
     } catch (error) {
@@ -1242,6 +1267,12 @@ const ExerciseScreen = ({ navigation }: any) => {
       Alert.alert("제목 입력 필요", "오늘 운동 제목을 입력해주세요.");
       return;
     }
+    
+    // saveTitle 최소 길이 검증 (서버에서 최소 3글자 이상 요구할 수 있음)
+    if (trimmedTitle.length < 3) {
+      Alert.alert("제목 길이 부족", "운동 제목은 최소 3글자 이상 입력해주세요.");
+      return;
+    }
 
     if (!userId) {
       Alert.alert(
@@ -1371,21 +1402,24 @@ const ExerciseScreen = ({ navigation }: any) => {
         };
 
         // intensity 변환: 무거워요(7.5), 선택안함(5.0), 가벼워요(2.5)
+        // 서버는 float/double 배열을 기대하므로 반드시 소수점 포함 (5 → 5.0)
         if (feedback.intensity === "heavy") {
           intensityList.push(7.5);
         } else if (feedback.intensity === "light") {
           intensityList.push(2.5);
         } else {
-          intensityList.push(5.0);
+          intensityList.push(5.0); // float 형식으로 (정수 5가 아닌 5.0)
         }
 
-        // feedback 변환: 좋아요(like), 선택안함(neutral), 싫어요(dislike)
+        // feedback 변환: 좋아요(like), 싫어요(dislike)
+        // 서버는 "neutral"을 허용하지 않으므로 기본값은 "like"로 설정
         if (feedback.feedback === "like") {
           feedbackList.push("like");
         } else if (feedback.feedback === "dislike") {
           feedbackList.push("dislike");
         } else {
-          feedbackList.push("neutral");
+          // neutral은 서버 enum에 없으므로 기본값으로 "like" 사용
+          feedbackList.push("like");
         }
       });
 
@@ -1393,13 +1427,37 @@ const ExerciseScreen = ({ navigation }: any) => {
       // todayTotalWorkoutSeconds는 오늘의 총 운동 시간이므로 현재 세션의 시간으로 사용
       const workoutSeconds = todayTotalWorkoutSeconds || 0;
 
+      // API 스펙 검증: intensity와 feedback 배열 길이는 운동 개수와 일치해야 함
+      if (intensityList.length !== completedExercises.length) {
+        console.warn(
+          "[WORKOUT][SAVE] intensity 배열 길이 불일치:",
+          intensityList.length,
+          "!=",
+          completedExercises.length
+        );
+      }
+      if (feedbackList.length !== completedExercises.length) {
+        console.warn(
+          "[WORKOUT][SAVE] feedback 배열 길이 불일치:",
+          feedbackList.length,
+          "!=",
+          completedExercises.length
+        );
+      }
+
       console.log("[WORKOUT][SAVE] 운동 저장 시작:", {
         userId: userIdNum,
         saveTitle: trimmedTitle,
         exerciseCount: completedExercises.length,
         intensityList,
+        intensityLength: intensityList.length,
         feedbackList,
+        feedbackLength: feedbackList.length,
         seconds: workoutSeconds,
+        // API 스펙 검증: 배열 길이가 운동 개수와 일치하는지 확인
+        arraysMatchExerciseCount:
+          intensityList.length === completedExercises.length &&
+          feedbackList.length === completedExercises.length,
       });
 
       const response = await saveWorkoutTitle(
