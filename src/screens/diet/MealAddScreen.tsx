@@ -476,6 +476,8 @@ const MealAddScreen = ({navigation, route}: any) => {
       carbs: Math.max(0, Math.round(carbs * 10) / 10), // 소수점 1자리
       protein: Math.max(0, Math.round(protein * 10) / 10),
       fat: Math.max(0, Math.round(fat * 10) / 10), // 소수점 1자리
+      // food_id 전달 (검색 또는 직접 입력에서 받은 음식 ID)
+      id: food.id || undefined,
       // optional 필드들은 제외 (sodium, cholesterol, sugar, fiber)
     };
     
@@ -577,6 +579,11 @@ const MealAddScreen = ({navigation, route}: any) => {
           fiber: finalFiber,
         };
         
+        // food_id 전달 (검색 또는 직접 입력에서 받은 음식 ID)
+        if (food.id !== undefined && food.id !== null && food.id > 0) {
+          foodData.id = food.id;
+        }
+        
         // optional 필드들 (값이 있을 때만 추가, undefined 제거)
         if (food.imageUrl) {
           foodData.imageUrl = food.imageUrl;
@@ -652,7 +659,16 @@ const MealAddScreen = ({navigation, route}: any) => {
         dateToUse.getDate() === today.getDate();
 
       if (isEditMode && mealData?.id) {
-        // 수정 모드: PUT 요청 (API가 없으면 일단 추가 API 사용)
+        // 수정 모드: 기존 식단 삭제 후 새로 추가
+        try {
+          await mealAPI.deleteMeal(mealData.id);
+          console.log('기존 식사 삭제 완료:', mealData.id);
+        } catch (deleteError: any) {
+          console.error('기존 식사 삭제 실패:', deleteError);
+          // 삭제 실패해도 계속 진행 (이미 삭제되었을 수 있음)
+        }
+        
+        // 새로 추가
         await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
         Alert.alert('성공', '식사가 수정되었습니다.', [
           {
@@ -782,13 +798,17 @@ const MealAddScreen = ({navigation, route}: any) => {
       console.log('업로드 응답:', JSON.stringify(response, null, 2));
       
       // ai_result가 있는 경우 (사진 업로드 응답)
+      // 응답 형식: { "ai_result": [{ "food_id": 162608, "name": "...", "name_ko": "...", ... }] }
+      // 다중 음식 감지 지원: ai_result는 배열로 여러 음식을 반환할 수 있음
       if (response.ai_result) {
-        // ai_result가 배열인 경우 첫 번째 항목 사용
-        const aiResult = Array.isArray(response.ai_result) 
-          ? response.ai_result[0] 
-          : response.ai_result;
+        const aiResults = Array.isArray(response.ai_result) 
+          ? response.ai_result 
+          : [response.ai_result];
         
-        if (aiResult) {
+        if (aiResults.length > 0) {
+          // 첫 번째 음식 사용 (다중 음식인 경우 사용자가 선택할 수 있도록 개선 가능)
+          const aiResult = aiResults[0];
+          
           // 숫자 타입 보장 및 검증
           const calories = typeof aiResult.calories === 'number' 
             ? aiResult.calories 
@@ -807,10 +827,14 @@ const MealAddScreen = ({navigation, route}: any) => {
             : parseFloat(String(aiResult.weight || 100)) || 100;
           
           // 이름은 한국어 우선, 없으면 영어
-          const name = aiResult.name_ko || aiResult.name_en || aiResult.name || '음식';
+          // API 응답: name_ko (한국어), name (영어)
+          const name = aiResult.name_ko || aiResult.name || '음식';
+          
+          // food_id 사용 (API 응답의 food_id 필드)
+          const foodId = aiResult.food_id || aiResult.id || 0;
           
           foodData = {
-            id: aiResult.id || Date.now(),
+            id: foodId, // food_id (검색/직접 입력과 동일하게 사용)
             name: name,
             calories: Math.max(0, calories),
             carbs: Math.max(0, carbs),
@@ -820,13 +844,20 @@ const MealAddScreen = ({navigation, route}: any) => {
           };
           
           console.log('사진 업로드로 변환된 음식 데이터:', foodData);
+          console.log('원본 AI 응답:', aiResult);
+          
+          // 다중 음식 감지 시 로그
+          if (aiResults.length > 1) {
+            console.log(`⚠️ 다중 음식 감지됨 (${aiResults.length}개), 첫 번째 음식만 추가됨`);
+            console.log('감지된 모든 음식:', aiResults.map((r: any) => r.name_ko || r.name));
+          }
         }
       } else if (Array.isArray(response)) {
         // 배열인 경우 첫 번째 음식 사용
         if (response.length > 0) {
           const item = response[0];
           foodData = {
-            id: item.id || Date.now(),
+            id: item.id || 0, // food_id (없으면 0, 신규 음식으로 처리)
             name: item.name || '음식',
             calories: item.calories || 0,
             carbs: item.carbs || 0,
@@ -839,7 +870,7 @@ const MealAddScreen = ({navigation, route}: any) => {
         // foods 배열이 있는 경우
         const item = response.foods[0];
         foodData = {
-          id: item.id || Date.now(),
+          id: item.id || 0, // food_id (없으면 0, 신규 음식으로 처리)
           name: item.name || item.foodName || '음식',
           calories: item.calories || 0,
           carbs: item.carbs || 0,
@@ -850,7 +881,7 @@ const MealAddScreen = ({navigation, route}: any) => {
       } else if (response.name) {
         // 직접 음식 객체인 경우
         foodData = {
-          id: response.id || Date.now(),
+          id: response.id || 0, // food_id (없으면 0, 신규 음식으로 처리)
           name: response.name,
           calories: response.calories || 0,
           carbs: response.carbs || 0,
