@@ -39,9 +39,18 @@ interface Food {
 
 const MealAddScreen = ({navigation, route}: any) => {
   const {selectedDate: contextSelectedDate} = useDate();
-  const mealData: DailyMeal | undefined = route?.params?.meal; // 수정 모드일 때 전달받은 식단 데이터
+  // route params에서 mealData를 받아서 state에 저장 (화면 이동 시 params가 사라질 수 있으므로)
+  const [mealData, setMealData] = useState<DailyMeal | undefined>(route?.params?.meal);
   const routeSelectedDateString: string | undefined = route?.params?.selectedDate; // DietScreen에서 전달받은 선택 날짜 (문자열)
   const isEditMode = !!mealData;
+  
+  // route params가 변경될 때 mealData 업데이트
+  useEffect(() => {
+    if (route?.params?.meal) {
+      console.log('📥 route params에서 mealData 업데이트:', route.params.meal.id);
+      setMealData(route.params.meal);
+    }
+  }, [route?.params?.meal]);
   
   // 날짜 우선순위: route에서 전달받은 날짜 > context의 선택 날짜 > 오늘 날짜
   // 시간은 항상 현재 시간으로 설정 (또는 기존 시간 유지)
@@ -126,10 +135,10 @@ const MealAddScreen = ({navigation, route}: any) => {
     }
   };
 
-  // 영양 목표 로드 (목표가 없으면 API에서 자동 생성)
+  // 영양 목표 로드 (일일 목표 조회 API 사용)
   const loadNutritionGoal = async () => {
     try {
-      const data = await mealAPI.getNutritionGoal();
+      const data = await mealAPI.getDailyGoal();
       setNutritionGoal(data);
       console.log('영양 목표 조회 성공:', data);
     } catch (e: any) {
@@ -139,7 +148,7 @@ const MealAddScreen = ({navigation, route}: any) => {
         // API에서 자동 생성되므로 잠시 후 재시도
         setTimeout(async () => {
           try {
-            const retryData = await mealAPI.getNutritionGoal();
+            const retryData = await mealAPI.getDailyGoal();
             setNutritionGoal(retryData);
             console.log('영양 목표 재시도 성공:', retryData);
           } catch (retryError) {
@@ -210,15 +219,22 @@ const MealAddScreen = ({navigation, route}: any) => {
         setSelectedDateTime(date);
       }
       // 음식 데이터 변환
-      const convertedFoods: Food[] = mealData.foods.map((food: any, index: number) => ({
-        id: food.id || Date.now() + index,
-        name: food.foodName,
-        calories: food.calories,
-        carbs: food.carbs,
-        protein: food.protein,
-        fat: food.fat,
-        weight: food.servingSize,
-      }));
+      // 중요: food.id는 food_id여야 함 (meal_item_id가 아님)
+      const convertedFoods: Food[] = mealData.foods.map((food: any, index: number) => {
+        // food_id 우선 사용, 없으면 id 사용, 둘 다 없으면 0
+        const foodId = food.food_id || food.id || 0;
+        console.log(`음식 변환 ${index + 1}: foodName=${food.foodName}, food_id=${foodId}, meal_item_id=${food.meal_item_id || food.id}`);
+        
+        return {
+          id: foodId, // food_id 사용 (meal_item_id가 아님)
+          name: food.foodName,
+          calories: food.calories,
+          carbs: food.carbs,
+          protein: food.protein,
+          fat: food.fat,
+          weight: food.servingSize,
+        };
+      });
       setFoods(convertedFoods);
     } else if (routeSelectedDateString && !mealData) {
       // route에서 날짜를 받았을 때 날짜 설정 (수정 모드가 아닐 때)
@@ -658,31 +674,83 @@ const MealAddScreen = ({navigation, route}: any) => {
         dateToUse.getMonth() === today.getMonth() &&
         dateToUse.getDate() === today.getDate();
 
+      // 수정 모드 확인 로그
+      console.log('🔍 저장 시점 수정 모드 확인:', {
+        isEditMode,
+        mealDataExists: !!mealData,
+        mealDataId: mealData?.id,
+        mealData: mealData ? {
+          id: mealData.id,
+          mealType: mealData.mealType,
+          mealDate: mealData.mealDate,
+          foodsCount: mealData.foods?.length,
+        } : null,
+      });
+
       if (isEditMode && mealData?.id) {
         // 수정 모드: 기존 식단 삭제 후 새로 추가하는 방식
-        console.log('🔄 식단 수정 모드: 기존 식단 삭제 후 새로 추가');
-        console.log('삭제할 식단 ID:', mealData.id);
+        console.log('🔄 ========== 식단 수정 모드 시작 ==========');
+        console.log('📋 수정할 식단 정보:', {
+          mealId: mealData.id,
+          mealType: mealData.mealType,
+          mealDate: mealData.mealDate,
+          foodsCount: mealData.foods?.length || 0,
+        });
+        console.log('📋 새로 저장할 식단 정보:', {
+          mealType: mealType,
+          mealDate: mealDateString,
+          foodsCount: validatedFoods.length,
+        });
         
-        // Step 1: 기존 식단 삭제
+        // Step 1: 기존 식단 삭제 (성공 확인 필수)
+        let deleteSuccess = false;
         try {
-          await mealAPI.deleteMeal(mealData.id);
-          console.log('✅ 기존 식사 삭제 완료:', mealData.id);
+          console.log(`🗑️ 기존 식단 삭제 시작: meal_id=${mealData.id}`);
+          const deleteResult = await mealAPI.deleteMeal(mealData.id);
+          deleteSuccess = deleteResult.success === true;
+          console.log('✅ 기존 식사 삭제 완료:', mealData.id, '결과:', deleteResult);
+          
+          if (!deleteSuccess) {
+            throw new Error('삭제 응답이 성공이 아닙니다.');
+          }
         } catch (deleteError: any) {
           console.error('❌ 기존 식사 삭제 실패:', deleteError);
+          console.error('삭제 에러 상세:', {
+            status: deleteError.status,
+            message: deleteError.message,
+            error: deleteError,
+          });
           
           // 404 에러는 이미 삭제된 것으로 간주하고 계속 진행
-          if (deleteError.status === 404) {
+          if (deleteError.status === 404 || deleteError.message?.includes('404')) {
             console.log('⚠️ 식단이 이미 삭제되었거나 존재하지 않음, 계속 진행');
+            deleteSuccess = true; // 404는 삭제 성공으로 간주
           } else {
-            // 다른 에러는 사용자에게 알림
+            // 다른 에러는 사용자에게 알리고 중단
             const deleteErrorMessage = deleteError.message || '기존 식단 삭제에 실패했습니다.';
-            Alert.alert('경고', `${deleteErrorMessage}\n새로운 식단을 추가하려고 시도합니다.`);
+            console.error('❌ 삭제 실패로 인한 중단:', deleteErrorMessage);
+            Alert.alert('오류', `식단 수정에 실패했습니다.\n${deleteErrorMessage}`);
+            setLoading(false);
+            return; // 삭제 실패 시 중단
           }
-          // 삭제 실패해도 계속 진행 (새로 추가 시도)
         }
+        
+        // 삭제가 성공하지 않았으면 중단
+        if (!deleteSuccess) {
+          console.error('❌ 삭제 성공하지 않음, 중단');
+          Alert.alert('오류', '기존 식단 삭제에 실패했습니다. 수정을 취소합니다.');
+          setLoading(false);
+          return;
+        }
+        
+        // 삭제 성공 후 약간의 지연 (서버 동기화 대기)
+        console.log('⏳ 서버 동기화 대기 중... (300ms)');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        console.log('✅ 서버 동기화 완료');
         
         // Step 2: 새로 추가 (일반 추가와 동일한 로직)
         try {
+          console.log('➕ 새 식단 추가 시작...');
           await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
           console.log('✅ 식단 수정 완료 (삭제 후 추가)');
           
