@@ -38,11 +38,14 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
   const [targetProtein, setTargetProtein] = useState('');
   const [targetFat, setTargetFat] = useState('');
   const [isRealTimeRecommendationEnabled, setIsRealTimeRecommendationEnabled] = useState(false);
+  const [hasToggled, setHasToggled] = useState(false); // 토글이 실제로 변경되었는지 추적
 
   useEffect(() => {
     if (isOpen) {
       // 모달이 열릴 때 항상 수동 입력 모드로 설정
       setGoalType('MANUAL');
+      // 토글 변경 추적 초기화
+      setHasToggled(false);
       
       // 토글이 off일 때만 currentGoal로 초기화
       // 토글이 on이면 API 호출 결과로 업데이트되므로 초기화하지 않음
@@ -64,16 +67,18 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
     }
   }, [currentGoal, isOpen]); // isRealTimeRecommendationEnabled 의존성 제거
 
-  // 토글이 off로 바뀔 때 오늘 날짜에 대해 GET /food/daily_goal 호출하고 내일부터 말일까지 0으로 설정
+  // 토글이 on으로 변경될 때만 오늘 날짜에 대해 GET /food/daily_goal 호출하고 내일부터 말일까지 0으로 설정
   useEffect(() => {
-    if (isOpen && !isRealTimeRecommendationEnabled) {
+    // 토글이 on으로 변경되었을 때만 실행 (모달이 열릴 때마다 실행되지 않도록)
+    // hasToggled가 true이고 isRealTimeRecommendationEnabled가 true일 때만 실행
+    if (isOpen && isRealTimeRecommendationEnabled && hasToggled) {
       const setupAutoGoal = async () => {
         try {
           const today = new Date();
           const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
           
           // 1. 오늘 날짜에 대해 GET /food/daily_goal 호출
-          console.log('토글 off - 오늘 날짜 자동 목표 저장:', todayStr);
+          console.log('토글 on - 오늘 날짜 자동 목표 저장:', todayStr);
           await mealAPI.getAutoDailyGoal(todayStr);
           
           // 2. 내일 날짜부터 말일까지 0칼로리로 설정
@@ -90,17 +95,17 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
             date: todayAfterStr, // 내일부터 말일까지 일괄 적용
           };
           await mealAPI.setNutritionGoal(goalData);
-          console.log('토글 off - 내일부터 말일까지 0칼로리 설정 완료');
+          console.log('토글 on - 내일부터 말일까지 0칼로리 설정 완료');
         } catch (error: any) {
-          console.error('토글 off 설정 실패:', error);
+          console.error('토글 on 설정 실패:', error);
         }
       };
       
       setupAutoGoal();
     }
-  }, [isOpen, isRealTimeRecommendationEnabled]); // 토글 상태 변경 시에만 실행
+  }, [isRealTimeRecommendationEnabled, hasToggled]); // isOpen 제거, 토글이 실제로 변경되었을 때만 실행
 
-  // 날짜가 바뀔 때마다 API 호출
+  // 날짜가 바뀔 때마다 API 호출 (모달이 열려있을 때만)
   useEffect(() => {
     if (isOpen && date) {
       const loadGoal = async () => {
@@ -113,22 +118,22 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
           let goal: any;
           
           if (isRealTimeRecommendationEnabled) {
-            // 토글이 on일 때: 무조건 GET /food/nutrition-goal/get 호출
-            console.log(`토글 on - 조회 API 호출 (${date})`);
-            goal = await mealAPI.getNutritionGoal(date);
-          } else {
-            // 토글이 off일 때
+            // 토글이 on일 때
             if (date === todayStr) {
               // 오늘 날짜면 GET /food/daily_goal 호출
-              console.log(`토글 off, 오늘 날짜 (${date} === ${todayStr}) - 자동 목표 저장 API 호출`);
+              console.log(`토글 on, 오늘 날짜 (${date} === ${todayStr}) - 자동 목표 저장 API 호출`);
               goal = await mealAPI.getAutoDailyGoal(date);
               console.log('오늘 날짜 자동 목표 응답:', goal);
             } else {
               // 오늘 이전 또는 오늘 이후 날짜면 GET /food/nutrition-goal/get 호출
-              console.log(`토글 off, ${date < todayStr ? '오늘 이전' : '오늘 이후'} 날짜 (${date}) - 조회 API 호출`);
+              console.log(`토글 on, ${date < todayStr ? '오늘 이전' : '오늘 이후'} 날짜 (${date}) - 조회 API 호출`);
               goal = await mealAPI.getNutritionGoal(date);
               console.log('조회 응답:', goal);
             }
+          } else {
+            // 토글이 off일 때: 무조건 GET /food/nutrition-goal/get 호출
+            console.log(`토글 off - 조회 API 호출 (${date})`);
+            goal = await mealAPI.getNutritionGoal(date);
           }
           
           // 목표로 UI 업데이트 (항상 업데이트)
@@ -160,26 +165,10 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
     }
   }, [isOpen, isRealTimeRecommendationEnabled, date]);
 
-  const handleClose = async () => {
-    setTargetCalories('');
-    setTargetCarbs('');
-    setTargetProtein('');
-    setTargetFat('');
-    
-    // 모달 닫을 때 영양 목표 다시 조회
-    if (date) {
-      try {
-        await mealAPI.getNutritionGoal(date);
-        onGoalUpdate();
-      } catch (error: any) {
-        console.error('모달 닫을 때 영양 목표 조회 실패:', error);
-        // 에러가 발생해도 onGoalUpdate는 호출
-        onGoalUpdate();
-      }
-    } else {
-      onGoalUpdate();
-    }
-    
+  const handleClose = () => {
+    // 모달을 닫을 때는 상태를 변경하지 않고 그냥 닫기만 함
+    // 사용자가 변경사항을 저장하지 않고 닫은 경우이므로 원래 상태 유지
+    // 부모 컴포넌트에서 필요시 자체적으로 데이터를 다시 조회함
     onClose();
   };
 
@@ -421,7 +410,10 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
                   <Text style={styles.toggleLabel}>실시간 영양 목표 추천받기</Text>
                   <Switch
                     value={isRealTimeRecommendationEnabled}
-                    onValueChange={setIsRealTimeRecommendationEnabled}
+                    onValueChange={(value) => {
+                      setIsRealTimeRecommendationEnabled(value);
+                      setHasToggled(true); // 토글이 실제로 변경되었음을 표시
+                    }}
                     trackColor={{ false: '#464646', true: '#e3ff7c' }}
                     thumbColor={isRealTimeRecommendationEnabled ? '#000000' : '#ffffff'}
                     ios_backgroundColor="#464646"
