@@ -1317,6 +1317,7 @@ const AnalysisScreen = ({ navigation }: any) => {
 
         const response = await axios.get<ArrayBuffer>(url, {
           responseType: "arraybuffer",
+          timeout: 10000, // 10초 타임아웃
           headers: {
             Authorization: token ? `Bearer ${token}` : undefined,
             Accept: "*/*",
@@ -1325,8 +1326,13 @@ const AnalysisScreen = ({ navigation }: any) => {
 
         if (response.status === 200 && response.data) {
           const base64 = arrayBufferToBase64(response.data);
-          if (!base64) {
-            console.warn("[ANALYSIS] 운동 그래프 base64 변환 실패 (빈 문자열)");
+          if (!base64 || base64.length < 100) {
+            console.warn(
+              "[ANALYSIS] 운동 그래프 base64 변환 실패 또는 데이터가 너무 짧음:",
+              {
+                base64Length: base64?.length || 0,
+              }
+            );
             // 변환 실패해도 캐시된 데이터가 있으면 유지
             if (!cachedGraphData) {
               setExerciseGraphLoading(false);
@@ -1366,9 +1372,13 @@ const AnalysisScreen = ({ navigation }: any) => {
         }
       } catch (apiError: any) {
         // API 호출 실패해도 캐시된 데이터가 있으면 유지
+        const isTimeout =
+          apiError?.code === "ECONNABORTED" ||
+          apiError?.message?.includes("timeout");
         console.warn("[ANALYSIS] 운동 그래프 API 호출 실패:", {
           message: apiError?.message,
           status: apiError?.response?.status,
+          isTimeout,
         });
         if (!cachedGraphData) {
           setExerciseGraphLoading(false);
@@ -1386,6 +1396,7 @@ const AnalysisScreen = ({ navigation }: any) => {
 
   // 식단 주간 그래프 로드 (단순화된 버전)
   const loadNutritionWeeklyGraph = useCallback(async () => {
+    let cachedGraphData: string | null = null;
     try {
       // 1) aiUserId 구하기
       let aiUserId: string | null = null;
@@ -1421,7 +1432,6 @@ const AnalysisScreen = ({ navigation }: any) => {
       }
 
       const cacheKey = `nutrition_weekly_graph_${aiUserId}`;
-      let cachedGraphData: string | null = null;
 
       // 2) 캐시 먼저 시도
       const cachedRaw = await AsyncStorage.getItem(cacheKey);
@@ -1458,6 +1468,7 @@ const AnalysisScreen = ({ navigation }: any) => {
 
         const response = await axios.get<ArrayBuffer>(url, {
           responseType: "arraybuffer",
+          timeout: 10000, // 10초 타임아웃
           headers: {
             Authorization: token ? `Bearer ${token}` : undefined,
             Accept: "*/*",
@@ -1466,8 +1477,13 @@ const AnalysisScreen = ({ navigation }: any) => {
 
         if (response.status === 200 && response.data) {
           const base64 = arrayBufferToBase64(response.data);
-          if (!base64) {
-            console.warn("[ANALYSIS] 식단 그래프 base64 변환 실패 (빈 문자열)");
+          if (!base64 || base64.length < 100) {
+            console.warn(
+              "[ANALYSIS] 식단 그래프 base64 변환 실패 또는 데이터가 너무 짧음:",
+              {
+                base64Length: base64?.length || 0,
+              }
+            );
             // 변환 실패해도 캐시된 데이터가 있으면 유지
             if (!cachedGraphData) {
               setNutritionGraphLoading(false);
@@ -1507,9 +1523,13 @@ const AnalysisScreen = ({ navigation }: any) => {
         }
       } catch (apiError: any) {
         // API 호출 실패해도 캐시된 데이터가 있으면 유지
+        const isTimeout =
+          apiError?.code === "ECONNABORTED" ||
+          apiError?.message?.includes("timeout");
         console.warn("[ANALYSIS] 식단 그래프 API 호출 실패:", {
           message: apiError?.message,
           status: apiError?.response?.status,
+          isTimeout,
         });
         if (!cachedGraphData) {
           setNutritionGraphLoading(false);
@@ -1521,8 +1541,9 @@ const AnalysisScreen = ({ navigation }: any) => {
         status: error?.response?.status,
       });
       // 에러 발생해도 캐시된 데이터가 있으면 유지
-      // cachedGraphData는 try 블록 내부에서만 접근 가능하므로 여기서는 체크하지 않음
-      setNutritionGraphLoading(false);
+      if (!cachedGraphData) {
+        setNutritionGraphLoading(false);
+      }
     }
   }, [arrayBufferToBase64]);
 
@@ -1962,7 +1983,7 @@ const AnalysisScreen = ({ navigation }: any) => {
                 <ActivityIndicator size="small" color="#d6ff4b" />
                 <Text style={styles.loadingText}>그래프 불러오는 중...</Text>
               </View>
-            ) : exerciseWeeklyGraph ? (
+            ) : exerciseWeeklyGraph && exerciseWeeklyGraph.length > 5000 ? (
               (() => {
                 console.log("[ANALYSIS] 운동 그래프 렌더링:", {
                   hasValue: !!exerciseWeeklyGraph,
@@ -2128,7 +2149,7 @@ const AnalysisScreen = ({ navigation }: any) => {
                 <ActivityIndicator size="small" color="#d6ff4b" />
                 <Text style={styles.loadingText}>그래프 불러오는 중...</Text>
               </View>
-            ) : nutritionWeeklyGraph ? (
+            ) : nutritionWeeklyGraph && nutritionWeeklyGraph.length > 5000 ? (
               (() => {
                 console.log("[ANALYSIS] 식단 그래프 렌더링:", {
                   hasValue: !!nutritionWeeklyGraph,
