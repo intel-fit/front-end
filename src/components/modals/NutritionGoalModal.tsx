@@ -13,8 +13,11 @@ import {
   Switch,
 } from 'react-native';
 import { Ionicons as Icon } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { mealAPI } from '../../services';
 import type { NutritionGoal, SetNutritionGoalRequest } from '../../types';
+import { getMembershipType } from '../../utils/membership-utils';
+import PremiumModal from './PremiumModal';
 
 interface NutritionGoalModalProps {
   isOpen: boolean;
@@ -38,11 +41,15 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
   const [targetProtein, setTargetProtein] = useState('');
   const [targetFat, setTargetFat] = useState('');
   const [isRealTimeRecommendationEnabled, setIsRealTimeRecommendationEnabled] = useState(false);
+  const [hasToggled, setHasToggled] = useState(false); // 토글이 실제로 변경되었는지 추적
+  const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false); // 프리미엄 모달 상태
 
   useEffect(() => {
     if (isOpen) {
       // 모달이 열릴 때 항상 수동 입력 모드로 설정
       setGoalType('MANUAL');
+      // 토글 변경 추적 초기화
+      setHasToggled(false);
       
       // 토글이 off일 때만 currentGoal로 초기화
       // 토글이 on이면 API 호출 결과로 업데이트되므로 초기화하지 않음
@@ -64,16 +71,18 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
     }
   }, [currentGoal, isOpen]); // isRealTimeRecommendationEnabled 의존성 제거
 
-  // 토글이 off로 바뀔 때 오늘 날짜에 대해 GET /food/daily_goal 호출하고 내일부터 말일까지 0으로 설정
+  // 토글이 on으로 변경될 때만 오늘 날짜에 대해 GET /food/daily_goal 호출하고 내일부터 말일까지 0으로 설정
   useEffect(() => {
-    if (isOpen && !isRealTimeRecommendationEnabled) {
+    // 토글이 on으로 변경되었을 때만 실행 (모달이 열릴 때마다 실행되지 않도록)
+    // hasToggled가 true이고 isRealTimeRecommendationEnabled가 true일 때만 실행
+    if (isOpen && isRealTimeRecommendationEnabled && hasToggled) {
       const setupAutoGoal = async () => {
         try {
           const today = new Date();
           const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
           
           // 1. 오늘 날짜에 대해 GET /food/daily_goal 호출
-          console.log('토글 off - 오늘 날짜 자동 목표 저장:', todayStr);
+          console.log('토글 on - 오늘 날짜 자동 목표 저장:', todayStr);
           await mealAPI.getAutoDailyGoal(todayStr);
           
           // 2. 내일 날짜부터 말일까지 0칼로리로 설정
@@ -90,17 +99,17 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
             date: todayAfterStr, // 내일부터 말일까지 일괄 적용
           };
           await mealAPI.setNutritionGoal(goalData);
-          console.log('토글 off - 내일부터 말일까지 0칼로리 설정 완료');
+          console.log('토글 on - 내일부터 말일까지 0칼로리 설정 완료');
         } catch (error: any) {
-          console.error('토글 off 설정 실패:', error);
+          console.error('토글 on 설정 실패:', error);
         }
       };
       
       setupAutoGoal();
     }
-  }, [isOpen, isRealTimeRecommendationEnabled]); // 토글 상태 변경 시에만 실행
+  }, [isRealTimeRecommendationEnabled, hasToggled]); // isOpen 제거, 토글이 실제로 변경되었을 때만 실행
 
-  // 날짜가 바뀔 때마다 API 호출
+  // 날짜가 바뀔 때마다 API 호출 (모달이 열려있을 때만)
   useEffect(() => {
     if (isOpen && date) {
       const loadGoal = async () => {
@@ -113,22 +122,22 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
           let goal: any;
           
           if (isRealTimeRecommendationEnabled) {
-            // 토글이 on일 때: 무조건 GET /food/nutrition-goal/get 호출
-            console.log(`토글 on - 조회 API 호출 (${date})`);
-            goal = await mealAPI.getNutritionGoal(date);
-          } else {
-            // 토글이 off일 때
+            // 토글이 on일 때
             if (date === todayStr) {
               // 오늘 날짜면 GET /food/daily_goal 호출
-              console.log(`토글 off, 오늘 날짜 (${date} === ${todayStr}) - 자동 목표 저장 API 호출`);
+              console.log(`토글 on, 오늘 날짜 (${date} === ${todayStr}) - 자동 목표 저장 API 호출`);
               goal = await mealAPI.getAutoDailyGoal(date);
               console.log('오늘 날짜 자동 목표 응답:', goal);
             } else {
               // 오늘 이전 또는 오늘 이후 날짜면 GET /food/nutrition-goal/get 호출
-              console.log(`토글 off, ${date < todayStr ? '오늘 이전' : '오늘 이후'} 날짜 (${date}) - 조회 API 호출`);
+              console.log(`토글 on, ${date < todayStr ? '오늘 이전' : '오늘 이후'} 날짜 (${date}) - 조회 API 호출`);
               goal = await mealAPI.getNutritionGoal(date);
               console.log('조회 응답:', goal);
             }
+          } else {
+            // 토글이 off일 때: 무조건 GET /food/nutrition-goal/get 호출
+            console.log(`토글 off - 조회 API 호출 (${date})`);
+            goal = await mealAPI.getNutritionGoal(date);
           }
           
           // 목표로 UI 업데이트 (항상 업데이트)
@@ -160,26 +169,10 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
     }
   }, [isOpen, isRealTimeRecommendationEnabled, date]);
 
-  const handleClose = async () => {
-    setTargetCalories('');
-    setTargetCarbs('');
-    setTargetProtein('');
-    setTargetFat('');
-    
-    // 모달 닫을 때 영양 목표 다시 조회
-    if (date) {
-      try {
-        await mealAPI.getNutritionGoal(date);
-        onGoalUpdate();
-      } catch (error: any) {
-        console.error('모달 닫을 때 영양 목표 조회 실패:', error);
-        // 에러가 발생해도 onGoalUpdate는 호출
-        onGoalUpdate();
-      }
-    } else {
-      onGoalUpdate();
-    }
-    
+  const handleClose = () => {
+    // 모달을 닫을 때는 상태를 변경하지 않고 그냥 닫기만 함
+    // 사용자가 변경사항을 저장하지 않고 닫은 경우이므로 원래 상태 유지
+    // 부모 컴포넌트에서 필요시 자체적으로 데이터를 다시 조회함
     onClose();
   };
 
@@ -342,8 +335,8 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
                 </View>
                 <Text style={[styles.inputHint, isRealTimeRecommendationEnabled && styles.inputHintDisabled]}>
                   {isRealTimeRecommendationEnabled
-                    ? '실시간 추천이 활성화되어 있습니다. 자동으로 계산된 영양 목표가 표시됩니다.'
-                    : '칼로리를 입력하고 확인 버튼을 누르면 탄수화물, 단백질, 지방이 자동으로 계산되어 저장됩니다.'}
+                    ? '목표 칼로리를 입력하면 \n탄수화물, 단백질, 지방이 자동으로 계산되어 저장됩니다.'
+                    : '목표 칼로리를 입력하면 \n탄수화물, 단백질, 지방이 자동으로 계산되어 저장됩니다.'}
                 </Text>
               </View>
 
@@ -418,10 +411,35 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
               {/* 실시간 영양 목표 추천받기 토글 */}
               <View style={styles.toggleContainer}>
                 <View style={styles.toggleContent}>
-                  <Text style={styles.toggleLabel}>실시간 영양 목표 추천받기</Text>
+                  <View style={styles.toggleLabelContainer}>
+                    <Text style={styles.toggleLabel}>실시간 영양 목표 추천받기</Text>
+                    <View style={styles.premiumBadgeContainer}>
+                      <LinearGradient
+                        colors={["#e3ff7c", "#fff9c4", "#ffffff"]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.premiumBadgeGradient}
+                      >
+                        <Text style={styles.premiumBadgeText}>premium</Text>
+                      </LinearGradient>
+                    </View>
+                  </View>
                   <Switch
                     value={isRealTimeRecommendationEnabled}
-                    onValueChange={setIsRealTimeRecommendationEnabled}
+                    onValueChange={async (value) => {
+                      // 토글을 ON 하려고 할 때만 프리미엄 체크
+                      if (value === true) {
+                        const membershipType = await getMembershipType();
+                        if (membershipType !== 'PREMIUM') {
+                          // 프리미엄이 아니면 모달 띄우고 토글을 ON 하지 않음
+                          setIsPremiumModalOpen(true);
+                          return;
+                        }
+                      }
+                      // 프리미엄이거나 OFF로 변경하는 경우 토글 변경
+                      setIsRealTimeRecommendationEnabled(value);
+                      setHasToggled(true); // 토글이 실제로 변경되었음을 표시
+                    }}
                     trackColor={{ false: '#464646', true: '#e3ff7c' }}
                     thumbColor={isRealTimeRecommendationEnabled ? '#000000' : '#ffffff'}
                     ios_backgroundColor="#464646"
@@ -429,8 +447,8 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
                 </View>
                 <Text style={styles.toggleHint}>
                   {isRealTimeRecommendationEnabled 
-                    ? '실시간으로 최적의 영양 목표를 추천받습니다.' 
-                    : '수동으로 영양 목표를 설정합니다.'}
+                    ? '실시간으로 최적의 영양 목표가 설정됩니다.' 
+                    : '식단, 운동, 신체 정보를 분석하여 제공되는\n최적의 영양 목표를 실시간으로 받아보세요!'}
                 </Text>
               </View>
 
@@ -438,6 +456,12 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
           </View>
         </TouchableWithoutFeedback>
       </View>
+
+      {/* 프리미엄 모달 */}
+      <PremiumModal
+        isOpen={isPremiumModalOpen}
+        onClose={() => setIsPremiumModalOpen(false)}
+      />
     </Modal>
   );
 };
@@ -458,23 +482,30 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     backgroundColor: '#252525',
-    borderRadius: 20,
-    paddingVertical: 30,
-    paddingHorizontal: 20,
+    borderRadius: 24,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
     width: '90%',
     maxWidth: 420,
     maxHeight: '90%',
     position: 'relative',
     zIndex: 999,
-    elevation: 5,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   closeButton: {
     position: 'absolute',
-    top: 15,
-    right: 15,
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    padding: 0,
+    top: 16,
+    right: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
     zIndex: 10,
   },
   modalContent: {
@@ -485,12 +516,12 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   inputRow: {
     flexDirection: 'row',
-    marginBottom: 20,
-    gap: 20,
+    marginBottom: 24,
+    gap: 16,
   },
   inputGroupHalf: {
     flex: 1,
@@ -500,6 +531,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#ffffff',
     textAlign: 'center',
+    letterSpacing: -0.3,
   },
   calorieInputRow: {
     flexDirection: 'row',
@@ -521,8 +553,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#464646',
     borderWidth: 0,
-    borderRadius: 10,
-    padding: 20,
+    borderRadius: 12,
+    padding: 18,
     fontSize: 16,
     fontWeight: '700',
     color: '#ffffff',
@@ -530,9 +562,9 @@ const styles = StyleSheet.create({
   },
   calculateButton: {
     backgroundColor: '#e3ff7c',
-    borderRadius: 10,
-    paddingVertical: 20,
-    paddingHorizontal: 24,
+    borderRadius: 12,
+    paddingVertical: 18,
+    paddingHorizontal: 28,
     minWidth: 80,
     alignItems: 'center',
     justifyContent: 'center',
@@ -550,22 +582,25 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: 'rgba(255, 255, 255, 0.6)',
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 10,
+    lineHeight: 18,
   },
   readOnlyField: {
     width: '100%',
     backgroundColor: '#393939',
     borderWidth: 0,
-    borderRadius: 10,
-    padding: 20,
+    borderRadius: 12,
+    padding: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 60,
   },
   readOnlyText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: 'rgba(255, 255, 255, 0.8)',
     textAlign: 'center',
+    letterSpacing: -0.2,
   },
   recommendButton: {
     width: '100%',
@@ -603,8 +638,11 @@ const styles = StyleSheet.create({
     color: '#000000',
   },
   toggleContainer: {
-    marginBottom: 20,
-    marginTop: 10,
+    marginTop: 12,
+    marginBottom: 0,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
   },
   toggleContent: {
     flexDirection: 'row',
@@ -612,17 +650,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  toggleLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#ffffff',
+  toggleLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
+    gap: 8,
+  },
+  toggleLabel: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#ffffff',
+    letterSpacing: -0.3,
+  },
+  premiumBadgeContainer: {
+    overflow: 'hidden',
+    borderRadius: 4,
+  },
+  premiumBadgeGradient: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  premiumBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#000000',
+    letterSpacing: 0.5,
   },
   toggleHint: {
     fontSize: 12,
     fontWeight: '400',
     color: 'rgba(255, 255, 255, 0.6)',
-    marginTop: 4,
+    marginTop: 6,
+    lineHeight: 18,
   },
   inputGroupDisabled: {
     opacity: 0.5,
