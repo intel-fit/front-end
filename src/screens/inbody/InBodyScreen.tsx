@@ -410,6 +410,8 @@ const InBodyScreen = ({ navigation, route }: any) => {
           inBodyData.rightArmMuscle,
           inBodyData.muscleFatAnalysis?.rightArmMuscle,
           inBodyData.segmentalMuscleMass?.rightArm,
+          inBodyData.segmentalMuscle?.rightArm,
+          inBodyData.segmentalLeanBodyMass?.rightArm,
           mass.rightArm,
           analysis.rightArm,
           analysis.rightArmValue,
@@ -428,6 +430,8 @@ const InBodyScreen = ({ navigation, route }: any) => {
           inBodyData.leftArmMuscle,
           inBodyData.muscleFatAnalysis?.leftArmMuscle,
           inBodyData.segmentalMuscleMass?.leftArm,
+          inBodyData.segmentalMuscle?.leftArm,
+          inBodyData.segmentalLeanBodyMass?.leftArm,
           mass.leftArm,
           analysis.leftArm,
           analysis.leftArmValue,
@@ -446,6 +450,8 @@ const InBodyScreen = ({ navigation, route }: any) => {
           inBodyData.trunkMuscle,
           inBodyData.muscleFatAnalysis?.trunkMuscle,
           inBodyData.segmentalMuscleMass?.trunk,
+          inBodyData.segmentalMuscle?.trunk,
+          inBodyData.segmentalLeanBodyMass?.trunk,
           mass.trunk,
           analysis.trunk,
           analysis.trunkValue,
@@ -464,6 +470,8 @@ const InBodyScreen = ({ navigation, route }: any) => {
           inBodyData.rightLegMuscle,
           inBodyData.muscleFatAnalysis?.rightLegMuscle,
           inBodyData.segmentalMuscleMass?.rightLeg,
+          inBodyData.segmentalMuscle?.rightLeg,
+          inBodyData.segmentalLeanBodyMass?.rightLeg,
           mass.rightLeg,
           analysis.rightLeg,
           analysis.rightLegValue,
@@ -482,6 +490,8 @@ const InBodyScreen = ({ navigation, route }: any) => {
           inBodyData.leftLegMuscle,
           inBodyData.muscleFatAnalysis?.leftLegMuscle,
           inBodyData.segmentalMuscleMass?.leftLeg,
+          inBodyData.segmentalMuscle?.leftLeg,
+          inBodyData.segmentalLeanBodyMass?.leftLeg,
           mass.leftLeg,
           analysis.leftLeg,
           analysis.leftLegValue,
@@ -520,7 +530,7 @@ const InBodyScreen = ({ navigation, route }: any) => {
         label: item.label,
         value: hasNumericValue
           ? `${item.numericValue.toFixed(1)}kg`
-          : "N/A",
+          : "-",
         percentage,
         status: "표준",
       };
@@ -851,86 +861,38 @@ const InBodyScreen = ({ navigation, route }: any) => {
                 <View style={styles.analysisSection}>
                   <Text style={styles.sectionTitle}>부위별 체지방 분석</Text>
                   <View style={styles.metricList}>
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricName}>오른팔 체지방</Text>
-                      <Text style={styles.metricValue}>
-                        {(() => {
-                          const value = inBodyData.rightArmFat ?? 
-                                       inBodyData.muscleFatAnalysis?.rightArmFat ??
-                                       inBodyData.segmentalFatRatio?.rightArm ??
-                                       inBodyData.segmentalBodyFat?.rightArm;
-                          const numValue = parseNumericValue(value);
-                          return numValue !== undefined
-                            ? `${numValue.toFixed(1)}kg`
-                            : "N/A";
-                        })()}
-                      </Text>
-                      <Text style={styles.metricRange}></Text>
-                    </View>
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricName}>왼팔 체지방</Text>
-                      <Text style={styles.metricValue}>
-                        {(() => {
-                          const value = inBodyData.leftArmFat ?? 
-                                       inBodyData.muscleFatAnalysis?.leftArmFat ??
-                                       inBodyData.segmentalFatRatio?.leftArm ??
-                                       inBodyData.segmentalBodyFat?.leftArm;
-                          const numValue = parseNumericValue(value);
-                          return numValue !== undefined
-                            ? `${numValue.toFixed(1)}kg`
-                            : "N/A";
-                        })()}
-                      </Text>
-                      <Text style={styles.metricRange}></Text>
-                    </View>
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricName}>몸통 체지방</Text>
-                      <Text style={styles.metricValue}>
-                        {(() => {
-                          const value = inBodyData.trunkFat ?? 
-                                       inBodyData.muscleFatAnalysis?.trunkFat ??
-                                       inBodyData.segmentalFatRatio?.trunk ??
-                                       inBodyData.segmentalBodyFat?.trunk;
-                          const numValue = parseNumericValue(value);
-                          return numValue !== undefined
-                            ? `${numValue.toFixed(1)}kg`
-                            : "N/A";
-                        })()}
-                      </Text>
-                      <Text style={styles.metricRange}></Text>
-                    </View>
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricName}>오른다리 체지방</Text>
-                      <Text style={styles.metricValue}>
-                        {(() => {
-                          const value = inBodyData.rightLegFat ?? 
-                                       inBodyData.muscleFatAnalysis?.rightLegFat ??
-                                       inBodyData.segmentalFatRatio?.rightLeg ??
-                                       inBodyData.segmentalBodyFat?.rightLeg;
-                          const numValue = parseNumericValue(value);
-                          return numValue !== undefined
-                            ? `${numValue.toFixed(1)}kg`
-                            : "N/A";
-                        })()}
-                      </Text>
-                      <Text style={styles.metricRange}></Text>
-                    </View>
-                    <View style={[styles.metricItem, styles.metricItemLast]}>
-                      <Text style={styles.metricName}>왼다리 체지방</Text>
-                      <Text style={styles.metricValue}>
-                        {(() => {
-                          const value = inBodyData.leftLegFat ?? 
-                                       inBodyData.muscleFatAnalysis?.leftLegFat ??
-                                       inBodyData.segmentalFatRatio?.leftLeg ??
-                                       inBodyData.segmentalBodyFat?.leftLeg;
-                          const numValue = parseNumericValue(value);
-                          return numValue !== undefined
-                            ? `${numValue.toFixed(1)}kg`
-                            : "N/A";
-                        })()}
-                      </Text>
-                      <Text style={styles.metricRange}></Text>
-                    </View>
+                    {[
+                      { label: "오른팔 체지방", keys: ["rightArmFat"] },
+                      { label: "왼팔 체지방", keys: ["leftArmFat"] },
+                      { label: "몸통 체지방", keys: ["trunkFat"] },
+                      { label: "오른다리 체지방", keys: ["rightLegFat"] },
+                      { label: "왼다리 체지방", keys: ["leftLegFat"] },
+                    ].map((item, index, array) => {
+                      const value =
+                        inBodyData[item.keys[0]] ??
+                        inBodyData.muscleFatAnalysis?.[item.keys[0]] ??
+                        inBodyData.segmentalBodyFat?.[item.keys[0]] ??
+                        inBodyData.segmentalBodyFat?.[item.keys[0].replace("Fat", "Arm").replace("Fat", "Leg").replace("Fat", "Trunk")] ??
+                        inBodyData.segmentalFatRatio?.[item.keys[0].replace("Fat", "Arm").replace("Fat", "Leg").replace("Fat", "Trunk")] ??
+                        null;
+                      const numValue = parseNumericValue(value);
+                      return (
+                        <View
+                          key={item.keys[0]}
+                          style={[
+                            styles.metricItem,
+                            index === array.length - 1 && styles.metricItemLast,
+                          ]}>
+                          <Text style={styles.metricName}>{item.label}</Text>
+                          <Text style={styles.metricValue}>
+                            {numValue !== undefined
+                              ? `${numValue.toFixed(1)}kg`
+                              : "-"}
+                          </Text>
+                          <Text style={styles.metricRange}></Text>
+                        </View>
+                      );
+                    })}
                   </View>
                 </View>
               </>

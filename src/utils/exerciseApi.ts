@@ -746,11 +746,14 @@ export interface SavedWorkoutGroup {
 }
 
 export const fetchSavedWorkouts = async (
-  userId: number
+  userId: number | string,
+  date: string // yyyy-MM-dd 형식
 ): Promise<SavedWorkoutGroup[]> => {
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-    const url = `${SAVED_WORKOUTS_API_URL}/${encodeURIComponent(userId)}`;
+    const url = `${SAVED_WORKOUTS_API_URL}/${encodeURIComponent(
+      String(userId)
+    )}/${date}`;
     console.log("[WORKOUT][SAVED] 조회 요청:", url);
     const response = await axios.get(url, {
       headers: {
