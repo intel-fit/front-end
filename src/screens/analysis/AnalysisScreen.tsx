@@ -1028,10 +1028,12 @@ const AnalysisScreen = ({ navigation }: any) => {
         url,
         method: "GET",
         aiUserId,
+        hasToken: !!token,
       });
 
       const response = await axios.get<any>(url, {
         headers: {
+          Authorization: token ? `Bearer ${token}` : undefined,
           Accept: "application/json",
         },
       });
@@ -1498,7 +1500,7 @@ const AnalysisScreen = ({ navigation }: any) => {
     try {
       setNutritionGraphLoading(true);
 
-      // 캐시 확인
+      // 캐시 확인 (임시로 캐시 비활성화하여 항상 새 그래프 로드)
       const cacheKey = `nutrition_weekly_graph_${aiUserId}`;
       const cachedData = await AsyncStorage.getItem(cacheKey);
       if (cachedData) {
@@ -1506,14 +1508,23 @@ const AnalysisScreen = ({ navigation }: any) => {
           const cached = JSON.parse(cachedData);
           const cacheTime = cached.timestamp || 0;
           const now = Date.now();
-          // 1시간 캐시 유효
-          if (now - cacheTime < 3600000) {
+          // 1시간 캐시 유효 (임시로 캐시 사용 안 함 - 항상 새 그래프 로드)
+          if (false && now - cacheTime < 3600000) {
             if (__DEV__) {
               console.log("[ANALYSIS] 식단 주간 그래프: 캐시에서 로드");
             }
+            console.log("[ANALYSIS] 캐시에서 식단 그래프 로드:", {
+              hasData: !!cached.data,
+              dataLength: cached.data?.length || 0,
+              dataPrefix: cached.data?.substring(0, 50) || "",
+            });
             setNutritionWeeklyGraph(cached.data);
             setNutritionGraphLoading(false);
             return;
+          } else {
+            console.log(
+              "[ANALYSIS] 식단 주간 그래프: 캐시 무효화, 새 그래프 로드"
+            );
           }
         } catch (e) {
           // 캐시 파싱 실패 시 무시
@@ -1713,6 +1724,17 @@ const AnalysisScreen = ({ navigation }: any) => {
         dataPrefix: graphData?.substring(0, 50) || "",
         startsWithDataImage: graphData?.startsWith("data:image") || false,
       });
+
+      // 그래프 데이터가 너무 짧으면 (빈 그래프일 수 있음) null로 설정
+      if (graphData && graphData.length < 5000) {
+        console.warn("[ANALYSIS] 식단 주간 그래프 데이터가 너무 짧음:", {
+          length: graphData.length,
+          prefix: graphData.substring(0, 100),
+        });
+        // 그래프 데이터가 너무 짧으면 빈 그래프일 수 있으므로 null로 설정하지 않고 그대로 표시
+        // (서버에서 빈 그래프를 반환할 수도 있음)
+      }
+
       setNutritionWeeklyGraph(graphData);
       setNutritionGraphLoading(false);
     } catch (error: any) {
@@ -2339,6 +2361,15 @@ const AnalysisScreen = ({ navigation }: any) => {
           })()}
 
           {/* 식단 주간 그래프 */}
+          {(() => {
+            console.log("[ANALYSIS] 식단 그래프 렌더링 조건:", {
+              nutritionGraphLoading,
+              hasGraph: !!nutritionWeeklyGraph,
+              graphLength: nutritionWeeklyGraph?.length || 0,
+              graphPrefix: nutritionWeeklyGraph?.substring(0, 50) || "",
+            });
+            return null;
+          })()}
           {nutritionGraphLoading ? (
             <View style={styles.graphLoadingContainer}>
               <ActivityIndicator size="small" color="#d6ff4b" />
@@ -2347,22 +2378,50 @@ const AnalysisScreen = ({ navigation }: any) => {
           ) : nutritionWeeklyGraph && nutritionWeeklyGraph.trim() !== "" ? (
             <View style={styles.weeklyGraphContainer}>
               <Text style={styles.graphTitle}>주간 식단 분석</Text>
+              {(() => {
+                console.log("[ANALYSIS] 식단 그래프 컨테이너 렌더링:", {
+                  hasGraph: !!nutritionWeeklyGraph,
+                  graphLength: nutritionWeeklyGraph?.length || 0,
+                  startsWithHttp:
+                    nutritionWeeklyGraph?.startsWith("http") || false,
+                  startsWithDataImage:
+                    nutritionWeeklyGraph?.startsWith("data:image") || false,
+                  nutritionGraphLoading,
+                });
+                return null;
+              })()}
               {nutritionWeeklyGraph.startsWith("http") ||
               nutritionWeeklyGraph.startsWith("data:image") ? (
                 <Image
+                  key={`nutrition-graph-${nutritionWeeklyGraph.substring(
+                    0,
+                    50
+                  )}`}
                   source={{ uri: nutritionWeeklyGraph }}
                   style={styles.weeklyGraphImage}
                   resizeMode="contain"
                   onError={(e) => {
                     console.error(
                       "[ANALYSIS] 식단 그래프 이미지 로드 실패:",
-                      e.nativeEvent.error
+                      e.nativeEvent.error,
+                      {
+                        uriLength: nutritionWeeklyGraph.length,
+                        uriPrefix: nutritionWeeklyGraph.substring(0, 100),
+                        error: e.nativeEvent.error,
+                      }
                     );
                   }}
                   onLoad={() => {
-                    if (__DEV__) {
-                      console.log("[ANALYSIS] 식단 그래프 이미지 로드 완료");
-                    }
+                    console.log(
+                      "[ANALYSIS] 식단 그래프 이미지 로드 완료 및 표시됨:",
+                      {
+                        uriLength: nutritionWeeklyGraph.length,
+                        uriPrefix: nutritionWeeklyGraph.substring(0, 50),
+                      }
+                    );
+                  }}
+                  onLoadStart={() => {
+                    console.log("[ANALYSIS] 식단 그래프 이미지 로드 시작");
                   }}
                 />
               ) : nutritionWeeklyGraph.startsWith("<svg") ||
@@ -2378,7 +2437,16 @@ const AnalysisScreen = ({ navigation }: any) => {
                 </View>
               )}
             </View>
-          ) : null}
+          ) : (
+            <View style={styles.weeklyGraphContainer}>
+              <Text style={styles.graphTitle}>주간 식단 분석</Text>
+              <View style={styles.weeklyGraphPlaceholder}>
+                <Text style={styles.graphPlaceholderText}>
+                  그래프 데이터를 불러오는 중입니다...
+                </Text>
+              </View>
+            </View>
+          )}
 
           {(() => {
             if (__DEV__) {
