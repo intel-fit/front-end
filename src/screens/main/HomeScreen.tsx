@@ -962,7 +962,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.7,
     shadowRadius: 14,
     elevation: 10,
-    overflow: "visible",
+    overflow: "hidden",
   },
   titleContainer: {
     marginBottom: 8,
@@ -1004,8 +1004,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     shadowRadius: 0,
     elevation: 0,
-    zIndex: 10,
-    overflow: "visible",
   },
   enhancedRecButtonWrapper: {
     flex: 1,
@@ -1020,7 +1018,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     shadowRadius: 0,
     elevation: 0,
-    zIndex: 10,
   },
   enhancedRecButton: {
     flexDirection: "row",
@@ -1039,8 +1036,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     shadowRadius: 0,
     elevation: 0,
-    zIndex: 10,
-    overflow: "hidden",
   },
   buttonIcon: {
     fontSize: 20,

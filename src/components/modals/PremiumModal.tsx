@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 24,
-    gap: 10,
+    gap: 6,
   },
   intelfitText: {
     fontSize: 20,
@@ -266,6 +266,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 10,
     paddingVertical: 4,
+    paddingLeft: 8,
     borderRadius: 6,
     backgroundColor: "#e3ff7c",
   },
