@@ -1,3 +1,5 @@
+// src/screens/main/MyPageScreen.tsx
+
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -19,13 +21,16 @@ import ProfileEditModal from "../../components/modals/ProfileEditModal";
 import RoutineRecommendModal from "../../components/modals/RoutineRecommendModal";
 import MealRecommendModal from "../../components/modals/MealRecommendModal";
 import DeleteAccountModal from "../../components/modals/DeleteAccountModal";
+import { useRoute } from "@react-navigation/native";
 
 const MyPageScreen = ({ navigation }: any) => {
+  const route = useRoute<any>();
+
   const [profileData, setProfileData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [currentMembershipType, setCurrentMembershipType] = useState<
     "FREE" | "PREMIUM"
-  >("FREE"); // ✅ 추가
+  >("FREE");
 
   // 모달 상태
   const [isAIAnalysisModalOpen, setIsAIAnalysisModalOpen] = useState(false);
@@ -40,9 +45,22 @@ const MyPageScreen = ({ navigation }: any) => {
   const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] =
     useState(false);
 
+  //  1. 외부에서 넘어온 파라미터 감지 (내 플랜 모달 열기)
+  useEffect(() => {
+    if (route.params?.openPlanModal) {
+      console.log("🔓 마이페이지 진입: 내 플랜 모달 자동 오픈");
+      // 모달 열기
+      setIsMyPlanModalOpen(true);
+
+      // 파라미터 초기화 (다음에 마이페이지 들어올 때 또 열리는 것 방지)
+      navigation.setParams({ openPlanModal: undefined });
+    }
+  }, [route.params]);
+
+  //  2. 초기 데이터 로드
   useEffect(() => {
     fetchProfile();
-    loadMembershipType(); // ✅ 추가
+    loadMembershipType();
   }, []);
 
   const fetchProfile = async () => {
@@ -51,14 +69,14 @@ const MyPageScreen = ({ navigation }: any) => {
       const data = await authAPI.getProfile();
       setProfileData(data);
     } catch (error: any) {
-      Alert.alert("오류", "프로필 정보를 불러오는데 실패했습니다.");
+      console.error("프로필 로드 실패:", error);
       if (error.status === 401) navigation.replace("Login");
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ 멤버십 타입 로드
+  //  멤버십 타입 로드
   const loadMembershipType = async () => {
     try {
       const membershipType = await AsyncStorage.getItem("membershipType");
@@ -70,7 +88,7 @@ const MyPageScreen = ({ navigation }: any) => {
     }
   };
 
-  // ✅ 테스트용 멤버십 전환 함수
+  //  테스트용 멤버십 전환 함수
   const handleToggleMembership = async () => {
     const newType = currentMembershipType === "FREE" ? "PREMIUM" : "FREE";
 
@@ -220,7 +238,7 @@ const MyPageScreen = ({ navigation }: any) => {
                 <Text style={styles.userTitle}>
                   {getMembershipTypeText(currentMembershipType)}
                 </Text>
-                {/* ✅ 현재 멤버십 상태 표시 */}
+                {/*  현재 멤버십 상태 표시 */}
                 <View
                   style={[
                     styles.membershipStatusBadge,
@@ -254,11 +272,11 @@ const MyPageScreen = ({ navigation }: any) => {
 
         <View style={styles.separator} />
 
-        {/* ✅ 테스트 섹션 - 가장 위로 이동 */}
+        {/* 테스트 섹션 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🧪 개발 테스트 (개발 전용)</Text>
           <View style={styles.sectionLinks}>
-            {/* ✅ 멤버십 전환 버튼 */}
+            {/*  멤버십 전환 버튼 */}
             <TouchableOpacity
               style={styles.linkItem}
               onPress={handleToggleMembership}
@@ -587,7 +605,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: NEW_COLORS.text,
   },
-  // ✅ 멤버십 배지 컨테이너
   membershipBadgeContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -598,7 +615,6 @@ const styles = StyleSheet.create({
     color: NEW_COLORS.accent,
     fontWeight: "500",
   },
-  // ✅ 멤버십 상태 배지
   membershipStatusBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -675,7 +691,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#000",
   },
-  // ✅ 상태 배지 스타일
   statusBadge: {
     backgroundColor: NEW_COLORS.separator,
     paddingHorizontal: 10,

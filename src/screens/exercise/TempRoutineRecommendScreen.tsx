@@ -301,7 +301,7 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(false);
   const [currentPlanId, setCurrentPlanId] = useState<number | null>(null);
 
-  // ✅ 추가: 무료/프리미엄 회원 상태
+  //  무료/프리미엄 회원 상태
   const [isFreeUser, setIsFreeUser] = useState<boolean>(true);
   const [hasUsedWeeklyRecommendation, setHasUsedWeeklyRecommendation] =
     useState<boolean>(false);
@@ -342,10 +342,10 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
 
   useEffect(() => {
     loadSavedRoutines();
-    loadUserData(); // ✅ 추가
+    loadUserData();
   }, []);
 
-  // ✅ 추가: 사용자 데이터 로드
+  //사용자 데이터 로드
   const loadUserData = async () => {
     try {
       const testType = await AsyncStorage.getItem("testRoutineMembershipType");
@@ -368,7 +368,7 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
     }
   };
 
-  // ✅ 추가: 주의 시작일 계산
+  // 주의 시작일 계산
   const getWeekStart = (date: Date): Date => {
     const d = new Date(date);
     const day = d.getDay();
@@ -376,7 +376,7 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
     return new Date(d.setDate(diff));
   };
 
-  // ✅ 추가: 회원 등급 테스트 전환
+  // 회원 등급 테스트 전환
   const toggleMembershipTest = async () => {
     const newType = isFreeUser ? "PREMIUM" : "FREE";
     await AsyncStorage.setItem("testRoutineMembershipType", newType);
@@ -456,7 +456,7 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
   };
 
   const handleGetRoutine = async () => {
-    // ✅ 추가: 무료 회원 제한 체크
+    // 무료 회원 제한 체크
     if (hasUsedWeeklyRecommendation && isFreeUser) {
       Alert.alert(
         "알림",
@@ -537,7 +537,7 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
         setShowRoutine(true);
         setSelectedDay(0);
 
-        // ✅ 추가: 무료 회원 사용 기록
+        // 무료 회원 사용 기록
         if (isFreeUser) {
           await AsyncStorage.setItem(
             "lastRoutineRecommendDate",
@@ -798,7 +798,7 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
             </View>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>운동 루틴</Text>
-          {/* ✅ 추가: 테스트 버튼 */}
+          {/* 테스트 버튼 */}
           <TouchableOpacity
             onPress={toggleMembershipTest}
             style={styles.testButton}
@@ -832,7 +832,7 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
                 AI가 당신의 목표에 맞는{"\n"}완벽한 루틴을 설계합니다
               </Text>
 
-              {/* ✅ 추가: 무료 회원 배너 */}
+              {/* 무료 회원 배너 */}
               {isFreeUser && (
                 <View style={styles.freeUserBannerContainer}>
                   <LinearGradient
@@ -968,10 +968,9 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
                             {
                               text: "업그레이드",
                               onPress: () => {
-                                Alert.alert(
-                                  "준비 중",
-                                  "프리미엄 기능은 곧 출시됩니다!"
-                                );
+                                navigation.navigate("MyPage", {
+                                  openPlanModal: true,
+                                } as never);
                               },
                             },
                           ]

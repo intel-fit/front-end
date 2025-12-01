@@ -19,12 +19,7 @@ export type {
 } from "./recommendedMealAPI";
 export { healthScoreAPI } from "./healthScoreAPI";
 export type { ScoreTrendItem } from "./healthScoreAPI";
-export type {
-  TempFoodItem,
-  TempMealItem,
-  TempDailyPlanResponse,
-} from "./tempRecommendedMealAPI";
-export { tempRecommendedMealAPI } from "./tempRecommendedMealAPI";
+
 // 향후 추가될 API들
 // export {exerciseAPI} from './exerciseAPI';
 // export {profileAPI} from './profileAPI';
