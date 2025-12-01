@@ -63,7 +63,6 @@ export const chatAPI = {
         coachStyle,
       });
 
-      // ✅ API_BASE_URL 사용으로 변경
       const url = `${API_BASE_URL}/api/ai/coach/chat`;
 
       const response = await fetch(url, {

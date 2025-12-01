@@ -1,3 +1,5 @@
+// src/screens/main/HomeScreen.tsx
+
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -6,6 +8,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
@@ -13,7 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../../theme/colors";
 import { ROUTES } from "../../constants/routes";
 import { useDate } from "../../contexts/DateContext";
-import { homeAPI } from "../../services";
+import { homeAPI, authAPI } from "../../services";
 import { getTodayWorkoutTime } from "../../utils/exerciseApi";
 import { getLatestInBody } from "../../utils/inbodyApi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -29,6 +32,10 @@ const HomeScreen = ({ navigation }: any) => {
   const [inBodyData, setInBodyData] = useState<any>(null);
   const isLoadingRef = useRef(false);
 
+  // ✅ 추가: 멤버십 정보 state
+  const [membershipType, setMembershipType] = useState<string>("FREE");
+  const [mealTokens, setMealTokens] = useState<number>(0);
+
   // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
   const formatDateToString = (date: Date): string => {
     const year = date.getFullYear();
@@ -42,7 +49,10 @@ const HomeScreen = ({ navigation }: any) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
+      2,
+      "0"
+    )}:${String(secs).padStart(2, "0")}`;
   };
 
   // 주간 진행률 데이터 로드
@@ -113,7 +123,9 @@ const HomeScreen = ({ navigation }: any) => {
     try {
       const latestRecord = await getLatestInBody();
       if (latestRecord) {
-        const latestData = latestRecord?.success ? latestRecord.inBody : latestRecord;
+        const latestData = latestRecord?.success
+          ? latestRecord.inBody
+          : latestRecord;
         setInBodyData(latestData);
       } else {
         setInBodyData(null);
@@ -121,6 +133,46 @@ const HomeScreen = ({ navigation }: any) => {
     } catch (e: any) {
       console.error("인바디 데이터 로드 실패:", e);
       setInBodyData(null);
+    }
+  };
+
+  const loadProfileInfo = async () => {
+    try {
+      const profile = await authAPI.getProfile();
+
+      console.log("membershipType:", profile.membershipType);
+
+      setMembershipType(profile.membershipType);
+      setMealTokens(profile.mealRecommendTokens ?? 1);
+    } catch (error) {
+      console.error("프로필 로드 실패:", error);
+      setMembershipType("FREE");
+      setMealTokens(1);
+    }
+  };
+
+  const handleMealRecommendNavigation = async () => {
+    try {
+      const profile = await authAPI.getProfile();
+
+      console.log("🔍 식단 추천 시도:", {
+        membershipType: profile.membershipType,
+        mealTokens: profile.mealRecommendTokens,
+      });
+
+      // PREMIUM이면 무제한 사용 가능
+      if (profile.membershipType === "PREMIUM") {
+        navigation.navigate(ROUTES.MEAL_RECOMMEND);
+        return;
+      }
+
+      // FREE인 경우 → 토큰 체크 없이 바로 이동
+      // (토큰 체크는 TempMealRecommendScreen에서 수행)
+      navigation.navigate(ROUTES.TEMP_MEAL_RECOMMEND);
+    } catch (error) {
+      console.error("❌ 식단 추천 네비게이션 실패:", error);
+      // 에러 발생 시 기본 동작
+      navigation.navigate(ROUTES.TEMP_MEAL_RECOMMEND);
     }
   };
 
@@ -138,6 +190,7 @@ const HomeScreen = ({ navigation }: any) => {
         loadHomeData(),
         loadTodayWorkoutTime(),
         loadInBodyData(),
+        loadProfileInfo(),
       ]).finally(() => {
         isLoadingRef.current = false;
       });
@@ -187,6 +240,7 @@ const HomeScreen = ({ navigation }: any) => {
           </View>
         </View>
 
+        {/* ✅ 식단/운동 추천 카드 */}
         <View style={styles.enhancedRecommendationWrapper}>
           <View style={styles.enhancedRecommendationCard}>
             <View style={styles.enhancedRecommendationHeader}>
@@ -199,16 +253,18 @@ const HomeScreen = ({ navigation }: any) => {
                 </LinearGradient>
               </View>
 
-              <Text style={styles.enhancedRecommendationTitle}>
-                회원님만을 위한{"\n"}맞춤형 식단/루틴을 받아보세요!
-              </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.enhancedRecommendationTitle}>
+                  회원님만을 위한{"\n"}맞춤형 식단/루틴을 받아보세요!
+                </Text>
+              </View>
             </View>
 
             <View style={styles.enhancedRecommendationButtons}>
               {/* 식단 */}
               <TouchableOpacity
                 style={styles.enhancedRecButtonWrapper}
-                onPress={() => navigation.navigate(ROUTES.MEAL_RECOMMEND)}
+                onPress={handleMealRecommendNavigation}
               >
                 <LinearGradient
                   colors={["#e3ff7c", "#b5ff70"]}
@@ -416,10 +472,15 @@ const HomeScreen = ({ navigation }: any) => {
           <View style={[styles.bodyStatCard]}>
             <Text style={styles.bodyStatLabel}>체중</Text>
             <Text style={styles.bodyStatValue}>
-              {inBodyData?.weight 
+              {inBodyData?.weight
                 ? `${inBodyData.weight.toFixed(1)}kg`
                 : inBodyData?.bodyComposition?.weight
-                ? `${parseFloat(String(inBodyData.bodyComposition.weight).replace(/[^\d.]/g, '')).toFixed(1)}kg`
+                ? `${parseFloat(
+                    String(inBodyData.bodyComposition.weight).replace(
+                      /[^\d.]/g,
+                      ""
+                    )
+                  ).toFixed(1)}kg`
                 : inBodyData?.muscleFatAnalysis?.weight
                 ? `${inBodyData.muscleFatAnalysis.weight.toFixed(1)}kg`
                 : "-"}
@@ -432,7 +493,9 @@ const HomeScreen = ({ navigation }: any) => {
               {inBodyData?.skeletalMuscleMass
                 ? `${inBodyData.skeletalMuscleMass.toFixed(1)}kg`
                 : inBodyData?.muscleFatAnalysis?.skeletalMuscleMass
-                ? `${inBodyData.muscleFatAnalysis.skeletalMuscleMass.toFixed(1)}kg`
+                ? `${inBodyData.muscleFatAnalysis.skeletalMuscleMass.toFixed(
+                    1
+                  )}kg`
                 : "-"}
             </Text>
           </View>
@@ -445,7 +508,12 @@ const HomeScreen = ({ navigation }: any) => {
                 : inBodyData?.muscleFatAnalysis?.bodyFatMass
                 ? `${inBodyData.muscleFatAnalysis.bodyFatMass.toFixed(1)}kg`
                 : inBodyData?.bodyComposition?.bodyFatMass
-                ? `${parseFloat(String(inBodyData.bodyComposition.bodyFatMass).replace(/[^\d.]/g, '')).toFixed(1)}kg`
+                ? `${parseFloat(
+                    String(inBodyData.bodyComposition.bodyFatMass).replace(
+                      /[^\d.]/g,
+                      ""
+                    )
+                  ).toFixed(1)}kg`
                 : "-"}
             </Text>
           </View>
@@ -955,6 +1023,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#fff",
     lineHeight: 26,
+  },
+  tokenInfo: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#a8e063",
+    marginTop: 8,
+    letterSpacing: 0.3,
   },
   enhancedRecommendationButtons: {
     gap: 12,
