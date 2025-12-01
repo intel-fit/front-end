@@ -81,8 +81,10 @@ export const fetchExercises = async (
 
     const url = `${EXERCISE_API_URL}?${queryParams.toString()}`;
 
-    console.log("API 요청 URL:", url);
-    console.log("토큰:", token ? "있음" : "없음");
+    if (__DEV__) {
+      console.log("API 요청 URL:", url);
+      console.log("토큰:", token ? "있음" : "없음");
+    }
 
     const response = await axios.get(url, {
       headers: {
@@ -91,7 +93,7 @@ export const fetchExercises = async (
       },
     });
 
-    console.log("API 응답 성공:", response.data);
+    // 응답 데이터 로그는 제거 (너무 긴 로그 방지)
     return response.data;
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
@@ -530,46 +532,6 @@ export const fetchDateProgress = async (
   }
 };
 
-// 오늘 운동시간 누적 API
-export interface PostWorkoutTimeRequest {
-  userId: number;
-  seconds: number;
-}
-
-export const postWorkoutTime = async (
-  userId: number,
-  seconds: number
-): Promise<void> => {
-  try {
-    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-    const url = `${WORKOUTS_API_URL}/time`;
-    const payload: PostWorkoutTimeRequest = {
-      userId,
-      seconds,
-    };
-    console.log("[WORKOUT][TIME] 운동 시간 누적 요청:", payload);
-    const response = await axios.post(url, payload, {
-      headers: {
-        Authorization: `Bearer ${token || ""}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-    });
-    console.log("[WORKOUT][TIME] 운동 시간 누적 응답:", response.status);
-  } catch (error: any) {
-    if (axios.isAxiosError(error)) {
-      console.error("[WORKOUT][TIME] 운동 시간 누적 에러:", {
-        message: error.message,
-        status: error.response?.status,
-        data: error.response?.data,
-      });
-    } else {
-      console.error("[WORKOUT][TIME] 운동 시간 누적 예외:", error);
-    }
-    throw error;
-  }
-};
-
 // 오늘 운동시간 조회 API
 export interface GetTodayWorkoutTimeResponse {
   userId: number;
@@ -617,7 +579,7 @@ export interface SaveWorkoutTitleRequest {
   date: string; // 오늘의 날짜 정보만 넣어야함 (YYYY-MM-DD)
   intensity?: number[]; // 무거워요(7.5), 선택안함(5.0), 가벼워요(2.5)
   feedback?: string[]; // 좋아요(like), 선택안함(neutral), 싫어요(dislike)
-  seconds?: number; // 운동 시간 (초 단위)
+  seconds: number; // 운동 시간 (초 단위) - 필수 필드
 }
 
 export interface SaveWorkoutTitleResponse {
@@ -638,22 +600,51 @@ export const saveWorkoutTitle = async (
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
     const url = `${WORKOUTS_API_URL}/save`;
 
-    // 오늘 날짜 (YYYY-MM-DD 형식)
-    const today = new Date().toISOString().slice(0, 10);
+    // 오늘 날짜 (YYYY-MM-DD 형식) - 로컬 시간대 사용 (서버와 날짜 일치 보장)
+    // toISOString()은 UTC를 사용하므로 타임존 차이로 날짜가 어긋날 수 있음
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    const today = `${year}-${month}-${day}`;
+
+    // intensity 배열을 float 형식으로 보장 (서버가 double/float 배열을 기대)
+    const intensityFloat =
+      intensity && intensity.length > 0
+        ? intensity.map((val) => parseFloat(val.toString()))
+        : undefined;
 
     const payload: SaveWorkoutTitleRequest = {
       userId,
-      saveTitle,
+      saveTitle: saveTitle.trim(),
       date: today,
-      ...(intensity && intensity.length > 0 && { intensity }),
+      // intensity와 feedback은 운동 개수만큼 있어야 함 (n개 운동이면 배열 길이 n)
+      // intensity는 float 형식으로 보장 (5 → 5.0)
+      ...(intensityFloat &&
+        intensityFloat.length > 0 && { intensity: intensityFloat }),
       ...(feedback && feedback.length > 0 && { feedback }),
-      ...(seconds !== undefined && seconds !== null && { seconds }),
+      // seconds는 필수 필드 (초 단위)
+      // 백엔드가 0을 허용하지 않을 수 있으므로 최소값 1로 설정
+      seconds:
+        seconds !== undefined && seconds !== null && seconds > 0 ? seconds : 1,
     };
+
+    // 페이로드 검증 로그
     console.log("[WORKOUT][SAVE] API 요청:", {
       url,
       method: "POST",
       payload,
       hasToken: !!token,
+      payloadDetails: {
+        userId: typeof payload.userId,
+        saveTitle: payload.saveTitle,
+        saveTitleLength: payload.saveTitle.length,
+        date: payload.date,
+        intensityLength: payload.intensity?.length,
+        feedbackLength: payload.feedback?.length,
+        seconds: payload.seconds,
+        secondsType: typeof payload.seconds,
+      },
     });
 
     const response = await axios.post(url, payload, {
@@ -683,13 +674,48 @@ export const saveWorkoutTitle = async (
     return response.data as SaveWorkoutTitleResponse;
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
+      const errorData = error.response?.data;
+      const requestPayload =
+        typeof error.config?.data === "string"
+          ? JSON.parse(error.config.data)
+          : error.config?.data;
+
       console.error("[WORKOUT][SAVE] API 에러:", {
         message: error.message,
         status: error.response?.status,
         statusText: error.response?.statusText,
-        data: error.response?.data,
+        data: errorData,
+        // 상세 에러 정보 확인
+        errorCode: errorData?.code,
+        errorMessage: errorData?.message,
+        validationErrors: errorData?.validationErrors,
+        fieldErrors: errorData?.fieldErrors,
+        details: errorData?.details,
+        errors: errorData?.errors,
         url: error.config?.url,
-        payload: error.config?.data,
+        payload: requestPayload,
+        // 페이로드 상세 분석
+        payloadAnalysis: {
+          userId: requestPayload?.userId,
+          saveTitle: requestPayload?.saveTitle,
+          saveTitleLength: requestPayload?.saveTitle?.length,
+          date: requestPayload?.date,
+          isToday:
+            requestPayload?.date ===
+            (() => {
+              const now = new Date();
+              const year = now.getFullYear();
+              const month = String(now.getMonth() + 1).padStart(2, "0");
+              const day = String(now.getDate()).padStart(2, "0");
+              return `${year}-${month}-${day}`;
+            })(),
+          intensity: requestPayload?.intensity,
+          intensityLength: requestPayload?.intensity?.length,
+          feedback: requestPayload?.feedback,
+          feedbackLength: requestPayload?.feedback?.length,
+          seconds: requestPayload?.seconds,
+          hasSeconds: requestPayload?.seconds !== undefined,
+        },
       });
     } else {
       console.error("[WORKOUT][SAVE] 예외:", error);
@@ -720,11 +746,14 @@ export interface SavedWorkoutGroup {
 }
 
 export const fetchSavedWorkouts = async (
-  userId: number
+  userId: number | string,
+  date: string // yyyy-MM-dd 형식
 ): Promise<SavedWorkoutGroup[]> => {
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-    const url = `${SAVED_WORKOUTS_API_URL}/${encodeURIComponent(userId)}`;
+    const url = `${SAVED_WORKOUTS_API_URL}/${encodeURIComponent(
+      String(userId)
+    )}/${date}`;
     console.log("[WORKOUT][SAVED] 조회 요청:", url);
     const response = await axios.get(url, {
       headers: {

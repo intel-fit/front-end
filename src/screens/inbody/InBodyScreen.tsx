@@ -10,16 +10,24 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
-import { getLatestInBody } from "../../utils/inbodyApi";
+import {
+  getLatestInBody,
+  getInBodyByDatePath,
+  getInBodyList,
+} from "../../utils/inbodyApi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { eventBus } from "../../utils/eventBus";
+import InbodyDateNavigator from "../../components/common/InbodyDateNavigator";
+import InBodyCalendarModal from "../../components/common/InBodyCalendarModal";
 
 const InBodyScreen = ({ navigation, route }: any) => {
   const [inBodyData, setInBodyData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
   const fromPhotoUpload = route?.params?.fromPhotoUpload;
-
 
   const parseNumericValue = useCallback((value: any): number | undefined => {
     if (value === null || value === undefined) return undefined;
@@ -119,7 +127,97 @@ const InBodyScreen = ({ navigation, route }: any) => {
     [parseRangeRatio]
   );
 
+  // 날짜별 인바디 정보 조회
+  const fetchInBodyDataByDate = useCallback(async (date: Date) => {
+    // 날짜를 YYYY-MM-DD 형식으로 변환 (에러 처리에서도 사용하기 위해 밖으로 이동)
+    const dateStr = `${date.getFullYear()}-${String(
+      date.getMonth() + 1
+    ).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
+    try {
+      setLoading(true);
+
+      console.log("[INBODY SCREEN] 날짜별 인바디 데이터 조회 시작:", dateStr);
+      const response = await getInBodyByDatePath(dateStr);
+
+      console.log("[INBODY SCREEN] 날짜별 API 응답:", {
+        hasResponse: !!response,
+        responseType: typeof response,
+        hasInBody: !!response?.inBody,
+        responseKeys: response ? Object.keys(response) : [],
+      });
+
+      // 응답 구조 처리: { success: true, inBody: {...} } 또는 직접 inBody 객체
+      const data = response?.success ? response.inBody : response;
+
+      console.log("[INBODY SCREEN] 처리된 날짜별 데이터:", {
+        hasData: !!data,
+        hasMeasurementDate: !!data?.measurementDate,
+        measurementDate: data?.measurementDate,
+        dataKeys: data ? Object.keys(data) : [],
+      });
+
+      // 전체 응답 구조 확인 (segmentalFatAnalysis 찾기)
+      console.log("[INBODY SCREEN] 날짜별 전체 응답 구조 확인:", {
+        responseSuccess: response?.success,
+        responseInBody: response?.inBody ? Object.keys(response.inBody) : null,
+        responseKeys: response ? Object.keys(response) : [],
+        hasSegmentalFatAnalysisInResponse: !!response?.segmentalFatAnalysis,
+        hasSegmentalFatAnalysisInInBody:
+          !!response?.inBody?.segmentalFatAnalysis,
+        hasSegmentalFatAnalysisInData: !!data?.segmentalFatAnalysis,
+        segmentalFatAnalysisInResponse: response?.segmentalFatAnalysis,
+        segmentalFatAnalysisInInBody: response?.inBody?.segmentalFatAnalysis,
+        segmentalFatAnalysisInData: data?.segmentalFatAnalysis,
+      });
+
+      if (data && data.measurementDate) {
+        const normalizedDate = data.measurementDate.includes(".")
+          ? data.measurementDate
+          : data.measurementDate.replace(/-/g, ".");
+
+        setInBodyData({
+          ...data,
+          measurementDate: normalizedDate,
+        });
+        console.log("[INBODY SCREEN] 날짜별 인바디 데이터 설정 완료");
+        console.log("[INBODY SCREEN] 날짜별 segmentalFatAnalysis 확인:", {
+          segmentalFatAnalysis: data.segmentalFatAnalysis,
+          hasSegmentalFatAnalysis: !!data.segmentalFatAnalysis,
+          rightArm: data.segmentalFatAnalysis?.rightArm,
+          leftArm: data.segmentalFatAnalysis?.leftArm,
+          trunk: data.segmentalFatAnalysis?.trunk,
+          rightLeg: data.segmentalFatAnalysis?.rightLeg,
+          leftLeg: data.segmentalFatAnalysis?.leftLeg,
+        });
+      } else {
+        // 데이터 없음은 정상적인 케이스 (에러 아님)
+        console.log("[INBODY SCREEN] 해당 날짜에 인바디 기록 없음:", dateStr);
+        setInBodyData(null);
+      }
+    } catch (error: any) {
+      // 400/404는 데이터 없음으로 처리 (에러 아님)
+      const status = error?.response?.status;
+      if (status === 400 || status === 404) {
+        console.log("[INBODY SCREEN] 해당 날짜에 인바디 기록 없음:", {
+          date: dateStr,
+          status,
+        });
+        setInBodyData(null);
+      } else {
+        // 그 외 에러만 로그 (에러 메시지는 표시하지 않음)
+        console.warn("[INBODY SCREEN] 날짜별 API 데이터 로드 실패:", {
+          message: error?.message,
+          status,
+          statusText: error?.response?.statusText,
+        });
+        setInBodyData(null);
+      }
+    } finally {
+      setLoading(false);
+      console.log("[INBODY SCREEN] 날짜별 로딩 완료");
+    }
+  }, []);
 
   // API로 최신 인바디 정보 조회 (항상 가장 최신 저장 이력 표시)
   const fetchInBodyData = useCallback(async () => {
@@ -128,7 +226,7 @@ const InBodyScreen = ({ navigation, route }: any) => {
 
       console.log("[INBODY SCREEN] 최신 인바디 데이터 조회 시작");
       const response = await getLatestInBody();
-      
+
       console.log("[INBODY SCREEN] API 응답:", {
         hasResponse: !!response,
         responseType: typeof response,
@@ -145,6 +243,20 @@ const InBodyScreen = ({ navigation, route }: any) => {
         hasMeasurementDate: !!latest?.measurementDate,
         measurementDate: latest?.measurementDate,
         latestKeys: latest ? Object.keys(latest) : [],
+      });
+
+      // 전체 응답 구조 확인 (segmentalFatAnalysis 찾기)
+      console.log("[INBODY SCREEN] 최신 전체 응답 구조 확인:", {
+        responseSuccess: response?.success,
+        responseInBody: response?.inBody ? Object.keys(response.inBody) : null,
+        responseKeys: response ? Object.keys(response) : [],
+        hasSegmentalFatAnalysisInResponse: !!response?.segmentalFatAnalysis,
+        hasSegmentalFatAnalysisInInBody:
+          !!response?.inBody?.segmentalFatAnalysis,
+        hasSegmentalFatAnalysisInLatest: !!latest?.segmentalFatAnalysis,
+        segmentalFatAnalysisInResponse: response?.segmentalFatAnalysis,
+        segmentalFatAnalysisInInBody: response?.inBody?.segmentalFatAnalysis,
+        segmentalFatAnalysisInLatest: latest?.segmentalFatAnalysis,
       });
 
       if (latest && latest.measurementDate) {
@@ -176,10 +288,34 @@ const InBodyScreen = ({ navigation, route }: any) => {
           }
         }
 
-        setInBodyData({
+        const data = {
           ...latest,
           measurementDate: normalizedDate,
+        };
+        setInBodyData(data);
+
+        // 디버깅: segmentalFatAnalysis 확인
+        console.log("[INBODY SCREEN] 최신 데이터 segmentalFatAnalysis 확인:", {
+          segmentalFatAnalysis: data.segmentalFatAnalysis,
+          hasSegmentalFatAnalysis: !!data.segmentalFatAnalysis,
+          rightArm: data.segmentalFatAnalysis?.rightArm,
+          leftArm: data.segmentalFatAnalysis?.leftArm,
+          trunk: data.segmentalFatAnalysis?.trunk,
+          rightLeg: data.segmentalFatAnalysis?.rightLeg,
+          leftLeg: data.segmentalFatAnalysis?.leftLeg,
         });
+
+        // 선택된 날짜가 없으면 최신 데이터의 날짜로 설정
+        if (!selectedDate) {
+          const dateStr = normalizedDate.replace(/\./g, "-");
+          const [year, month, day] = dateStr.split("-");
+          if (year && month && day) {
+            setSelectedDate(
+              new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+            );
+          }
+        }
+
         console.log("[INBODY SCREEN] 인바디 데이터 설정 완료");
         console.log("[INBODY SCREEN] 부위별 근육 데이터:", {
           rightArmMuscle: latest?.rightArmMuscle,
@@ -194,37 +330,182 @@ const InBodyScreen = ({ navigation, route }: any) => {
           trunkFat: latest?.trunkFat,
           rightLegFat: latest?.rightLegFat,
           leftLegFat: latest?.leftLegFat,
+          segmentalFatAnalysis: latest?.segmentalFatAnalysis,
+          hasSegmentalFatAnalysis: !!latest?.segmentalFatAnalysis,
         });
       } else {
-        console.warn("[INBODY][FETCH][LATEST] 유효한 데이터가 없습니다.", {
-          response,
-          latest,
-          hasMeasurementDate: latest?.measurementDate,
-        });
+        // 데이터 없음은 정상적인 케이스 (에러 아님)
+        console.log("[INBODY SCREEN] 인바디 기록 없음");
         setInBodyData(null);
       }
     } catch (error: any) {
-      console.error("[INBODY SCREEN] API 데이터 로드 실패:", {
-        message: error?.message,
-        status: error?.response?.status,
-        statusText: error?.response?.statusText,
-        errorCode: error?.response?.data?.code,
-        errorMessage: error?.response?.data?.message,
-        data: error?.response?.data,
-        stack: error?.stack,
-      });
-      setInBodyData(null);
+      // 400/404는 데이터 없음으로 처리 (에러 아님)
+      const status = error?.response?.status;
+      if (status === 400 || status === 404) {
+        console.log("[INBODY SCREEN] 인바디 기록 없음:", {
+          status,
+        });
+        setInBodyData(null);
+      } else {
+        // 그 외 에러만 경고 로그 (에러 메시지는 표시하지 않음)
+        console.warn("[INBODY SCREEN] API 데이터 로드 실패:", {
+          message: error?.message,
+          status,
+          statusText: error?.response?.statusText,
+        });
+        setInBodyData(null);
+      }
     } finally {
       setLoading(false);
       console.log("[INBODY SCREEN] 로딩 완료");
     }
   }, []);
 
-  // 화면이 포커스될 때마다 최신 데이터 조회
+  // 인바디 목록 조회하여 날짜 목록 가져오기
+  const fetchInBodyDates = useCallback(async () => {
+    try {
+      const list = await getInBodyList();
+      console.log("[INBODY SCREEN] 날짜 목록 API 응답:", {
+        isArray: Array.isArray(list),
+        isObject: typeof list === "object",
+        hasData: !!list?.data,
+        listKeys: list && typeof list === "object" ? Object.keys(list) : [],
+      });
+
+      if (Array.isArray(list)) {
+        const rawDates = list
+          .map((item: any) => item.measurementDate || item.date)
+          .filter((date: any) => date);
+        console.log("[INBODY SCREEN] 원본 날짜 목록:", rawDates.slice(0, 5));
+
+        const dates = rawDates.map((date: string) => {
+          // 날짜 형식 정규화 (YYYY-MM-DD 또는 YYYY.MM.DD -> YYYY.MM.DD)
+          const normalized = date
+            .replace(/-/g, ".")
+            .split("T")[0]
+            .split(" ")[0];
+          return normalized;
+        });
+
+        setAvailableDates(dates);
+        console.log(
+          "[INBODY SCREEN] 사용 가능한 날짜 목록:",
+          dates.length,
+          "개",
+          dates
+        );
+
+        // 오늘 날짜 확인
+        const today = new Date();
+        const todayKey = `${today.getFullYear()}.${String(
+          today.getMonth() + 1
+        ).padStart(2, "0")}.${String(today.getDate()).padStart(2, "0")}`;
+        console.log("[INBODY SCREEN] 오늘 날짜 확인:", {
+          todayKey,
+          isInList: dates.includes(todayKey),
+          allDates: dates,
+        });
+      } else if (list && typeof list === "object") {
+        // 응답이 객체인 경우 (예: { data: [...] })
+        const data = list.data || list.list || list.items || [];
+        if (Array.isArray(data)) {
+          const rawDates = data
+            .map((item: any) => item.measurementDate || item.date)
+            .filter((date: any) => date);
+          console.log(
+            "[INBODY SCREEN] 원본 날짜 목록 (객체):",
+            rawDates.slice(0, 5)
+          );
+
+          const dates = rawDates.map((date: string) => {
+            // 날짜 형식 정규화 (YYYY-MM-DD 또는 YYYY.MM.DD -> YYYY.MM.DD)
+            const normalized = date
+              .replace(/-/g, ".")
+              .split("T")[0]
+              .split(" ")[0];
+            return normalized;
+          });
+
+          setAvailableDates(dates);
+          console.log(
+            "[INBODY SCREEN] 사용 가능한 날짜 목록:",
+            dates.length,
+            "개",
+            dates
+          );
+
+          // 오늘 날짜 확인
+          const today = new Date();
+          const todayKey = `${today.getFullYear()}.${String(
+            today.getMonth() + 1
+          ).padStart(2, "0")}.${String(today.getDate()).padStart(2, "0")}`;
+          console.log("[INBODY SCREEN] 오늘 날짜 확인:", {
+            todayKey,
+            isInList: dates.includes(todayKey),
+            allDates: dates,
+          });
+        }
+      }
+    } catch (error: any) {
+      // 목록 조회 실패해도 날짜별 조회 기능은 동작하도록 에러만 로그
+      const status = error?.response?.status;
+      if (status === 500) {
+        console.warn("[INBODY SCREEN] 날짜 목록 조회 실패 (서버 오류):", {
+          status,
+          message: error?.message,
+        });
+      } else {
+        console.warn("[INBODY SCREEN] 날짜 목록 조회 실패:", {
+          status,
+          message: error?.message,
+        });
+      }
+      // 에러 발생 시 빈 배열 유지 (캘린더에서 모든 날짜 선택 가능)
+      setAvailableDates([]);
+    }
+  }, []);
+
+  // 화면이 포커스될 때마다 최신 데이터 조회 (날짜가 선택되지 않은 경우만)
   useFocusEffect(
     useCallback(() => {
-      fetchInBodyData();
-    }, [fetchInBodyData])
+      fetchInBodyDates();
+      if (!selectedDate) {
+        fetchInBodyData();
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedDate]) // fetchInBodyData, fetchInBodyDates 제거하여 무한 루프 방지
+  );
+
+  // 날짜 변경 핸들러
+  const handleDateChange = useCallback(
+    (date: Date) => {
+      setSelectedDate(date);
+      fetchInBodyDataByDate(date);
+    },
+    [fetchInBodyDataByDate]
+  );
+
+  // 날짜 네비게이터에서 날짜 변경 시
+  const handleDateNavigatorChange = useCallback(
+    (date: Date) => {
+      handleDateChange(date);
+    },
+    [handleDateChange]
+  );
+
+  // 캘린더 모달에서 날짜 선택 시
+  const handleCalendarDateSelect = useCallback(
+    (date: Date) => {
+      const dateStr = `${date.getFullYear()}-${String(
+        date.getMonth() + 1
+      ).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      console.log("[INBODY SCREEN] 캘린더에서 날짜 선택:", {
+        date: dateStr,
+      });
+      handleDateChange(date);
+      setShowCalendarModal(false);
+    },
+    [handleDateChange] // availableDates 제거하여 무한 루프 방지
   );
 
   // 날짜 정규화 헬퍼 함수 (YYYY-MM-DD 형식으로 통일)
@@ -237,50 +518,114 @@ const InBodyScreen = ({ navigation, route }: any) => {
   // 인바디 업데이트 이벤트 구독
   useEffect(() => {
     const unsubscribe = eventBus.on("inbodyUpdated", async (payload) => {
-      console.log("[INBODY SCREEN] 인바디 업데이트 이벤트 수신, 데이터 새로고침", payload);
-      
+      console.log(
+        "[INBODY SCREEN] 인바디 업데이트 이벤트 수신, 데이터 새로고침",
+        payload
+      );
+
       try {
         setLoading(true);
-        
-        // 최신 기록 조회
-        const latestRecord = await getLatestInBody();
-        
-        if (latestRecord) {
-          const latestData = latestRecord?.success ? latestRecord.inBody : latestRecord;
-          
-          // 저장된 날짜가 있으면 날짜 비교
-          if (payload.measurementDate && latestData?.measurementDate) {
-            const normalizedLatestDate = normalizeDateForComparison(latestData.measurementDate);
-            const normalizedPayloadDate = normalizeDateForComparison(payload.measurementDate);
-            
-            if (normalizedLatestDate === normalizedPayloadDate) {
-              // 날짜가 일치하면 최신 기록 사용
-              const normalizedDate = latestData.measurementDate.includes(".")
-                ? latestData.measurementDate
-                : latestData.measurementDate.replace(/-/g, ".");
-              
+
+        // 저장된 날짜가 있으면 날짜별 조회 사용 (더 정확함)
+        if (payload.measurementDate) {
+          // 날짜 형식 정규화 (YYYY-MM-DD)
+          const normalizedDate = normalizeDateForComparison(
+            payload.measurementDate
+          );
+
+          // 약간의 딜레이를 주어 저장이 완료되도록 함
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          console.log(
+            "[INBODY SCREEN] 저장된 날짜로 데이터 조회:",
+            normalizedDate
+          );
+          const dateRecord = await getInBodyByDatePath(normalizedDate);
+
+          if (dateRecord) {
+            const dateData = dateRecord?.success
+              ? dateRecord.inBody
+              : dateRecord;
+
+            if (dateData && dateData.measurementDate) {
+              const normalizedDateStr = dateData.measurementDate.includes(".")
+                ? dateData.measurementDate
+                : dateData.measurementDate.replace(/-/g, ".");
+
+              // 선택된 날짜도 업데이트
+              const dateStr = normalizedDate.replace(/-/g, ".");
+              const [year, month, day] = dateStr.split(".");
+              if (year && month && day) {
+                setSelectedDate(
+                  new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+                );
+              }
+
               setInBodyData({
-                ...latestData,
-                measurementDate: normalizedDate,
+                ...dateData,
+                measurementDate: normalizedDateStr,
               });
               console.log("[INBODY SCREEN] 저장된 날짜의 데이터 로드 완료");
+
+              // 날짜 목록도 새로고침
+              await fetchInBodyDates();
+
+              // 저장된 날짜를 목록에 추가 (API 응답이 늦을 수 있으므로)
+              setAvailableDates((prev) => {
+                const dateKey = normalizedDateStr;
+                if (!prev.includes(dateKey)) {
+                  const updated = [...prev, dateKey].sort().reverse(); // 최신 날짜가 앞에 오도록 정렬
+                  console.log("[INBODY SCREEN] 저장된 날짜를 목록에 추가:", {
+                    dateKey,
+                    updatedDates: updated,
+                  });
+                  return updated;
+                }
+                return prev;
+              });
               return;
-            } else {
-              console.log("[INBODY SCREEN] 최신 기록의 날짜가 일치하지 않음, 최신 데이터 사용");
             }
           }
-          
-          // 날짜가 일치하지 않거나 저장된 날짜 정보가 없으면 최신 데이터 사용
+        }
+
+        // 날짜가 없거나 날짜별 조회 실패 시 최신 기록 조회
+        console.log("[INBODY SCREEN] 최신 기록 조회 시도");
+        const latestRecord = await getLatestInBody();
+
+        if (latestRecord) {
+          const latestData = latestRecord?.success
+            ? latestRecord.inBody
+            : latestRecord;
+
           if (latestData && latestData.measurementDate) {
             const normalizedDate = latestData.measurementDate.includes(".")
               ? latestData.measurementDate
               : latestData.measurementDate.replace(/-/g, ".");
-            
+
             setInBodyData({
               ...latestData,
               measurementDate: normalizedDate,
             });
             console.log("[INBODY SCREEN] 최신 데이터 로드 완료");
+
+            // 날짜 목록도 새로고침
+            await fetchInBodyDates();
+
+            // 최신 날짜를 목록에 추가 (API 응답이 늦을 수 있으므로)
+            if (normalizedDate) {
+              setAvailableDates((prev) => {
+                const dateKey = normalizedDate;
+                if (!prev.includes(dateKey)) {
+                  const updated = [...prev, dateKey].sort().reverse(); // 최신 날짜가 앞에 오도록 정렬
+                  console.log("[INBODY SCREEN] 최신 날짜를 목록에 추가:", {
+                    dateKey,
+                    updatedDates: updated,
+                  });
+                  return updated;
+                }
+                return prev;
+              });
+            }
           } else {
             setInBodyData(null);
           }
@@ -288,8 +633,23 @@ const InBodyScreen = ({ navigation, route }: any) => {
           setInBodyData(null);
         }
       } catch (error: any) {
-        console.error("[INBODY SCREEN] 데이터 조회 실패:", error);
-        setInBodyData(null);
+        // 400/404는 데이터 없음으로 처리 (에러 아님)
+        const status = error?.response?.status;
+        if (status === 400 || status === 404) {
+          console.log("[INBODY SCREEN] 인바디 기록 없음:", {
+            status,
+          });
+          setInBodyData(null);
+        } else {
+          // 그 외 에러만 경고 로그 (에러 메시지는 표시하지 않음)
+          console.warn("[INBODY SCREEN] 데이터 조회 실패:", {
+            message: error?.message,
+            status,
+            statusText: error?.response?.statusText,
+          });
+          // 에러 발생 시에도 기존 데이터는 유지 (사용자가 볼 수 있도록)
+          // setInBodyData(null); // 주석 처리하여 기존 데이터 유지
+        }
       } finally {
         setLoading(false);
       }
@@ -298,8 +658,8 @@ const InBodyScreen = ({ navigation, route }: any) => {
     return () => {
       unsubscribe();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [normalizeDateForComparison]);
-
 
   // API 데이터에서 값 추출 헬퍼 함수
   const extractValue = (value: string | number | undefined): string => {
@@ -410,6 +770,8 @@ const InBodyScreen = ({ navigation, route }: any) => {
           inBodyData.rightArmMuscle,
           inBodyData.muscleFatAnalysis?.rightArmMuscle,
           inBodyData.segmentalMuscleMass?.rightArm,
+          inBodyData.segmentalMuscle?.rightArm,
+          inBodyData.segmentalLeanBodyMass?.rightArm,
           mass.rightArm,
           analysis.rightArm,
           analysis.rightArmValue,
@@ -428,6 +790,8 @@ const InBodyScreen = ({ navigation, route }: any) => {
           inBodyData.leftArmMuscle,
           inBodyData.muscleFatAnalysis?.leftArmMuscle,
           inBodyData.segmentalMuscleMass?.leftArm,
+          inBodyData.segmentalMuscle?.leftArm,
+          inBodyData.segmentalLeanBodyMass?.leftArm,
           mass.leftArm,
           analysis.leftArm,
           analysis.leftArmValue,
@@ -446,6 +810,8 @@ const InBodyScreen = ({ navigation, route }: any) => {
           inBodyData.trunkMuscle,
           inBodyData.muscleFatAnalysis?.trunkMuscle,
           inBodyData.segmentalMuscleMass?.trunk,
+          inBodyData.segmentalMuscle?.trunk,
+          inBodyData.segmentalLeanBodyMass?.trunk,
           mass.trunk,
           analysis.trunk,
           analysis.trunkValue,
@@ -464,6 +830,8 @@ const InBodyScreen = ({ navigation, route }: any) => {
           inBodyData.rightLegMuscle,
           inBodyData.muscleFatAnalysis?.rightLegMuscle,
           inBodyData.segmentalMuscleMass?.rightLeg,
+          inBodyData.segmentalMuscle?.rightLeg,
+          inBodyData.segmentalLeanBodyMass?.rightLeg,
           mass.rightLeg,
           analysis.rightLeg,
           analysis.rightLegValue,
@@ -482,6 +850,8 @@ const InBodyScreen = ({ navigation, route }: any) => {
           inBodyData.leftLegMuscle,
           inBodyData.muscleFatAnalysis?.leftLegMuscle,
           inBodyData.segmentalMuscleMass?.leftLeg,
+          inBodyData.segmentalMuscle?.leftLeg,
+          inBodyData.segmentalLeanBodyMass?.leftLeg,
           mass.leftLeg,
           analysis.leftLeg,
           analysis.leftLegValue,
@@ -518,9 +888,7 @@ const InBodyScreen = ({ navigation, route }: any) => {
 
       return {
         label: item.label,
-        value: hasNumericValue
-          ? `${item.numericValue.toFixed(1)}kg`
-          : "N/A",
+        value: hasNumericValue ? `${item.numericValue.toFixed(1)}kg` : "-",
         percentage,
         status: "표준",
       };
@@ -554,12 +922,39 @@ const InBodyScreen = ({ navigation, route }: any) => {
       segmentalLeanBodyMass: inBodyData.segmentalLeanBodyMass,
       source: inBodyData.source || "unknown",
     });
+
+    // 부위별 체지방 데이터 확인
+    console.log("[INBODY][FAT] 부위별 체지방 데이터 확인:", {
+      directFatValues: {
+        rightArmFat: inBodyData.rightArmFat,
+        leftArmFat: inBodyData.leftArmFat,
+        trunkFat: inBodyData.trunkFat,
+        rightLegFat: inBodyData.rightLegFat,
+        leftLegFat: inBodyData.leftLegFat,
+      },
+      manualFatValues: {
+        rArmFat: inBodyData.rArmFat,
+        lArmFat: inBodyData.lArmFat,
+        rLegFat: inBodyData.rLegFat,
+        lLegFat: inBodyData.lLegFat,
+      },
+      segmentalFatAnalysis: inBodyData.segmentalFatAnalysis,
+      segmentalFatAnalysisKeys: inBodyData.segmentalFatAnalysis
+        ? Object.keys(inBodyData.segmentalFatAnalysis)
+        : [],
+      allKeys: Object.keys(inBodyData).filter(
+        (k) =>
+          k.toLowerCase().includes("fat") ||
+          k.toLowerCase().includes("arm") ||
+          k.toLowerCase().includes("leg") ||
+          k.toLowerCase().includes("segmental")
+      ),
+    });
   }, [inBodyData]);
 
   useEffect(() => {
     console.log("[INBODY][SEGMENTAL] 계산된 항목", segmentalMuscleItems);
   }, [segmentalMuscleItems]);
-
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -573,7 +968,8 @@ const InBodyScreen = ({ navigation, route }: any) => {
               // 일반적인 경우 이전 화면으로 돌아가기
               navigation.goBack();
             }
-          }}>
+          }}
+        >
           <Icon name="chevron-back" size={28} color="#ffffff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>인바디 정보</Text>
@@ -584,6 +980,33 @@ const InBodyScreen = ({ navigation, route }: any) => {
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
       >
+        {/* 날짜 네비게이터 */}
+        {inBodyData && selectedDate && (
+          <View style={styles.dateNavigatorContainer}>
+            <TouchableOpacity
+              style={styles.dateButton}
+              onPress={() => setShowCalendarModal(true)}
+            >
+              <Icon name="calendar-outline" size={20} color="#E3FF7C" />
+              <Text style={styles.dateButtonText}>
+                {selectedDate.getFullYear()}.
+                {String(selectedDate.getMonth() + 1).padStart(2, "0")}.
+                {String(selectedDate.getDate()).padStart(2, "0")}
+              </Text>
+              <Icon name="chevron-down" size={16} color="#E3FF7C" />
+            </TouchableOpacity>
+            {availableDates.length > 0 && (
+              <View style={styles.dateNavigatorWrapper}>
+                <InbodyDateNavigator
+                  dates={availableDates}
+                  onChange={handleDateNavigatorChange}
+                  selectedDate={selectedDate}
+                />
+              </View>
+            )}
+          </View>
+        )}
+
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#E3FF7C" />
@@ -607,9 +1030,7 @@ const InBodyScreen = ({ navigation, route }: any) => {
                 {inBodyData.gender && (
                   <View style={styles.metricItem}>
                     <Text style={styles.metricName}>성별</Text>
-                    <Text style={styles.metricValue}>
-                      {inBodyData.gender}
-                    </Text>
+                    <Text style={styles.metricValue}>{inBodyData.gender}</Text>
                     <Text style={styles.metricRange}></Text>
                   </View>
                 )}
@@ -635,7 +1056,11 @@ const InBodyScreen = ({ navigation, route }: any) => {
                   <View style={[styles.metricItem, styles.metricItemLast]}>
                     <Text style={styles.metricName}>체중</Text>
                     <Text style={styles.metricValue}>
-                      {extractValue(inBodyData.weight || inBodyData.bodyComposition?.weight || inBodyData.muscleFatAnalysis?.weight)}
+                      {extractValue(
+                        inBodyData.weight ||
+                          inBodyData.bodyComposition?.weight ||
+                          inBodyData.muscleFatAnalysis?.weight
+                      )}
                     </Text>
                     <Text style={styles.metricRange}>kg</Text>
                   </View>
@@ -650,28 +1075,40 @@ const InBodyScreen = ({ navigation, route }: any) => {
                 <View style={styles.metricItem}>
                   <Text style={styles.metricName}>골격근량</Text>
                   <Text style={styles.metricValue}>
-                    {extractValue(inBodyData.skeletalMuscleMass || inBodyData.muscleFatAnalysis?.skeletalMuscleMass)}
+                    {extractValue(
+                      inBodyData.skeletalMuscleMass ||
+                        inBodyData.muscleFatAnalysis?.skeletalMuscleMass
+                    )}
                   </Text>
                   <Text style={styles.metricRange}>kg</Text>
                 </View>
                 <View style={styles.metricItem}>
                   <Text style={styles.metricName}>체지방량</Text>
                   <Text style={styles.metricValue}>
-                    {extractValue(inBodyData.bodyFatMass || inBodyData.muscleFatAnalysis?.bodyFatMass || inBodyData.bodyComposition?.bodyFatMass)}
+                    {extractValue(
+                      inBodyData.bodyFatMass ||
+                        inBodyData.muscleFatAnalysis?.bodyFatMass ||
+                        inBodyData.bodyComposition?.bodyFatMass
+                    )}
                   </Text>
                   <Text style={styles.metricRange}>kg</Text>
                 </View>
                 <View style={styles.metricItem}>
                   <Text style={styles.metricName}>체지방률</Text>
                   <Text style={styles.metricValue}>
-                    {extractValue(inBodyData.bodyFatPercentage || inBodyData.obesityAnalysis?.bodyFatPercentage)}
+                    {extractValue(
+                      inBodyData.bodyFatPercentage ||
+                        inBodyData.obesityAnalysis?.bodyFatPercentage
+                    )}
                   </Text>
                   <Text style={styles.metricRange}>%</Text>
                 </View>
                 <View style={styles.metricItem}>
                   <Text style={styles.metricName}>BMI</Text>
                   <Text style={styles.metricValue}>
-                    {extractValue(inBodyData.bmi || inBodyData.obesityAnalysis?.bmi)}
+                    {extractValue(
+                      inBodyData.bmi || inBodyData.obesityAnalysis?.bmi
+                    )}
                   </Text>
                   <Text style={styles.metricRange}>kg/m²</Text>
                 </View>
@@ -687,262 +1124,302 @@ const InBodyScreen = ({ navigation, route }: any) => {
               </View>
             </View>
 
-                {/* 체성분 분석 */}
-                <View style={styles.analysisSection}>
-                  <Text style={styles.sectionTitle}>체성분 분석</Text>
-                  <View style={styles.metricList}>
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricName}>체수분</Text>
-                      <Text style={styles.metricValue}>
-                        {extractValue(
-                          inBodyData.bodyComposition?.totalBodyWater
-                        )}
-                      </Text>
-                      <Text style={styles.metricRange}>
-                        {extractRange(
-                          inBodyData.bodyComposition?.totalBodyWater
-                        )}
-                      </Text>
-                    </View>
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricName}>단백질</Text>
-                      <Text style={styles.metricValue}>
-                        {extractValue(inBodyData.bodyComposition?.protein)}
-                      </Text>
-                      <Text style={styles.metricRange}>
-                        {extractRange(inBodyData.bodyComposition?.protein)}
-                      </Text>
-                    </View>
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricName}>무기질</Text>
-                      <Text style={styles.metricValue}>
-                        {extractValue(inBodyData.bodyComposition?.mineral)}
-                      </Text>
-                      <Text style={styles.metricRange}>
-                        {extractRange(inBodyData.bodyComposition?.mineral)}
-                      </Text>
-                    </View>
-                    <View style={[styles.metricItem, styles.metricItemLast]}>
-                      <Text style={styles.metricName}>체지방</Text>
-                      <Text style={styles.metricValue}>
-                        {extractValue(inBodyData.bodyComposition?.bodyFatMass)}
-                      </Text>
-                      <Text style={styles.metricRange}>
-                        {extractRange(inBodyData.bodyComposition?.bodyFatMass)}
-                      </Text>
-                    </View>
-                  </View>
+            {/* 체성분 분석 */}
+            <View style={styles.analysisSection}>
+              <Text style={styles.sectionTitle}>체성분 분석</Text>
+              <View style={styles.metricList}>
+                <View style={styles.metricItem}>
+                  <Text style={styles.metricName}>체수분</Text>
+                  <Text style={styles.metricValue}>
+                    {extractValue(inBodyData.bodyComposition?.totalBodyWater)}
+                  </Text>
+                  <Text style={styles.metricRange}>
+                    {extractRange(inBodyData.bodyComposition?.totalBodyWater)}
+                  </Text>
                 </View>
-
-                {/* 골격근 지방 분석 */}
-                <View style={styles.analysisSection}>
-                  <Text style={styles.sectionTitle}>골격근 지방 분석</Text>
-                  <View style={styles.barChartList}>
-                    <View style={styles.barLabelsHeader}>
-                      <Text style={styles.barRangeLabel}>표준이하</Text>
-                      <Text style={styles.barRangeLabel}>표준</Text>
-                      <Text style={styles.barRangeLabel}>표준이상</Text>
-                    </View>
-                    <BarChartItem
-                      label="체수분"
-                      value={extractValue(
-                        inBodyData.bodyComposition?.totalBodyWater
-                      )}
-                      percentage={resolveBarPercentage(
-                        inBodyData.bodyComposition?.totalBodyWater,
-                        "표준"
-                      )}
-                      status="표준"
-                    />
-                    <BarChartItem
-                      label="골격근량"
-                      value={
-                        inBodyData.muscleFatAnalysis?.skeletalMuscleMass?.toFixed(
-                          1
-                        ) || "N/A"
-                      }
-                      percentage={resolveBarPercentage(
-                        inBodyData.muscleFatAnalysis?.skeletalMuscleMass,
-                        inBodyData.muscleFatAnalysis?.skeletalMuscleStatus
-                      )}
-                      status={
-                        inBodyData.muscleFatAnalysis?.skeletalMuscleStatus ||
-                        "표준"
-                      }
-                    />
-                    <BarChartItem
-                      label="체지방량"
-                      value={
-                        inBodyData.muscleFatAnalysis?.bodyFatMass?.toFixed(1) ||
-                        "N/A"
-                      }
-                      percentage={resolveBarPercentage(
-                        inBodyData.muscleFatAnalysis?.bodyFatMass,
-                        inBodyData.muscleFatAnalysis?.bodyFatStatus
-                      )}
-                      status={
-                        inBodyData.muscleFatAnalysis?.bodyFatStatus || "표준"
-                      }
-                      isLast
-                    />
-                  </View>
+                <View style={styles.metricItem}>
+                  <Text style={styles.metricName}>단백질</Text>
+                  <Text style={styles.metricValue}>
+                    {extractValue(inBodyData.bodyComposition?.protein)}
+                  </Text>
+                  <Text style={styles.metricRange}>
+                    {extractRange(inBodyData.bodyComposition?.protein)}
+                  </Text>
                 </View>
-
-                {/* 비만 분석 */}
-                <View style={styles.analysisSection}>
-                  <Text style={styles.sectionTitle}>비만 분석</Text>
-                  <View style={styles.barChartList}>
-                    <View style={styles.barLabelsHeader}>
-                      <Text style={styles.barRangeLabel}>표준이하</Text>
-                      <Text style={styles.barRangeLabel}>표준</Text>
-                      <Text style={styles.barRangeLabel}>표준이상</Text>
-                    </View>
-                    <BarChartItem
-                      label="BMI"
-                      value={
-                        inBodyData.obesityAnalysis?.bmi?.toFixed(1) || "N/A"
-                      }
-                      percentage={resolveBarPercentage(
-                        inBodyData.obesityAnalysis?.bmi,
-                        inBodyData.obesityAnalysis?.bmiStatus
-                      )}
-                      status={inBodyData.obesityAnalysis?.bmiStatus || "표준"}
-                    />
-                    <BarChartItem
-                      label="체지방률"
-                      value={
-                        inBodyData.obesityAnalysis?.bodyFatPercentage?.toFixed(
-                          1
-                        ) || "N/A"
-                      }
-                      percentage={resolveBarPercentage(
-                        inBodyData.obesityAnalysis?.bodyFatPercentage,
-                        inBodyData.obesityAnalysis?.bodyFatPercentageStatus
-                      )}
-                      status={
-                        inBodyData.obesityAnalysis?.bodyFatPercentageStatus ||
-                        "표준"
-                      }
-                      isLast
-                    />
-                  </View>
+                <View style={styles.metricItem}>
+                  <Text style={styles.metricName}>무기질</Text>
+                  <Text style={styles.metricValue}>
+                    {extractValue(inBodyData.bodyComposition?.mineral)}
+                  </Text>
+                  <Text style={styles.metricRange}>
+                    {extractRange(inBodyData.bodyComposition?.mineral)}
+                  </Text>
                 </View>
-
-                {/* 부위별 근육 분석 */}
-                <View style={styles.analysisSection}>
-                  <Text style={styles.sectionTitle}>부위별 근육 분석</Text>
-                  <View style={styles.metricList}>
-                    {segmentalMuscleItems.map((item, index) => (
-                      <View
-                        key={item.label}
-                        style={[
-                          styles.metricItem,
-                          index === segmentalMuscleItems.length - 1 && styles.metricItemLast,
-                        ]}>
-                        <Text style={styles.metricName}>{item.label}</Text>
-                        <Text style={styles.metricValue}>{item.value}</Text>
-                        <Text style={styles.metricRange}></Text>
-                      </View>
-                    ))}
-                  </View>
+                <View style={[styles.metricItem, styles.metricItemLast]}>
+                  <Text style={styles.metricName}>체지방</Text>
+                  <Text style={styles.metricValue}>
+                    {extractValue(inBodyData.bodyComposition?.bodyFatMass)}
+                  </Text>
+                  <Text style={styles.metricRange}>
+                    {extractRange(inBodyData.bodyComposition?.bodyFatMass)}
+                  </Text>
                 </View>
-
-                {/* 부위별 체지방 분석 */}
-                <View style={styles.analysisSection}>
-                  <Text style={styles.sectionTitle}>부위별 체지방 분석</Text>
-                  <View style={styles.metricList}>
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricName}>오른팔 체지방</Text>
-                      <Text style={styles.metricValue}>
-                        {(() => {
-                          const value = inBodyData.rightArmFat ?? 
-                                       inBodyData.muscleFatAnalysis?.rightArmFat ??
-                                       inBodyData.segmentalFatRatio?.rightArm ??
-                                       inBodyData.segmentalBodyFat?.rightArm;
-                          const numValue = parseNumericValue(value);
-                          return numValue !== undefined
-                            ? `${numValue.toFixed(1)}kg`
-                            : "N/A";
-                        })()}
-                      </Text>
-                      <Text style={styles.metricRange}></Text>
-                    </View>
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricName}>왼팔 체지방</Text>
-                      <Text style={styles.metricValue}>
-                        {(() => {
-                          const value = inBodyData.leftArmFat ?? 
-                                       inBodyData.muscleFatAnalysis?.leftArmFat ??
-                                       inBodyData.segmentalFatRatio?.leftArm ??
-                                       inBodyData.segmentalBodyFat?.leftArm;
-                          const numValue = parseNumericValue(value);
-                          return numValue !== undefined
-                            ? `${numValue.toFixed(1)}kg`
-                            : "N/A";
-                        })()}
-                      </Text>
-                      <Text style={styles.metricRange}></Text>
-                    </View>
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricName}>몸통 체지방</Text>
-                      <Text style={styles.metricValue}>
-                        {(() => {
-                          const value = inBodyData.trunkFat ?? 
-                                       inBodyData.muscleFatAnalysis?.trunkFat ??
-                                       inBodyData.segmentalFatRatio?.trunk ??
-                                       inBodyData.segmentalBodyFat?.trunk;
-                          const numValue = parseNumericValue(value);
-                          return numValue !== undefined
-                            ? `${numValue.toFixed(1)}kg`
-                            : "N/A";
-                        })()}
-                      </Text>
-                      <Text style={styles.metricRange}></Text>
-                    </View>
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricName}>오른다리 체지방</Text>
-                      <Text style={styles.metricValue}>
-                        {(() => {
-                          const value = inBodyData.rightLegFat ?? 
-                                       inBodyData.muscleFatAnalysis?.rightLegFat ??
-                                       inBodyData.segmentalFatRatio?.rightLeg ??
-                                       inBodyData.segmentalBodyFat?.rightLeg;
-                          const numValue = parseNumericValue(value);
-                          return numValue !== undefined
-                            ? `${numValue.toFixed(1)}kg`
-                            : "N/A";
-                        })()}
-                      </Text>
-                      <Text style={styles.metricRange}></Text>
-                    </View>
-                    <View style={[styles.metricItem, styles.metricItemLast]}>
-                      <Text style={styles.metricName}>왼다리 체지방</Text>
-                      <Text style={styles.metricValue}>
-                        {(() => {
-                          const value = inBodyData.leftLegFat ?? 
-                                       inBodyData.muscleFatAnalysis?.leftLegFat ??
-                                       inBodyData.segmentalFatRatio?.leftLeg ??
-                                       inBodyData.segmentalBodyFat?.leftLeg;
-                          const numValue = parseNumericValue(value);
-                          return numValue !== undefined
-                            ? `${numValue.toFixed(1)}kg`
-                            : "N/A";
-                        })()}
-                      </Text>
-                      <Text style={styles.metricRange}></Text>
-                    </View>
-                  </View>
-                </View>
-              </>
-            ) : (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>인바디 데이터가 없습니다.</Text>
-                <Text style={styles.emptySubText}>
-                  수기로 입력하거나 사진으로 입력해주세요.
-                </Text>
               </View>
-            )}
+            </View>
+
+            {/* 골격근 지방 분석 */}
+            <View style={styles.analysisSection}>
+              <Text style={styles.sectionTitle}>골격근 지방 분석</Text>
+              <View style={styles.barChartList}>
+                <View style={styles.barLabelsHeader}>
+                  <Text style={styles.barRangeLabel}>표준이하</Text>
+                  <Text style={styles.barRangeLabel}>표준</Text>
+                  <Text style={styles.barRangeLabel}>표준이상</Text>
+                </View>
+                <BarChartItem
+                  label="체수분"
+                  value={extractValue(
+                    inBodyData.bodyComposition?.totalBodyWater
+                  )}
+                  percentage={resolveBarPercentage(
+                    inBodyData.bodyComposition?.totalBodyWater,
+                    "표준"
+                  )}
+                  status="표준"
+                />
+                <BarChartItem
+                  label="골격근량"
+                  value={
+                    inBodyData.muscleFatAnalysis?.skeletalMuscleMass?.toFixed(
+                      1
+                    ) || "N/A"
+                  }
+                  percentage={resolveBarPercentage(
+                    inBodyData.muscleFatAnalysis?.skeletalMuscleMass,
+                    inBodyData.muscleFatAnalysis?.skeletalMuscleStatus
+                  )}
+                  status={
+                    inBodyData.muscleFatAnalysis?.skeletalMuscleStatus || "표준"
+                  }
+                />
+                <BarChartItem
+                  label="체지방량"
+                  value={
+                    inBodyData.muscleFatAnalysis?.bodyFatMass?.toFixed(1) ||
+                    "N/A"
+                  }
+                  percentage={resolveBarPercentage(
+                    inBodyData.muscleFatAnalysis?.bodyFatMass,
+                    inBodyData.muscleFatAnalysis?.bodyFatStatus
+                  )}
+                  status={inBodyData.muscleFatAnalysis?.bodyFatStatus || "표준"}
+                  isLast
+                />
+              </View>
+            </View>
+
+            {/* 비만 분석 */}
+            <View style={styles.analysisSection}>
+              <Text style={styles.sectionTitle}>비만 분석</Text>
+              <View style={styles.barChartList}>
+                <View style={styles.barLabelsHeader}>
+                  <Text style={styles.barRangeLabel}>표준이하</Text>
+                  <Text style={styles.barRangeLabel}>표준</Text>
+                  <Text style={styles.barRangeLabel}>표준이상</Text>
+                </View>
+                <BarChartItem
+                  label="BMI"
+                  value={inBodyData.obesityAnalysis?.bmi?.toFixed(1) || "N/A"}
+                  percentage={resolveBarPercentage(
+                    inBodyData.obesityAnalysis?.bmi,
+                    inBodyData.obesityAnalysis?.bmiStatus
+                  )}
+                  status={inBodyData.obesityAnalysis?.bmiStatus || "표준"}
+                />
+                <BarChartItem
+                  label="체지방률"
+                  value={
+                    inBodyData.obesityAnalysis?.bodyFatPercentage?.toFixed(1) ||
+                    "N/A"
+                  }
+                  percentage={resolveBarPercentage(
+                    inBodyData.obesityAnalysis?.bodyFatPercentage,
+                    inBodyData.obesityAnalysis?.bodyFatPercentageStatus
+                  )}
+                  status={
+                    inBodyData.obesityAnalysis?.bodyFatPercentageStatus ||
+                    "표준"
+                  }
+                  isLast
+                />
+              </View>
+            </View>
+
+            {/* 부위별 근육 분석 */}
+            <View style={styles.analysisSection}>
+              <Text style={styles.sectionTitle}>부위별 근육 분석</Text>
+              <View style={styles.metricList}>
+                {segmentalMuscleItems.map((item, index) => (
+                  <View
+                    key={item.label}
+                    style={[
+                      styles.metricItem,
+                      index === segmentalMuscleItems.length - 1 &&
+                        styles.metricItemLast,
+                    ]}
+                  >
+                    <Text style={styles.metricName}>{item.label}</Text>
+                    <Text style={styles.metricValue}>{item.value}</Text>
+                    <Text style={styles.metricRange}></Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            {/* 부위별 체지방 분석 */}
+            <View style={styles.analysisSection}>
+              <Text style={styles.sectionTitle}>부위별 체지방 분석</Text>
+              <View style={styles.metricList}>
+                {[
+                  {
+                    label: "오른팔 체지방",
+                    keys: ["rightArmFat"],
+                    segmentalKey: "rightArm",
+                  },
+                  {
+                    label: "왼팔 체지방",
+                    keys: ["leftArmFat"],
+                    segmentalKey: "leftArm",
+                  },
+                  {
+                    label: "몸통 체지방",
+                    keys: ["trunkFat"],
+                    segmentalKey: "trunk",
+                  },
+                  {
+                    label: "오른다리 체지방",
+                    keys: ["rightLegFat"],
+                    segmentalKey: "rightLeg",
+                  },
+                  {
+                    label: "왼다리 체지방",
+                    keys: ["leftLegFat"],
+                    segmentalKey: "leftLeg",
+                  },
+                ].map((item, index, array) => {
+                  // 수기 입력 필드명 매핑 (rArmFat -> rightArmFat 등)
+                  const manualFieldMap: { [key: string]: string } = {
+                    rightArmFat: "rArmFat",
+                    leftArmFat: "lArmFat",
+                    trunkFat: "trunkFat",
+                    rightLegFat: "rLegFat",
+                    leftLegFat: "lLegFat",
+                  };
+                  const manualFieldKey = manualFieldMap[item.keys[0]];
+
+                  // 디버깅: 각 필드별 값 확인 (모든 항목에 대해)
+                  if (__DEV__) {
+                    console.log(
+                      `[INBODY] 부위별 체지방 값 추출 [${item.label}]:`,
+                      {
+                        label: item.label,
+                        segmentalKey: item.segmentalKey,
+                        directValue: inBodyData[item.keys[0]],
+                        manualFieldValue: manualFieldKey
+                          ? inBodyData[manualFieldKey]
+                          : null,
+                        segmentalFatAnalysisValue:
+                          inBodyData.segmentalFatAnalysis?.[item.segmentalKey],
+                        segmentalFatAnalysis: inBodyData.segmentalFatAnalysis,
+                        hasSegmentalFatAnalysis:
+                          !!inBodyData.segmentalFatAnalysis,
+                        allKeys: inBodyData
+                          ? Object.keys(inBodyData).filter(
+                              (k) =>
+                                k.includes("Fat") ||
+                                k.includes("Arm") ||
+                                k.includes("Leg") ||
+                                k.includes("segmental")
+                            )
+                          : [],
+                        inBodyDataKeys: inBodyData
+                          ? Object.keys(inBodyData)
+                          : [],
+                      }
+                    );
+                  }
+
+                  const value =
+                    inBodyData[item.keys[0]] ?? // 1순위: 직접 필드 (rightArmFat 등)
+                    (manualFieldKey ? inBodyData[manualFieldKey] : null) ?? // 1-1순위: 수기 입력 필드명 (rArmFat 등)
+                    inBodyData.segmentalFatAnalysis?.[item.segmentalKey] ?? // 2순위: segmentalFatAnalysis 객체
+                    inBodyData.muscleFatAnalysis?.[item.keys[0]] ?? // 3순위: muscleFatAnalysis 객체
+                    (manualFieldKey
+                      ? inBodyData.muscleFatAnalysis?.[manualFieldKey]
+                      : null) ?? // 3-1순위: muscleFatAnalysis (수기 입력 필드명)
+                    inBodyData.segmentalBodyFat?.[item.keys[0]] ?? // 4순위: segmentalBodyFat 객체
+                    inBodyData.segmentalBodyFat?.[item.segmentalKey] ?? // 5순위: segmentalBodyFat (변환된 키)
+                    inBodyData.segmentalFatRatio?.[item.segmentalKey] ?? // 6순위: segmentalFatRatio
+                    null;
+
+                  // 디버깅: 최종 값 확인 (모든 항목에 대해)
+                  if (__DEV__) {
+                    console.log(
+                      `[INBODY] 부위별 체지방 최종 값 [${item.label}]:`,
+                      {
+                        label: item.label,
+                        value,
+                        numValue: parseNumericValue(value),
+                        valueType: typeof value,
+                        isNull: value === null,
+                        isUndefined: value === undefined,
+                      }
+                    );
+                  }
+
+                  const numValue = parseNumericValue(value);
+                  return (
+                    <View
+                      key={item.keys[0]}
+                      style={[
+                        styles.metricItem,
+                        index === array.length - 1 && styles.metricItemLast,
+                      ]}
+                    >
+                      <Text style={styles.metricName}>{item.label}</Text>
+                      <Text style={styles.metricValue}>
+                        {numValue !== undefined
+                          ? `${numValue.toFixed(1)}kg`
+                          : "-"}
+                      </Text>
+                      <Text style={styles.metricRange}></Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          </>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>인바디 데이터가 없습니다.</Text>
+            <Text style={styles.emptySubText}>
+              수기로 입력하거나 사진으로 입력해주세요.
+            </Text>
+          </View>
+        )}
       </ScrollView>
+
+      {/* 캘린더 모달 */}
+      {selectedDate && (
+        <InBodyCalendarModal
+          visible={showCalendarModal}
+          onClose={() => setShowCalendarModal(false)}
+          onSelectDate={handleCalendarDateSelect}
+          selectedDate={selectedDate}
+          inBodyDates={availableDates} // 사용 가능한 날짜 목록
+          onlySelectableDates={true} // 기록이 있는 날짜만 선택 가능
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -1154,6 +1631,29 @@ const styles = StyleSheet.create({
   emptySubText: {
     fontSize: 14,
     color: "#aaaaaa",
+  },
+  dateNavigatorContainer: {
+    marginBottom: 20,
+    marginTop: 16,
+    gap: 12,
+  },
+  dateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#2a2a2a",
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  dateButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#E3FF7C",
+  },
+  dateNavigatorWrapper: {
+    marginTop: 8,
   },
 });
 

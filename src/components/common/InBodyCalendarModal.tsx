@@ -14,7 +14,8 @@ interface InBodyCalendarModalProps {
   onClose: () => void;
   onSelectDate: (date: Date) => void;
   selectedDate: Date;
-  inBodyDates?: string[]; // 인바디 입력된 날짜 목록 (YYYY-MM-DD 형식), 빈 배열이면 모든 날짜 선택 가능
+  inBodyDates?: string[]; // 인바디 입력된 날짜 목록 (YYYY-MM-DD 형식)
+  onlySelectableDates?: boolean; // true면 기록이 있는 날짜만 선택 가능, false면 모든 날짜 선택 가능 (기본값: false)
 }
 
 const InBodyCalendarModal: React.FC<InBodyCalendarModalProps> = ({
@@ -22,7 +23,8 @@ const InBodyCalendarModal: React.FC<InBodyCalendarModalProps> = ({
   onClose,
   onSelectDate,
   selectedDate,
-  inBodyDates = [], // 기본값: 빈 배열 (모든 날짜 선택 가능)
+  inBodyDates = [],
+  onlySelectableDates = false, // 기본값: 모든 날짜 선택 가능
 }) => {
   // 유효한 날짜인지 확인
   const validSelectedDate = selectedDate && !isNaN(selectedDate.getTime()) 
@@ -119,7 +121,25 @@ const InBodyCalendarModal: React.FC<InBodyCalendarModalProps> = ({
   };
 
   const hasInBodyData = (date: Date): boolean => {
-    return inBodyDatesSet.has(formatDateKey(date));
+    const dateKey = formatDateKey(date);
+    const hasData = inBodyDatesSet.has(dateKey);
+    
+    // 디버깅: 오늘 날짜와 기록이 있는 날짜 확인
+    const today = new Date();
+    const isTodayDate = isSameDay(date, today);
+    
+    if (__DEV__ && (isTodayDate || hasData)) {
+      console.log("[CALENDAR] 날짜 데이터 확인:", {
+        dateKey,
+        isToday: isTodayDate,
+        hasData,
+        inBodyDates: Array.from(inBodyDatesSet),
+        inBodyDatesLength: inBodyDatesSet.size,
+        checkingDate: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
+      });
+    }
+    
+    return hasData;
   };
 
   return (
@@ -181,16 +201,42 @@ const InBodyCalendarModal: React.FC<InBodyCalendarModalProps> = ({
               const isInBodyDate = hasInBodyData(date);
               const isTodayDate = isToday(date);
 
-              // 날짜 목록이 비어있으면 모든 날짜 선택 가능 (수기 입력 모드)
-              const isSelectable = inBodyDates.length === 0 || isInBodyDate;
+              // onlySelectableDates가 true면 기록이 있는 날짜만 선택 가능
+              // false면 모든 날짜 선택 가능 (수기 입력 모드 등)
+              // 단, 이미 선택된 날짜는 항상 선택 가능 (현재 보고 있는 날짜)
+              const isSelectable = onlySelectableDates 
+                ? (isInBodyDate || isSelected) // 기록이 있거나 이미 선택된 날짜는 선택 가능
+                : (inBodyDates.length === 0 || isInBodyDate);
+              
+              // 디버깅: 기록이 있는 날짜 확인
+              if (__DEV__ && isInBodyDate && date.getDate() <= 3) {
+                console.log("[CALENDAR] 기록이 있는 날짜:", {
+                  dateKey,
+                  isSelectable,
+                  onlySelectableDates,
+                });
+              }
               
               return (
                 <TouchableOpacity
                   key={index}
                   style={styles.dayCell}
                   onPress={() => {
+                    console.log("[CALENDAR] 날짜 클릭:", {
+                      dateKey,
+                      isSelectable,
+                      isInBodyDate,
+                      onlySelectableDates,
+                      inBodyDatesLength: inBodyDatesSet.size,
+                    });
                     if (isSelectable) {
                       handleDateSelect(date);
+                    } else {
+                      console.warn("[CALENDAR] 날짜 선택 불가:", {
+                        dateKey,
+                        reason: onlySelectableDates ? "기록이 없는 날짜" : "기타",
+                        isInBodyDate,
+                      });
                     }
                   }}
                   disabled={!isSelectable}
@@ -202,6 +248,7 @@ const InBodyCalendarModal: React.FC<InBodyCalendarModalProps> = ({
                       isSelected && styles.selectedDay,
                       isTodayDate && !isSelected && styles.todayDay,
                       !isSelectable && styles.disabledDay,
+                      isInBodyDate && onlySelectableDates && styles.hasDataDay,
                     ]}
                   >
                     {isInBodyDate && (
@@ -215,6 +262,7 @@ const InBodyCalendarModal: React.FC<InBodyCalendarModalProps> = ({
                         date.getMonth() !== currentMonth.getMonth() &&
                           styles.otherMonthText,
                         !isSelectable && styles.disabledDayText,
+                        isInBodyDate && onlySelectableDates && !isSelected && styles.hasDataDayText,
                       ]}
                     >
                       {date.getDate()}
@@ -338,6 +386,15 @@ const styles = StyleSheet.create({
   },
   disabledDayText: {
     color: "#666666",
+  },
+  hasDataDay: {
+    // 기록이 있는 날짜는 배경색으로 강조
+    backgroundColor: "rgba(74, 222, 128, 0.15)",
+  },
+  hasDataDayText: {
+    // 기록이 있는 날짜는 텍스트 색상 강조
+    color: "#4ade80",
+    fontWeight: "600",
   },
   closeButton: {
     marginTop: 20,

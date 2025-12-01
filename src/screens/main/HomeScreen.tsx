@@ -32,7 +32,7 @@ const HomeScreen = ({ navigation }: any) => {
   const [inBodyData, setInBodyData] = useState<any>(null);
   const isLoadingRef = useRef(false);
 
-  // ✅ 추가: 멤버십 정보 state
+  // 멤버십 정보 state
   const [membershipType, setMembershipType] = useState<string>("FREE");
   const [mealTokens, setMealTokens] = useState<number>(0);
 
@@ -61,19 +61,12 @@ const HomeScreen = ({ navigation }: any) => {
       const data = await homeAPI.getWeeklyProgress();
 
       if (Array.isArray(data) && data.length > 0) {
-        console.log("주간 진행률 데이터 로드 성공");
         setWeeklyProgress(data);
       } else {
-        console.warn("주간 진행률 데이터 비어있음");
         setWeeklyProgress([]);
       }
     } catch (e: any) {
       console.error("주간 진행률 로드 실패:", e);
-      console.error("에러 상세:", {
-        message: e.message,
-        status: e.status,
-        data: e.data,
-      });
       setWeeklyProgress([]);
     }
   };
@@ -81,13 +74,7 @@ const HomeScreen = ({ navigation }: any) => {
   // 특정 날짜의 진행률 데이터 가져오기
   const getDayProgress = (date: Date): DailyProgressWeekItem | undefined => {
     const dateStr = formatDateToString(date);
-    const progress = weeklyProgress.find((item) => item.date === dateStr);
-
-    if (!progress) {
-      return undefined;
-    }
-
-    return progress;
+    return weeklyProgress.find((item) => item.date === dateStr);
   };
 
   // 홈 데이터 로드
@@ -136,12 +123,10 @@ const HomeScreen = ({ navigation }: any) => {
     }
   };
 
+  // 프로필 정보 로드 (멤버십 확인용)
   const loadProfileInfo = async () => {
     try {
       const profile = await authAPI.getProfile();
-
-      console.log("membershipType:", profile.membershipType);
-
       setMembershipType(profile.membershipType);
       setMealTokens(profile.mealRecommendTokens ?? 1);
     } catch (error) {
@@ -151,27 +136,22 @@ const HomeScreen = ({ navigation }: any) => {
     }
   };
 
+  //식단 추천 네비게이션 핸들러 (멤버십 분기 처리)
   const handleMealRecommendNavigation = async () => {
     try {
       const profile = await authAPI.getProfile();
 
-      console.log("🔍 식단 추천 시도:", {
-        membershipType: profile.membershipType,
-        mealTokens: profile.mealRecommendTokens,
-      });
-
-      // PREMIUM이면 무제한 사용 가능
+      // PREMIUM이면 무제한 사용 가능 (기존 추천 화면)
       if (profile.membershipType === "PREMIUM") {
         navigation.navigate(ROUTES.MEAL_RECOMMEND);
         return;
       }
 
-      // FREE인 경우 → 토큰 체크 없이 바로 이동
-      // (토큰 체크는 TempMealRecommendScreen에서 수행)
+      // FREE인 경우 (임시 추천 화면)
       navigation.navigate(ROUTES.TEMP_MEAL_RECOMMEND);
     } catch (error) {
       console.error("❌ 식단 추천 네비게이션 실패:", error);
-      // 에러 발생 시 기본 동작
+      // 에러 발생 시 기본 동작 (임시 화면으로 이동)
       navigation.navigate(ROUTES.TEMP_MEAL_RECOMMEND);
     }
   };
@@ -180,7 +160,6 @@ const HomeScreen = ({ navigation }: any) => {
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
       if (isLoadingRef.current) {
-        console.log("⏸️ 이미 데이터 로딩 중이므로 스킵");
         return;
       }
 
@@ -261,7 +240,6 @@ const HomeScreen = ({ navigation }: any) => {
             </View>
 
             <View style={styles.enhancedRecommendationButtons}>
-              {/* 식단 */}
               <TouchableOpacity
                 style={styles.enhancedRecButtonWrapper}
                 onPress={handleMealRecommendNavigation}

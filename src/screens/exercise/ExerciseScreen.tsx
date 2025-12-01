@@ -953,13 +953,19 @@ const ExerciseScreen = ({ navigation }: any) => {
   }, [userId]);
 
   const loadSavedWorkouts = React.useCallback(async () => {
-    if (!userId) return;
+    if (!userId || !selectedDate) return;
     const userIdNum = parseInt(userId, 10);
     if (isNaN(userIdNum)) return;
+    
+    // 날짜를 yyyy-MM-dd 형식으로 변환
+    const dateStr = `${selectedDate.getFullYear()}-${String(
+      selectedDate.getMonth() + 1
+    ).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+    
     try {
       setSavedWorkoutsLoading(true);
       setSavedWorkoutsError(null);
-      const data = await fetchSavedWorkouts(userIdNum);
+      const data = await fetchSavedWorkouts(userIdNum, dateStr);
       const workouts = Array.isArray(data) ? data : [];
 
       // 동일한 제목의 운동은 한 그룹으로 합쳐서 세션을 이어 붙인다.
@@ -986,9 +992,12 @@ const ExerciseScreen = ({ navigation }: any) => {
         }
       });
 
+      // 저장된 운동은 모두 표시 (필터링 제거)
+      // 오늘 날짜에 저장된 운동도 표시되어야 하므로 필터링하지 않음
       setSavedWorkouts(mergedGroups);
 
       const sessionTitleMapFresh = new Map<string, string>();
+      // filteredGroups 대신 mergedGroups 사용 (모든 세션 정보는 유지)
       mergedGroups.forEach((group) => {
         const normalizedTitle = (group.title || "").trim();
         group.sessions?.forEach((session) => {
@@ -1054,7 +1063,7 @@ const ExerciseScreen = ({ navigation }: any) => {
     } finally {
       setSavedWorkoutsLoading(false);
     }
-  }, [userId]);
+  }, [userId, selectedDate]);
 
   React.useEffect(() => {
     if (!userIdLoaded) return;
@@ -1242,6 +1251,12 @@ const ExerciseScreen = ({ navigation }: any) => {
       Alert.alert("제목 입력 필요", "오늘 운동 제목을 입력해주세요.");
       return;
     }
+    
+    // saveTitle 최소 길이 검증 (서버에서 최소 3글자 이상 요구할 수 있음)
+    if (trimmedTitle.length < 3) {
+      Alert.alert("제목 길이 부족", "운동 제목은 최소 3글자 이상 입력해주세요.");
+      return;
+    }
 
     if (!userId) {
       Alert.alert(
@@ -1371,21 +1386,24 @@ const ExerciseScreen = ({ navigation }: any) => {
         };
 
         // intensity 변환: 무거워요(7.5), 선택안함(5.0), 가벼워요(2.5)
+        // 서버는 float/double 배열을 기대하므로 반드시 소수점 포함 (5 → 5.0)
         if (feedback.intensity === "heavy") {
           intensityList.push(7.5);
         } else if (feedback.intensity === "light") {
           intensityList.push(2.5);
         } else {
-          intensityList.push(5.0);
+          intensityList.push(5.0); // float 형식으로 (정수 5가 아닌 5.0)
         }
 
-        // feedback 변환: 좋아요(like), 선택안함(neutral), 싫어요(dislike)
+        // feedback 변환: 좋아요(like), 싫어요(dislike)
+        // 서버는 "neutral"을 허용하지 않으므로 기본값은 "like"로 설정
         if (feedback.feedback === "like") {
           feedbackList.push("like");
         } else if (feedback.feedback === "dislike") {
           feedbackList.push("dislike");
         } else {
-          feedbackList.push("neutral");
+          // neutral은 서버 enum에 없으므로 기본값으로 "like" 사용
+          feedbackList.push("like");
         }
       });
 
@@ -1393,13 +1411,37 @@ const ExerciseScreen = ({ navigation }: any) => {
       // todayTotalWorkoutSeconds는 오늘의 총 운동 시간이므로 현재 세션의 시간으로 사용
       const workoutSeconds = todayTotalWorkoutSeconds || 0;
 
+      // API 스펙 검증: intensity와 feedback 배열 길이는 운동 개수와 일치해야 함
+      if (intensityList.length !== completedExercises.length) {
+        console.warn(
+          "[WORKOUT][SAVE] intensity 배열 길이 불일치:",
+          intensityList.length,
+          "!=",
+          completedExercises.length
+        );
+      }
+      if (feedbackList.length !== completedExercises.length) {
+        console.warn(
+          "[WORKOUT][SAVE] feedback 배열 길이 불일치:",
+          feedbackList.length,
+          "!=",
+          completedExercises.length
+        );
+      }
+
       console.log("[WORKOUT][SAVE] 운동 저장 시작:", {
         userId: userIdNum,
         saveTitle: trimmedTitle,
         exerciseCount: completedExercises.length,
         intensityList,
+        intensityLength: intensityList.length,
         feedbackList,
+        feedbackLength: feedbackList.length,
         seconds: workoutSeconds,
+        // API 스펙 검증: 배열 길이가 운동 개수와 일치하는지 확인
+        arraysMatchExerciseCount:
+          intensityList.length === completedExercises.length &&
+          feedbackList.length === completedExercises.length,
       });
 
       const response = await saveWorkoutTitle(
@@ -1420,10 +1462,18 @@ const ExerciseScreen = ({ navigation }: any) => {
         ? response.sessionIds
         : [];
       if (savedSessionIds.length > 0) {
+        // 저장된 세션에 saveTitle과 groupKey 설정
+        const saveGroupKey = `group_${Date.now()}_${Math.random()
+          .toString(36)
+          .slice(2)}`;
         setAllActivities((prev) =>
           prev.map((activity) =>
             activity.sessionId && savedSessionIds.includes(activity.sessionId)
-              ? { ...activity, saveTitle: trimmedTitle }
+              ? { 
+                  ...activity, 
+                  saveTitle: trimmedTitle,
+                  groupKey: activity.groupKey || saveGroupKey,
+                }
               : activity
           )
         );
@@ -1435,10 +1485,19 @@ const ExerciseScreen = ({ navigation }: any) => {
         }));
       }
 
+      // 현재 세션에서 완료한 세트 수만 계산 (이전에 저장한 세트 제외)
+      const currentSessionSetCount = completedExercises.reduce((total, exercise) => {
+        if (Array.isArray(exercise.sets)) {
+          const completedSets = exercise.sets.filter((set: any) => set?.isCompleted === true);
+          return total + completedSets.length;
+        }
+        return total;
+      }, 0);
+
       // 성공 메시지에 저장된 세트 수와 AI 피드백 전송 여부 포함
       const successMessage =
-        response.updatedCount > 0
-          ? `오늘의 운동 "${trimmedTitle}"이 저장되었어요.\n\n${response.updatedCount}개의 세트가 저장되었고, AI 피드백이 전송되었습니다.`
+        currentSessionSetCount > 0
+          ? `오늘의 운동 "${trimmedTitle}"이 저장되었어요.\n\n${currentSessionSetCount}개의 세트가 저장되었고, AI 피드백이 전송되었습니다.`
           : `오늘의 운동 "${trimmedTitle}"이 저장되었어요.\n\nAI 피드백이 전송되었습니다.`;
 
       Alert.alert("저장 완료", successMessage);
@@ -1446,6 +1505,8 @@ const ExerciseScreen = ({ navigation }: any) => {
       setCompletionSummaryTitle(""); // 제목 초기화
       loadTodayWorkoutTime();
       loadSavedWorkouts();
+      // 운동 목표 데이터도 다시 불러와서 게이지 업데이트
+      loadGoalData();
 
       // 운동 제목 저장 후 주간 진행률을 다시 가져와서 게이지 업데이트
       // 서버에서 exerciseRate 계산에 시간이 걸릴 수 있으므로 여러 번 재시도
@@ -1454,6 +1515,8 @@ const ExerciseScreen = ({ navigation }: any) => {
         maxRetries: number = 3
       ) => {
         try {
+          // 목표 데이터와 주간 진행률을 함께 업데이트
+          await loadGoalData();
           await loadWeeklyCalories();
 
           // exerciseRate가 업데이트되었는지 확인하기 위해 잠시 대기 후 다시 확인
@@ -1538,6 +1601,7 @@ const ExerciseScreen = ({ navigation }: any) => {
     isSavingCompletionTitle,
     loadTodayWorkoutTime,
     loadSavedWorkouts,
+    loadGoalData,
     loadWeeklyCalories,
     extractSaveErrorDetail,
     completedExercises,
@@ -2798,10 +2862,6 @@ const ExerciseScreen = ({ navigation }: any) => {
               >
                 <Text style={styles.startWorkoutButtonText}>시작</Text>
               </TouchableOpacity>
-            ) : todayTotalWorkoutSeconds > 0 ? (
-              <Text style={styles.todayWorkoutTimeText}>
-                오늘 총 운동 시간: {formatWorkoutTime(todayTotalWorkoutSeconds)}
-              </Text>
             ) : null}
           </View>
 
@@ -3021,7 +3081,55 @@ const ExerciseScreen = ({ navigation }: any) => {
         onSave={handleExerciseSave}
         isCompleted={selectedExerciseCompleted}
         onWorkoutComplete={async (exercises) => {
-          setCompletedExercises(exercises);
+          // 이미 저장된 운동들 제외 (savedWorkouts + pendingSavedRefs 기준)
+          const savedSessionIds = new Set<string>();
+          savedWorkouts.forEach((group) => {
+            group.sessions.forEach((session) => {
+              if (session.sessionId) {
+                savedSessionIds.add(session.sessionId);
+              }
+            });
+          });
+          const pendingSessionIds = new Set(pendingSavedRefs.sessionIds);
+          const pendingActivityIds = new Set(pendingSavedRefs.activityIds);
+          const pendingExternalKeys = new Set(pendingSavedRefs.externalKeys);
+          
+          // allActivities에서 saveTitle이 있는 운동도 확인
+          const activitiesWithSaveTitle = new Set<string>();
+          allActivities.forEach((activity) => {
+            if (activity.saveTitle) {
+              if (activity.sessionId) activitiesWithSaveTitle.add(`session:${activity.sessionId}`);
+              if (typeof activity.id === "number") activitiesWithSaveTitle.add(`activity:${activity.id}`);
+              if (activity.externalId && activity.name) {
+                activitiesWithSaveTitle.add(`external:${activity.externalId}__${activity.name}`);
+              }
+            }
+          });
+          
+          const filteredExercises = exercises.filter((ex) => {
+            const sessionId = ex.sessionId;
+            const activityId = ex.activityId;
+            const externalKey = ex.externalId && ex.name ? `${ex.externalId}__${ex.name}` : null;
+            
+            // 이미 저장된 운동인지 확인
+            const alreadySavedBySession = sessionId && 
+              (savedSessionIds.has(sessionId) || pendingSessionIds.has(sessionId));
+            const alreadySavedByActivity = typeof activityId === "number" && 
+              pendingActivityIds.has(activityId);
+            const alreadySavedByExternal = externalKey && 
+              pendingExternalKeys.has(externalKey);
+            
+            // saveTitle이 있는 운동인지 확인
+            const hasSaveTitle = 
+              (sessionId && activitiesWithSaveTitle.has(`session:${sessionId}`)) ||
+              (typeof activityId === "number" && activitiesWithSaveTitle.has(`activity:${activityId}`)) ||
+              (externalKey && activitiesWithSaveTitle.has(`external:${externalKey}`));
+            
+            // 이미 저장되었거나 saveTitle이 있으면 제외
+            return !(alreadySavedBySession || alreadySavedByActivity || alreadySavedByExternal || hasSaveTitle);
+          });
+          
+          setCompletedExercises(filteredExercises);
           setCompletionSummaryTitle("오늘의 운동");
           setShowCompletionModal(true);
 
@@ -3261,7 +3369,55 @@ const ExerciseScreen = ({ navigation }: any) => {
                 onClose: handleStretchSkip,
                 onSave: handleExerciseSave,
                 onWorkoutComplete: (exercises) => {
-                  setCompletedExercises(exercises);
+                  // 이미 저장된 운동들 제외 (savedWorkouts + pendingSavedRefs 기준)
+                  const savedSessionIds = new Set<string>();
+                  savedWorkouts.forEach((group) => {
+                    group.sessions.forEach((session) => {
+                      if (session.sessionId) {
+                        savedSessionIds.add(session.sessionId);
+                      }
+                    });
+                  });
+                  const pendingSessionIds = new Set(pendingSavedRefs.sessionIds);
+                  const pendingActivityIds = new Set(pendingSavedRefs.activityIds);
+                  const pendingExternalKeys = new Set(pendingSavedRefs.externalKeys);
+                  
+                  // allActivities에서 saveTitle이 있는 운동도 확인
+                  const activitiesWithSaveTitle = new Set<string>();
+                  allActivities.forEach((activity) => {
+                    if (activity.saveTitle) {
+                      if (activity.sessionId) activitiesWithSaveTitle.add(`session:${activity.sessionId}`);
+                      if (typeof activity.id === "number") activitiesWithSaveTitle.add(`activity:${activity.id}`);
+                      if (activity.externalId && activity.name) {
+                        activitiesWithSaveTitle.add(`external:${activity.externalId}__${activity.name}`);
+                      }
+                    }
+                  });
+                  
+                  const filteredExercises = exercises.filter((ex) => {
+                    const sessionId = ex.sessionId;
+                    const activityId = ex.activityId;
+                    const externalKey = ex.externalId && ex.name ? `${ex.externalId}__${ex.name}` : null;
+                    
+                    // 이미 저장된 운동인지 확인
+                    const alreadySavedBySession = sessionId && 
+                      (savedSessionIds.has(sessionId) || pendingSessionIds.has(sessionId));
+                    const alreadySavedByActivity = typeof activityId === "number" && 
+                      pendingActivityIds.has(activityId);
+                    const alreadySavedByExternal = externalKey && 
+                      pendingExternalKeys.has(externalKey);
+                    
+                    // saveTitle이 있는 운동인지 확인
+                    const hasSaveTitle = 
+                      (sessionId && activitiesWithSaveTitle.has(`session:${sessionId}`)) ||
+                      (typeof activityId === "number" && activitiesWithSaveTitle.has(`activity:${activityId}`)) ||
+                      (externalKey && activitiesWithSaveTitle.has(`external:${externalKey}`));
+                    
+                    // 이미 저장되었거나 saveTitle이 있으면 제외
+                    return !(alreadySavedBySession || alreadySavedByActivity || alreadySavedByExternal || hasSaveTitle);
+                  });
+                  
+                  setCompletedExercises(filteredExercises);
                   setShowCompletionModal(true);
                   setIsIntroVisible(false);
                   setIntroStage("intro");
