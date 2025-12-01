@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import InBodyManualForm from "../../components/common/InBodyManualForm";
-import { postInBody, patchInBody, getInBodyList, getLatestInBody, InBodyPayload } from "../../utils/inbodyApi";
+import { postInBody, patchInBody, getInBodyList, getLatestInBody, getInBodyByDatePath, InBodyPayload } from "../../utils/inbodyApi";
 import { eventBus } from "../../utils/eventBus";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -136,6 +136,8 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
     const bodyComposition = inBodyData.bodyComposition || {};
     const muscleFatAnalysis = inBodyData.muscleFatAnalysis || {};
     const obesityAnalysis = inBodyData.obesityAnalysis || {};
+    const segmentalMuscleAnalysis = inBodyData.segmentalMuscleAnalysis || {};
+    const segmentalFatAnalysis = inBodyData.segmentalFatAnalysis || {};
 
     // 날짜 변환 (YYYY.MM.DD -> YYYY-MM-DD)
     const measurementDate = inBodyData.measurementDate
@@ -155,6 +157,53 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
     // 성별 변환
     const gender = inBodyData.gender === "남성" ? "male" : "female";
 
+    // 부위별 근육량: 직접 필드 우선, 없으면 segmentalMuscleAnalysis 객체에서 가져오기
+    const rArmMuscle = inBodyData.rightArmMuscle?.toString() || 
+                       segmentalMuscleAnalysis.rightArm?.toString() || "";
+    const lArmMuscle = inBodyData.leftArmMuscle?.toString() || 
+                       segmentalMuscleAnalysis.leftArm?.toString() || "";
+    const trunkMuscle = inBodyData.trunkMuscle?.toString() || 
+                        segmentalMuscleAnalysis.trunk?.toString() || "";
+    const rLegMuscle = inBodyData.rightLegMuscle?.toString() || 
+                       segmentalMuscleAnalysis.rightLeg?.toString() || "";
+    const lLegMuscle = inBodyData.leftLegMuscle?.toString() || 
+                       segmentalMuscleAnalysis.leftLeg?.toString() || "";
+
+    // 부위별 체지방량: 직접 필드 우선, 없으면 segmentalFatAnalysis 객체에서 가져오기
+    // null/undefined 체크 후 toString() 호출
+    const getFatValue = (directValue: any, segmentalValue: any): string => {
+      if (directValue !== null && directValue !== undefined) {
+        return directValue.toString();
+      }
+      if (segmentalValue !== null && segmentalValue !== undefined) {
+        return segmentalValue.toString();
+      }
+      return "";
+    };
+    
+    const rArmFat = getFatValue(inBodyData.rightArmFat, segmentalFatAnalysis.rightArm);
+    const lArmFat = getFatValue(inBodyData.leftArmFat, segmentalFatAnalysis.leftArm);
+    const trunkFat = getFatValue(inBodyData.trunkFat, segmentalFatAnalysis.trunk);
+    const rLegFat = getFatValue(inBodyData.rightLegFat, segmentalFatAnalysis.rightLeg);
+    const lLegFat = getFatValue(inBodyData.leftLegFat, segmentalFatAnalysis.leftLeg);
+
+    console.log("[INBODY MANUAL] 폼 값 변환:", {
+      hasSegmentalMuscleAnalysis: !!segmentalMuscleAnalysis && Object.keys(segmentalMuscleAnalysis).length > 0,
+      hasSegmentalFatAnalysis: !!segmentalFatAnalysis && Object.keys(segmentalFatAnalysis).length > 0,
+      segmentalMuscleAnalysis,
+      segmentalFatAnalysis,
+      rArmMuscle,
+      lArmMuscle,
+      trunkMuscle,
+      rLegMuscle,
+      lLegMuscle,
+      rArmFat,
+      lArmFat,
+      trunkFat,
+      rLegFat,
+      lLegFat,
+    });
+
     return {
       date: measurementDate,
       gender,
@@ -167,16 +216,16 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
       pbf: inBodyData.bodyFatPercentage?.toString() || obesityAnalysis.bodyFatPercentage?.toString() || "",
       vfa: inBodyData.visceralFatLevel?.toString()?.split(" ")[0] || "",
       bmr: inBodyData.basalMetabolicRate?.toString() || "",
-      rArm: inBodyData.rightArmMuscle?.toString() || "",
-      lArm: inBodyData.leftArmMuscle?.toString() || "",
-      trunk: inBodyData.trunkMuscle?.toString() || "",
-      rLeg: inBodyData.rightLegMuscle?.toString() || "",
-      lLeg: inBodyData.leftLegMuscle?.toString() || "",
-      rArmFat: inBodyData.rightArmFat?.toString() || "",
-      lArmFat: inBodyData.leftArmFat?.toString() || "",
-      trunkFat: inBodyData.trunkFat?.toString() || "",
-      rLegFat: inBodyData.rightLegFat?.toString() || "",
-      lLegFat: inBodyData.leftLegFat?.toString() || "",
+      rArm: rArmMuscle,
+      lArm: lArmMuscle,
+      trunk: trunkMuscle,
+      rLeg: rLegMuscle,
+      lLeg: lLegMuscle,
+      rArmFat: rArmFat,
+      lArmFat: lArmFat,
+      trunkFat: trunkFat,
+      rLegFat: rLegFat,
+      lLegFat: lLegFat,
       tbw: inBodyData.totalBodyWater?.toString() || bodyComposition.totalBodyWater?.toString()?.split(" ")[0] || "",
       protein: inBodyData.protein?.toString() || bodyComposition.protein?.toString()?.split(" ")[0] || "",
       mineral: inBodyData.mineral?.toString() || bodyComposition.mineral?.toString()?.split(" ")[0] || "",
@@ -195,32 +244,95 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
   // 날짜 변경 핸들러
   const handleDateChange = useCallback(async (date: string, currentFormData?: any) => {
     try {
-      console.log("[INBODY] 날짜 변경, 최신 기록 확인 중:", date);
+      console.log("[INBODY MANUAL] 날짜 변경, 해당 날짜 기록 확인 중:", date);
+      
+      // 날짜 형식 정규화 (YYYY-MM-DD)
+      const normalizedDate = normalizeDateForComparison(date);
+      
+      // 날짜별 조회 API로 해당 날짜의 기록 확인
+      let dateRecord = null;
+      try {
+        dateRecord = await getInBodyByDatePath(normalizedDate);
+        console.log("[INBODY MANUAL] 날짜별 조회 결과:", {
+          hasRecord: !!dateRecord,
+          recordId: dateRecord?.id || dateRecord?.inBody?.id,
+          success: dateRecord?.success,
+        });
+      } catch (error: any) {
+        // 400/404는 데이터 없음으로 처리 (에러 아님)
+        const status = error?.response?.status;
+        if (status === 400 || status === 404) {
+          console.log("[INBODY MANUAL] 해당 날짜에 기록 없음:", normalizedDate);
+        } else {
+          console.warn("[INBODY MANUAL] 날짜별 조회 중 에러:", error);
+        }
+      }
+      
+      // 날짜별 조회에서 기록을 찾은 경우
+      if (dateRecord) {
+        const recordData = dateRecord?.success ? dateRecord.inBody : dateRecord;
+        const recordId = recordData?.id || dateRecord?.id;
+        
+        if (recordData && recordId) {
+          console.log("[INBODY MANUAL] 기존 기록 발견, ID:", recordId);
+          console.log("[INBODY MANUAL] 기록 데이터:", {
+            hasSegmentalMuscleAnalysis: !!recordData.segmentalMuscleAnalysis,
+            hasSegmentalFatAnalysis: !!recordData.segmentalFatAnalysis,
+            segmentalMuscleAnalysis: recordData.segmentalMuscleAnalysis,
+            segmentalFatAnalysis: recordData.segmentalFatAnalysis,
+            rightArmFat: recordData.rightArmFat,
+            leftArmFat: recordData.leftArmFat,
+            trunkFat: recordData.trunkFat,
+            rightLegFat: recordData.rightLegFat,
+            leftLegFat: recordData.leftLegFat,
+          });
+          
+          // 기존 기록 ID 저장
+          setCurrentInBodyId(recordId);
+          
+          // API 응답을 폼 형식으로 변환
+          const formValues = convertInBodyToFormValues(recordData);
+          console.log("[INBODY MANUAL] 변환된 폼 값:", {
+            rArmFat: formValues.rArmFat,
+            lArmFat: formValues.lArmFat,
+            trunkFat: formValues.trunkFat,
+            rLegFat: formValues.rLegFat,
+            lLegFat: formValues.lLegFat,
+          });
+          
+          setCurrentDefaultValues(formValues);
+          
+          // 폼 리마운트하여 새 값 적용
+          setFormKey((prev) => prev + 1);
+          
+          Alert.alert(
+            "기존 기록 발견",
+            "해당 날짜에 기존 인바디 기록이 있습니다.\n기록을 수정할 수 있습니다.",
+            [{ text: "확인" }]
+          );
+          return;
+        }
+      }
+      
+      // 날짜별 조회에서 기록을 찾지 못한 경우, 최신 기록 확인 (fallback)
+      console.log("[INBODY MANUAL] 날짜별 조회에서 기록 없음, 최신 기록 확인 중");
       const latestRecord = await getLatestInBody();
       
-      // 최신 기록이 있고 날짜가 일치하는지 확인
       if (latestRecord) {
         const latestData = latestRecord?.success ? latestRecord.inBody : latestRecord;
         const latestDate = latestData?.measurementDate;
         
         if (latestDate) {
-          // 날짜 형식 정규화 (YYYY-MM-DD)
           const normalizedLatestDate = normalizeDateForComparison(latestDate);
-          const normalizedSelectedDate = normalizeDateForComparison(date);
           
-          if (normalizedLatestDate === normalizedSelectedDate) {
-            // 날짜가 일치하면 기존 기록으로 처리
+          if (normalizedLatestDate === normalizedDate) {
+            // 최신 기록의 날짜가 선택한 날짜와 일치하는 경우
             const recordId = latestData.id;
-            console.log("[INBODY] 최신 기록의 날짜가 일치, ID:", recordId);
+            console.log("[INBODY MANUAL] 최신 기록의 날짜가 일치, ID:", recordId);
             
-            // 기존 기록 ID 저장
             setCurrentInBodyId(recordId);
-            
-            // API 응답을 폼 형식으로 변환
             const formValues = convertInBodyToFormValues(latestData);
             setCurrentDefaultValues(formValues);
-            
-            // 폼 리마운트하여 새 값 적용
             setFormKey((prev) => prev + 1);
             
             Alert.alert(
@@ -229,17 +341,12 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
               [{ text: "확인" }]
             );
             return;
-          } else {
-            console.log("[INBODY] 최신 기록의 날짜가 일치하지 않음:", {
-              latestDate: normalizedLatestDate,
-              selectedDate: normalizedSelectedDate,
-            });
           }
         }
       }
       
-      // 날짜가 일치하지 않거나 최신 기록이 없으면 날짜만 변경하고 나머지 데이터는 유지
-      console.log("[INBODY] 기존 기록 없음, 날짜만 변경하고 입력 데이터 유지");
+      // 기록이 없으면 날짜만 변경하고 나머지 데이터는 유지
+      console.log("[INBODY MANUAL] 기존 기록 없음, 날짜만 변경하고 입력 데이터 유지");
       setCurrentInBodyId(undefined);
       
       // 현재 폼 데이터가 있으면 날짜만 업데이트, 없으면 날짜만 설정
@@ -253,7 +360,7 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
       }
       setFormKey((prev) => prev + 1);
     } catch (error: any) {
-      console.warn("[INBODY] 날짜 변경 시 최신 기록 확인 중 에러:", error);
+      console.warn("[INBODY MANUAL] 날짜 변경 시 기록 확인 중 에러:", error);
       // 에러 발생 시에도 현재 폼 데이터 유지하고 날짜만 변경
       setCurrentInBodyId(undefined);
       if (currentFormData) {
@@ -447,161 +554,69 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
           : await postInBody(payload);
       } catch (e: any) {
         // POST 요청에서 409 에러가 발생하면 기존 기록이 있다는 의미
-        // 에러 응답에서 기존 기록 ID를 추출하여 PATCH로 재시도
+        // 날짜별 조회 API로 기존 기록을 찾아서 자동으로 PATCH로 재시도 (재저장 허용)
         if (!existingInBodyId && e?.response?.status === 409) {
-          console.log("[INBODY] 409 에러 발생, 기존 기록 ID 찾기 시도");
-          console.log("[INBODY] 409 에러 응답 전체:", JSON.stringify(e.response?.data, null, 2));
+          console.log("[INBODY] 409 에러 발생, 날짜별 조회로 기존 기록 찾아 자동 업데이트 시도");
           
-          // 에러 응답에서 기존 기록 ID 추출 시도
-          const errorData = e.response?.data;
-          let foundInBodyId: number | string | undefined;
+          // 날짜 형식 정규화 (YYYY-MM-DD)
+          const normalizedDate = normalizeDateForComparison(payload.measurementDate || "");
           
-          // 여러 가능한 경로에서 ID 찾기 (더 많은 경로 확인)
-          if (errorData?.inBodyId) {
-            foundInBodyId = errorData.inBodyId;
-          } else if (errorData?.inBody?.id) {
-            foundInBodyId = errorData.inBody.id;
-          } else if (errorData?.id) {
-            foundInBodyId = errorData.id;
-          } else if (errorData?.data?.inBodyId) {
-            foundInBodyId = errorData.data.inBodyId;
-          } else if (errorData?.data?.inBody?.id) {
-            foundInBodyId = errorData.data.inBody.id;
-          } else if (errorData?.data?.id) {
-            foundInBodyId = errorData.data.id;
-          } else if (errorData?.details?.inBodyId) {
-            foundInBodyId = errorData.details.inBodyId;
-          } else if (errorData?.details?.id) {
-            foundInBodyId = errorData.details.id;
-          }
-          
-          // ID를 찾았으면 PATCH로 재시도
-          if (foundInBodyId) {
-            console.log("[INBODY] 기존 기록 ID 발견, PATCH로 재시도:", foundInBodyId);
-            try {
-              response = await patchInBody(foundInBodyId, payload);
-              existingInBodyId = foundInBodyId; // 성공 시 ID 저장
-            } catch (patchError: any) {
-              // PATCH도 실패하면 원래 에러를 다시 throw
-              console.error("[INBODY] PATCH 재시도 실패:", patchError);
-              throw patchError;
-            }
-          } else {
-            // ID를 찾지 못했으면 getLatestInBody로 최신 기록 확인
-            console.log("[INBODY] getLatestInBody로 최신 기록 확인 시도");
-            try {
-              const latestInBody = await getLatestInBody();
-              const latestData = latestInBody?.success ? latestInBody.inBody : latestInBody;
-              
-              if (latestData?.id) {
-                // 최신 기록의 날짜와 현재 날짜 비교
-                const latestDate = latestData.measurementDate || latestData.date;
-                if (latestDate) {
-                  // 날짜 형식 정규화 (YYYY-MM-DD)
-                  const normalizedLatestDate = normalizeDateForComparison(latestDate);
-                  const normalizedPayloadDate = normalizeDateForComparison(payload.measurementDate || "");
-                  
-                  console.log("[INBODY][409] 날짜 비교:", {
-                    latestDate: normalizedLatestDate,
-                    payloadDate: normalizedPayloadDate,
-                    match: normalizedLatestDate === normalizedPayloadDate,
-                  });
-                  
-                  if (normalizedLatestDate === normalizedPayloadDate) {
-                    foundInBodyId = latestData.id;
-                    console.log("[INBODY] getLatestInBody에서 기존 기록 ID 발견, PATCH로 재시도:", foundInBodyId);
-                    response = await patchInBody(foundInBodyId, payload);
-                    existingInBodyId = foundInBodyId;
-                  } else {
-                    console.log("[INBODY] 최신 기록의 날짜가 일치하지 않음, getInBodyList로 시도");
-                    // 날짜가 일치하지 않으면 getInBodyList로 시도
-                    throw new Error("날짜 불일치");
-                  }
-                } else {
-                  console.log("[INBODY] 최신 기록에 날짜 정보 없음, getInBodyList로 시도");
-                  throw new Error("날짜 정보 없음");
-                }
-              } else {
-                console.log("[INBODY] 최신 기록 없음, getInBodyList로 시도");
-                throw new Error("최신 기록 없음");
+          try {
+            // 날짜별 조회 API로 기존 기록 찾기
+            const existingRecord = await getInBodyByDatePath(normalizedDate);
+            
+            if (existingRecord?.id || existingRecord?.inBody?.id) {
+              const foundInBodyId = existingRecord.id || existingRecord.inBody?.id;
+              console.log("[INBODY] 날짜별 조회로 기존 기록 ID 발견, 자동으로 PATCH로 업데이트:", foundInBodyId);
+              try {
+                response = await patchInBody(foundInBodyId, payload);
+                existingInBodyId = foundInBodyId; // 성공 시 ID 저장
+                console.log("[INBODY] 기존 기록 자동 업데이트 성공");
+              } catch (patchError: any) {
+                console.error("[INBODY] PATCH 재시도 실패:", patchError);
+                throw patchError;
               }
-            } catch (latestError: any) {
-              // getLatestInBody 실패 또는 날짜 불일치 시 getInBodyList로 시도
-              if (latestError.message === "날짜 불일치" || latestError.message === "날짜 정보 없음" || latestError.message === "최신 기록 없음" || !latestError.response) {
-                console.log("[INBODY] getInBodyList로 기존 기록 찾기 시도");
+            } else {
+              // 날짜별 조회에서 기록을 찾지 못한 경우, 에러 응답에서 ID 추출 시도
+              console.log("[INBODY] 날짜별 조회에서 기록을 찾지 못함, 에러 응답에서 ID 추출 시도");
+              const errorData = e.response?.data;
+              let foundInBodyId: number | string | undefined;
+              
+              // 여러 가능한 경로에서 ID 찾기
+              if (errorData?.inBodyId) {
+                foundInBodyId = errorData.inBodyId;
+              } else if (errorData?.inBody?.id) {
+                foundInBodyId = errorData.inBody.id;
+              } else if (errorData?.id) {
+                foundInBodyId = errorData.id;
+              } else if (errorData?.data?.inBodyId) {
+                foundInBodyId = errorData.data.inBodyId;
+              } else if (errorData?.data?.inBody?.id) {
+                foundInBodyId = errorData.data.inBody.id;
+              } else if (errorData?.data?.id) {
+                foundInBodyId = errorData.data.id;
+              }
+              
+              if (foundInBodyId) {
+                console.log("[INBODY] 에러 응답에서 기존 기록 ID 발견, 자동으로 PATCH로 업데이트:", foundInBodyId);
                 try {
-                  const inBodyList = await getInBodyList();
-                  if (inBodyList?.success && Array.isArray(inBodyList.data)) {
-                    // 날짜로 필터링하여 기존 기록 찾기
-                    const existingRecord = inBodyList.data.find((record: any) => {
-                      const recordDate = record.measurementDate || record.date;
-                      if (!recordDate) return false;
-                      // 날짜 형식 정규화 (YYYY-MM-DD)
-                      const normalizedRecordDate = normalizeDateForComparison(recordDate);
-                      const normalizedPayloadDate = normalizeDateForComparison(payload.measurementDate || "");
-                      return normalizedRecordDate === normalizedPayloadDate;
-                    });
-                    
-                    if (existingRecord?.id) {
-                      foundInBodyId = existingRecord.id;
-                      console.log("[INBODY] getInBodyList에서 기존 기록 ID 발견, PATCH로 재시도:", foundInBodyId);
-                      response = await patchInBody(foundInBodyId, payload);
-                      existingInBodyId = foundInBodyId;
-                    } else {
-                      console.warn("[INBODY] getInBodyList에서도 기존 기록을 찾지 못함");
-                      // getInBodyList에서 찾지 못했지만 409 에러가 발생했다는 것은 기록이 존재한다는 의미
-                      // 사용자에게 알림을 표시하고 에러를 throw
-                      Alert.alert(
-                        "저장 실패",
-                        `해당 날짜(${payload.measurementDate})에 이미 인바디 기록이 있습니다.\n\n날짜를 변경하거나, 해당 날짜로 이동하여 기존 기록을 수정해주세요.`,
-                        [
-                          { text: "취소", style: "cancel" },
-                          {
-                            text: "날짜 변경",
-                            onPress: () => {
-                              // 날짜 선택 화면으로 이동하거나 날짜 입력 필드에 포커스
-                              // 여기서는 단순히 에러만 throw
-                            },
-                          },
-                        ]
-                      );
-                      throw e;
-                    }
-                  } else {
-                    console.warn("[INBODY] getInBodyList 응답 형식 오류");
-                    // getInBodyList가 실패했지만 409 에러가 발생했다는 것은 기록이 존재한다는 의미
-                    Alert.alert(
-                      "저장 실패",
-                      `해당 날짜(${payload.measurementDate})에 이미 인바디 기록이 있습니다.\n\n날짜를 변경하거나, 해당 날짜로 이동하여 기존 기록을 수정해주세요.`,
-                      [{ text: "확인" }]
-                    );
-                    throw e;
-                  }
-                } catch (listError: any) {
-                  console.error("[INBODY] getInBodyList로 기존 기록 찾기 실패:", listError);
-                  // getInBodyList가 실패했지만 409 에러가 발생했다는 것은 기록이 존재한다는 의미
-                  // 500 에러인 경우 서버 문제이므로 사용자에게 안내
-                  if (listError?.response?.status === 500) {
-                    Alert.alert(
-                      "저장 실패",
-                      `해당 날짜(${payload.measurementDate})에 이미 인바디 기록이 있습니다.\n\n기존 기록을 수정하려면:\n1. 날짜를 해당 날짜로 변경하세요\n2. 기존 기록이 자동으로 로드됩니다\n3. 수정 후 저장하세요`,
-                      [{ text: "확인" }]
-                    );
-                  } else {
-                    Alert.alert(
-                      "저장 실패",
-                      `해당 날짜(${payload.measurementDate})에 이미 인바디 기록이 있습니다.\n\n날짜를 변경하거나, 해당 날짜로 이동하여 기존 기록을 수정해주세요.`,
-                      [{ text: "확인" }]
-                    );
-                  }
-                  throw e;
+                  response = await patchInBody(foundInBodyId, payload);
+                  existingInBodyId = foundInBodyId;
+                  console.log("[INBODY] 기존 기록 자동 업데이트 성공");
+                } catch (patchError: any) {
+                  console.error("[INBODY] PATCH 재시도 실패:", patchError);
+                  throw patchError;
                 }
               } else {
-                // getLatestInBody 자체가 실패한 경우 (네트워크 에러 등)
-                console.error("[INBODY] getLatestInBody 실패:", latestError);
+                // ID를 찾지 못한 경우, 원래 에러를 throw하여 상위에서 처리
+                console.warn("[INBODY] 기존 기록 ID를 찾지 못함, 원래 에러 throw");
                 throw e;
               }
             }
+          } catch (dateError: any) {
+            console.error("[INBODY] 날짜별 조회 실패:", dateError);
+            // 날짜별 조회가 실패한 경우, 원래 409 에러를 throw하여 상위에서 처리
+            throw e;
           }
         } else {
           // 409가 아니거나 이미 existingInBodyId가 있으면 원래 에러를 throw

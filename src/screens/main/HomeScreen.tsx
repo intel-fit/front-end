@@ -14,7 +14,7 @@ import { colors } from "../../theme/colors";
 import { ROUTES } from "../../constants/routes";
 import { useDate } from "../../contexts/DateContext";
 import { homeAPI } from "../../services";
-import { getTodayWorkoutTime } from "../../utils/exerciseApi";
+import { getTodayWorkoutTime, fetchSavedWorkouts } from "../../utils/exerciseApi";
 import { getLatestInBody } from "../../utils/inbodyApi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { DailyProgressWeekItem, HomeResponse } from "../../types";
@@ -29,6 +29,7 @@ const HomeScreen = ({ navigation }: any) => {
   const [homeData, setHomeData] = useState<HomeResponse | null>(null);
   const [todayWorkoutSeconds, setTodayWorkoutSeconds] = useState(0);
   const [inBodyData, setInBodyData] = useState<any>(null);
+  const [todayExerciseCount, setTodayExerciseCount] = useState<number>(0);
   const isLoadingRef = useRef(false);
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
 
@@ -127,6 +128,46 @@ const HomeScreen = ({ navigation }: any) => {
     }
   };
 
+  // 오늘 완료한 운동 종목 수 계산
+  const loadTodayExerciseCount = async () => {
+    try {
+      const userIdStr = await AsyncStorage.getItem("userId");
+      if (!userIdStr) {
+        setTodayExerciseCount(0);
+        return;
+      }
+      const userId = parseInt(userIdStr, 10);
+      if (isNaN(userId)) {
+        setTodayExerciseCount(0);
+        return;
+      }
+
+      const today = new Date();
+      const dateString = formatDateToString(today);
+      const savedWorkouts = await fetchSavedWorkouts(userId, dateString);
+
+      // 모든 세션에서 고유한 운동 종목 수 계산
+      const uniqueExercises = new Set<string>();
+      savedWorkouts.forEach((group) => {
+        group.sessions.forEach((session) => {
+          session.records.forEach((record) => {
+            // 운동 이름을 기준으로 고유한 종목 수 계산
+            if (record.exerciseName) {
+              uniqueExercises.add(record.exerciseName);
+            }
+          });
+        });
+      });
+
+      const count = uniqueExercises.size;
+      console.log("[HOME] 오늘 완료한 운동 종목 수:", count, "개");
+      setTodayExerciseCount(count);
+    } catch (e: any) {
+      console.error("오늘 운동 종목 수 계산 실패:", e);
+      setTodayExerciseCount(0);
+    }
+  };
+
   // 화면 포커스 시 데이터 로드
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
@@ -141,6 +182,7 @@ const HomeScreen = ({ navigation }: any) => {
         loadHomeData(),
         loadTodayWorkoutTime(),
         loadInBodyData(),
+        loadTodayExerciseCount(),
       ]).finally(() => {
         isLoadingRef.current = false;
       });
@@ -417,7 +459,7 @@ const HomeScreen = ({ navigation }: any) => {
               <Text style={styles.exerciseStatLabel}>완료 운동</Text>
               <View style={styles.exerciseStatValueRow}>
                 <Text style={styles.exerciseStatValue}>
-                  {homeData?.todayExercise?.exerciseCount ?? 0}
+                  {todayExerciseCount}
                 </Text>
                 <Text style={styles.exerciseStatUnit}>개</Text>
               </View>

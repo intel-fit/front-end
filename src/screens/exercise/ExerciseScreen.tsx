@@ -953,13 +953,19 @@ const ExerciseScreen = ({ navigation }: any) => {
   }, [userId]);
 
   const loadSavedWorkouts = React.useCallback(async () => {
-    if (!userId) return;
+    if (!userId || !selectedDate) return;
     const userIdNum = parseInt(userId, 10);
     if (isNaN(userIdNum)) return;
+    
+    // 날짜를 yyyy-MM-dd 형식으로 변환
+    const dateStr = `${selectedDate.getFullYear()}-${String(
+      selectedDate.getMonth() + 1
+    ).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+    
     try {
       setSavedWorkoutsLoading(true);
       setSavedWorkoutsError(null);
-      const data = await fetchSavedWorkouts(userIdNum);
+      const data = await fetchSavedWorkouts(userIdNum, dateStr);
       const workouts = Array.isArray(data) ? data : [];
 
       // 동일한 제목의 운동은 한 그룹으로 합쳐서 세션을 이어 붙인다.
@@ -986,25 +992,9 @@ const ExerciseScreen = ({ navigation }: any) => {
         }
       });
 
-      // 오늘 날짜에 저장된 운동 제목 필터링 (새로운 세션 저장 시 제외)
-      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-      const filteredGroups = mergedGroups.filter((group) => {
-        // 그룹의 세션들 중 오늘 날짜에 저장된 것이 있는지 확인
-        const hasTodaySession = group.sessions?.some((session) => {
-          // session의 records에서 workoutDate 확인
-          return session.records?.some((record) => {
-            if (record.workoutDate) {
-              const recordDate = record.workoutDate.slice(0, 10); // YYYY-MM-DD 형식으로 변환
-              return recordDate === today;
-            }
-            return false;
-          });
-        });
-        // 오늘 날짜에 저장된 세션이 있으면 제외
-        return !hasTodaySession;
-      });
-
-      setSavedWorkouts(filteredGroups);
+      // 저장된 운동은 모두 표시 (필터링 제거)
+      // 오늘 날짜에 저장된 운동도 표시되어야 하므로 필터링하지 않음
+      setSavedWorkouts(mergedGroups);
 
       const sessionTitleMapFresh = new Map<string, string>();
       // filteredGroups 대신 mergedGroups 사용 (모든 세션 정보는 유지)
@@ -1059,17 +1049,11 @@ const ExerciseScreen = ({ navigation }: any) => {
       if (__DEV__) {
         console.log(
           "[GROUP] 저장된 운동 제목 로드:",
-          filteredGroups.map((w) => ({
+          mergedGroups.map((w) => ({
             title: w.title,
             sessionCount: w.sessions?.length || 0,
             sessionIds: w.sessions?.map((s) => s.sessionId) || [],
           }))
-        );
-        console.log(
-          "[GROUP] 오늘 저장된 운동 제목 (제외됨):",
-          mergedGroups
-            .filter((g) => !filteredGroups.includes(g))
-            .map((w) => w.title)
         );
       }
     } catch (error) {
@@ -1079,7 +1063,7 @@ const ExerciseScreen = ({ navigation }: any) => {
     } finally {
       setSavedWorkoutsLoading(false);
     }
-  }, [userId]);
+  }, [userId, selectedDate]);
 
   React.useEffect(() => {
     if (!userIdLoaded) return;
@@ -1478,10 +1462,18 @@ const ExerciseScreen = ({ navigation }: any) => {
         ? response.sessionIds
         : [];
       if (savedSessionIds.length > 0) {
+        // 저장된 세션에 saveTitle과 groupKey 설정
+        const saveGroupKey = `group_${Date.now()}_${Math.random()
+          .toString(36)
+          .slice(2)}`;
         setAllActivities((prev) =>
           prev.map((activity) =>
             activity.sessionId && savedSessionIds.includes(activity.sessionId)
-              ? { ...activity, saveTitle: trimmedTitle }
+              ? { 
+                  ...activity, 
+                  saveTitle: trimmedTitle,
+                  groupKey: activity.groupKey || saveGroupKey,
+                }
               : activity
           )
         );

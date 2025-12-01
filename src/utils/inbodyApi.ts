@@ -236,7 +236,71 @@ export const patchInBody = async (
 };
 
 /**
- * 특정 날짜의 인바디 기록 조회
+ * 특정 날짜의 인바디 기록 조회 (경로 파라미터 사용)
+ * @param date 날짜 (YYYY-MM-DD 형식)
+ */
+export const getInBodyByDatePath = async (date: string): Promise<any> => {
+  try {
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    
+    // 날짜 형식 정규화 (YYYY-MM-DD)
+    const normalizedDate = date.replace(/\./g, "-").split("T")[0].split(" ")[0];
+    
+    const url = `${INBODY_API_URL}/date/${normalizedDate}`;
+    
+    console.log("[INBODY][GET BY DATE PATH] API 요청:", {
+      url,
+      date: normalizedDate,
+      hasToken: !!token,
+    });
+
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token || ""}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+    });
+
+    console.log("[INBODY][GET BY DATE PATH] API 응답 성공:", {
+      status: response.status,
+      hasData: !!response.data,
+    });
+
+    return response.data;
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      const errorData = error.response?.data;
+      
+      // 400 또는 404는 데이터 없음으로 처리
+      if (status === 400 || status === 404) {
+        console.log("[INBODY][GET BY DATE PATH] 데이터 없음:", {
+          status,
+          date,
+          errorCode: errorData?.code,
+          errorMessage: errorData?.message,
+        });
+        return null;
+      }
+      
+      console.error("[INBODY][GET BY DATE PATH] API 에러:", {
+        message: error.message,
+        status,
+        statusText: error.response?.statusText,
+        errorCode: errorData?.code,
+        errorMessage: errorData?.message,
+        date,
+      });
+    } else {
+      console.error("[INBODY][GET BY DATE PATH] 예상치 못한 에러:", error);
+    }
+    throw error;
+  }
+};
+
+/**
+ * 특정 날짜의 인바디 기록 조회 (쿼리 파라미터 사용, 기존 함수)
  * @param date 날짜 (YYYY-MM-DD 또는 YYYY.MM.DD 형식)
  */
 export const getInBodyByDate = async (date: string): Promise<any> => {
