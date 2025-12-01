@@ -284,16 +284,39 @@ const MealAddScreen = ({navigation, route}: any) => {
 
   // 시간 선택 모달 열기
   const handleTimePress = () => {
-    const currentDateTime = new Date(selectedDateTime);
-    // tempDateTime을 현재 선택된 날짜+시간으로 초기화
-    const newTempDateTime = new Date(currentDateTime);
+    let newTempDateTime: Date;
+    
+    if (isEditMode && mealData?.createdAt) {
+      // 수정 모드: 원래 식단의 시간으로 시작
+      const mealDate = mealData.mealDate ? new Date(mealData.mealDate) : new Date();
+      const createdDate = new Date(mealData.createdAt);
+      newTempDateTime = new Date(mealDate);
+      newTempDateTime.setHours(createdDate.getHours());
+      newTempDateTime.setMinutes(createdDate.getMinutes());
+      newTempDateTime.setSeconds(0);
+      newTempDateTime.setMilliseconds(0);
+      console.log('시간 선택 모달 열기 (수정 모드):', {
+        원래_시간: createdDate.toLocaleTimeString('ko-KR'),
+        tempDateTime: newTempDateTime.toLocaleString('ko-KR')
+      });
+    } else {
+      // 추가 모드: 현재 시간으로 시작
+      const now = new Date();
+      const currentDate = new Date(selectedDateTime);
+      newTempDateTime = new Date(currentDate);
+      newTempDateTime.setHours(now.getHours());
+      newTempDateTime.setMinutes(now.getMinutes());
+      newTempDateTime.setSeconds(0);
+      newTempDateTime.setMilliseconds(0);
+      console.log('시간 선택 모달 열기 (추가 모드):', {
+        현재_시간: now.toLocaleTimeString('ko-KR'),
+        tempDateTime: newTempDateTime.toLocaleString('ko-KR')
+      });
+    }
+    
     setTempDateTime(newTempDateTime);
     setDateTimeMode('time');
     setShowDateTimeModal(true);
-    console.log('시간 선택 모달 열기:', {
-      selectedDateTime: selectedDateTime.toLocaleString('ko-KR'),
-      tempDateTime: newTempDateTime.toLocaleString('ko-KR')
-    });
   };
 
   // 날짜 선택 핸들러
@@ -361,6 +384,7 @@ const MealAddScreen = ({navigation, route}: any) => {
           선택된_time: time.toLocaleString('ko-KR'),
           time_시간: `${time.getHours()}:${String(time.getMinutes()).padStart(2, '0')}`
         });
+        // tempDateTime의 날짜는 유지하고 시간만 업데이트
         const newDate = new Date(tempDateTime);
         const selectedTime = new Date(time);
         newDate.setHours(selectedTime.getHours());
@@ -368,7 +392,8 @@ const MealAddScreen = ({navigation, route}: any) => {
         newDate.setSeconds(0);
         newDate.setMilliseconds(0);
         console.log('업데이트할 newDate:', newDate.toLocaleString('ko-KR'));
-        setTempDateTime(newDate);
+        // 새로운 Date 객체를 생성하여 React가 변경을 감지하도록 함
+        setTempDateTime(new Date(newDate.getTime()));
         // iOS에서는 확인 버튼을 눌러야 적용
       } else {
         console.warn('iOS onChangeTime: time 파라미터가 없음', { event, time });
@@ -386,12 +411,15 @@ const MealAddScreen = ({navigation, route}: any) => {
     finalDate.setSeconds(0);
     finalDate.setMilliseconds(0);
     setSelectedDateTime(finalDate);
+    // tempDateTime도 업데이트하여 다음에 모달을 열 때 올바른 값으로 시작
+    setTempDateTime(finalDate);
     setShowDateTimeModal(false);
   };
 
   // 모달에서 취소 버튼 클릭
   const handleDateTimeCancel = () => {
-    setTempDateTime(selectedDateTime);
+    // tempDateTime을 selectedDateTime으로 리셋
+    setTempDateTime(new Date(selectedDateTime));
     setShowDateTimeModal(false);
   };
 
@@ -1345,6 +1373,7 @@ const MealAddScreen = ({navigation, route}: any) => {
             <View style={styles.dateTimePickerContainer}>
               {dateTimeMode === 'date' ? (
                 <DateTimePicker
+                  key={`date-${showDateTimeModal}-${tempDateTime.getTime()}`}
                   value={tempDateTime}
                   mode="date"
                   display={Platform.OS === 'ios' ? 'spinner' : 'default'}
@@ -1356,6 +1385,7 @@ const MealAddScreen = ({navigation, route}: any) => {
                 />
               ) : (
                 <DateTimePicker
+                  key={`time-${showDateTimeModal}-${tempDateTime.getTime()}`}
                   value={tempDateTime}
                   mode="time"
                   display={Platform.OS === 'ios' ? 'spinner' : 'default'}
