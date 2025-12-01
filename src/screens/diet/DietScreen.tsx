@@ -200,10 +200,12 @@ const DietScreen = ({navigation, route}: any) => {
 
 
 
-  // 영양 목표 로드 (일일 목표 조회 API 사용)
-  const loadNutritionGoal = async () => {
+  // 영양 목표 로드 (특정 날짜의 목표 조회 API 사용)
+  const loadNutritionGoal = async (date?: Date) => {
     try {
-      const data = await mealAPI.getDailyGoal();
+      const targetDate = date || selectedDate || new Date();
+      const dateString = formatDateToString(targetDate);
+      const data = await mealAPI.getNutritionGoal(dateString);
       setNutritionGoal(data);
     } catch (e: any) {
       console.error('영양 목표 로드 실패:', e);
@@ -212,7 +214,9 @@ const DietScreen = ({navigation, route}: any) => {
         // API에서 자동 생성되므로 잠시 후 재시도
         setTimeout(async () => {
           try {
-            const retryData = await mealAPI.getDailyGoal();
+            const targetDate = date || selectedDate || new Date();
+            const dateString = formatDateToString(targetDate);
+            const retryData = await mealAPI.getNutritionGoal(dateString);
             setNutritionGoal(retryData);
           } catch (retryError) {
             console.error('영양 목표 재시도 실패:', retryError);
@@ -226,6 +230,8 @@ const DietScreen = ({navigation, route}: any) => {
                 targetFat: 0,
                 goalType: 'AUTO',
                 goalTypeDescription: '자동 계산',
+                isManual: false,
+                exists: false,
               });
             }
           }
@@ -238,6 +244,13 @@ const DietScreen = ({navigation, route}: any) => {
   useEffect(() => {
     loadNutritionGoal();
   }, []);
+
+  // 선택된 날짜가 변경될 때마다 영양 목표 조회
+  useEffect(() => {
+    if (selectedDate) {
+      loadNutritionGoal(selectedDate);
+    }
+  }, [selectedDate]);
 
   // API 데이터를 UI 형식으로 변환 (목표가 없으면 0)
   const targetCalories = nutritionGoal?.targetCalories || 0;
@@ -693,6 +706,7 @@ const DietScreen = ({navigation, route}: any) => {
         onGoalUpdate={() => {
           loadNutritionGoal();
         }}
+        date={formatDateToString(selectedDate || new Date())}
       />
     </ContainerComponent>
   );

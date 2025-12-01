@@ -688,12 +688,19 @@ export const mealAPI = {
   },
 
   /**
-   * 영양 목표 조회 (AI 추천 - 프리미엄 기능)
-   * AI 서버의 /food/nutrition-goal/get API 사용
-   * 저장된 DailyNutritionGoal 조회 전용 API (자동 계산 실행하지 않음)
+   * 특정 날짜에 자동 영양 목표 저장 (TDEE 기반)
+   * AI 서버의 /food/daily_goal API 사용
+   * GET /food/daily_goal?user_id={user_id}&date={date}
+   * is_manual = False로 설정됨
+   * @param date YYYY-MM-DD 형식의 날짜 (필수)
    */
-  getNutritionGoal: async (): Promise<NutritionGoal> => {
+  getAutoDailyGoal: async (date: string): Promise<NutritionGoal> => {
     const user_id = await getUserId();
+    
+    // 날짜 형식 검증
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new Error('날짜 형식이 올바르지 않습니다. yyyy-MM-dd 형식을 사용해주세요.');
+    }
     
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
     const headers: HeadersInit = {
@@ -704,8 +711,100 @@ export const mealAPI = {
       headers['Authorization'] = `Bearer ${token}`;
     }
     
-    const url = `${AI_API_BASE_URL}/food/nutrition-goal/get?user_id=${encodeURIComponent(user_id)}`;
-    console.log(`📡 영양 목표 조회 요청 (AI 추천): ${url}`);
+    const url = `${AI_API_BASE_URL}/food/daily_goal?user_id=${encodeURIComponent(user_id)}&date=${encodeURIComponent(date)}`;
+    console.log(`📡 자동 영양 목표 저장 요청 (날짜: ${date}): ${url}`);
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers,
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ 자동 영양 목표 저장 에러 응답:`, errorText);
+        
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        
+        // 422 Validation Error 처리
+        if (response.status === 422) {
+          try {
+            const errorData = JSON.parse(errorText);
+            if (errorData.detail && Array.isArray(errorData.detail)) {
+              const errorMessages = errorData.detail.map((err: any) => {
+                const field = err.loc && Array.isArray(err.loc)
+                  ? err.loc.filter((loc: any) => typeof loc === 'string').join('.')
+                  : 'unknown';
+                return `${field}: ${err.msg || '검증 오류'}`;
+              });
+              errorMessage = errorMessages.join(', ');
+            } else if (errorData.detail && typeof errorData.detail === 'string') {
+              errorMessage = errorData.detail;
+            }
+          } catch (parseError) {
+            errorMessage = '요청 파라미터가 올바르지 않습니다. user_id와 date를 확인해주세요.';
+          }
+        }
+        
+        throw new Error(errorMessage);
+      }
+      
+      const goal = await response.json();
+      console.log(`✅ 자동 영양 목표 저장 성공 (날짜: ${date}):`, goal);
+      
+      // AI 서버 응답 형식 변환
+      const nutritionGoal: NutritionGoal = {
+        id: goal.id || 0,
+        targetCalories: goal.target_calorie || goal.targetCalories || 0,
+        targetCarbs: goal.carbs_g || goal.target_carbs || goal.targetCarbs || 0,
+        targetProtein: goal.protein_g || goal.target_protein || goal.targetProtein || 0,
+        targetFat: goal.fat_g || goal.target_fat || goal.targetFat || 0,
+        goalType: 'AUTO',
+        goalTypeDescription: '자동 계산',
+      };
+      
+      console.log('변환된 자동 영양 목표:', nutritionGoal);
+      return nutritionGoal;
+    } catch (error: any) {
+      console.error('자동 영양 목표 저장 실패:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * 영양 목표 조회 (특정 날짜)
+   * AI 서버의 /food/nutrition-goal/get API 사용
+   * 저장된 DailyNutritionGoal 조회 전용 API (자동 계산 실행하지 않음)
+   * @param date YYYY-MM-DD 형식의 날짜 (선택적, 없으면 오늘 날짜 사용)
+   */
+  getNutritionGoal: async (date?: string): Promise<NutritionGoal> => {
+    const user_id = await getUserId();
+    
+    // 날짜가 없으면 오늘 날짜 사용
+    const targetDate = date || (() => {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    })();
+    
+    // 날짜 형식 검증
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+      throw new Error('날짜 형식이 올바르지 않습니다. yyyy-MM-dd 형식을 사용해주세요.');
+    }
+    
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      'accept': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const url = `${AI_API_BASE_URL}/food/nutrition-goal/get?user_id=${encodeURIComponent(user_id)}&date=${encodeURIComponent(targetDate)}`;
+    console.log(`📡 영양 목표 조회 요청 (날짜: ${targetDate}): ${url}`);
     
     try {
       const response = await fetch(url, {
@@ -717,7 +816,7 @@ export const mealAPI = {
         const errorText = await response.text();
         console.error(`❌ 영양 목표 조회 에러 응답:`, errorText);
         
-        // 404 에러인 경우 기본값 반환
+        // 404 에러인 경우 exists=false로 반환
         if (response.status === 404) {
           return {
             id: 0,
@@ -730,22 +829,44 @@ export const mealAPI = {
           };
         }
         
+        // 422 Validation Error 처리
+        if (response.status === 422) {
+          try {
+            const errorData = JSON.parse(errorText);
+            if (errorData.detail && Array.isArray(errorData.detail)) {
+              const errorMessages = errorData.detail.map((err: any) => {
+                const field = err.loc && Array.isArray(err.loc)
+                  ? err.loc.filter((loc: any) => typeof loc === 'string').join('.')
+                  : 'unknown';
+                return `${field}: ${err.msg || '검증 오류'}`;
+              });
+              throw new Error(errorMessages.join(', '));
+            } else if (errorData.detail && typeof errorData.detail === 'string') {
+              throw new Error(errorData.detail);
+            }
+          } catch (parseError) {
+            throw new Error('요청 파라미터가 올바르지 않습니다. user_id와 date를 확인해주세요.');
+          }
+        }
+        
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const goal = await response.json();
-      console.log(`✅ 영양 목표 조회 성공 (AI 추천):`, goal);
+      console.log(`✅ 영양 목표 조회 성공 (날짜: ${targetDate}):`, goal);
       
-      // AI 서버 응답 형식: { user_id, exists, target_calorie, protein_g, fat_g, carbs_g }
+      // AI 서버 응답 형식: { user_id, exists, is_manual, target_calorie, protein_g, fat_g, carbs_g }
       // 기존 형식으로 변환
+      const isManual = goal.is_manual !== undefined ? goal.is_manual : (goal.isManual !== undefined ? goal.isManual : false);
+      
       return {
         id: goal.id || 0,
         targetCalories: goal.target_calorie || goal.targetCalories || 0,
         targetCarbs: goal.carbs_g || goal.target_carbs || goal.targetCarbs || 0,
         targetProtein: goal.protein_g || goal.target_protein || goal.targetProtein || 0,
         targetFat: goal.fat_g || goal.target_fat || goal.targetFat || 0,
-        goalType: goal.goal_type || goal.goalType || 'AUTO',
-        goalTypeDescription: goal.goal_type_description || goal.goalTypeDescription || 'AI 추천',
+        goalType: isManual ? 'MANUAL' : (goal.goal_type || goal.goalType || 'AUTO'),
+        goalTypeDescription: isManual ? '수동 설정' : (goal.goal_type_description || goal.goalTypeDescription || '자동 계산'),
       };
     } catch (error: any) {
       // 404 에러인 경우 기본값 반환
@@ -785,10 +906,16 @@ export const mealAPI = {
     console.log(`📡 영양 목표 설정 요청: ${url}`);
     
     // 칼로리만 전송 (나머지는 서버에서 자동 계산)
-    const requestBody = {
+    // date 필드가 있으면 지정 날짜부터 말일까지 일괄 적용
+    const requestBody: any = {
       user_id: user_id,
       target_calorie: goalData.targetCalories,
     };
+    
+    // date 필드가 있으면 추가 (YYYY-MM-DD 형식)
+    if (goalData.date) {
+      requestBody.date = goalData.date;
+    }
     
     console.log(`요청 데이터:`, JSON.stringify(requestBody, null, 2));
     

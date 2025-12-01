@@ -135,10 +135,12 @@ const MealAddScreen = ({navigation, route}: any) => {
     }
   };
 
-  // 영양 목표 로드 (일일 목표 조회 API 사용)
-  const loadNutritionGoal = async () => {
+  // 영양 목표 로드 (특정 날짜의 목표 조회 API 사용)
+  const loadNutritionGoal = async (date?: Date) => {
     try {
-      const data = await mealAPI.getDailyGoal();
+      const targetDate = date || selectedDateTime;
+      const dateString = formatDateToString(targetDate);
+      const data = await mealAPI.getNutritionGoal(dateString);
       setNutritionGoal(data);
       console.log('영양 목표 조회 성공:', data);
     } catch (e: any) {
@@ -148,7 +150,9 @@ const MealAddScreen = ({navigation, route}: any) => {
         // API에서 자동 생성되므로 잠시 후 재시도
         setTimeout(async () => {
           try {
-            const retryData = await mealAPI.getDailyGoal();
+            const targetDate = date || selectedDateTime;
+            const dateString = formatDateToString(targetDate);
+            const retryData = await mealAPI.getNutritionGoal(dateString);
             setNutritionGoal(retryData);
             console.log('영양 목표 재시도 성공:', retryData);
           } catch (retryError) {
@@ -164,6 +168,8 @@ const MealAddScreen = ({navigation, route}: any) => {
                   targetFat: 0,
                   goalType: 'AUTO',
                   goalTypeDescription: '자동 계산',
+                  isManual: false,
+                  exists: false,
                 };
               }
               return prev;
@@ -182,11 +188,16 @@ const MealAddScreen = ({navigation, route}: any) => {
   // 화면 포커스 시 영양 목표 다시 조회
   useFocusEffect(
     React.useCallback(() => {
-      loadNutritionGoal();
+      loadNutritionGoal(selectedDateTime);
       // 선택된 날짜의 일일 식단 데이터 조회
       fetchDailyMeals(selectedDateTime);
     }, [selectedDateTime])
   );
+
+  // selectedDateTime이 변경될 때 영양 목표 조회
+  useEffect(() => {
+    loadNutritionGoal(selectedDateTime);
+  }, [selectedDateTime]);
 
   // selectedDateTime이 변경될 때 일일 식단 데이터 조회
   useEffect(() => {
