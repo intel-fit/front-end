@@ -64,6 +64,42 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
     }
   }, [currentGoal, isOpen]); // isRealTimeRecommendationEnabled 의존성 제거
 
+  // 토글이 off로 바뀔 때 오늘 날짜에 대해 GET /food/daily_goal 호출하고 내일부터 말일까지 0으로 설정
+  useEffect(() => {
+    if (isOpen && !isRealTimeRecommendationEnabled) {
+      const setupAutoGoal = async () => {
+        try {
+          const today = new Date();
+          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+          
+          // 1. 오늘 날짜에 대해 GET /food/daily_goal 호출
+          console.log('토글 off - 오늘 날짜 자동 목표 저장:', todayStr);
+          await mealAPI.getAutoDailyGoal(todayStr);
+          
+          // 2. 내일 날짜부터 말일까지 0칼로리로 설정
+          const todayAfter = new Date(today);
+          todayAfter.setDate(todayAfter.getDate() + 1);
+          const todayAfterStr = `${todayAfter.getFullYear()}-${String(todayAfter.getMonth() + 1).padStart(2, '0')}-${String(todayAfter.getDate()).padStart(2, '0')}`;
+          
+          const goalData: SetNutritionGoalRequest = {
+            targetCalories: 0,
+            targetCarbs: 0,
+            targetProtein: 0,
+            targetFat: 0,
+            goalType: 'MANUAL',
+            date: todayAfterStr, // 내일부터 말일까지 일괄 적용
+          };
+          await mealAPI.setNutritionGoal(goalData);
+          console.log('토글 off - 내일부터 말일까지 0칼로리 설정 완료');
+        } catch (error: any) {
+          console.error('토글 off 설정 실패:', error);
+        }
+      };
+      
+      setupAutoGoal();
+    }
+  }, [isOpen, isRealTimeRecommendationEnabled]); // 토글 상태 변경 시에만 실행
+
   // 날짜가 바뀔 때마다 API 호출
   useEffect(() => {
     if (isOpen && date) {
@@ -76,71 +112,22 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
           
           let goal: any;
           
-          if (!isRealTimeRecommendationEnabled) {
-            // 토글이 off일 때: 조회 API 호출
-            console.log(`토글 off - 조회 API 호출 (${date})`);
+          if (isRealTimeRecommendationEnabled) {
+            // 토글이 on일 때: 무조건 GET /food/nutrition-goal/get 호출
+            console.log(`토글 on - 조회 API 호출 (${date})`);
             goal = await mealAPI.getNutritionGoal(date);
           } else {
-            // 토글이 on일 때
-            if (date < todayStr) {
-              // 오늘 이전 날짜면 조회 API 호출
-              console.log(`토글 on, 오늘 이전 날짜 (${date} < ${todayStr}) - 조회 API 호출`);
-              goal = await mealAPI.getNutritionGoal(date);
-            } else if (date === todayStr) {
-              // 오늘 날짜면 자동 목표 저장 API 호출 (GET /food/daily_goal)
-              console.log(`토글 on, 오늘 날짜 (${date} === ${todayStr}) - 자동 목표 저장 API 호출`);
+            // 토글이 off일 때
+            if (date === todayStr) {
+              // 오늘 날짜면 GET /food/daily_goal 호출
+              console.log(`토글 off, 오늘 날짜 (${date} === ${todayStr}) - 자동 목표 저장 API 호출`);
               goal = await mealAPI.getAutoDailyGoal(date);
               console.log('오늘 날짜 자동 목표 응답:', goal);
-            } else if (date > todayStr) {
-              // 오늘 이후 날짜면 오늘 이후부터 말일까지 모든 날짜를 0으로 설정 후 조회
-              console.log(`토글 on, 오늘 이후 날짜 (${date} > ${todayStr}) - 오늘 이후부터 말일까지 0으로 설정 후 조회`);
-              try {
-                // 1. POST /food/nutrition-goal/manual-calorie (오늘 이후부터 말일까지 목표칼로리 0으로 설정)
-                // 오늘 이후 첫 날짜를 date로 설정하면 오늘 이후부터 말일까지 일괄 적용됨
-                const todayAfter = new Date(today);
-                todayAfter.setDate(todayAfter.getDate() + 1);
-                const todayAfterStr = `${todayAfter.getFullYear()}-${String(todayAfter.getMonth() + 1).padStart(2, '0')}-${String(todayAfter.getDate()).padStart(2, '0')}`;
-                
-                const goalData: SetNutritionGoalRequest = {
-                  targetCalories: 0,
-                  targetCarbs: 0,
-                  targetProtein: 0,
-                  targetFat: 0,
-                  goalType: 'MANUAL',
-                  date: todayAfterStr, // 오늘 이후 첫 날짜부터 말일까지 일괄 적용
-                };
-                const setResult = await mealAPI.setNutritionGoal(goalData);
-                console.log('POST 응답 (오늘 이후부터 말일까지 0 설정):', setResult);
-                
-                // 2. GET /food/nutrition-goal/get (설정된 목표 조회)
-                goal = await mealAPI.getNutritionGoal(date);
-                console.log('GET 응답:', goal);
-                
-                // GET 응답이 없거나 값이 없으면 0으로 설정
-                if (!goal || (goal.targetCalories === undefined || goal.targetCalories === null)) {
-                  goal = {
-                    id: 0,
-                    targetCalories: 0,
-                    targetCarbs: 0,
-                    targetProtein: 0,
-                    targetFat: 0,
-                    goalType: 'MANUAL',
-                    goalTypeDescription: '수동 설정',
-                  };
-                }
-              } catch (error: any) {
-                console.error('수동 목표 설정/조회 실패:', error);
-                // 에러가 발생해도 0으로 설정된 목표 반환
-                goal = {
-                  id: 0,
-                  targetCalories: 0,
-                  targetCarbs: 0,
-                  targetProtein: 0,
-                  targetFat: 0,
-                  goalType: 'MANUAL',
-                  goalTypeDescription: '수동 설정',
-                };
-              }
+            } else {
+              // 오늘 이전 또는 오늘 이후 날짜면 GET /food/nutrition-goal/get 호출
+              console.log(`토글 off, ${date < todayStr ? '오늘 이전' : '오늘 이후'} 날짜 (${date}) - 조회 API 호출`);
+              goal = await mealAPI.getNutritionGoal(date);
+              console.log('조회 응답:', goal);
             }
           }
           

@@ -765,6 +765,15 @@ const MealAddScreen = ({navigation, route}: any) => {
           await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
           console.log('✅ 식단 수정 완료 (삭제 후 추가)');
           
+          // 저장 후 GET으로 최신 데이터 불러오기
+          try {
+            console.log('📥 저장 후 최신 식단 데이터 불러오기:', mealDate);
+            await mealAPI.getDailyMeals(mealDate);
+            console.log('✅ 최신 식단 데이터 불러오기 완료');
+          } catch (error) {
+            console.error('❌ 최신 식단 데이터 불러오기 실패:', error);
+          }
+
           Alert.alert('성공', '식사가 수정되었습니다.', [
             {
               text: '확인',
@@ -797,6 +806,16 @@ const MealAddScreen = ({navigation, route}: any) => {
       } else {
         // 추가 모드
         await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
+        
+        // 저장 후 GET으로 최신 데이터 불러오기
+        try {
+          console.log('📥 저장 후 최신 식단 데이터 불러오기:', mealDate);
+          await mealAPI.getDailyMeals(mealDate);
+          console.log('✅ 최신 식단 데이터 불러오기 완료');
+        } catch (error) {
+          console.error('❌ 최신 식단 데이터 불러오기 실패:', error);
+        }
+
         Alert.alert('성공', '식사가 추가되었습니다.', [
           {
             text: '확인',
@@ -1204,15 +1223,15 @@ const MealAddScreen = ({navigation, route}: any) => {
                 <View style={styles.foodNutrition}>
                   <View style={styles.nutritionItem}>
                     <Text style={styles.nutritionLabel}>탄</Text>
-                    <Text style={styles.nutritionValue}>{food.carbs}g</Text>
+                    <Text style={styles.nutritionValue}>{Math.floor(food.carbs)}g</Text>
                   </View>
                   <View style={styles.nutritionItem}>
                     <Text style={styles.nutritionLabel}>단</Text>
-                    <Text style={styles.nutritionValue}>{food.protein}g</Text>
+                    <Text style={styles.nutritionValue}>{Math.floor(food.protein)}g</Text>
                   </View>
                   <View style={styles.nutritionItem}>
                     <Text style={styles.nutritionLabel}>지</Text>
-                    <Text style={styles.nutritionValue}>{food.fat}g</Text>
+                    <Text style={styles.nutritionValue}>{Math.floor(food.fat)}g</Text>
                   </View>
                   <View style={styles.nutritionItem}>
                     <Text style={styles.nutritionLabel}>중량</Text>

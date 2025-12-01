@@ -137,7 +137,7 @@ const DietScreen = ({navigation, route}: any) => {
 
   // route params에서 업데이트된 진행률과 날짜 받기
   useEffect(() => {
-    if (route?.params?.updatedProgress) {
+    if (route?.params?.updatedProgress || route?.params?.updatedDate) {
       const progress = route.params.updatedProgress;
       const dateStr = route.params.updatedDate;
       
@@ -159,7 +159,10 @@ const DietScreen = ({navigation, route}: any) => {
       if (dateStr) {
         const date = new Date(dateStr);
         setSelectedDate(date);
-        // 진행률 API 호출 제거
+        // 달력의 월도 업데이트 (저장된 날짜의 월로 변경)
+        setMonthBase(new Date(date.getFullYear(), date.getMonth(), 1));
+        // 해당 날짜의 식단 데이터 다시 불러오기
+        fetchDailyMeals(date);
       }
       
       // params 초기화
