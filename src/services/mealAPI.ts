@@ -167,36 +167,59 @@ export const mealAPI = {
     }
     
     // AI 서버 응답을 기존 형식으로 변환
+    // meal_name이 표준 식사 타입인지 확인
+    const standardMealTypes = ['breakfast', 'lunch', 'dinner', 'snack', 'other'];
+    const mealTypeMap: Record<string, string> = {
+      'breakfast': 'BREAKFAST',
+      'lunch': 'LUNCH',
+      'dinner': 'DINNER',
+      'snack': 'SNACK',
+      'other': 'OTHER',
+    };
+    
+    // 식사들을 time_taken 기준으로 정렬 (시간순)
+    const sortedMeals = [...meals].sort((a: any, b: any) => {
+      const timeA = a.time_taken ? new Date(a.time_taken).getTime() : 0;
+      const timeB = b.time_taken ? new Date(b.time_taken).getTime() : 0;
+      return timeA - timeB; // 오름차순 정렬 (이른 시간부터)
+    });
+    
     const dailyMeals: DailyMealsResponse = {
       date: date,
-      meals: meals.map((meal: any) => ({
-        id: meal.meal_id,
-        mealDate: date,
-        mealType: meal.meal_name?.toUpperCase() || 'OTHER',
-        mealTypeName: meal.meal_name || '기타',
-        totalCalories: meal.items?.reduce((sum: number, item: any) => sum + (item.calories || 0), 0) || 0,
-        totalCarbs: meal.items?.reduce((sum: number, item: any) => sum + (item.carbs || 0), 0) || 0,
-        totalProtein: meal.items?.reduce((sum: number, item: any) => sum + (item.protein || 0), 0) || 0,
-        totalFat: meal.items?.reduce((sum: number, item: any) => sum + (item.fat || 0), 0) || 0,
-        foods: meal.items?.map((item: any) => ({
-          id: item.food_id || item.id || 0, // food_id 사용 (meal_item_id가 아님)
-          food_id: item.food_id || item.id || 0, // food_id 명시적으로 저장
-          meal_item_id: item.meal_item_id || item.id || 0, // meal_item_id도 저장 (참고용)
-          foodName: item.food_name,
-          servingSize: item.quantity_g || 0,
-          calories: item.calories || 0,
-          carbs: item.carbs || 0,
-          protein: item.protein || 0,
-          fat: item.fat || 0,
-          sodium: 0,
-          cholesterol: 0,
-          sugar: 0,
-          fiber: 0,
-          imageUrl: '',
-          aiConfidenceScore: 0,
-        })) || [],
-        createdAt: meal.time_taken || new Date().toISOString(),
-      })),
+      meals: sortedMeals.map((meal: any) => {
+        const mealNameLower = meal.meal_name?.toLowerCase() || '';
+        const isStandardMealType = standardMealTypes.includes(mealNameLower);
+        
+        return {
+          id: meal.meal_id,
+          mealDate: date,
+          mealType: isStandardMealType ? (mealTypeMap[mealNameLower] as any) : 'OTHER',
+          mealTypeName: isStandardMealType ? meal.meal_name : (meal.meal_name || '기타'),
+          memo: isStandardMealType ? undefined : meal.meal_name, // 표준 타입이 아니면 memo로 저장
+          totalCalories: meal.items?.reduce((sum: number, item: any) => sum + (item.calories || 0), 0) || 0,
+          totalCarbs: meal.items?.reduce((sum: number, item: any) => sum + (item.carbs || 0), 0) || 0,
+          totalProtein: meal.items?.reduce((sum: number, item: any) => sum + (item.protein || 0), 0) || 0,
+          totalFat: meal.items?.reduce((sum: number, item: any) => sum + (item.fat || 0), 0) || 0,
+          foods: meal.items?.map((item: any) => ({
+            id: item.food_id || item.id || 0, // food_id 사용 (meal_item_id가 아님)
+            food_id: item.food_id || item.id || 0, // food_id 명시적으로 저장
+            meal_item_id: item.meal_item_id || item.id || 0, // meal_item_id도 저장 (참고용)
+            foodName: item.food_name,
+            servingSize: item.quantity_g || 0,
+            calories: item.calories || 0,
+            carbs: item.carbs || 0,
+            protein: item.protein || 0,
+            fat: item.fat || 0,
+            sodium: 0,
+            cholesterol: 0,
+            sugar: 0,
+            fiber: 0,
+            imageUrl: '',
+            aiConfidenceScore: 0,
+          })) || [],
+          createdAt: meal.time_taken || new Date().toISOString(),
+        };
+      }),
       dailyTotalCalories: meals.reduce((sum: number, meal: any) => 
         sum + (meal.items?.reduce((s: number, item: any) => s + (item.calories || 0), 0) || 0), 0
       ),
@@ -221,15 +244,22 @@ export const mealAPI = {
   addMeal: async (mealData: AddMealRequest): Promise<AddMealResponse> => {
     const user_id = await getUserId();
     
-    // meal_name을 소문자로 변환 (서버가 소문자를 기대)
-    const mealNameMap: Record<string, string> = {
-      'BREAKFAST': 'breakfast',
-      'LUNCH': 'lunch',
-      'DINNER': 'dinner',
-      'SNACK': 'snack',
-      'OTHER': 'other',
-    };
-    const mealName = mealNameMap[mealData.mealType] || mealData.mealType.toLowerCase();
+    // meal_name 결정: memo가 있으면 memo를 사용, 없으면 mealType 사용
+    let mealName: string;
+    if (mealData.memo && mealData.memo.trim().length > 0) {
+      // 식단 이름이 있으면 memo를 meal_name으로 사용
+      mealName = mealData.memo.trim();
+    } else {
+      // 식단 이름이 없으면 mealType을 소문자로 변환하여 사용
+      const mealNameMap: Record<string, string> = {
+        'BREAKFAST': 'breakfast',
+        'LUNCH': 'lunch',
+        'DINNER': 'dinner',
+        'SNACK': 'snack',
+        'OTHER': 'other',
+      };
+      mealName = mealNameMap[mealData.mealType] || mealData.mealType.toLowerCase();
+    }
     
     // JWT 토큰 가져오기
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
@@ -242,8 +272,8 @@ export const mealAPI = {
       headers['Authorization'] = `Bearer ${token}`;
     }
     
-    // time_taken은 현재 시간으로 설정 (ISO 8601 형식)
-    const timeTaken = new Date().toISOString();
+    // time_taken은 mealData에 있으면 사용, 없으면 현재 시간으로 설정 (ISO 8601 형식)
+    const timeTaken = mealData.timeTaken || new Date().toISOString();
     
     // items 배열 구성
     // food_id는 검색(/food/search) 또는 직접 입력(/food/add_manual_food)에서 받은 id를 사용
@@ -266,7 +296,7 @@ export const mealAPI = {
       return item;
     });
     
-    const requestBody = {
+    const requestBody: any = {
       user_id: user_id,
       date: mealData.mealDate,
       meal_name: mealName,

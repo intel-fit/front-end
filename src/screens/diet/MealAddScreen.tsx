@@ -285,9 +285,15 @@ const MealAddScreen = ({navigation, route}: any) => {
   // 시간 선택 모달 열기
   const handleTimePress = () => {
     const currentDateTime = new Date(selectedDateTime);
-    setTempDateTime(new Date(currentDateTime));
+    // tempDateTime을 현재 선택된 날짜+시간으로 초기화
+    const newTempDateTime = new Date(currentDateTime);
+    setTempDateTime(newTempDateTime);
     setDateTimeMode('time');
     setShowDateTimeModal(true);
+    console.log('시간 선택 모달 열기:', {
+      selectedDateTime: selectedDateTime.toLocaleString('ko-KR'),
+      tempDateTime: newTempDateTime.toLocaleString('ko-KR')
+    });
   };
 
   // 날짜 선택 핸들러
@@ -298,11 +304,11 @@ const MealAddScreen = ({navigation, route}: any) => {
         return;
       }
       if (date) {
-        // 날짜만 변경하고 시간은 현재 시간으로 유지
+        // 날짜만 변경하고 시간은 기존 시간 유지
         const newDate = new Date(date);
-        const now = new Date();
-        newDate.setHours(now.getHours());
-        newDate.setMinutes(now.getMinutes());
+        const currentTime = new Date(tempDateTime);
+        newDate.setHours(currentTime.getHours());
+        newDate.setMinutes(currentTime.getMinutes());
         newDate.setSeconds(0);
         newDate.setMilliseconds(0);
         setTempDateTime(newDate);
@@ -314,9 +320,9 @@ const MealAddScreen = ({navigation, route}: any) => {
       // iOS - 날짜가 변경될 때마다 tempDateTime 업데이트
       if (date) {
         const newDate = new Date(date);
-        const now = new Date();
-        newDate.setHours(now.getHours());
-        newDate.setMinutes(now.getMinutes());
+        const currentTime = new Date(tempDateTime);
+        newDate.setHours(currentTime.getHours());
+        newDate.setMinutes(currentTime.getMinutes());
         newDate.setSeconds(0);
         newDate.setMilliseconds(0);
         setTempDateTime(newDate);
@@ -330,6 +336,7 @@ const MealAddScreen = ({navigation, route}: any) => {
 
   // 시간 선택 핸들러
   const onChangeTime = (event: any, time?: Date) => {
+    console.log('onChangeTime 호출:', { event, time, tempDateTime });
     if (Platform.OS === 'android') {
       if (event.type === 'dismissed') {
         setShowDateTimeModal(false);
@@ -347,30 +354,35 @@ const MealAddScreen = ({navigation, route}: any) => {
         setSelectedDateTime(newDate);
       }
     } else {
-      // iOS - 시간이 변경될 때마다 tempDateTime 업데이트 (실시간 반영)
-      // iOS에서는 onChange가 사용자가 값을 변경할 때마다 호출됨
+      // iOS - 시간이 변경될 때마다 tempDateTime 업데이트
       if (time) {
-        // 새로운 Date 객체를 생성하여 업데이트
+        console.log('iOS 시간 변경:', {
+          기존_tempDateTime: tempDateTime.toLocaleString('ko-KR'),
+          선택된_time: time.toLocaleString('ko-KR'),
+          time_시간: `${time.getHours()}:${String(time.getMinutes()).padStart(2, '0')}`
+        });
         const newDate = new Date(tempDateTime);
-        newDate.setHours(time.getHours());
-        newDate.setMinutes(time.getMinutes());
+        const selectedTime = new Date(time);
+        newDate.setHours(selectedTime.getHours());
+        newDate.setMinutes(selectedTime.getMinutes());
         newDate.setSeconds(0);
         newDate.setMilliseconds(0);
-        // 새로운 객체를 생성하여 React가 변경을 감지하도록 함
-        setTempDateTime(new Date(newDate));
-        console.log('시간 변경:', newDate.toLocaleTimeString());
+        console.log('업데이트할 newDate:', newDate.toLocaleString('ko-KR'));
+        setTempDateTime(newDate);
+        // iOS에서는 확인 버튼을 눌러야 적용
+      } else {
+        console.warn('iOS onChangeTime: time 파라미터가 없음', { event, time });
       }
-      // iOS에서는 dismissed 이벤트가 발생하지 않을 수 있으므로 확인 버튼으로만 닫기
+      if (event.type === 'dismissed') {
+        setShowDateTimeModal(false);
+      }
     }
   };
 
   // 모달에서 확인 버튼 클릭
   const handleDateTimeConfirm = () => {
-    // 날짜만 적용하고 시간은 현재 시간으로 설정
-    const now = new Date();
+    // tempDateTime의 날짜와 시간을 모두 적용
     const finalDate = new Date(tempDateTime);
-    finalDate.setHours(now.getHours());
-    finalDate.setMinutes(now.getMinutes());
     finalDate.setSeconds(0);
     finalDate.setMilliseconds(0);
     setSelectedDateTime(finalDate);
@@ -624,11 +636,15 @@ const MealAddScreen = ({navigation, route}: any) => {
         return foodData as AddMealFoodRequest;
       });
       
+      // 선택된 날짜와 시간을 ISO 8601 형식으로 변환
+      const timeTaken = selectedDateTime.toISOString();
+      
       // 최종 요청 데이터 구성 (API 스펙 순서대로, undefined 필드 제거)
       const mealRequestData: any = {
         mealDate: mealDateString,
         mealType: mealType,
         foods: validatedFoods,
+        timeTaken: timeTaken, // 사용자가 선택한 시간 전달
       };
       
       // memo가 비어있지 않으면 추가 (길이 제한, 빈 문자열은 제외)
@@ -1327,14 +1343,27 @@ const MealAddScreen = ({navigation, route}: any) => {
               </TouchableOpacity>
             </View>
             <View style={styles.dateTimePickerContainer}>
-              <DateTimePicker
-                value={tempDateTime}
-                mode={dateTimeMode}
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={dateTimeMode === 'date' ? onChangeDate : onChangeTime}
-                minimumDate={dateTimeMode === 'date' ? new Date(2020, 0, 1) : undefined}
-                maximumDate={dateTimeMode === 'date' ? new Date(2100, 11, 31) : undefined}
-              />
+              {dateTimeMode === 'date' ? (
+                <DateTimePicker
+                  value={tempDateTime}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={onChangeDate}
+                  minimumDate={new Date(2020, 0, 1)}
+                  maximumDate={new Date(2100, 11, 31)}
+                  locale={Platform.OS === 'ios' ? 'ko_KR' : 'ko-KR'}
+                  textColor={Platform.OS === 'ios' ? '#ffffff' : undefined}
+                />
+              ) : (
+                <DateTimePicker
+                  value={tempDateTime}
+                  mode="time"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={onChangeTime}
+                  locale={Platform.OS === 'ios' ? 'ko_KR' : 'ko-KR'}
+                  textColor={Platform.OS === 'ios' ? '#ffffff' : undefined}
+                />
+              )}
             </View>
           </View>
         </TouchableOpacity>

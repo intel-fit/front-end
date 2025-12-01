@@ -43,6 +43,13 @@ const DietScreen = ({navigation, route}: any) => {
     return `${year}-${month}-${day}`;
   };
 
+  // 문자열을 Date 객체로 안전하게 변환 (YYYY-MM-DD 형식)
+  const parseDateString = (dateStr: string): Date => {
+    // YYYY-MM-DD 형식을 로컬 시간대로 파싱
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   // 주간 데이터 로드 (비활성화)
   const loadWeeklyProgress = async () => {
     // API 호출 제거 - 진행률 데이터 사용 안 함
@@ -157,7 +164,8 @@ const DietScreen = ({navigation, route}: any) => {
       
       // 날짜 선택 및 해당 달의 월별 진행률 API 호출
       if (dateStr) {
-        const date = new Date(dateStr);
+        // YYYY-MM-DD 형식을 안전하게 파싱
+        const date = parseDateString(dateStr);
         setSelectedDate(date);
         // 달력의 월도 업데이트 (저장된 날짜의 월로 변경)
         setMonthBase(new Date(date.getFullYear(), date.getMonth(), 1));
@@ -286,36 +294,44 @@ const DietScreen = ({navigation, route}: any) => {
     fat: {current: 0, target: targetFat},
   };
 
-  // 식사 목록 변환
-  const meals = dailyMealsData?.meals.map((meal: DailyMeal) => {
-    // mealType을 한글 이름으로 변환
-    const mealTypeMap: Record<string, string> = {
-      'BREAKFAST': '아침',
-      'LUNCH': '점심',
-      'DINNER': '저녁',
-      'SNACK': '야식',
-      'OTHER': '기타',
-    };
+  // 식사 목록 변환 및 시간순 정렬
+  const meals = (dailyMealsData?.meals || [])
+    .slice() // 원본 배열 복사
+    .sort((a: DailyMeal, b: DailyMeal) => {
+      // createdAt 기준으로 시간순 정렬 (이른 시간부터)
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return timeA - timeB;
+    })
+    .map((meal: DailyMeal) => {
+      // mealType을 한글 이름으로 변환
+      const mealTypeMap: Record<string, string> = {
+        'BREAKFAST': '아침',
+        'LUNCH': '점심',
+        'DINNER': '저녁',
+        'SNACK': '야식',
+        'OTHER': '기타',
+      };
 
-    // 시간 포맷팅 (createdAt에서 시간 추출)
-    const mealTime = meal.createdAt 
-      ? new Date(meal.createdAt).toLocaleTimeString('ko-KR', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true,
-        })
-      : '추천 식단';
+      // 시간 포맷팅 (createdAt에서 시간 추출)
+      const mealTime = meal.createdAt 
+        ? new Date(meal.createdAt).toLocaleTimeString('ko-KR', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+          })
+        : '추천 식단';
 
-    return {
-      type: meal.memo || mealTypeMap[meal.mealType] || meal.mealTypeName,
-      time: mealTime,
-      calories: meal.totalCalories,
-      foods: meal.foods.map(food => ({
-        name: food.foodName,
-        color: '#e3ff7c', // 기본 색상
-      })),
-    };
-  }) || [];
+      return {
+        type: meal.memo || mealTypeMap[meal.mealType] || meal.mealTypeName,
+        time: mealTime,
+        calories: meal.totalCalories,
+        foods: meal.foods.map(food => ({
+          name: food.foodName,
+          color: '#e3ff7c', // 기본 색상
+        })),
+      };
+    });
 
   // StatsScreen 내부에서 사용될 때는 SafeAreaView 제거
   const ContainerComponent = View;
@@ -356,7 +372,10 @@ const DietScreen = ({navigation, route}: any) => {
             onPress={() => {
               setShowMonthView(prev => {
                 const next = !prev;
-                if (!next) setMonthBase(new Date());
+                // 목록을 닫을 때 selectedDate의 월로 monthBase 업데이트
+                if (!next && selectedDate) {
+                  setMonthBase(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
+                }
                 return next;
               });
             }}
@@ -467,7 +486,11 @@ const DietScreen = ({navigation, route}: any) => {
                     <TouchableOpacity
                       key={startThis.toISOString()+i}
                       style={styles.calendarItem}
-                      onPress={() => setSelectedDate(d)}
+                      onPress={() => {
+                        setSelectedDate(d);
+                        // 선택한 날짜의 월로 monthBase 업데이트
+                        setMonthBase(new Date(d.getFullYear(), d.getMonth(), 1));
+                      }}
                       activeOpacity={0.7}
                     >
                       <View style={styles.calendarNumber}>

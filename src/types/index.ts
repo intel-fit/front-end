@@ -142,6 +142,7 @@ export interface AddMealRequest {
   mealType: "BREAKFAST" | "LUNCH" | "DINNER" | "SNACK" | "OTHER";
   foods: AddMealFoodRequest[];
   memo?: string;
+  timeTaken?: string; // ISO 8601 형식 (YYYY-MM-DDTHH:mm:ss.sssZ)
 }
 
 export interface AddMealResponse {
