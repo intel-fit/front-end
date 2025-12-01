@@ -135,10 +135,12 @@ const MealAddScreen = ({navigation, route}: any) => {
     }
   };
 
-  // 영양 목표 로드 (일일 목표 조회 API 사용)
-  const loadNutritionGoal = async () => {
+  // 영양 목표 로드 (특정 날짜의 목표 조회 API 사용)
+  const loadNutritionGoal = async (date?: Date) => {
     try {
-      const data = await mealAPI.getDailyGoal();
+      const targetDate = date || selectedDateTime;
+      const dateString = formatDateToString(targetDate);
+      const data = await mealAPI.getNutritionGoal(dateString);
       setNutritionGoal(data);
       console.log('영양 목표 조회 성공:', data);
     } catch (e: any) {
@@ -148,7 +150,9 @@ const MealAddScreen = ({navigation, route}: any) => {
         // API에서 자동 생성되므로 잠시 후 재시도
         setTimeout(async () => {
           try {
-            const retryData = await mealAPI.getDailyGoal();
+            const targetDate = date || selectedDateTime;
+            const dateString = formatDateToString(targetDate);
+            const retryData = await mealAPI.getNutritionGoal(dateString);
             setNutritionGoal(retryData);
             console.log('영양 목표 재시도 성공:', retryData);
           } catch (retryError) {
@@ -164,6 +168,8 @@ const MealAddScreen = ({navigation, route}: any) => {
                   targetFat: 0,
                   goalType: 'AUTO',
                   goalTypeDescription: '자동 계산',
+                  isManual: false,
+                  exists: false,
                 };
               }
               return prev;
@@ -182,11 +188,16 @@ const MealAddScreen = ({navigation, route}: any) => {
   // 화면 포커스 시 영양 목표 다시 조회
   useFocusEffect(
     React.useCallback(() => {
-      loadNutritionGoal();
+      loadNutritionGoal(selectedDateTime);
       // 선택된 날짜의 일일 식단 데이터 조회
       fetchDailyMeals(selectedDateTime);
     }, [selectedDateTime])
   );
+
+  // selectedDateTime이 변경될 때 영양 목표 조회
+  useEffect(() => {
+    loadNutritionGoal(selectedDateTime);
+  }, [selectedDateTime]);
 
   // selectedDateTime이 변경될 때 일일 식단 데이터 조회
   useEffect(() => {
@@ -273,8 +284,37 @@ const MealAddScreen = ({navigation, route}: any) => {
 
   // 시간 선택 모달 열기
   const handleTimePress = () => {
-    const currentDateTime = new Date(selectedDateTime);
-    setTempDateTime(new Date(currentDateTime));
+    let newTempDateTime: Date;
+    
+    if (isEditMode && mealData?.createdAt) {
+      // 수정 모드: 원래 식단의 시간으로 시작
+      const mealDate = mealData.mealDate ? new Date(mealData.mealDate) : new Date();
+      const createdDate = new Date(mealData.createdAt);
+      newTempDateTime = new Date(mealDate);
+      newTempDateTime.setHours(createdDate.getHours());
+      newTempDateTime.setMinutes(createdDate.getMinutes());
+      newTempDateTime.setSeconds(0);
+      newTempDateTime.setMilliseconds(0);
+      console.log('시간 선택 모달 열기 (수정 모드):', {
+        원래_시간: createdDate.toLocaleTimeString('ko-KR'),
+        tempDateTime: newTempDateTime.toLocaleString('ko-KR')
+      });
+    } else {
+      // 추가 모드: 현재 시간으로 시작
+      const now = new Date();
+      const currentDate = new Date(selectedDateTime);
+      newTempDateTime = new Date(currentDate);
+      newTempDateTime.setHours(now.getHours());
+      newTempDateTime.setMinutes(now.getMinutes());
+      newTempDateTime.setSeconds(0);
+      newTempDateTime.setMilliseconds(0);
+      console.log('시간 선택 모달 열기 (추가 모드):', {
+        현재_시간: now.toLocaleTimeString('ko-KR'),
+        tempDateTime: newTempDateTime.toLocaleString('ko-KR')
+      });
+    }
+    
+    setTempDateTime(newTempDateTime);
     setDateTimeMode('time');
     setShowDateTimeModal(true);
   };
@@ -287,11 +327,11 @@ const MealAddScreen = ({navigation, route}: any) => {
         return;
       }
       if (date) {
-        // 날짜만 변경하고 시간은 현재 시간으로 유지
+        // 날짜만 변경하고 시간은 기존 시간 유지
         const newDate = new Date(date);
-        const now = new Date();
-        newDate.setHours(now.getHours());
-        newDate.setMinutes(now.getMinutes());
+        const currentTime = new Date(tempDateTime);
+        newDate.setHours(currentTime.getHours());
+        newDate.setMinutes(currentTime.getMinutes());
         newDate.setSeconds(0);
         newDate.setMilliseconds(0);
         setTempDateTime(newDate);
@@ -303,9 +343,9 @@ const MealAddScreen = ({navigation, route}: any) => {
       // iOS - 날짜가 변경될 때마다 tempDateTime 업데이트
       if (date) {
         const newDate = new Date(date);
-        const now = new Date();
-        newDate.setHours(now.getHours());
-        newDate.setMinutes(now.getMinutes());
+        const currentTime = new Date(tempDateTime);
+        newDate.setHours(currentTime.getHours());
+        newDate.setMinutes(currentTime.getMinutes());
         newDate.setSeconds(0);
         newDate.setMilliseconds(0);
         setTempDateTime(newDate);
@@ -319,6 +359,7 @@ const MealAddScreen = ({navigation, route}: any) => {
 
   // 시간 선택 핸들러
   const onChangeTime = (event: any, time?: Date) => {
+    console.log('onChangeTime 호출:', { event, time, tempDateTime });
     if (Platform.OS === 'android') {
       if (event.type === 'dismissed') {
         setShowDateTimeModal(false);
@@ -336,39 +377,49 @@ const MealAddScreen = ({navigation, route}: any) => {
         setSelectedDateTime(newDate);
       }
     } else {
-      // iOS - 시간이 변경될 때마다 tempDateTime 업데이트 (실시간 반영)
-      // iOS에서는 onChange가 사용자가 값을 변경할 때마다 호출됨
+      // iOS - 시간이 변경될 때마다 tempDateTime 업데이트
       if (time) {
-        // 새로운 Date 객체를 생성하여 업데이트
+        console.log('iOS 시간 변경:', {
+          기존_tempDateTime: tempDateTime.toLocaleString('ko-KR'),
+          선택된_time: time.toLocaleString('ko-KR'),
+          time_시간: `${time.getHours()}:${String(time.getMinutes()).padStart(2, '0')}`
+        });
+        // tempDateTime의 날짜는 유지하고 시간만 업데이트
         const newDate = new Date(tempDateTime);
-        newDate.setHours(time.getHours());
-        newDate.setMinutes(time.getMinutes());
+        const selectedTime = new Date(time);
+        newDate.setHours(selectedTime.getHours());
+        newDate.setMinutes(selectedTime.getMinutes());
         newDate.setSeconds(0);
         newDate.setMilliseconds(0);
-        // 새로운 객체를 생성하여 React가 변경을 감지하도록 함
-        setTempDateTime(new Date(newDate));
-        console.log('시간 변경:', newDate.toLocaleTimeString());
+        console.log('업데이트할 newDate:', newDate.toLocaleString('ko-KR'));
+        // 새로운 Date 객체를 생성하여 React가 변경을 감지하도록 함
+        setTempDateTime(new Date(newDate.getTime()));
+        // iOS에서는 확인 버튼을 눌러야 적용
+      } else {
+        console.warn('iOS onChangeTime: time 파라미터가 없음', { event, time });
       }
-      // iOS에서는 dismissed 이벤트가 발생하지 않을 수 있으므로 확인 버튼으로만 닫기
+      if (event.type === 'dismissed') {
+        setShowDateTimeModal(false);
+      }
     }
   };
 
   // 모달에서 확인 버튼 클릭
   const handleDateTimeConfirm = () => {
-    // 날짜만 적용하고 시간은 현재 시간으로 설정
-    const now = new Date();
+    // tempDateTime의 날짜와 시간을 모두 적용
     const finalDate = new Date(tempDateTime);
-    finalDate.setHours(now.getHours());
-    finalDate.setMinutes(now.getMinutes());
     finalDate.setSeconds(0);
     finalDate.setMilliseconds(0);
     setSelectedDateTime(finalDate);
+    // tempDateTime도 업데이트하여 다음에 모달을 열 때 올바른 값으로 시작
+    setTempDateTime(finalDate);
     setShowDateTimeModal(false);
   };
 
   // 모달에서 취소 버튼 클릭
   const handleDateTimeCancel = () => {
-    setTempDateTime(selectedDateTime);
+    // tempDateTime을 selectedDateTime으로 리셋
+    setTempDateTime(new Date(selectedDateTime));
     setShowDateTimeModal(false);
   };
 
@@ -613,11 +664,15 @@ const MealAddScreen = ({navigation, route}: any) => {
         return foodData as AddMealFoodRequest;
       });
       
+      // 선택된 날짜와 시간을 ISO 8601 형식으로 변환
+      const timeTaken = selectedDateTime.toISOString();
+      
       // 최종 요청 데이터 구성 (API 스펙 순서대로, undefined 필드 제거)
       const mealRequestData: any = {
         mealDate: mealDateString,
         mealType: mealType,
         foods: validatedFoods,
+        timeTaken: timeTaken, // 사용자가 선택한 시간 전달
       };
       
       // memo가 비어있지 않으면 추가 (길이 제한, 빈 문자열은 제외)
@@ -754,6 +809,15 @@ const MealAddScreen = ({navigation, route}: any) => {
           await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
           console.log('✅ 식단 수정 완료 (삭제 후 추가)');
           
+          // 저장 후 GET으로 최신 데이터 불러오기
+          try {
+            console.log('📥 저장 후 최신 식단 데이터 불러오기:', mealDate);
+            await mealAPI.getDailyMeals(mealDate);
+            console.log('✅ 최신 식단 데이터 불러오기 완료');
+          } catch (error) {
+            console.error('❌ 최신 식단 데이터 불러오기 실패:', error);
+          }
+
           Alert.alert('성공', '식사가 수정되었습니다.', [
             {
               text: '확인',
@@ -786,6 +850,16 @@ const MealAddScreen = ({navigation, route}: any) => {
       } else {
         // 추가 모드
         await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
+        
+        // 저장 후 GET으로 최신 데이터 불러오기
+        try {
+          console.log('📥 저장 후 최신 식단 데이터 불러오기:', mealDate);
+          await mealAPI.getDailyMeals(mealDate);
+          console.log('✅ 최신 식단 데이터 불러오기 완료');
+        } catch (error) {
+          console.error('❌ 최신 식단 데이터 불러오기 실패:', error);
+        }
+
         Alert.alert('성공', '식사가 추가되었습니다.', [
           {
             text: '확인',
@@ -1193,15 +1267,15 @@ const MealAddScreen = ({navigation, route}: any) => {
                 <View style={styles.foodNutrition}>
                   <View style={styles.nutritionItem}>
                     <Text style={styles.nutritionLabel}>탄</Text>
-                    <Text style={styles.nutritionValue}>{food.carbs}g</Text>
+                    <Text style={styles.nutritionValue}>{Math.floor(food.carbs)}g</Text>
                   </View>
                   <View style={styles.nutritionItem}>
                     <Text style={styles.nutritionLabel}>단</Text>
-                    <Text style={styles.nutritionValue}>{food.protein}g</Text>
+                    <Text style={styles.nutritionValue}>{Math.floor(food.protein)}g</Text>
                   </View>
                   <View style={styles.nutritionItem}>
                     <Text style={styles.nutritionLabel}>지</Text>
-                    <Text style={styles.nutritionValue}>{food.fat}g</Text>
+                    <Text style={styles.nutritionValue}>{Math.floor(food.fat)}g</Text>
                   </View>
                   <View style={styles.nutritionItem}>
                     <Text style={styles.nutritionLabel}>중량</Text>
@@ -1297,14 +1371,29 @@ const MealAddScreen = ({navigation, route}: any) => {
               </TouchableOpacity>
             </View>
             <View style={styles.dateTimePickerContainer}>
-              <DateTimePicker
-                value={tempDateTime}
-                mode={dateTimeMode}
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={dateTimeMode === 'date' ? onChangeDate : onChangeTime}
-                minimumDate={dateTimeMode === 'date' ? new Date(2020, 0, 1) : undefined}
-                maximumDate={dateTimeMode === 'date' ? new Date(2100, 11, 31) : undefined}
-              />
+              {dateTimeMode === 'date' ? (
+                <DateTimePicker
+                  key={`date-${showDateTimeModal}-${tempDateTime.getTime()}`}
+                  value={tempDateTime}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={onChangeDate}
+                  minimumDate={new Date(2020, 0, 1)}
+                  maximumDate={new Date(2100, 11, 31)}
+                  locale={Platform.OS === 'ios' ? 'ko_KR' : 'ko-KR'}
+                  textColor={Platform.OS === 'ios' ? '#ffffff' : undefined}
+                />
+              ) : (
+                <DateTimePicker
+                  key={`time-${showDateTimeModal}-${tempDateTime.getTime()}`}
+                  value={tempDateTime}
+                  mode="time"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={onChangeTime}
+                  locale={Platform.OS === 'ios' ? 'ko_KR' : 'ko-KR'}
+                  textColor={Platform.OS === 'ios' ? '#ffffff' : undefined}
+                />
+              )}
             </View>
           </View>
         </TouchableOpacity>

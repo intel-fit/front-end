@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  Switch,
 } from 'react-native';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import { mealAPI } from '../../services';
@@ -20,6 +21,7 @@ interface NutritionGoalModalProps {
   onClose: () => void;
   currentGoal: NutritionGoal | null;
   onGoalUpdate: () => void;
+  date?: string; // YYYY-MM-DD 형식, 지정 날짜부터 말일까지 일괄 적용
 }
 
 const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
@@ -27,6 +29,7 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
   onClose,
   currentGoal,
   onGoalUpdate,
+  date,
 }) => {
   const [loading, setLoading] = useState(false);
   const [goalType, setGoalType] = useState<'AUTO' | 'MANUAL'>('MANUAL');
@@ -34,32 +37,149 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
   const [targetCarbs, setTargetCarbs] = useState('');
   const [targetProtein, setTargetProtein] = useState('');
   const [targetFat, setTargetFat] = useState('');
+  const [isRealTimeRecommendationEnabled, setIsRealTimeRecommendationEnabled] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       // 모달이 열릴 때 항상 수동 입력 모드로 설정
       setGoalType('MANUAL');
       
-      if (currentGoal) {
-        setTargetCalories(String(currentGoal.targetCalories || 0));
-        setTargetCarbs(String(currentGoal.targetCarbs || 0));
-        setTargetProtein(String(currentGoal.targetProtein || 0));
-        setTargetFat(String(currentGoal.targetFat || 0));
-      } else {
-        // 목표가 없으면 0으로 초기화
-        setTargetCalories('0');
-        setTargetCarbs('0');
-        setTargetProtein('0');
-        setTargetFat('0');
+      // 토글이 off일 때만 currentGoal로 초기화
+      // 토글이 on이면 API 호출 결과로 업데이트되므로 초기화하지 않음
+      // 단, 모달이 처음 열릴 때만 초기화 (토글 상태 변경 시에는 초기화하지 않음)
+      if (!isRealTimeRecommendationEnabled) {
+        if (currentGoal) {
+          setTargetCalories(String(currentGoal.targetCalories || 0));
+          setTargetCarbs(String(currentGoal.targetCarbs || 0));
+          setTargetProtein(String(currentGoal.targetProtein || 0));
+          setTargetFat(String(currentGoal.targetFat || 0));
+        } else {
+          // 목표가 없으면 0으로 초기화
+          setTargetCalories('0');
+          setTargetCarbs('0');
+          setTargetProtein('0');
+          setTargetFat('0');
+        }
       }
     }
-  }, [currentGoal, isOpen]);
+  }, [currentGoal, isOpen]); // isRealTimeRecommendationEnabled 의존성 제거
 
-  const handleClose = () => {
+  // 토글이 off로 바뀔 때 오늘 날짜에 대해 GET /food/daily_goal 호출하고 내일부터 말일까지 0으로 설정
+  useEffect(() => {
+    if (isOpen && !isRealTimeRecommendationEnabled) {
+      const setupAutoGoal = async () => {
+        try {
+          const today = new Date();
+          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+          
+          // 1. 오늘 날짜에 대해 GET /food/daily_goal 호출
+          console.log('토글 off - 오늘 날짜 자동 목표 저장:', todayStr);
+          await mealAPI.getAutoDailyGoal(todayStr);
+          
+          // 2. 내일 날짜부터 말일까지 0칼로리로 설정
+          const todayAfter = new Date(today);
+          todayAfter.setDate(todayAfter.getDate() + 1);
+          const todayAfterStr = `${todayAfter.getFullYear()}-${String(todayAfter.getMonth() + 1).padStart(2, '0')}-${String(todayAfter.getDate()).padStart(2, '0')}`;
+          
+          const goalData: SetNutritionGoalRequest = {
+            targetCalories: 0,
+            targetCarbs: 0,
+            targetProtein: 0,
+            targetFat: 0,
+            goalType: 'MANUAL',
+            date: todayAfterStr, // 내일부터 말일까지 일괄 적용
+          };
+          await mealAPI.setNutritionGoal(goalData);
+          console.log('토글 off - 내일부터 말일까지 0칼로리 설정 완료');
+        } catch (error: any) {
+          console.error('토글 off 설정 실패:', error);
+        }
+      };
+      
+      setupAutoGoal();
+    }
+  }, [isOpen, isRealTimeRecommendationEnabled]); // 토글 상태 변경 시에만 실행
+
+  // 날짜가 바뀔 때마다 API 호출
+  useEffect(() => {
+    if (isOpen && date) {
+      const loadGoal = async () => {
+        setLoading(true);
+        try {
+          // 날짜가 오늘 이전인지 확인 (YYYY-MM-DD 형식 문자열로 직접 비교)
+          const today = new Date();
+          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+          
+          let goal: any;
+          
+          if (isRealTimeRecommendationEnabled) {
+            // 토글이 on일 때: 무조건 GET /food/nutrition-goal/get 호출
+            console.log(`토글 on - 조회 API 호출 (${date})`);
+            goal = await mealAPI.getNutritionGoal(date);
+          } else {
+            // 토글이 off일 때
+            if (date === todayStr) {
+              // 오늘 날짜면 GET /food/daily_goal 호출
+              console.log(`토글 off, 오늘 날짜 (${date} === ${todayStr}) - 자동 목표 저장 API 호출`);
+              goal = await mealAPI.getAutoDailyGoal(date);
+              console.log('오늘 날짜 자동 목표 응답:', goal);
+            } else {
+              // 오늘 이전 또는 오늘 이후 날짜면 GET /food/nutrition-goal/get 호출
+              console.log(`토글 off, ${date < todayStr ? '오늘 이전' : '오늘 이후'} 날짜 (${date}) - 조회 API 호출`);
+              goal = await mealAPI.getNutritionGoal(date);
+              console.log('조회 응답:', goal);
+            }
+          }
+          
+          // 목표로 UI 업데이트 (항상 업데이트)
+          if (goal) {
+            console.log('UI 업데이트할 목표:', goal);
+            setTargetCalories(String(goal.targetCalories ?? 0));
+            setTargetCarbs(String(goal.targetCarbs ?? 0));
+            setTargetProtein(String(goal.targetProtein ?? 0));
+            setTargetFat(String(goal.targetFat ?? 0));
+            setGoalType(goal.goalType || 'AUTO');
+            console.log('UI 업데이트 완료:', {
+              calories: goal.targetCalories ?? 0,
+              carbs: goal.targetCarbs ?? 0,
+              protein: goal.targetProtein ?? 0,
+              fat: goal.targetFat ?? 0,
+            });
+          } else {
+            console.warn('목표가 없어서 UI 업데이트하지 않음');
+          }
+        } catch (error: any) {
+          console.error('영양 목표 로드 실패:', error);
+          Alert.alert('오류', error.message || '영양 목표를 가져오는데 실패했습니다.');
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      loadGoal();
+    }
+  }, [isOpen, isRealTimeRecommendationEnabled, date]);
+
+  const handleClose = async () => {
     setTargetCalories('');
     setTargetCarbs('');
     setTargetProtein('');
     setTargetFat('');
+    
+    // 모달 닫을 때 영양 목표 다시 조회
+    if (date) {
+      try {
+        await mealAPI.getNutritionGoal(date);
+        onGoalUpdate();
+      } catch (error: any) {
+        console.error('모달 닫을 때 영양 목표 조회 실패:', error);
+        // 에러가 발생해도 onGoalUpdate는 호출
+        onGoalUpdate();
+      }
+    } else {
+      onGoalUpdate();
+    }
+    
     onClose();
   };
 
@@ -76,12 +196,14 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
     setLoading(true);
     try {
       // 칼로리만 전송 (나머지는 서버에서 자동 계산)
+      // date 필드가 있으면 지정 날짜부터 말일까지 일괄 적용
       const goalData: SetNutritionGoalRequest = {
         targetCalories: calories,
         targetCarbs: 0, // 서버에서 계산됨
         targetProtein: 0, // 서버에서 계산됨
         targetFat: 0, // 서버에서 계산됨
         goalType: 'MANUAL',
+        date: date, // 날짜가 있으면 포함 (YYYY-MM-DD 형식)
       };
 
       const result = await mealAPI.setNutritionGoal(goalData);
@@ -108,16 +230,8 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
         setTargetFat('0');
       }
       
-      // 성공 메시지 표시
-      Alert.alert('성공', '영양 목표가 설정되었습니다.', [
-        {
-          text: '확인',
-          onPress: () => {
-            onGoalUpdate();
-            handleClose();
-          },
-        },
-      ]);
+      // 알람 없이 내용만 업데이트
+      onGoalUpdate();
     } catch (error: any) {
       console.error('영양 목표 수정 실패:', error);
       const errorMessage = error.message || '영양 목표 수정에 실패했습니다.';
@@ -195,21 +309,30 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}>
               {/* 칼로리 입력 (나머지는 자동 계산) */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, {marginBottom: 10}]}>칼로리 목표</Text>
+              <View style={[styles.inputGroup, isRealTimeRecommendationEnabled && styles.inputGroupDisabled]}>
+                <Text style={[styles.inputLabel, {marginBottom: 10}, isRealTimeRecommendationEnabled && styles.inputLabelDisabled]}>
+                  칼로리 목표
+                </Text>
                 <View style={styles.calorieInputRow}>
                   <TextInput
-                    style={styles.inputFieldWithButton}
+                    style={[
+                      styles.inputFieldWithButton,
+                      isRealTimeRecommendationEnabled && styles.inputFieldDisabled
+                    ]}
                     placeholder="칼로리를 입력하세요"
                     placeholderTextColor="rgba(255, 255, 255, 0.5)"
                     value={targetCalories}
-                    onChangeText={setTargetCalories}
+                    onChangeText={isRealTimeRecommendationEnabled ? undefined : setTargetCalories}
                     keyboardType="number-pad"
+                    editable={!isRealTimeRecommendationEnabled}
                   />
                   <TouchableOpacity
-                    style={[styles.calculateButton, loading && styles.calculateButtonDisabled]}
+                    style={[
+                      styles.calculateButton,
+                      (loading || isRealTimeRecommendationEnabled) && styles.calculateButtonDisabled
+                    ]}
                     onPress={handleConfirm}
-                    disabled={loading}>
+                    disabled={loading || isRealTimeRecommendationEnabled}>
                     {loading ? (
                       <ActivityIndicator size="small" color="#000000" />
                     ) : (
@@ -217,25 +340,51 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
                     )}
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.inputHint}>
-                  칼로리를 입력하고 확인 버튼을 누르면 탄수화물, 단백질, 지방이 자동으로 계산되어 저장됩니다.
+                <Text style={[styles.inputHint, isRealTimeRecommendationEnabled && styles.inputHintDisabled]}>
+                  {isRealTimeRecommendationEnabled
+                    ? '실시간 추천이 활성화되어 있습니다. 자동으로 계산된 영양 목표가 표시됩니다.'
+                    : '칼로리를 입력하고 확인 버튼을 누르면 탄수화물, 단백질, 지방이 자동으로 계산되어 저장됩니다.'}
                 </Text>
               </View>
 
               {/* 계산된 영양소 표시 (읽기 전용) */}
               <View style={styles.inputRow}>
                 <View style={styles.inputGroupHalf}>
-                  <Text style={[styles.inputLabel, {marginBottom: 10}]}>탄수화물</Text>
-                  <View style={styles.readOnlyField}>
-                    <Text style={styles.readOnlyText}>
+                  <Text style={[
+                    styles.inputLabel,
+                    {marginBottom: 10},
+                    isRealTimeRecommendationEnabled && styles.inputLabelDisabled
+                  ]}>
+                    탄수화물
+                  </Text>
+                  <View style={[
+                    styles.readOnlyField,
+                    isRealTimeRecommendationEnabled && styles.readOnlyFieldDisabled
+                  ]}>
+                    <Text style={[
+                      styles.readOnlyText,
+                      isRealTimeRecommendationEnabled && styles.readOnlyTextDisabled
+                    ]}>
                       {targetCarbs ? `${Math.round(Number(targetCarbs))}g` : '-'}
                     </Text>
                   </View>
                 </View>
                 <View style={styles.inputGroupHalf}>
-                  <Text style={[styles.inputLabel, {marginBottom: 10}]}>단백질</Text>
-                  <View style={styles.readOnlyField}>
-                    <Text style={styles.readOnlyText}>
+                  <Text style={[
+                    styles.inputLabel,
+                    {marginBottom: 10},
+                    isRealTimeRecommendationEnabled && styles.inputLabelDisabled
+                  ]}>
+                    단백질
+                  </Text>
+                  <View style={[
+                    styles.readOnlyField,
+                    isRealTimeRecommendationEnabled && styles.readOnlyFieldDisabled
+                  ]}>
+                    <Text style={[
+                      styles.readOnlyText,
+                      isRealTimeRecommendationEnabled && styles.readOnlyTextDisabled
+                    ]}>
                       {targetProtein ? `${Math.round(Number(targetProtein))}g` : '-'}
                     </Text>
                   </View>
@@ -244,9 +393,21 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
 
               <View style={styles.inputRow}>
                 <View style={styles.inputGroupHalf}>
-                  <Text style={[styles.inputLabel, {marginBottom: 10}]}>지방</Text>
-                  <View style={styles.readOnlyField}>
-                    <Text style={styles.readOnlyText}>
+                  <Text style={[
+                    styles.inputLabel,
+                    {marginBottom: 10},
+                    isRealTimeRecommendationEnabled && styles.inputLabelDisabled
+                  ]}>
+                    지방
+                  </Text>
+                  <View style={[
+                    styles.readOnlyField,
+                    isRealTimeRecommendationEnabled && styles.readOnlyFieldDisabled
+                  ]}>
+                    <Text style={[
+                      styles.readOnlyText,
+                      isRealTimeRecommendationEnabled && styles.readOnlyTextDisabled
+                    ]}>
                       {targetFat ? `${Math.round(Number(targetFat))}g` : '-'}
                     </Text>
                   </View>
@@ -254,17 +415,25 @@ const NutritionGoalModal: React.FC<NutritionGoalModalProps> = ({
                 <View style={styles.inputGroupHalf} />
               </View>
 
-              {/* 최적의 영양 목표 추천받기 버튼 */}
-              <TouchableOpacity 
-                style={[styles.recommendButton, loading && styles.recommendButtonDisabled]} 
-                onPress={handleGetRecommendation}
-                disabled={loading}>
-                {loading ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <Text style={styles.recommendButtonText}>최적의 영양 목표 추천받기</Text>
-                )}
-              </TouchableOpacity>
+              {/* 실시간 영양 목표 추천받기 토글 */}
+              <View style={styles.toggleContainer}>
+                <View style={styles.toggleContent}>
+                  <Text style={styles.toggleLabel}>실시간 영양 목표 추천받기</Text>
+                  <Switch
+                    value={isRealTimeRecommendationEnabled}
+                    onValueChange={setIsRealTimeRecommendationEnabled}
+                    trackColor={{ false: '#464646', true: '#e3ff7c' }}
+                    thumbColor={isRealTimeRecommendationEnabled ? '#000000' : '#ffffff'}
+                    ios_backgroundColor="#464646"
+                  />
+                </View>
+                <Text style={styles.toggleHint}>
+                  {isRealTimeRecommendationEnabled 
+                    ? '실시간으로 최적의 영양 목표를 추천받습니다.' 
+                    : '수동으로 영양 목표를 설정합니다.'}
+                </Text>
+              </View>
+
             </ScrollView>
           </View>
         </TouchableWithoutFeedback>
@@ -432,6 +601,48 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#000000',
+  },
+  toggleContainer: {
+    marginBottom: 20,
+    marginTop: 10,
+  },
+  toggleContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  toggleLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#ffffff',
+    flex: 1,
+  },
+  toggleHint: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginTop: 4,
+  },
+  inputGroupDisabled: {
+    opacity: 0.5,
+  },
+  inputLabelDisabled: {
+    color: 'rgba(255, 255, 255, 0.5)',
+  },
+  inputFieldDisabled: {
+    backgroundColor: '#393939',
+    color: 'rgba(255, 255, 255, 0.5)',
+  },
+  inputHintDisabled: {
+    color: 'rgba(255, 255, 255, 0.4)',
+  },
+  readOnlyFieldDisabled: {
+    backgroundColor: '#393939',
+    opacity: 0.5,
+  },
+  readOnlyTextDisabled: {
+    color: 'rgba(255, 255, 255, 0.4)',
   },
 });
 
