@@ -1,21 +1,36 @@
 // 회원 등급 관련 유틸리티 함수
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { authAPI } from "../services";
 
 export type MembershipType = "FREE" | "PREMIUM";
 
 /**
  * 현재 회원 등급 가져오기
- * TODO: 나중에 API에서 membershipType을 받으면 authAPI.getProfile()에서 가져오도록 변경
  */
 export const getMembershipType = async (): Promise<MembershipType> => {
   try {
-    // ✅ 현재: 테스트용 AsyncStorage 사용
+    // 1. 테스트용 AsyncStorage 확인
     const testType = await AsyncStorage.getItem("testMembershipType");
     if (testType === "PREMIUM") return "PREMIUM";
 
-    // TODO: API 추가 후 아래 코드 활성화
-    // const profile = await authAPI.getProfile();
-    // return profile.membershipType || "FREE";
+    // 2. 실제 membershipType 확인
+    const membershipType = await AsyncStorage.getItem("membershipType");
+    if (membershipType === "PREMIUM") return "PREMIUM";
+
+    // 3. API에서 프로필 조회
+    try {
+      const profile = await authAPI.getProfile();
+      if (profile?.membershipType) {
+        const type = profile.membershipType.toUpperCase();
+        if (type === "PREMIUM") {
+          await AsyncStorage.setItem("membershipType", "PREMIUM");
+          return "PREMIUM";
+        }
+      }
+    } catch (apiError) {
+      // API 호출 실패 시 무시하고 계속 진행
+      console.log("[membership-utils] API 프로필 조회 실패, AsyncStorage 값 사용");
+    }
 
     return "FREE";
   } catch (error) {

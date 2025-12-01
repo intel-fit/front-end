@@ -19,6 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
 import InBodyPhotoModal from "../../components/modals/InBodyPhotoModal";
+import PremiumModal from "../../components/modals/PremiumModal";
 import axios from "axios";
 import Svg, { Circle } from "react-native-svg";
 // Buffer import
@@ -43,6 +44,7 @@ import MacroDonut from "../../components/charts/MacroDonut";
 import { authAPI, healthScoreAPI } from "../../services";
 import { getLatestInBody, InBodyPayload } from "../../utils/inbodyApi";
 import { eventBus } from "../../utils/eventBus";
+import { getMembershipType } from "../../utils/membership-utils";
 
 interface MealComparison {
   thisWeekStart: string;
@@ -230,6 +232,7 @@ const HealthScoreCircle = ({
 
 const AnalysisScreen = ({ navigation }: any) => {
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
   const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [mealComparison, setMealComparison] = useState<MealComparison | null>(
@@ -1761,8 +1764,22 @@ const AnalysisScreen = ({ navigation }: any) => {
     return items;
   }, [lastWeekRatio, thisWeekRatio]);
 
-  const handleInBodyClick = () => {
-    navigation.navigate("InBody");
+  const handleInBodyClick = async () => {
+    const membershipType = await getMembershipType();
+    if (membershipType === "PREMIUM") {
+      navigation.navigate("InBody");
+    } else {
+      setIsPremiumModalOpen(true);
+    }
+  };
+
+  const handleHealthScoreClick = async () => {
+    const membershipType = await getMembershipType();
+    if (membershipType === "PREMIUM") {
+      navigation.navigate("HealthScoreTrend");
+    } else {
+      setIsPremiumModalOpen(true);
+    }
   };
 
   const handlePhotoClick = () => {
@@ -1895,7 +1912,7 @@ const AnalysisScreen = ({ navigation }: any) => {
         {/* 건강점수 섹션 */}
         <TouchableOpacity
           style={styles.healthScoreSection}
-          onPress={() => navigation.navigate("HealthScoreTrend")}
+          onPress={handleHealthScoreClick}
           activeOpacity={0.7}
         >
           <View style={styles.healthScoreContent}>
@@ -2415,6 +2432,15 @@ const AnalysisScreen = ({ navigation }: any) => {
         isOpen={isPhotoModalOpen}
         onClose={() => setIsPhotoModalOpen(false)}
         onSave={handlePhotoSave}
+      />
+      <PremiumModal
+        isOpen={isPremiumModalOpen}
+        onClose={() => setIsPremiumModalOpen(false)}
+        onContinue={() => {
+          setIsPremiumModalOpen(false);
+          // 결제 페이지로 이동하거나 결제 처리
+          navigation.navigate("PaymentSuccess");
+        }}
       />
     </SafeAreaView>
   );

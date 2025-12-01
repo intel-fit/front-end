@@ -18,6 +18,8 @@ import { getTodayWorkoutTime, fetchSavedWorkouts } from "../../utils/exerciseApi
 import { getLatestInBody } from "../../utils/inbodyApi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { DailyProgressWeekItem, HomeResponse } from "../../types";
+import { getMembershipType } from "../../utils/membership-utils";
+import PremiumModal from "../../components/modals/PremiumModal";
 
 const HomeScreen = ({ navigation }: any) => {
   const { selectedDate, setSelectedDate } = useDate();
@@ -29,6 +31,7 @@ const HomeScreen = ({ navigation }: any) => {
   const [inBodyData, setInBodyData] = useState<any>(null);
   const [todayExerciseCount, setTodayExerciseCount] = useState<number>(0);
   const isLoadingRef = useRef(false);
+  const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
 
   // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
   const formatDateToString = (date: Date): string => {
@@ -192,6 +195,22 @@ const HomeScreen = ({ navigation }: any) => {
     navigation.navigate("Calendar");
   };
 
+  // 추천 식단/운동 버튼 클릭 핸들러
+  const handleRecommendationClick = async (route: string) => {
+    try {
+      const membershipType = await getMembershipType();
+      if (membershipType === "FREE") {
+        setIsPremiumModalOpen(true);
+      } else {
+        navigation.navigate(route);
+      }
+    } catch (error) {
+      console.error("멤버십 확인 실패:", error);
+      // 에러 발생 시 기본적으로 모달 표시
+      setIsPremiumModalOpen(true);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
@@ -231,56 +250,51 @@ const HomeScreen = ({ navigation }: any) => {
 
         <View style={styles.enhancedRecommendationWrapper}>
           <View style={styles.enhancedRecommendationCard}>
-            <View style={styles.enhancedRecommendationHeader}>
-              <View style={styles.iconCircle}>
-                <LinearGradient
-                  colors={["#e3ff7c", "#a8e063"]}
-                  style={styles.iconCircleGradient}
-                >
-                  <Ionicons name="star" size={24} color="#111" />
-                </LinearGradient>
-              </View>
-
+            <View style={styles.titleContainer}>
               <Text style={styles.enhancedRecommendationTitle}>
-                회원님만을 위한{"\n"}맞춤형 식단/루틴을 받아보세요!
+                <Text style={styles.titleNormal}>회원님만을 위한</Text>
               </Text>
+              <View style={styles.titleSecondLine}>
+                <Text style={styles.titleNormal}>
+                  <Text style={styles.titleHighlight}>맞춤형 식단과 운동</Text>을 받아보세요
+                </Text>
+                <Ionicons name="heart" size={16} color="#e3ff7c" style={styles.heartIcon} />
+              </View>
             </View>
 
             <View style={styles.enhancedRecommendationButtons}>
               {/* 식단 */}
               <TouchableOpacity
                 style={styles.enhancedRecButtonWrapper}
-                onPress={() => navigation.navigate(ROUTES.MEAL_RECOMMEND)}
+                onPress={() => handleRecommendationClick(ROUTES.MEAL_RECOMMEND)}
+                activeOpacity={0.8}
               >
-                <LinearGradient
-                  colors={["#e3ff7c", "#b5ff70"]}
-                  style={styles.enhancedRecButton}
-                >
-                  <Ionicons name="restaurant" size={18} color="#111" />
+                <View style={styles.enhancedRecButton}>
                   <Text style={styles.enhancedRecButtonText}>
-                    식단 추천 받기
+                    추천 식단 받기
                   </Text>
-                  <Ionicons name="chevron-forward" size={18} color="#111" />
-                </LinearGradient>
+                  <View style={styles.chevronContainer}>
+                    <Ionicons name="chevron-forward" size={20} color="#000000" />
+                  </View>
+                </View>
               </TouchableOpacity>
 
               {/* 루틴 */}
               <TouchableOpacity
                 style={styles.enhancedRecButtonWrapper}
                 onPress={() =>
-                  navigation.navigate(ROUTES.ROUTINE_RECOMMEND_NEW)
+                  handleRecommendationClick(ROUTES.ROUTINE_RECOMMEND_NEW)
                 }
+                activeOpacity={0.8}
               >
-                <LinearGradient
-                  colors={["#e3ff7c", "#b5ff70"]}
-                  style={styles.enhancedRecButton}
-                >
-                  <Ionicons name="barbell" size={18} color="#111" />
+                <View style={styles.enhancedRecButton}>
                   <Text style={styles.enhancedRecButtonText}>
-                    운동 추천 받기
+                    추천 운동 받기
                   </Text>
-                  <Ionicons name="chevron-forward" size={18} color="#111" />
-                </LinearGradient>
+                  <View style={styles.chevronContainer}>
+                    <Ionicons name="chevron-forward" size={20} color="#000000" />
+                  </View>
+                </View>
               </TouchableOpacity>
             </View>
           </View>
@@ -515,6 +529,14 @@ const HomeScreen = ({ navigation }: any) => {
           </View>
         </View>
       </ScrollView>
+      <PremiumModal
+        isOpen={isPremiumModalOpen}
+        onClose={() => setIsPremiumModalOpen(false)}
+        onContinue={() => {
+          setIsPremiumModalOpen(false);
+          // 결제 완료 후 처리 로직은 여기에 추가
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -969,54 +991,111 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   enhancedRecommendationCard: {
-    backgroundColor: "#393a38",
-    padding: 24,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  enhancedRecommendationHeader: {
-    flexDirection: "row",
-    gap: 16,
-    marginBottom: 20,
-  },
-  iconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    backgroundColor: "transparent",
+    padding: 22,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: "#e3ff7c",
+    shadowColor: "#e3ff7c",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.7,
+    shadowRadius: 14,
+    elevation: 10,
     overflow: "hidden",
   },
-  iconCircleGradient: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
+  titleContainer: {
+    marginBottom: 8,
   },
   enhancedRecommendationTitle: {
-    flex: 1,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "700",
-    color: "#fff",
     lineHeight: 26,
+    letterSpacing: 0.3,
+  },
+  titleSecondLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  heartIcon: {
+    marginTop: 2,
+  },
+  titleHighlight: {
+    color: "#e3ff7c",
+    fontSize: 17,
+    fontWeight: "800",
+  },
+  titleNormal: {
+    color: "#ffffff",
+    fontSize: 17,
+    fontWeight: "700",
   },
   enhancedRecommendationButtons: {
-    gap: 12,
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 8,
+    backgroundColor: "transparent",
+    shadowColor: "transparent",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   enhancedRecButtonWrapper: {
-    borderRadius: 14,
+    flex: 1,
+    borderRadius: 10,
     overflow: "hidden",
+    backgroundColor: "transparent",
+    shadowColor: "transparent",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   enhancedRecButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    minHeight: 44,
+    gap: 8,
+    backgroundColor: "#e3ff7c",
+    borderRadius: 10,
+    shadowColor: "transparent",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
+  buttonIcon: {
+    fontSize: 20,
+    lineHeight: 24,
+    includeFontPadding: false,
+    textAlignVertical: "center",
   },
   enhancedRecButtonText: {
     flex: 1,
-    textAlign: "center",
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: "700",
-    color: "#111",
+    color: "#000000",
+    lineHeight: 16,
+    letterSpacing: 0.1,
+    textAlign: "left",
+  },
+  chevronContainer: {
+    marginLeft: "auto",
   },
 });
 
