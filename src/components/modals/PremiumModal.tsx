@@ -93,7 +93,7 @@ const PremiumModal: React.FC<PremiumModalProps> = ({
                   end={{ x: 1, y: 0 }}
                   style={styles.premiumGradient}
                 >
-                  <Text style={styles.premiumText}>premium</Text>
+                  <Text style={styles.premiumText}> premium</Text>
                 </LinearGradient>
               </View>
             </View>
@@ -226,8 +226,6 @@ const styles = StyleSheet.create({
     zIndex: 100,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
-    borderRadius: 16,
   },
   scrollView: {
     flexGrow: 0,
@@ -247,6 +245,7 @@ const styles = StyleSheet.create({
   intelfitText: {
     fontSize: 20,
     fontWeight: "800",
+    fontStyle: "italic",
     color: "#e3ff7c",
     letterSpacing: 0.5,
   },
@@ -425,9 +424,9 @@ const styles = StyleSheet.create({
       width: 0,
       height: 0,
     },
-    shadowOpacity: 0.6,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   continueButtonSelected: {
     backgroundColor: "#e3ff7c",
@@ -437,9 +436,9 @@ const styles = StyleSheet.create({
       width: 0,
       height: 0,
     },
-    shadowOpacity: 0.8,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 5,
   },
   continueButtonMonthly: {
     backgroundColor: "#e3ff7c",
@@ -450,9 +449,9 @@ const styles = StyleSheet.create({
       width: 0,
       height: 0,
     },
-    shadowOpacity: 0.8,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 5,
   },
   continueButtonDisabled: {
     borderColor: "#e3ff7c",
