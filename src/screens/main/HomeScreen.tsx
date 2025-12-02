@@ -34,10 +34,13 @@ const HomeScreen = ({ navigation }: any) => {
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
 
   // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
+  // 한국 시간대(UTC+9) 기준으로 날짜 계산
   const formatDateToString = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
+    // 한국 시간대(Asia/Seoul) 기준으로 날짜 가져오기
+    const koreaTime = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+    const year = koreaTime.getFullYear();
+    const month = String(koreaTime.getMonth() + 1).padStart(2, "0");
+    const day = String(koreaTime.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   };
 
@@ -89,6 +92,16 @@ const HomeScreen = ({ navigation }: any) => {
     try {
       const today = new Date();
       const dateString = formatDateToString(today);
+      
+      console.log("[HOME][홈데이터] 날짜 확인:", {
+        today: today.toISOString(),
+        dateString,
+        year: today.getFullYear(),
+        month: today.getMonth() + 1,
+        day: today.getDate(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
+      
       const data = await homeAPI.getHomeData(dateString);
       setHomeData(data);
     } catch (e: any) {
@@ -97,15 +110,86 @@ const HomeScreen = ({ navigation }: any) => {
     }
   };
 
-  // 오늘의 총 운동 시간 조회
+  // 오늘의 총 운동 시간 조회 (오늘 날짜의 운동만 계산)
   const loadTodayWorkoutTime = async () => {
     try {
       const userIdStr = await AsyncStorage.getItem("userId");
-      if (!userIdStr) return;
+      if (!userIdStr) {
+        setTodayWorkoutSeconds(0);
+        return;
+      }
       const userId = parseInt(userIdStr, 10);
-      if (isNaN(userId)) return;
-      const response = await getTodayWorkoutTime(userId);
-      setTodayWorkoutSeconds(response.totalSeconds || 0);
+      if (isNaN(userId)) {
+        setTodayWorkoutSeconds(0);
+        return;
+      }
+
+      // 백엔드 API가 누적 시간을 반환하므로, 오늘 날짜의 운동 데이터를 직접 가져와서 계산
+      const today = new Date();
+      const dateString = formatDateToString(today);
+      
+      console.log("[HOME][운동시간] 날짜 확인:", {
+        today: today.toISOString(),
+        dateString,
+        year: today.getFullYear(),
+        month: today.getMonth() + 1,
+        day: today.getDate(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
+      
+      const savedWorkouts = await fetchSavedWorkouts(userId, dateString);
+
+      // 운동 기록이 없으면 0으로 설정
+      if (!savedWorkouts || savedWorkouts.length === 0) {
+        console.log("[HOME][운동시간] 오늘 운동 기록 없음, 시간 0으로 설정", {
+          date: dateString,
+          savedWorkoutsLength: savedWorkouts?.length || 0,
+        });
+        setTodayWorkoutSeconds(0);
+        return;
+      }
+
+      // 오늘 날짜의 운동 시간 계산
+      // 세션별로 실제 운동 시간이 있으면 사용하고, 없으면 세트 수 기반으로 추정
+      let totalSeconds = 0;
+      
+      savedWorkouts.forEach((group) => {
+        if (group.sessions && group.sessions.length > 0) {
+          group.sessions.forEach((session) => {
+            // 세션에 실제 시간 정보가 있는지 확인 (백엔드 응답 구조에 따라 수정 필요)
+            // 현재는 세트 수 기반으로 대략적인 시간 추정
+            if (session.records && session.records.length > 0) {
+              // 세트당 평균 2-3분으로 추정 (휴식 시간 포함)
+              const estimatedMinutes = Math.max(5, session.records.length * 2.5); // 최소 5분
+              totalSeconds += estimatedMinutes * 60;
+            }
+          });
+        }
+      });
+
+      console.log("[HOME][운동시간] 오늘 운동 시간 계산:", {
+        date: dateString,
+        totalSeconds,
+        formattedTime: formatWorkoutTime(totalSeconds),
+        savedWorkoutsLength: savedWorkouts.length,
+        sessionCount: savedWorkouts.reduce((sum, group) => sum + (group.sessions?.length || 0), 0),
+        totalSets: savedWorkouts.reduce(
+          (sum, group) => 
+            sum + (group.sessions || []).reduce((sSum, session) => sSum + (session.records?.length || 0), 0),
+          0
+        ),
+        savedWorkouts: savedWorkouts.map(group => ({
+          title: group.title,
+          sessionsCount: group.sessions?.length || 0,
+          sessions: group.sessions?.map(session => ({
+            sessionId: session.sessionId,
+            recordsCount: session.records?.length || 0,
+          })),
+        })),
+      });
+
+      // 계산된 시간이 0보다 작거나 NaN이면 0으로 설정
+      setTodayWorkoutSeconds(totalSeconds > 0 ? totalSeconds : 0);
     } catch (e: any) {
       console.error("오늘 운동 시간 조회 실패:", e);
       setTodayWorkoutSeconds(0);
@@ -144,23 +228,58 @@ const HomeScreen = ({ navigation }: any) => {
 
       const today = new Date();
       const dateString = formatDateToString(today);
+      
+      console.log("[HOME][운동개수] 날짜 확인:", {
+        today: today.toISOString(),
+        dateString,
+        year: today.getFullYear(),
+        month: today.getMonth() + 1,
+        day: today.getDate(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
+      
       const savedWorkouts = await fetchSavedWorkouts(userId, dateString);
+
+      // 운동 기록이 없으면 0으로 설정
+      if (!savedWorkouts || savedWorkouts.length === 0) {
+        console.log("[HOME][운동개수] 오늘 운동 기록 없음, 운동 개수 0으로 설정", {
+          date: dateString,
+          savedWorkoutsLength: savedWorkouts?.length || 0,
+        });
+        setTodayExerciseCount(0);
+        return;
+      }
 
       // 모든 세션에서 고유한 운동 종목 수 계산
       const uniqueExercises = new Set<string>();
       savedWorkouts.forEach((group) => {
-        group.sessions.forEach((session) => {
-          session.records.forEach((record) => {
-            // 운동 이름을 기준으로 고유한 종목 수 계산
-            if (record.exerciseName) {
-              uniqueExercises.add(record.exerciseName);
+        if (group.sessions && group.sessions.length > 0) {
+          group.sessions.forEach((session) => {
+            if (session.records && session.records.length > 0) {
+              session.records.forEach((record) => {
+                // 운동 이름을 기준으로 고유한 종목 수 계산
+                if (record.exerciseName) {
+                  uniqueExercises.add(record.exerciseName);
+                }
+              });
             }
           });
-        });
+        }
       });
 
       const count = uniqueExercises.size;
-      console.log("[HOME] 오늘 완료한 운동 종목 수:", count, "개");
+      console.log("[HOME][운동개수] 오늘 완료한 운동 종목 수:", {
+        date: dateString,
+        count,
+        uniqueExercises: Array.from(uniqueExercises),
+        savedWorkoutsLength: savedWorkouts.length,
+        sessionCount: savedWorkouts.reduce((sum, group) => sum + (group.sessions?.length || 0), 0),
+        totalRecords: savedWorkouts.reduce(
+          (sum, group) => 
+            sum + (group.sessions || []).reduce((sSum, session) => sSum + (session.records?.length || 0), 0),
+          0
+        ),
+      });
       setTodayExerciseCount(count);
     } catch (e: any) {
       console.error("오늘 운동 종목 수 계산 실패:", e);
@@ -171,11 +290,8 @@ const HomeScreen = ({ navigation }: any) => {
   // 화면 포커스 시 데이터 로드
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
-      if (isLoadingRef.current) {
-        console.log("⏸️ 이미 데이터 로딩 중이므로 스킵");
-        return;
-      }
-
+      console.log("[HOME] 화면 포커스, 오늘 운동 데이터 새로고침 시작");
+      
       isLoadingRef.current = true;
       Promise.all([
         loadWeeklyProgress(),
@@ -185,7 +301,22 @@ const HomeScreen = ({ navigation }: any) => {
         loadTodayExerciseCount(),
       ]).finally(() => {
         isLoadingRef.current = false;
+        console.log("[HOME] 화면 포커스, 오늘 운동 데이터 새로고침 완료");
       });
+    });
+
+    // 초기 로드 (로그인 완료 후)
+    console.log("[HOME] 초기 로드 시작 (로그인 완료 후)");
+    isLoadingRef.current = true;
+    Promise.all([
+      loadWeeklyProgress(),
+      loadHomeData(),
+      loadTodayWorkoutTime(),
+      loadInBodyData(),
+      loadTodayExerciseCount(),
+    ]).finally(() => {
+      isLoadingRef.current = false;
+      console.log("[HOME] 초기 로드 완료");
     });
 
     return unsubscribe;
@@ -450,7 +581,7 @@ const HomeScreen = ({ navigation }: any) => {
             <View style={styles.exerciseStatColumn}>
               <Text style={styles.exerciseStatLabel}>소모 칼로리</Text>
               <View style={styles.exerciseStatValueRow}>
-                <Text style={styles.exerciseStatValue}>2,198</Text>
+                <Text style={styles.exerciseStatValue}>-</Text>
                 <Text style={styles.exerciseStatUnit}>kcal</Text>
               </View>
             </View>
