@@ -14,6 +14,7 @@ import {
   Image,
   ActivityIndicator,
   Animated,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
@@ -39,6 +40,7 @@ import {
   ACCESS_TOKEN_KEY,
   API_BASE_URL,
   AI_API_BASE_URL,
+  requestAI,
 } from "../../services/apiConfig";
 import MacroDonut from "../../components/charts/MacroDonut";
 import { authAPI, healthScoreAPI } from "../../services";
@@ -250,25 +252,16 @@ const AnalysisScreen = ({ navigation }: any) => {
   const [localCompletionByNameDate, setLocalCompletionByNameDate] = useState<
     Record<string, boolean>
   >({});
-  const [exerciseWeeklyGraph, setExerciseWeeklyGraph] = useState<string | null>(
-    null
-  );
-  const [exerciseGraphLoading, setExerciseGraphLoading] = useState(false);
-  const [exerciseGraphKey, setExerciseGraphKey] = useState<string>(
-    `exercise-graph-${Date.now()}-${Math.random()
-      .toString(36)
-      .substring(2, 15)}`
-  );
-  const [nutritionWeeklyGraph, setNutritionWeeklyGraph] = useState<
-    string | null
-  >(null);
+  
+  // 식단 그래프 state
+  const [nutritionGraphUrl, setNutritionGraphUrl] = useState<string | null>(null);
   const [nutritionGraphLoading, setNutritionGraphLoading] = useState(false);
-  const [nutritionGraphKey, setNutritionGraphKey] = useState<string>(
-    `nutrition-graph-${Date.now()}-${Math.random()
-      .toString(36)
-      .substring(2, 15)}`
-  );
-
+  const [nutritionWeeks, setNutritionWeeks] = useState<string>("");
+  
+  // 운동 그래프 state
+  const [exerciseGraphUrl, setExerciseGraphUrl] = useState<string | null>(null);
+  const [exerciseWeeks, setExerciseWeeks] = useState<string>("");
+  
   // 건강점수 state
   const [healthScore, setHealthScore] = useState<number>(0);
   const [healthScoreTrend, setHealthScoreTrend] = useState<ScoreTrendItem[]>(
@@ -280,27 +273,6 @@ const AnalysisScreen = ({ navigation }: any) => {
     () => (userName ? `${userName}님` : "회원님"),
     [userName]
   );
-
-  // ArrayBuffer → base64 변환 유틸 함수
-  const arrayBufferToBase64 = useCallback((buffer: ArrayBuffer): string => {
-    try {
-      // Buffer 우선 사용
-      const uint8 = new Uint8Array(buffer);
-      return Buffer.from(uint8).toString("base64");
-    } catch (e) {
-      // Fallback: btoa (청크 단위로 처리)
-      let binary = "";
-      const bytes = new Uint8Array(buffer);
-      const len = bytes.byteLength;
-      const chunkSize = 0x8000; // 32k
-      for (let i = 0; i < len; i += chunkSize) {
-        const subarray = bytes.subarray(i, i + chunkSize);
-        binary += String.fromCharCode.apply(null, Array.from(subarray));
-      }
-      // @ts-ignore
-      return typeof btoa === "function" ? btoa(binary) : "";
-    }
-  }, []);
 
   const formatNumber = useCallback((value?: number | null) => {
     if (value === null || value === undefined || Number.isNaN(value))
@@ -449,7 +421,12 @@ const AnalysisScreen = ({ navigation }: any) => {
         }
       }
 
-      // 로컬 저장소에서 확인
+      // 로컬 저장소에서 확인 (단, workoutHistory가 비어있으면 로컬 정보도 무시)
+      // workoutHistory가 비어있으면 운동 기록이 없는 것이므로 로컬 완료 정보를 사용하지 않음
+      if (workoutHistory.length === 0) {
+        return false;
+      }
+
       const sessionKey =
         session.sessionId !== undefined && session.sessionId !== null
           ? String(session.sessionId)
@@ -479,13 +456,29 @@ const AnalysisScreen = ({ navigation }: any) => {
 
       return false;
     },
-    [interpretCompletion, localSessionCompletion, localCompletionByNameDate]
+    [
+      interpretCompletion,
+      localSessionCompletion,
+      localCompletionByNameDate,
+      workoutHistory,
+    ]
   );
 
-  const completedWorkoutHistory = useMemo(
-    () => workoutHistory.filter(isSessionCompleted),
-    [workoutHistory, isSessionCompleted]
-  );
+  const completedWorkoutHistory = useMemo(() => {
+    const completed = workoutHistory.filter(isSessionCompleted);
+    if (__DEV__) {
+      console.log("[ANALYSIS] completedWorkoutHistory 계산:", {
+        total: workoutHistory.length,
+        completed: completed.length,
+        sample: completed.slice(0, 3).map((s) => ({
+          exerciseName: s.exerciseName,
+          workoutDate: s.workoutDate,
+          setsCount: s.sets?.length || 0,
+        })),
+      });
+    }
+    return completed;
+  }, [workoutHistory, isSessionCompleted]);
 
   // 운동별 고유 key 생성 유틸 함수
   const makeExerciseKey = useCallback(
@@ -527,17 +520,52 @@ const AnalysisScreen = ({ navigation }: any) => {
   );
 
   const exercises = useMemo(() => {
-    console.log("[ANALYSIS] exercises 계산:", {
+    console.log("[ANALYSIS] exercises 계산 시작:", {
       workoutHistoryLength: workoutHistory.length,
       completedWorkoutHistoryLength: completedWorkoutHistory.length,
+      completedWorkoutHistorySample: completedWorkoutHistory
+        .slice(0, 2)
+        .map((s) => ({
+          exerciseName: s.exerciseName,
+          workoutDate: s.workoutDate,
+          setsCount: s.sets?.length || 0,
+          isCompleted: (s as any).isCompleted,
+          completed: (s as any).completed,
+        })),
     });
     if (completedWorkoutHistory.length === 0) {
-      console.log("[ANALYSIS] completedWorkoutHistory가 비어있음");
+      console.log(
+        "[ANALYSIS] completedWorkoutHistory가 비어있음 - exercises 빈 배열 반환"
+      );
       return [];
     }
 
-    // 운동 이름별로 그룹화
-    const groupedByExercise = completedWorkoutHistory.reduce((acc, session) => {
+    // 오늘 날짜 계산 (한국 시간대 기준)
+    const today = new Date();
+    const todayStr = today.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }); // "YYYY-MM-DD" 형식
+
+    // 오늘 완료한 운동만 필터링
+    const todayCompletedExercises = completedWorkoutHistory.filter((session) => {
+      if (!session.workoutDate) return false;
+      // workoutDate가 ISO 문자열인 경우 날짜 부분만 추출
+      const sessionDate = session.workoutDate.slice(0, 10);
+      return sessionDate === todayStr;
+    });
+
+    console.log("[ANALYSIS] 오늘 완료한 운동 필터링:", {
+      todayStr,
+      totalCompleted: completedWorkoutHistory.length,
+      todayCompleted: todayCompletedExercises.length,
+      todayExerciseNames: [...new Set(todayCompletedExercises.map(s => s.exerciseName))],
+    });
+
+    if (todayCompletedExercises.length === 0) {
+      console.log("[ANALYSIS] 오늘 완료한 운동이 없음 - exercises 빈 배열 반환");
+      return [];
+    }
+
+    // 운동 이름별로 그룹화 (오늘 완료한 운동만)
+    const groupedByExercise = todayCompletedExercises.reduce((acc, session) => {
       const name = session.exerciseName;
       if (!acc[name]) {
         acc[name] = [];
@@ -550,34 +578,50 @@ const AnalysisScreen = ({ navigation }: any) => {
     const recentExercises: any[] = [];
 
     Object.entries(groupedByExercise).forEach(([name, sessions]) => {
+      // 오늘 완료한 세션들 (이미 오늘 날짜로 필터링됨)
       // 날짜순 정렬 (최신순)
       const sorted = sessions.sort(
         (a, b) =>
           new Date(b.workoutDate).getTime() - new Date(a.workoutDate).getTime()
       );
 
-      // 최근 8개만
-      const recent = sorted.slice(0, 8);
+      // 가장 최근 세션 (오늘 완료한 세션 중)
+      const latest = sorted[0];
 
-      if (recent.length > 0) {
-        // 가장 최근 세션
-        const latest = recent[0];
+      if (!latest || !latest.sets || latest.sets.length === 0) {
+        return; // 세트가 없으면 스킵
+      }
 
-        // 최대 중량 계산 (가장 무거운 세트)
-        const maxWeight = Math.max(...latest.sets.map((s) => s.weight));
-        const maxWeightSet = latest.sets.find((s) => s.weight === maxWeight);
+      // 최대 중량 계산 (가장 무거운 세트)
+      const maxWeight = Math.max(...latest.sets.map((s) => s.weight));
+      const maxWeightSet = latest.sets.find((s) => s.weight === maxWeight);
 
-        // 1RM 계산
-        const oneRM = maxWeightSet
-          ? calculate1RM(maxWeightSet.weight, maxWeightSet.reps)
-          : 0;
+      // 1RM 계산
+      const oneRM = maxWeightSet
+        ? calculate1RM(maxWeightSet.weight, maxWeightSet.reps)
+        : 0;
 
-        // 이전 기록과 비교 (2번째 최근 기록) - 중량 변화만 추적
-        let change = 0;
-        let changeType: "positive" | "negative" | "neutral" = "neutral";
+      // 이전 기록과 비교 (오늘 이전의 가장 최근 기록) - 중량 변화만 추적
+      let change = 0;
+      let changeType: "positive" | "negative" | "neutral" = "neutral";
 
-        if (recent.length > 1) {
-          const previous = recent[1];
+      // 전체 완료 기록에서 같은 운동 이름의 이전 기록 찾기 (오늘 이전)
+      const allPreviousSessions = completedWorkoutHistory.filter((s) => {
+        if (!s.workoutDate || s.exerciseName !== name) return false;
+        const sessionDate = s.workoutDate.slice(0, 10);
+        return sessionDate < todayStr; // 오늘 이전의 기록만
+      });
+
+      if (allPreviousSessions.length > 0) {
+        // 날짜순 정렬 (최신순)
+        const sortedPrevious = allPreviousSessions.sort(
+          (a, b) =>
+            new Date(b.workoutDate).getTime() - new Date(a.workoutDate).getTime()
+        );
+        
+        // 가장 최근 이전 기록
+        const previous = sortedPrevious[0];
+        if (previous.sets && previous.sets.length > 0) {
           const prevMaxWeight = Math.max(...previous.sets.map((s) => s.weight));
           const weightChange = maxWeight - prevMaxWeight;
 
@@ -592,39 +636,47 @@ const AnalysisScreen = ({ navigation }: any) => {
             }
           }
         }
-
-        const canonicalExerciseId = resolveExerciseIdentifier(latest);
-
-        recentExercises.push({
-          id: makeExerciseKey(latest.sessionId, canonicalExerciseId || name),
-          name,
-          change: Math.abs(change),
-          changeType,
-          rm: oneRM,
-          recordCount: recent.length,
-          exerciseId: canonicalExerciseId,
-          imageUrl:
-            latest.imageUrl ||
-            latest.exerciseImageUrl ||
-            latest.image ||
-            latest.imgUrl ||
-            latest.photoUrl ||
-            "",
-        });
       }
+
+      const canonicalExerciseId = resolveExerciseIdentifier(latest);
+
+      // 전체 기록 수 계산 (오늘 포함)
+      const allSessionsForExercise = completedWorkoutHistory.filter(
+        (s) => s.exerciseName === name
+      );
+      const totalRecordCount = allSessionsForExercise.length;
+
+      recentExercises.push({
+        id: makeExerciseKey(latest.sessionId, canonicalExerciseId || name),
+        name,
+        change: Math.abs(change),
+        changeType,
+        rm: oneRM,
+        recordCount: totalRecordCount, // 전체 기록 수 (오늘 포함)
+        exerciseId: canonicalExerciseId,
+        imageUrl:
+          latest.imageUrl ||
+          latest.exerciseImageUrl ||
+          latest.image ||
+          latest.imgUrl ||
+          latest.photoUrl ||
+          "",
+      });
     });
 
-    // 최근 운동순으로 정렬 (가장 최근에 한 운동이 위로)
-    return recentExercises
+    // 운동 이름순으로 정렬 (오늘 완료한 운동이므로 날짜는 모두 같음)
+    const result = recentExercises
       .sort((a, b) => {
-        const aLatest = groupedByExercise[a.name][0];
-        const bLatest = groupedByExercise[b.name][0];
-        return (
-          new Date(bLatest.workoutDate).getTime() -
-          new Date(aLatest.workoutDate).getTime()
-        );
-      })
-      .slice(0, 8); // 최대 8개
+        // 이름순 정렬 (가나다순)
+        return a.name.localeCompare(b.name, "ko");
+      });
+
+    console.log("[ANALYSIS] exercises 계산 완료:", {
+      resultCount: result.length,
+      exerciseNames: result.map((e) => e.name),
+    });
+
+    return result;
   }, [completedWorkoutHistory, resolveExerciseIdentifier, makeExerciseKey]);
 
   const [exerciseImages, setExerciseImages] = useState<Record<string, string>>(
@@ -869,6 +921,8 @@ const AnalysisScreen = ({ navigation }: any) => {
     try {
       console.log("[ANALYSIS] 운동 기록 조회 시작");
       setLoading(true);
+      // 먼저 빈 배열로 초기화하여 이전 데이터가 표시되지 않도록 함
+      setWorkoutHistory([]);
 
       // 최근 30일간의 저장된 운동 기록 조회
       // userId는 문자열일 수 있으므로 숫자로 변환 시도, 실패하면 그대로 사용
@@ -960,7 +1014,34 @@ const AnalysisScreen = ({ navigation }: any) => {
           workoutDate: w.workoutDate,
         })),
       });
+
+      // 서버에서 가져온 데이터로 업데이트 (빈 배열이어도 명시적으로 설정)
       setWorkoutHistory(allWorkouts);
+
+      // 운동 기록이 없으면 로컬 완료 정보도 초기화하여 삭제된 운동이 표시되지 않도록 함
+      if (allWorkouts.length === 0) {
+        setLocalSessionCompletion({});
+        setLocalCompletionByNameDate({});
+        if (__DEV__) {
+          console.log("[ANALYSIS] 운동 기록 없음, 로컬 완료 정보 초기화");
+        }
+      } else {
+        // 운동 기록이 있으면 상세 로그 출력
+        if (__DEV__) {
+          console.log(
+            `[ANALYSIS] workoutHistory 업데이트: ${allWorkouts.length}개 세션`
+          );
+          console.log("[ANALYSIS] 운동 기록 상세:", {
+            dates: [
+              ...new Set(allWorkouts.map((w) => w.workoutDate?.slice(0, 10))),
+            ],
+            exerciseNames: [...new Set(allWorkouts.map((w) => w.exerciseName))],
+            sessionsWithSets: allWorkouts.filter(
+              (w) => w.sets && w.sets.length > 0
+            ).length,
+          });
+        }
+      }
     } catch (error: any) {
       const status = error?.response?.status;
       // 404나 데이터 없음은 정상 (에러 표시 안 함)
@@ -1038,6 +1119,7 @@ const AnalysisScreen = ({ navigation }: any) => {
   }, [loadWorkoutHistory, loadLocalCompletions]);
 
   const loadMealComparison = useCallback(async () => {
+    console.log("[ANALYSIS] loadMealComparison 호출 시작");
     try {
       setMealLoading(true);
       setMealError(null);
@@ -1074,71 +1156,185 @@ const AnalysisScreen = ({ navigation }: any) => {
         return;
       }
 
-      // AI 서버 API: /ai/user/{user_id}/trend/weekly
-      const url = `${AI_API_BASE_URL}/user/${aiUserId}/trend/weekly`;
+      // 새로운 API: /analytics/custom/weekly/{user_id}?weeks=2
+      // 이번 주와 저번 주 비교를 위해 2주치 데이터 요청
+      const endpoint = `/analytics/custom/weekly/${aiUserId}?weeks=2`;
 
       console.log("[ANALYSIS] 식단 비교 API 요청:", {
-        url,
+        url: `${AI_API_BASE_URL}${endpoint}`,
         method: "GET",
         aiUserId,
-        hasToken: !!token,
+        endpoint,
       });
 
-      const response = await axios.get<any>(url, {
-        headers: {
-          Authorization: token ? `Bearer ${token}` : undefined,
-          Accept: "application/json",
-        },
+      // requestAI는 직접 데이터를 반환 (response.data가 아님)
+      const responseData = await requestAI<any>(endpoint, {
+        method: "GET",
       });
       console.log(
         "[ANALYSIS] 식단 비교 API 응답 전체:",
-        JSON.stringify(response.data, null, 2)
+        JSON.stringify(responseData, null, 2)
       );
+      console.log("[ANALYSIS] 식단 비교 API 응답 상세:", {
+        dataType: typeof responseData,
+        isArray: Array.isArray(responseData),
+        arrayLength: Array.isArray(responseData) ? responseData.length : null,
+        isObject: responseData && typeof responseData === "object",
+        dataKeys: responseData && typeof responseData === "object" ? Object.keys(responseData) : null,
+      });
 
-      // 응답이 빈 배열인지 확인
-      if (Array.isArray(response.data)) {
-        if (response.data.length === 0) {
-          // 빈 배열이면 데이터 없음으로 처리
-          console.log("[ANALYSIS] 식단 비교 데이터 없음 (빈 배열)");
-          setMealComparison(null);
-          setMealError(null);
-          return;
-        }
-        // 배열에 데이터가 있으면 첫 번째 요소 사용 (API 스펙에 따라 조정)
-        console.log("[ANALYSIS] 식단 비교: 배열 응답, 첫 번째 요소 사용");
-        setMealComparison(response.data[0] as MealComparison);
-      } else if (response.data && typeof response.data === "object") {
-        // 객체인 경우 기존 로직대로 처리
-        console.log("[ANALYSIS] 식단 비교 응답 상세:", {
-          status: response.status,
-          hasData: !!response.data,
-          dataType: typeof response.data,
-          dataKeys: Object.keys(response.data),
-          thisWeekCalories: response.data?.thisWeekCalories,
-          lastWeekCalories: response.data?.lastWeekCalories,
-          caloriesDifference: response.data?.caloriesDifference,
-          caloriesChangeRate: response.data?.caloriesChangeRate,
-          thisWeekStart: response.data?.thisWeekStart,
-          thisWeekEnd: response.data?.thisWeekEnd,
+      // 응답 구조 확인: { user_id, weeks_requested, weekly_summary: [...] }
+      const weeklySummary = responseData?.weekly_summary;
+      
+      if (!Array.isArray(weeklySummary)) {
+        console.log("[ANALYSIS] 식단 비교: weekly_summary가 배열이 아님", {
+          responseData,
+          hasWeeklySummary: !!weeklySummary,
+          weeklySummaryType: typeof weeklySummary,
         });
-        setMealComparison(response.data);
-      } else {
-        // 예상치 못한 응답 형식
-        console.log("[ANALYSIS] 식단 비교: 예상치 못한 응답 형식");
         setMealComparison(null);
         setMealError(null);
+        return;
       }
+
+      // 최소 2주치 데이터가 있어야 비교 가능
+      if (weeklySummary.length < 2) {
+        console.log("[ANALYSIS] 식단 비교 데이터 부족:", {
+          receivedWeeks: weeklySummary.length,
+          requiredWeeks: 2,
+        });
+        setMealComparison(null);
+        setMealError(null);
+        return;
+      }
+
+      // 첫 번째 요소가 이번 주 (가장 최근), 두 번째 요소가 저번 주
+      const thisWeek = weeklySummary[0];
+      const lastWeek = weeklySummary[1];
+
+      console.log("[ANALYSIS] 이번 주 데이터:", {
+        week: thisWeek,
+        keys: thisWeek ? Object.keys(thisWeek) : null,
+      });
+      console.log("[ANALYSIS] 저번 주 데이터:", {
+        week: lastWeek,
+        keys: lastWeek ? Object.keys(lastWeek) : null,
+      });
+
+      // 영양성분 추출: nutrition_avg 객체에서 kcal, protein, fat, carb 필드 사용
+      const thisWeekNutrition = thisWeek?.nutrition_avg || {};
+      const lastWeekNutrition = lastWeek?.nutrition_avg || {};
+      
+      const thisWeekCalories = thisWeekNutrition?.kcal || 0;
+      const lastWeekCalories = lastWeekNutrition?.kcal || 0;
+      
+      const thisWeekCarbs = thisWeekNutrition?.carb || 0;
+      const lastWeekCarbs = lastWeekNutrition?.carb || 0;
+      
+      const thisWeekProtein = thisWeekNutrition?.protein || 0;
+      const lastWeekProtein = lastWeekNutrition?.protein || 0;
+      
+      const thisWeekFat = thisWeekNutrition?.fat || 0;
+      const lastWeekFat = lastWeekNutrition?.fat || 0;
+
+      // 날짜 정보 추출
+      const thisWeekStart = thisWeek?.week_start || "";
+      const thisWeekEnd = thisWeek?.week_end || "";
+
+      // 변화량 계산
+      const caloriesDifference = thisWeekCalories - lastWeekCalories;
+      const caloriesChangeRate = lastWeekCalories > 0 
+        ? ((caloriesDifference / lastWeekCalories) * 100) 
+        : (thisWeekCalories > 0 ? 100 : 0);
+
+      const carbsChangeRate = lastWeekCarbs > 0
+        ? (((thisWeekCarbs - lastWeekCarbs) / lastWeekCarbs) * 100)
+        : (thisWeekCarbs > 0 ? 100 : 0);
+
+      const proteinChangeRate = lastWeekProtein > 0
+        ? (((thisWeekProtein - lastWeekProtein) / lastWeekProtein) * 100)
+        : (thisWeekProtein > 0 ? 100 : 0);
+
+      const fatChangeRate = lastWeekFat > 0
+        ? (((thisWeekFat - lastWeekFat) / lastWeekFat) * 100)
+        : (thisWeekFat > 0 ? 100 : 0);
+
+      // 매크로 비율 계산
+      const thisWeekTotalMacro = thisWeekCarbs + thisWeekProtein + thisWeekFat;
+      const lastWeekTotalMacro = lastWeekCarbs + lastWeekProtein + lastWeekFat;
+
+      const thisWeekMacroRatio: MacroRatio = {
+        carbs: thisWeekTotalMacro > 0 ? (thisWeekCarbs / thisWeekTotalMacro) * 100 : null,
+        protein: thisWeekTotalMacro > 0 ? (thisWeekProtein / thisWeekTotalMacro) * 100 : null,
+        fat: thisWeekTotalMacro > 0 ? (thisWeekFat / thisWeekTotalMacro) * 100 : null,
+      };
+
+      const lastWeekMacroRatio: MacroRatio = {
+        carbs: lastWeekTotalMacro > 0 ? (lastWeekCarbs / lastWeekTotalMacro) * 100 : null,
+        protein: lastWeekTotalMacro > 0 ? (lastWeekProtein / lastWeekTotalMacro) * 100 : null,
+        fat: lastWeekTotalMacro > 0 ? (lastWeekFat / lastWeekTotalMacro) * 100 : null,
+      };
+
+      // MealComparison 객체 생성
+      const mealComparison: MealComparison = {
+        thisWeekStart,
+        thisWeekEnd,
+        thisWeekCalories,
+        lastWeekCalories,
+        caloriesDifference,
+        caloriesChangeRate,
+        carbsChangeRate,
+        proteinChangeRate,
+        fatChangeRate,
+        thisWeekMacroRatio,
+        lastWeekMacroRatio,
+      };
+
+      console.log("[ANALYSIS] 식단 비교 데이터 생성 완료:", {
+        thisWeekCalories,
+        lastWeekCalories,
+        caloriesDifference,
+        caloriesChangeRate: `${caloriesChangeRate.toFixed(1)}%`,
+        carbsChangeRate: `${carbsChangeRate.toFixed(1)}%`,
+        proteinChangeRate: `${proteinChangeRate.toFixed(1)}%`,
+        fatChangeRate: `${fatChangeRate.toFixed(1)}%`,
+      });
+
+      setMealComparison(mealComparison);
     } catch (error: any) {
-      const status = error?.response?.status;
-      const errorData = error?.response?.data;
+      // requestAI는 error.status와 error.data를 직접 제공
+      const status = error?.status || error?.response?.status;
+      const errorData = error?.data || error?.response?.data;
+
+      // aiUserId는 try 블록 밖에서도 접근 가능하도록 상위 스코프에서 가져오기
+      let aiUserIdForError: string | null = null;
+      try {
+        const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+        if (token) {
+          const base64Url = token.split(".")[1];
+          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split("")
+              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+              .join("")
+          );
+          const payload = JSON.parse(jsonPayload);
+          if (payload.sub) {
+            aiUserIdForError = String(payload.sub);
+          }
+        }
+      } catch (e) {
+        // 무시
+      }
 
       console.error("[ANALYSIS] 식단 비교 API 에러:", {
         status,
-        statusText: error?.response?.statusText,
-        url: error?.config?.url,
+        statusText: error?.statusText || error?.response?.statusText,
+        url: `${AI_API_BASE_URL}/analytics/custom/weekly/${aiUserIdForError || "unknown"}?weeks=2`,
         errorData,
         errorMessage: error?.message,
-        fullError: JSON.stringify(error?.response?.data, null, 2),
+        fullError: JSON.stringify(errorData, null, 2),
       });
 
       // 404나 데이터 없음은 정상 (에러 표시 안 함)
@@ -1173,9 +1369,10 @@ const AnalysisScreen = ({ navigation }: any) => {
         setMealError(null);
       }
     } finally {
+      console.log("[ANALYSIS] loadMealComparison 완료, mealLoading false로 설정");
       setMealLoading(false);
     }
-  }, [userId]);
+  }, []);
 
   const loadUserId = useCallback(async () => {
     try {
@@ -1232,6 +1429,152 @@ const AnalysisScreen = ({ navigation }: any) => {
     }
   }, []);
 
+  // 식단 주간 그래프 로드 (초고속 렌더링)
+  const loadNutritionWeeklyGraph = useCallback(async (weeks: number = 4) => {
+    try {
+      // 1) aiUserId 구하기
+      let aiUserId: string | null = null;
+      const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+      if (token) {
+        try {
+          const base64Url = token.split(".")[1];
+          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split("")
+              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+              .join("")
+          );
+          const payload = JSON.parse(jsonPayload);
+          if (payload.sub) {
+            aiUserId = String(payload.sub);
+          }
+        } catch (e) {
+          console.error("[ANALYSIS] JWT 디코딩 실패:", e);
+        }
+      }
+
+      if (!aiUserId) {
+        const storedUserId = await AsyncStorage.getItem("userId");
+        if (storedUserId) {
+          aiUserId = storedUserId;
+        } else {
+          console.warn("[ANALYSIS] 식단 그래프: aiUserId를 찾을 수 없음");
+          return;
+        }
+      }
+
+      // 2) 캐시 확인 (초고속 로딩)
+      const cacheKey = `nutrition_graph_${aiUserId}_${weeks}`;
+      const cachedUrl = await AsyncStorage.getItem(cacheKey);
+      if (cachedUrl) {
+        const cached = JSON.parse(cachedUrl);
+        const cacheTime = cached.timestamp || 0;
+        const now = Date.now();
+        // 캐시 유효기간: 1시간
+        if (now - cacheTime < 60 * 60 * 1000 && cached.url) {
+          // 캐시된 URL 즉시 사용 (로딩 상태 없이)
+          setNutritionGraphUrl(cached.url);
+          return;
+        }
+      }
+
+      // 3) API URL 생성 (image/png 반환) - 즉시 설정하여 빠른 렌더링
+      const url = `${AI_API_BASE_URL}/analytics/custom/weekly-graph/nutrition/${aiUserId}?weeks=${weeks}&_ts=${Date.now()}`;
+      
+      // URL 즉시 설정 (로딩 상태 없이 바로 표시 시작)
+      setNutritionGraphUrl(url);
+      
+      // 캐시 저장 (백그라운드)
+      AsyncStorage.setItem(
+        cacheKey,
+        JSON.stringify({
+          url: url,
+          timestamp: Date.now(),
+        })
+      ).catch(() => {}); // 캐시 실패는 무시
+      
+    } catch (error: any) {
+      console.error("[ANALYSIS] 식단 주간 그래프 로드 실패:", {
+        message: error?.message,
+        status: error?.response?.status,
+      });
+    }
+  }, []);
+
+  // 운동 주간 그래프 로드 (초고속 렌더링)
+  const loadExerciseWeeklyGraph = useCallback(async (weeks: number = 4) => {
+    try {
+      // 1) aiUserId 구하기
+      let aiUserId: string | null = null;
+      const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+      if (token) {
+        try {
+          const base64Url = token.split(".")[1];
+          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split("")
+              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+              .join("")
+          );
+          const payload = JSON.parse(jsonPayload);
+          if (payload.sub) {
+            aiUserId = String(payload.sub);
+          }
+        } catch (e) {
+          console.error("[ANALYSIS] JWT 디코딩 실패:", e);
+        }
+      }
+
+      if (!aiUserId) {
+        const storedUserId = await AsyncStorage.getItem("userId");
+        if (storedUserId) {
+          aiUserId = storedUserId;
+        } else {
+          console.warn("[ANALYSIS] 운동 그래프: aiUserId를 찾을 수 없음");
+          return;
+        }
+      }
+
+      // 2) 캐시 확인 (초고속 로딩)
+      const cacheKey = `exercise_graph_${aiUserId}_${weeks}`;
+      const cachedUrl = await AsyncStorage.getItem(cacheKey);
+      if (cachedUrl) {
+        const cached = JSON.parse(cachedUrl);
+        const cacheTime = cached.timestamp || 0;
+        const now = Date.now();
+        // 캐시 유효기간: 1시간
+        if (now - cacheTime < 60 * 60 * 1000 && cached.url) {
+          // 캐시된 URL 즉시 사용 (로딩 상태 없이)
+          setExerciseGraphUrl(cached.url);
+          return;
+        }
+      }
+
+      // 3) API URL 생성 (image/png 반환) - 즉시 설정하여 빠른 렌더링
+      const url = `${AI_API_BASE_URL}/analytics/custom/weekly-graph/exercise/${aiUserId}?weeks=${weeks}&_ts=${Date.now()}`;
+      
+      // URL 즉시 설정 (로딩 상태 없이 바로 표시 시작)
+      setExerciseGraphUrl(url);
+      
+      // 캐시 저장 (백그라운드)
+      AsyncStorage.setItem(
+        cacheKey,
+        JSON.stringify({
+          url: url,
+          timestamp: Date.now(),
+        })
+      ).catch(() => {}); // 캐시 실패는 무시
+      
+    } catch (error: any) {
+      console.error("[ANALYSIS] 운동 주간 그래프 로드 실패:", {
+        message: error?.message,
+        status: error?.response?.status,
+      });
+    }
+  }, []);
+
   // 🔥 테스트용: 파이프라인 체크를 위한 dummy base64 이미지 강제 세팅
   // 이 useEffect를 활성화하면 렌더/스타일 문제인지 변환 문제인지 바로 확인 가능
   // 테스트 후 주석 처리하거나 삭제하세요
@@ -1245,310 +1588,6 @@ const AnalysisScreen = ({ navigation }: any) => {
     setExerciseGraphLoading(false);
   }, []);
   */
-
-  // 운동 주간 그래프 로드 (단순화된 버전)
-  const loadExerciseWeeklyGraph = useCallback(async () => {
-    let cachedGraphData: string | null = null;
-    try {
-      // 1) aiUserId 구하기
-      let aiUserId: string | null = null;
-      const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-      if (token) {
-        try {
-          const base64Url = token.split(".")[1];
-          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-          const jsonPayload = decodeURIComponent(
-            atob(base64)
-              .split("")
-              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-              .join("")
-          );
-          const payload = JSON.parse(jsonPayload);
-          if (payload.sub) {
-            aiUserId = String(payload.sub);
-          }
-        } catch (e) {
-          console.error("[ANALYSIS] JWT 디코딩 실패:", e);
-        }
-      }
-
-      if (!aiUserId) {
-        const storedUserId = await AsyncStorage.getItem("userId");
-        if (storedUserId) {
-          aiUserId = storedUserId;
-        } else {
-          console.warn("[ANALYSIS] aiUserId를 찾을 수 없음");
-          setExerciseGraphLoading(false);
-          return;
-        }
-      }
-
-      const cacheKey = `exercise_weekly_graph_${aiUserId}`;
-
-      // 2) 캐시 먼저 시도
-      const cachedRaw = await AsyncStorage.getItem(cacheKey);
-      if (cachedRaw) {
-        try {
-          const cached = JSON.parse(cachedRaw);
-          const cacheTime = cached.timestamp || 0;
-          const now = Date.now();
-          if (now - cacheTime < 24 * 60 * 60 * 1000 && cached.data) {
-            if (__DEV__) {
-              console.log("[ANALYSIS] 운동 주간 그래프: 캐시에서 로드");
-            }
-            cachedGraphData = cached.data;
-            setExerciseWeeklyGraph(cached.data);
-            setExerciseGraphKey(`exercise-graph-${now}`);
-            setExerciseGraphLoading(false);
-          }
-        } catch (e) {
-          console.warn("[ANALYSIS] 운동 그래프 캐시 파싱 실패:", e);
-        }
-      }
-
-      // 캐시가 없으면 로딩 표시
-      if (!cachedGraphData) {
-        setExerciseGraphLoading(true);
-      }
-
-      // 3) API 호출 (백그라운드에서 새 데이터 가져오기)
-      try {
-        const url = `${AI_API_BASE_URL}/analytics/exercise/weekly-graph/${aiUserId}`;
-        if (__DEV__) {
-          console.log("[ANALYSIS] 운동 주간 그래프 요청:", { url, aiUserId });
-        }
-
-        const response = await axios.get<ArrayBuffer>(url, {
-          responseType: "arraybuffer",
-          timeout: 10000, // 10초 타임아웃
-          headers: {
-            Authorization: token ? `Bearer ${token}` : undefined,
-            Accept: "*/*",
-          },
-        });
-
-        if (response.status === 200 && response.data) {
-          const base64 = arrayBufferToBase64(response.data);
-          if (!base64 || base64.length < 100) {
-            console.warn(
-              "[ANALYSIS] 운동 그래프 base64 변환 실패 또는 데이터가 너무 짧음:",
-              {
-                base64Length: base64?.length || 0,
-              }
-            );
-            // 변환 실패해도 캐시된 데이터가 있으면 유지
-            if (!cachedGraphData) {
-              setExerciseGraphLoading(false);
-            }
-            return;
-          }
-
-          const uri = `data:image/png;base64,${base64}`;
-          if (__DEV__) {
-            console.log("[ANALYSIS] 운동 그래프 URI 생성:", {
-              length: uri.length,
-              prefix: uri.substring(0, 50),
-            });
-          }
-
-          // 캐시 저장
-          await AsyncStorage.setItem(
-            cacheKey,
-            JSON.stringify({
-              data: uri,
-              timestamp: Date.now(),
-            })
-          );
-
-          setExerciseWeeklyGraph(uri);
-          setExerciseGraphKey(`exercise-graph-${Date.now()}`);
-          setExerciseGraphLoading(false);
-        } else {
-          console.warn(
-            "[ANALYSIS] 운동 그래프 응답 상태 비정상:",
-            response.status
-          );
-          // 응답 비정상이어도 캐시된 데이터가 있으면 유지
-          if (!cachedGraphData) {
-            setExerciseGraphLoading(false);
-          }
-        }
-      } catch (apiError: any) {
-        // API 호출 실패해도 캐시된 데이터가 있으면 유지
-        const isTimeout =
-          apiError?.code === "ECONNABORTED" ||
-          apiError?.message?.includes("timeout");
-        console.warn("[ANALYSIS] 운동 그래프 API 호출 실패:", {
-          message: apiError?.message,
-          status: apiError?.response?.status,
-          isTimeout,
-        });
-        if (!cachedGraphData) {
-          setExerciseGraphLoading(false);
-        }
-      }
-    } catch (error: any) {
-      console.error("[ANALYSIS] 운동 주간 그래프 로드 실패:", {
-        message: error?.message,
-        status: error?.response?.status,
-      });
-      // 에러 발생해도 캐시된 데이터가 있으면 유지
-      setExerciseGraphLoading(false);
-    }
-  }, [arrayBufferToBase64]);
-
-  // 식단 주간 그래프 로드 (단순화된 버전)
-  const loadNutritionWeeklyGraph = useCallback(async () => {
-    let cachedGraphData: string | null = null;
-    try {
-      // 1) aiUserId 구하기
-      let aiUserId: string | null = null;
-      const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-      if (token) {
-        try {
-          const base64Url = token.split(".")[1];
-          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-          const jsonPayload = decodeURIComponent(
-            atob(base64)
-              .split("")
-              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-              .join("")
-          );
-          const payload = JSON.parse(jsonPayload);
-          if (payload.sub) {
-            aiUserId = String(payload.sub);
-          }
-        } catch (e) {
-          console.error("[ANALYSIS] JWT 디코딩 실패:", e);
-        }
-      }
-
-      if (!aiUserId) {
-        const storedUserId = await AsyncStorage.getItem("userId");
-        if (storedUserId) {
-          aiUserId = storedUserId;
-        } else {
-          console.warn("[ANALYSIS] aiUserId를 찾을 수 없음");
-          setNutritionGraphLoading(false);
-          return;
-        }
-      }
-
-      const cacheKey = `nutrition_weekly_graph_${aiUserId}`;
-
-      // 2) 캐시 먼저 시도
-      const cachedRaw = await AsyncStorage.getItem(cacheKey);
-      if (cachedRaw) {
-        try {
-          const cached = JSON.parse(cachedRaw);
-          const cacheTime = cached.timestamp || 0;
-          const now = Date.now();
-          if (now - cacheTime < 24 * 60 * 60 * 1000 && cached.data) {
-            if (__DEV__) {
-              console.log("[ANALYSIS] 식단 주간 그래프: 캐시에서 로드");
-            }
-            cachedGraphData = cached.data;
-            setNutritionWeeklyGraph(cached.data);
-            setNutritionGraphKey(`nutrition-graph-${now}`);
-            setNutritionGraphLoading(false);
-          }
-        } catch (e) {
-          console.warn("[ANALYSIS] 식단 그래프 캐시 파싱 실패:", e);
-        }
-      }
-
-      // 캐시가 없으면 로딩 표시
-      if (!cachedGraphData) {
-        setNutritionGraphLoading(true);
-      }
-
-      // 3) API 호출 (백그라운드에서 새 데이터 가져오기)
-      try {
-        const url = `${AI_API_BASE_URL}/analytics/nutrition/weekly-graph/${aiUserId}`;
-        if (__DEV__) {
-          console.log("[ANALYSIS] 식단 주간 그래프 요청:", { url, aiUserId });
-        }
-
-        const response = await axios.get<ArrayBuffer>(url, {
-          responseType: "arraybuffer",
-          timeout: 10000, // 10초 타임아웃
-          headers: {
-            Authorization: token ? `Bearer ${token}` : undefined,
-            Accept: "*/*",
-          },
-        });
-
-        if (response.status === 200 && response.data) {
-          const base64 = arrayBufferToBase64(response.data);
-          if (!base64 || base64.length < 100) {
-            console.warn(
-              "[ANALYSIS] 식단 그래프 base64 변환 실패 또는 데이터가 너무 짧음:",
-              {
-                base64Length: base64?.length || 0,
-              }
-            );
-            // 변환 실패해도 캐시된 데이터가 있으면 유지
-            if (!cachedGraphData) {
-              setNutritionGraphLoading(false);
-            }
-            return;
-          }
-
-          const uri = `data:image/png;base64,${base64}`;
-          if (__DEV__) {
-            console.log("[ANALYSIS] 식단 그래프 URI 생성:", {
-              length: uri.length,
-              prefix: uri.substring(0, 50),
-            });
-          }
-
-          // 캐시 저장
-          await AsyncStorage.setItem(
-            cacheKey,
-            JSON.stringify({
-              data: uri,
-              timestamp: Date.now(),
-            })
-          );
-
-          setNutritionWeeklyGraph(uri);
-          setNutritionGraphKey(`nutrition-graph-${Date.now()}`);
-          setNutritionGraphLoading(false);
-        } else {
-          console.warn(
-            "[ANALYSIS] 식단 그래프 응답 상태 비정상:",
-            response.status
-          );
-          // 응답 비정상이어도 캐시된 데이터가 있으면 유지
-          if (!cachedGraphData) {
-            setNutritionGraphLoading(false);
-          }
-        }
-      } catch (apiError: any) {
-        // API 호출 실패해도 캐시된 데이터가 있으면 유지
-        const isTimeout =
-          apiError?.code === "ECONNABORTED" ||
-          apiError?.message?.includes("timeout");
-        console.warn("[ANALYSIS] 식단 그래프 API 호출 실패:", {
-          message: apiError?.message,
-          status: apiError?.response?.status,
-          isTimeout,
-        });
-        if (!cachedGraphData) {
-          setNutritionGraphLoading(false);
-        }
-      }
-    } catch (error: any) {
-      console.error("[ANALYSIS] 식단 주간 그래프 로드 실패:", {
-        message: error?.message,
-        status: error?.response?.status,
-      });
-      // 에러 발생해도 캐시된 데이터가 있으면 유지
-      if (!cachedGraphData) {
-        setNutritionGraphLoading(false);
-      }
-    }
-  }, [arrayBufferToBase64]);
 
   const loadUserName = useCallback(async () => {
     let cachedName: string | null = null;
@@ -1631,6 +1670,25 @@ const AnalysisScreen = ({ navigation }: any) => {
     setLatestInBodyDate(null);
   }, [userId, userIdLoaded]);
 
+  // userId가 로드된 후 그래프 로드 (숫자가 입력된 경우에만)
+  useEffect(() => {
+    if (userIdLoaded && userId) {
+      // 숫자가 입력되어 있을 때만 그래프 로드
+      if (nutritionWeeks && nutritionWeeks.trim() !== "") {
+        const nutritionWeeksNum = parseInt(nutritionWeeks, 10);
+        if (nutritionWeeksNum >= 1 && nutritionWeeksNum <= 52) {
+          loadNutritionWeeklyGraph(nutritionWeeksNum);
+        }
+      }
+      if (exerciseWeeks && exerciseWeeks.trim() !== "") {
+        const exerciseWeeksNum = parseInt(exerciseWeeks, 10);
+        if (exerciseWeeksNum >= 1 && exerciseWeeksNum <= 52) {
+          loadExerciseWeeklyGraph(exerciseWeeksNum);
+        }
+      }
+    }
+  }, [userIdLoaded, userId, nutritionWeeks, exerciseWeeks, loadNutritionWeeklyGraph, loadExerciseWeeklyGraph]);
+
   const loadHealthScore = useCallback(async () => {
     try {
       setHealthScoreLoading(true);
@@ -1664,32 +1722,12 @@ const AnalysisScreen = ({ navigation }: any) => {
     }
   }, [userIdLoaded, loadLocalCompletions]);
 
-  // userId가 로드된 후 그래프 로드 (병렬 처리로 빠른 로딩)
-  useEffect(() => {
-    if (userIdLoaded && userId) {
-      if (__DEV__) {
-        console.log(
-          "[ANALYSIS] userId 로드 완료, 그래프 병렬 로드 시작:",
-          userId
-        );
-      }
-      // 두 그래프를 병렬로 로드하여 더 빠른 로딩
-      Promise.all([
-        loadExerciseWeeklyGraph(),
-        loadNutritionWeeklyGraph(),
-      ]).catch((error) => {
-        if (__DEV__) {
-          console.warn("[ANALYSIS] 그래프 로드 중 오류:", error);
-        }
-      });
-    }
-  }, [userIdLoaded, userId, loadExerciseWeeklyGraph, loadNutritionWeeklyGraph]);
-
   // 화면 포커스 시 운동 기록 새로고침
   useFocusEffect(
     useCallback(() => {
       // 다른 데이터는 순차적으로 로드
       loadWorkoutHistory();
+      console.log("[ANALYSIS] useFocusEffect에서 loadMealComparison 호출");
       loadMealComparison();
       loadUserName();
       loadLatestInBodyDate();
@@ -1704,8 +1742,6 @@ const AnalysisScreen = ({ navigation }: any) => {
       loadLatestInBodyDate,
       loadUserName,
       loadLocalCompletions,
-      loadExerciseWeeklyGraph,
-      loadNutritionWeeklyGraph,
       loadHealthScore,
       userId,
     ])
@@ -1993,63 +2029,89 @@ const AnalysisScreen = ({ navigation }: any) => {
           </Text>
 
           {/* 운동 주간 그래프 */}
-          <View style={styles.weeklyGraphContainer}>
-            <Text style={styles.graphTitle}>주간 운동 분석</Text>
-            {exerciseGraphLoading ? (
-              <View style={styles.graphLoadingContainer}>
-                <ActivityIndicator size="small" color="#d6ff4b" />
-                <Text style={styles.loadingText}>그래프 불러오는 중...</Text>
+          {exerciseWeeks && exerciseWeeks.trim() !== "" ? (
+            <View style={styles.weeklyGraphContainer}>
+              <View style={styles.graphHeader}>
+                <Text style={styles.graphTitle}>주간 운동 분석</Text>
+                <View style={styles.weeksInputContainer}>
+                  <Text style={styles.weeksLabel}>주:</Text>
+                  <TextInput
+                    style={styles.weeksInput}
+                    value={exerciseWeeks}
+                    onChangeText={(text) => {
+                      // 숫자만 입력 허용
+                      const numericValue = text.replace(/[^0-9]/g, "");
+                      if (numericValue === "" || (parseInt(numericValue, 10) >= 1 && parseInt(numericValue, 10) <= 52)) {
+                        setExerciseWeeks(numericValue);
+                        if (numericValue && userIdLoaded && userId) {
+                          const weeks = parseInt(numericValue, 10) || 3;
+                          loadExerciseWeeklyGraph(weeks);
+                        } else if (!numericValue) {
+                          // 입력이 비어있으면 그래프 URL 초기화
+                          setExerciseGraphUrl(null);
+                        }
+                      }
+                    }}
+                    keyboardType="numeric"
+                    placeholder="숫자를 입력해보세요"
+                    placeholderTextColor="#666666"
+                    maxLength={2}
+                  />
+                </View>
               </View>
-            ) : exerciseWeeklyGraph && exerciseWeeklyGraph.length > 5000 ? (
-              (() => {
-                console.log("[ANALYSIS] 운동 그래프 렌더링:", {
-                  hasValue: !!exerciseWeeklyGraph,
-                  length: exerciseWeeklyGraph.length,
-                  startsWithDataImage:
-                    exerciseWeeklyGraph.startsWith("data:image"),
-                  first50: exerciseWeeklyGraph.substring(0, 50),
-                });
-                return (
+              {exerciseGraphUrl ? (
+                <View style={styles.graphImageWrapper}>
                   <Image
-                    key={
-                      exerciseGraphKey ||
-                      `exercise-graph-${exerciseWeeklyGraph.length}`
-                    }
-                    source={{ uri: exerciseWeeklyGraph }}
+                    key={`exercise-graph-${exerciseGraphUrl}`}
+                    source={{ uri: exerciseGraphUrl }}
                     style={styles.weeklyGraphImage}
                     resizeMode="contain"
                     accessibilityLabel="운동 주간 분석 그래프"
-                    onLoadStart={() => {
-                      console.log("[ANALYSIS] 운동 그래프 이미지 로드 시작");
-                    }}
-                    onLoad={(e) => {
-                      console.log("[ANALYSIS] 운동 그래프 이미지 로드 완료:", {
-                        length: exerciseWeeklyGraph.length,
-                        prefix: exerciseWeeklyGraph.substring(0, 50),
-                        nativeEvent: e.nativeEvent,
+                    cache="force-cache"
+                    onError={(e) => {
+                      console.error("[ANALYSIS] 운동 그래프 이미지 로드 실패:", {
+                        error: e.nativeEvent.error,
+                        url: exerciseGraphUrl,
                       });
                     }}
-                    onError={(e) => {
-                      console.error(
-                        "[ANALYSIS] 운동 그래프 이미지 로드 실패:",
-                        {
-                          error: e.nativeEvent.error,
-                          uriPrefix: exerciseWeeklyGraph.substring(0, 50),
-                          fullError: e.nativeEvent,
-                        }
-                      );
-                    }}
                   />
-                );
-              })()
-            ) : (
-              <View style={styles.weeklyGraphPlaceholder}>
-                <Text style={styles.graphPlaceholderText}>
-                  그래프 데이터를 불러오는 중입니다...
-                </Text>
+                </View>
+              ) : (
+                <View style={styles.weeklyGraphPlaceholder}>
+                  <ActivityIndicator size="small" color="#d6ff4b" />
+                  <Text style={styles.graphPlaceholderText}>
+                    그래프를 불러오는 중...
+                  </Text>
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={styles.weeksInputOnlyContainer}>
+              <Text style={styles.weeksInputLabel}>주간 운동 분석</Text>
+              <View style={styles.weeksInputRow}>
+                <Text style={styles.weeksLabel}>주:</Text>
+                <TextInput
+                  style={styles.weeksInput}
+                  value={exerciseWeeks}
+                  onChangeText={(text) => {
+                    // 숫자만 입력 허용
+                    const numericValue = text.replace(/[^0-9]/g, "");
+                    if (numericValue === "" || (parseInt(numericValue, 10) >= 1 && parseInt(numericValue, 10) <= 52)) {
+                      setExerciseWeeks(numericValue);
+                      if (numericValue && userIdLoaded && userId) {
+                        const weeks = parseInt(numericValue, 10) || 3;
+                        loadExerciseWeeklyGraph(weeks);
+                      }
+                    }
+                  }}
+                  keyboardType="numeric"
+                  placeholder="숫자를 입력해보세요"
+                  placeholderTextColor="#666666"
+                  maxLength={2}
+                />
               </View>
-            )}
-          </View>
+            </View>
+          )}
 
           {loading ? (
             <View style={styles.loadingContainer}>
@@ -2159,63 +2221,89 @@ const AnalysisScreen = ({ navigation }: any) => {
           <Text style={styles.sectionTitle}>식단 분석</Text>
 
           {/* 식단 주간 그래프 */}
-          <View style={styles.weeklyGraphContainer}>
-            <Text style={styles.graphTitle}>주간 식단 분석</Text>
-            {nutritionGraphLoading ? (
-              <View style={styles.graphLoadingContainer}>
-                <ActivityIndicator size="small" color="#d6ff4b" />
-                <Text style={styles.loadingText}>그래프 불러오는 중...</Text>
+          {nutritionWeeks && nutritionWeeks.trim() !== "" ? (
+            <View style={styles.weeklyGraphContainer}>
+              <View style={styles.graphHeader}>
+                <Text style={styles.graphTitle}>주간 식단 분석</Text>
+                <View style={styles.weeksInputContainer}>
+                  <Text style={styles.weeksLabel}>주:</Text>
+                  <TextInput
+                    style={styles.weeksInput}
+                    value={nutritionWeeks}
+                    onChangeText={(text) => {
+                      // 숫자만 입력 허용
+                      const numericValue = text.replace(/[^0-9]/g, "");
+                      if (numericValue === "" || (parseInt(numericValue, 10) >= 1 && parseInt(numericValue, 10) <= 52)) {
+                        setNutritionWeeks(numericValue);
+                        if (numericValue && userIdLoaded && userId) {
+                          const weeks = parseInt(numericValue, 10) || 3;
+                          loadNutritionWeeklyGraph(weeks);
+                        } else if (!numericValue) {
+                          // 입력이 비어있으면 그래프 URL 초기화
+                          setNutritionGraphUrl(null);
+                        }
+                      }
+                    }}
+                    keyboardType="numeric"
+                    placeholder="숫자를 입력해보세요"
+                    placeholderTextColor="#666666"
+                    maxLength={2}
+                  />
+                </View>
               </View>
-            ) : nutritionWeeklyGraph && nutritionWeeklyGraph.length > 5000 ? (
-              (() => {
-                console.log("[ANALYSIS] 식단 그래프 렌더링:", {
-                  hasValue: !!nutritionWeeklyGraph,
-                  length: nutritionWeeklyGraph.length,
-                  startsWithDataImage:
-                    nutritionWeeklyGraph.startsWith("data:image"),
-                  first50: nutritionWeeklyGraph.substring(0, 50),
-                });
-                return (
+              {nutritionGraphUrl ? (
+                <View style={styles.graphImageWrapper}>
                   <Image
-                    key={
-                      nutritionGraphKey ||
-                      `nutrition-graph-${nutritionWeeklyGraph.length}`
-                    }
-                    source={{ uri: nutritionWeeklyGraph }}
+                    key={`nutrition-graph-${nutritionGraphUrl}`}
+                    source={{ uri: nutritionGraphUrl }}
                     style={styles.weeklyGraphImage}
                     resizeMode="contain"
                     accessibilityLabel="식단 주간 분석 그래프"
-                    onLoadStart={() => {
-                      console.log("[ANALYSIS] 식단 그래프 이미지 로드 시작");
-                    }}
-                    onLoad={(e) => {
-                      console.log("[ANALYSIS] 식단 그래프 이미지 로드 완료:", {
-                        length: nutritionWeeklyGraph.length,
-                        prefix: nutritionWeeklyGraph.substring(0, 50),
-                        nativeEvent: e.nativeEvent,
+                    cache="force-cache"
+                    onError={(e) => {
+                      console.error("[ANALYSIS] 식단 그래프 이미지 로드 실패:", {
+                        error: e.nativeEvent.error,
+                        url: nutritionGraphUrl,
                       });
                     }}
-                    onError={(e) => {
-                      console.error(
-                        "[ANALYSIS] 식단 그래프 이미지 로드 실패:",
-                        {
-                          error: e.nativeEvent.error,
-                          uriPrefix: nutritionWeeklyGraph.substring(0, 50),
-                          fullError: e.nativeEvent,
-                        }
-                      );
-                    }}
                   />
-                );
-              })()
-            ) : (
-              <View style={styles.weeklyGraphPlaceholder}>
-                <Text style={styles.graphPlaceholderText}>
-                  그래프 데이터를 불러오는 중입니다...
-                </Text>
+                </View>
+              ) : (
+                <View style={styles.weeklyGraphPlaceholder}>
+                  <ActivityIndicator size="small" color="#d6ff4b" />
+                  <Text style={styles.graphPlaceholderText}>
+                    그래프를 불러오는 중...
+                  </Text>
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={styles.weeksInputOnlyContainer}>
+              <Text style={styles.weeksInputLabel}>주간 식단 분석</Text>
+              <View style={styles.weeksInputRow}>
+                <Text style={styles.weeksLabel}>주:</Text>
+                <TextInput
+                  style={styles.weeksInput}
+                  value={nutritionWeeks}
+                  onChangeText={(text) => {
+                    // 숫자만 입력 허용
+                    const numericValue = text.replace(/[^0-9]/g, "");
+                    if (numericValue === "" || (parseInt(numericValue, 10) >= 1 && parseInt(numericValue, 10) <= 52)) {
+                      setNutritionWeeks(numericValue);
+                      if (numericValue && userIdLoaded && userId) {
+                        const weeks = parseInt(numericValue, 10) || 3;
+                        loadNutritionWeeklyGraph(weeks);
+                      }
+                    }
+                  }}
+                  keyboardType="numeric"
+                  placeholder="숫자를 입력해보세요"
+                  placeholderTextColor="#666666"
+                  maxLength={2}
+                />
               </View>
-            )}
-          </View>
+            </View>
+          )}
 
           {mealLoading ? (
             <View style={styles.mealLoadingContainer}>
@@ -2237,10 +2325,6 @@ const AnalysisScreen = ({ navigation }: any) => {
                 });
                 return null;
               })()}
-              <Text style={styles.dietSummary}>
-                {mealComparison.analysisMessage ||
-                  `${displayName}의 식단 분석을 준비 중이에요. 이번 주 기록을 쌓으면 지난 주와 비교해드릴게요.`}
-              </Text>
 
               <View style={styles.calorieSection}>
                 <View style={styles.calorieStatsCard}>
@@ -2758,60 +2842,6 @@ const styles = StyleSheet.create({
     textAlign: "right",
     minWidth: 80,
   },
-  weeklyGraphContainer: {
-    backgroundColor: "#1e1e1e",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#333333",
-  },
-  graphTitle: {
-    fontSize: 14.4,
-    fontWeight: "600",
-    color: "#ffffff",
-    marginBottom: 12,
-  },
-  weeklyGraphImage: {
-    width: "100%",
-    minHeight: 250,
-    height: 300,
-    borderRadius: 8,
-    backgroundColor: "#2a2a2a",
-  },
-  weeklyGraphSvgContainer: {
-    width: "100%",
-    height: 200,
-    backgroundColor: "#ffffff",
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  weeklyGraphPlaceholder: {
-    width: "100%",
-    minHeight: 150,
-    height: 250,
-    backgroundColor: "transparent",
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  graphPlaceholder: {
-    fontSize: 12,
-    color: "#666666",
-  },
-  graphPlaceholderText: {
-    fontSize: 12,
-    color: "#666666",
-    textAlign: "center",
-  },
-  graphLoadingContainer: {
-    paddingVertical: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
   dietSection: {
     backgroundColor: "#2a2a2a",
     borderRadius: 12,
@@ -2963,6 +2993,107 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#888888",
     marginTop: 4,
+  },
+  weeklyGraphContainer: {
+    backgroundColor: "#1e1e1e",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#333333",
+  },
+  graphHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  graphTitle: {
+    fontSize: 14.4,
+    fontWeight: "600",
+    color: "#ffffff",
+  },
+  weeksInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  weeksLabel: {
+    fontSize: 12,
+    color: "#aaaaaa",
+  },
+  weeksInput: {
+    backgroundColor: "#2a2a2a",
+    borderWidth: 1,
+    borderColor: "#444444",
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 12,
+    color: "#ffffff",
+    minWidth: 50,
+    textAlign: "center",
+  },
+  graphHintText: {
+    fontSize: 11,
+    color: "#888888",
+    textAlign: "center",
+    marginTop: 8,
+    marginBottom: 8,
+    fontStyle: "italic",
+  },
+  weeksInputOnlyContainer: {
+    backgroundColor: "#1e1e1e",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#333333",
+  },
+  weeksInputLabel: {
+    fontSize: 14.4,
+    fontWeight: "600",
+    color: "#ffffff",
+    marginBottom: 12,
+  },
+  weeksInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  graphImageWrapper: {
+    width: "100%",
+    minHeight: 250,
+    height: 320,
+    borderRadius: 8,
+    backgroundColor: "#ffffff",
+    overflow: "hidden",
+  },
+  weeklyGraphImage: {
+    width: "100%",
+    height: 320,
+    borderRadius: 8,
+  },
+  weeklyGraphPlaceholder: {
+    width: "100%",
+    minHeight: 150,
+    height: 250,
+    backgroundColor: "transparent",
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  graphPlaceholderText: {
+    fontSize: 12,
+    color: "#666666",
+    textAlign: "center",
+  },
+  graphLoadingContainer: {
+    paddingVertical: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
   },
   calorieDiffBadge: {
     marginTop: 12,

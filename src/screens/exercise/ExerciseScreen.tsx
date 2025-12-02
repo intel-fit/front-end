@@ -1508,91 +1508,99 @@ const ExerciseScreen = ({ navigation, route }: any) => {
           ? `오늘의 운동 "${trimmedTitle}"이 저장되었어요.\n\n${currentSessionSetCount}개의 세트가 저장되었고, AI 피드백이 전송되었습니다.`
           : `오늘의 운동 "${trimmedTitle}"이 저장되었어요.\n\nAI 피드백이 전송되었습니다.`;
 
-      Alert.alert("저장 완료", successMessage);
-      setShowCompletionModal(false);
-      setCompletionSummaryTitle(""); // 제목 초기화
-      loadTodayWorkoutTime();
-      loadSavedWorkouts();
-      // 운동 목표 데이터도 다시 불러와서 게이지 업데이트
-      loadGoalData();
+      // Alert 팝업을 먼저 표시하고, 사용자가 확인 버튼을 누른 후에 모달을 닫음
+      Alert.alert("저장 완료", successMessage, [
+        {
+          text: "확인",
+          onPress: () => {
+            // 사용자가 확인 버튼을 누른 후에 모달 닫기
+            setShowCompletionModal(false);
+            setCompletionSummaryTitle(""); // 제목 초기화
+            loadTodayWorkoutTime();
+            loadSavedWorkouts();
+            // 운동 목표 데이터도 다시 불러와서 게이지 업데이트
+            loadGoalData();
 
-      // 운동 제목 저장 후 주간 진행률을 다시 가져와서 게이지 업데이트
-      // 서버에서 exerciseRate 계산에 시간이 걸릴 수 있으므로 여러 번 재시도
-      const retryLoadProgress = async (
-        retryCount: number = 0,
-        maxRetries: number = 3
-      ) => {
-        try {
-          // 목표 데이터와 주간 진행률을 함께 업데이트
-          await loadGoalData();
-          await loadWeeklyCalories();
+            // 운동 제목 저장 후 주간 진행률을 다시 가져와서 게이지 업데이트
+            // 서버에서 exerciseRate 계산에 시간이 걸릴 수 있으므로 여러 번 재시도
+            const retryLoadProgress = async (
+              retryCount: number = 0,
+              maxRetries: number = 3
+            ) => {
+              try {
+                // 목표 데이터와 주간 진행률을 함께 업데이트
+                await loadGoalData();
+                await loadWeeklyCalories();
 
-          // exerciseRate가 업데이트되었는지 확인하기 위해 잠시 대기 후 다시 확인
-          setTimeout(async () => {
-            try {
-              const freshData = await fetchWeeklyProgress();
-              if (Array.isArray(freshData)) {
-                setWeeklyProgress(freshData);
-                const sum = freshData.reduce(
-                  (s: number, d) => s + Number(d?.totalCalorie || 0),
-                  0
+                // exerciseRate가 업데이트되었는지 확인하기 위해 잠시 대기 후 다시 확인
+                setTimeout(async () => {
+                  try {
+                    const freshData = await fetchWeeklyProgress();
+                    if (Array.isArray(freshData)) {
+                      setWeeklyProgress(freshData);
+                      const sum = freshData.reduce(
+                        (s: number, d) => s + Number(d?.totalCalorie || 0),
+                        0
+                      );
+                      setWeeklyCalories(sum);
+
+                      // 오늘 날짜의 exerciseRate 확인
+                      const today = new Date();
+                      const todayStr = formatDateToString(today);
+                      const todayProgress = freshData.find(
+                        (item) => item.date === todayStr
+                      );
+
+                      // exerciseRate가 여전히 0이고 재시도 횟수가 남아있으면 다시 시도
+                      if (
+                        (!todayProgress || todayProgress.exerciseRate === 0) &&
+                        retryCount < maxRetries
+                      ) {
+                        setTimeout(() => {
+                          retryLoadProgress(retryCount + 1, maxRetries);
+                        }, 2000 * (retryCount + 1)); // 재시도마다 대기 시간 증가 (2초, 4초, 6초)
+                      } else if (
+                        todayProgress &&
+                        todayProgress.exerciseRate === 100
+                      ) {
+                        console.log(
+                          "[PROGRESS] exerciseRate 업데이트 확인됨:",
+                          todayProgress
+                        );
+                      }
+                    }
+                  } catch (error) {
+                    console.error(
+                      `[PROGRESS] 진행률 확인 실패 (재시도 ${retryCount}/${maxRetries}):`,
+                      error
+                    );
+                    if (retryCount < maxRetries) {
+                      setTimeout(() => {
+                        retryLoadProgress(retryCount + 1, maxRetries);
+                      }, 2000 * (retryCount + 1));
+                    }
+                  }
+                }, 1000);
+              } catch (error) {
+                console.error(
+                  `[PROGRESS] 운동 제목 저장 후 주간 진행률 새로고침 실패 (재시도 ${retryCount}/${maxRetries}):`,
+                  error
                 );
-                setWeeklyCalories(sum);
-
-                // 오늘 날짜의 exerciseRate 확인
-                const today = new Date();
-                const todayStr = formatDateToString(today);
-                const todayProgress = freshData.find(
-                  (item) => item.date === todayStr
-                );
-
-                // exerciseRate가 여전히 0이고 재시도 횟수가 남아있으면 다시 시도
-                if (
-                  (!todayProgress || todayProgress.exerciseRate === 0) &&
-                  retryCount < maxRetries
-                ) {
+                if (retryCount < maxRetries) {
                   setTimeout(() => {
                     retryLoadProgress(retryCount + 1, maxRetries);
-                  }, 2000 * (retryCount + 1)); // 재시도마다 대기 시간 증가 (2초, 4초, 6초)
-                } else if (
-                  todayProgress &&
-                  todayProgress.exerciseRate === 100
-                ) {
-                  console.log(
-                    "[PROGRESS] exerciseRate 업데이트 확인됨:",
-                    todayProgress
-                  );
+                  }, 2000 * (retryCount + 1));
                 }
               }
-            } catch (error) {
-              console.error(
-                `[PROGRESS] 진행률 확인 실패 (재시도 ${retryCount}/${maxRetries}):`,
-                error
-              );
-              if (retryCount < maxRetries) {
-                setTimeout(() => {
-                  retryLoadProgress(retryCount + 1, maxRetries);
-                }, 2000 * (retryCount + 1));
-              }
-            }
-          }, 1000);
-        } catch (error) {
-          console.error(
-            `[PROGRESS] 운동 제목 저장 후 주간 진행률 새로고침 실패 (재시도 ${retryCount}/${maxRetries}):`,
-            error
-          );
-          if (retryCount < maxRetries) {
-            setTimeout(() => {
-              retryLoadProgress(retryCount + 1, maxRetries);
-            }, 2000 * (retryCount + 1));
-          }
-        }
-      };
+            };
 
-      // 첫 시도는 2초 후에
-      setTimeout(() => {
-        retryLoadProgress(0, 3);
-      }, 2000);
+            // 첫 시도는 2초 후에
+            setTimeout(() => {
+              retryLoadProgress(0, 3);
+            }, 2000);
+          },
+        },
+      ]);
     } catch (error) {
       console.error("[WORKOUT][SAVE] 저장 실패:", error);
       setCompletionSaveErrorDetail(extractSaveErrorDetail(error));
@@ -1669,12 +1677,15 @@ const ExerciseScreen = ({ navigation, route }: any) => {
   useFocusEffect(
     React.useCallback(() => {
       if (!userIdLoaded) return;
+      // 화면 포커스 시 날짜와 달력 월을 오늘로 설정
+      const today = new Date();
+      setSelectedDate(today);
+      setMonthBase(new Date(today.getFullYear(), today.getMonth(), 1));
       loadGoalData();
       loadWeeklyCalories();
       // 해당 달의 월별 데이터 가져오기
-      const dateToFetch = selectedDate || new Date();
-      loadMonthlyProgress(dateToFetch.getFullYear(), dateToFetch.getMonth());
-    }, [userIdLoaded, loadGoalData, loadWeeklyCalories, selectedDate])
+      loadMonthlyProgress(today.getFullYear(), today.getMonth());
+    }, [userIdLoaded, loadGoalData, loadWeeklyCalories, setSelectedDate])
   );
 
   // 완료 횟수 저장 helper
@@ -1714,15 +1725,21 @@ const ExerciseScreen = ({ navigation, route }: any) => {
     thisWeekStart.setDate(now.getDate() - now.getDay()); // 일요일로 설정
     thisWeekStart.setHours(0, 0, 0, 0);
 
-    // weeklyProgress에서 이번 주 완료된 날짜 개수 계산 (exerciseRate가 100인 날짜만)
+    // weeklyProgress에서 이번 주 완료된 날짜 개수 계산
+    // 운동 기록이 있는 날짜 (exerciseRate > 0 또는 totalCalorie > 0)를 완료로 간주
     const completedDates = new Set<string>();
 
     if (Array.isArray(weeklyProgress) && weeklyProgress.length > 0) {
       weeklyProgress.forEach((item) => {
         if (!item || !item.date) return;
 
-        // exerciseRate가 100이 아니면 완료로 간주하지 않음
-        if (item.exerciseRate !== 100) return;
+        // exerciseRate가 100이거나, 운동 기록이 있는 경우 (exerciseRate > 0 또는 totalCalorie > 0) 완료로 간주
+        const hasExercise = 
+          item.exerciseRate === 100 || 
+          (item.exerciseRate && item.exerciseRate > 0) ||
+          (item.totalCalorie && item.totalCalorie > 0);
+        
+        if (!hasExercise) return;
 
         try {
           const itemDate = new Date(item.date);
