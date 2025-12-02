@@ -17,7 +17,7 @@ import { colors } from "../../theme/colors";
 import { ROUTES } from "../../constants/routes";
 import { useDate } from "../../contexts/DateContext";
 import { homeAPI, authAPI } from "../../services";
-import { getTodayWorkoutTime } from "../../utils/exerciseApi";
+import { getTodayWorkoutTime, fetchSavedWorkouts } from "../../utils/exerciseApi";
 import { getLatestInBody } from "../../utils/inbodyApi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { DailyProgressWeekItem, HomeResponse } from "../../types";
@@ -29,6 +29,7 @@ const HomeScreen = ({ navigation }: any) => {
   );
   const [homeData, setHomeData] = useState<HomeResponse | null>(null);
   const [todayWorkoutSeconds, setTodayWorkoutSeconds] = useState(0);
+  const [todayExerciseCount, setTodayExerciseCount] = useState(0);
   const [inBodyData, setInBodyData] = useState<any>(null);
   const isLoadingRef = useRef(false);
 
@@ -37,11 +38,11 @@ const HomeScreen = ({ navigation }: any) => {
   const [mealTokens, setMealTokens] = useState<number>(0);
 
   // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
+  // 한국 시간대(UTC+9) 기준으로 날짜 계산
   const formatDateToString = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+    // 한국 시간대(Asia/Seoul) 기준으로 날짜 문자열 생성
+    const koreaDateStr = date.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }); // "YYYY-MM-DD" 형식
+    return koreaDateStr;
   };
 
   // 운동 시간을 시:분:초 형식으로 변환
@@ -82,26 +83,165 @@ const HomeScreen = ({ navigation }: any) => {
     try {
       const today = new Date();
       const dateString = formatDateToString(today);
+      
+      console.log("[HOME][홈데이터] 날짜 확인:", {
+        today: today.toISOString(),
+        dateString,
+        year: today.getFullYear(),
+        month: today.getMonth() + 1,
+        day: today.getDate(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
+      
+      // 날짜 형식 검증
+      if (!dateString || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+        console.error("[HOME][홈데이터] 잘못된 날짜 형식:", dateString);
+        setHomeData(null);
+        return;
+      }
+      
       const data = await homeAPI.getHomeData(dateString);
       setHomeData(data);
     } catch (e: any) {
-      console.error("홈 데이터 로드 실패:", e);
+      // 500 에러는 서버 측 문제이므로 조용히 처리
+      const status = e?.status || e?.response?.status;
+      if (status === 500) {
+        console.warn("[HOME][홈데이터] 서버 오류 (500):", {
+          date: formatDateToString(new Date()),
+          error: e?.message || e?.data?.message,
+        });
+      } else {
+        console.error("[HOME][홈데이터] 홈 데이터 로드 실패:", e);
+      }
       setHomeData(null);
     }
   };
 
-  // 오늘의 총 운동 시간 조회
+  // 오늘의 총 운동 시간 조회 (오늘 날짜의 운동만 계산)
   const loadTodayWorkoutTime = async () => {
     try {
       const userIdStr = await AsyncStorage.getItem("userId");
-      if (!userIdStr) return;
+      if (!userIdStr) {
+        setTodayWorkoutSeconds(0);
+        return;
+      }
       const userId = parseInt(userIdStr, 10);
-      if (isNaN(userId)) return;
-      const response = await getTodayWorkoutTime(userId);
-      setTodayWorkoutSeconds(response.totalSeconds || 0);
+      if (isNaN(userId)) {
+        setTodayWorkoutSeconds(0);
+        return;
+      }
+
+      // 백엔드 API가 누적 시간을 반환하므로, 오늘 날짜의 운동 데이터를 직접 가져와서 계산
+      const today = new Date();
+      const dateString = formatDateToString(today);
+      
+      console.log("[HOME][운동시간] 날짜 확인:", {
+        today: today.toISOString(),
+        dateString,
+        year: today.getFullYear(),
+        month: today.getMonth() + 1,
+        day: today.getDate(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
+      
+      // 날짜 형식 검증
+      if (!dateString || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+        console.error("[HOME][운동시간] 잘못된 날짜 형식:", dateString);
+        setTodayWorkoutSeconds(0);
+        return;
+      }
+      
+      const savedWorkouts = await fetchSavedWorkouts(userId, dateString);
+
+      // 운동 기록이 없으면 0으로 설정
+      if (!savedWorkouts || savedWorkouts.length === 0) {
+        console.log("[HOME][운동시간] 오늘 운동 기록 없음, 시간 0으로 설정", {
+          date: dateString,
+          savedWorkoutsLength: savedWorkouts?.length || 0,
+        });
+        setTodayWorkoutSeconds(0);
+        return;
+      }
+
+      // 오늘 날짜의 운동 시간 계산
+      // 세션별로 실제 운동 시간이 있으면 사용하고, 없으면 세트 수 기반으로 추정
+      let totalSeconds = 0;
+      
+      savedWorkouts.forEach((group) => {
+        if (group.sessions && group.sessions.length > 0) {
+          group.sessions.forEach((session) => {
+            // 세션에 실제 시간 정보가 있는지 확인 (백엔드 응답 구조에 따라 수정 필요)
+            // 현재는 세트 수 기반으로 대략적인 시간 추정
+            if (session.records && session.records.length > 0) {
+              // 세트당 평균 2-3분으로 추정 (휴식 시간 포함)
+              const estimatedMinutes = Math.max(5, session.records.length * 2.5); // 최소 5분
+              totalSeconds += estimatedMinutes * 60;
+            }
+          });
+        }
+      });
+
+      console.log("[HOME][운동시간] 오늘 운동 시간 계산:", {
+        date: dateString,
+        totalSeconds,
+        formattedTime: formatWorkoutTime(totalSeconds),
+        savedWorkoutsLength: savedWorkouts.length,
+        sessionCount: savedWorkouts.reduce((sum, group) => sum + (group.sessions?.length || 0), 0),
+        totalSets: savedWorkouts.reduce(
+          (sum, group) => 
+            sum + (group.sessions || []).reduce((sSum, session) => sSum + (session.records?.length || 0), 0),
+          0
+        ),
+        savedWorkouts: savedWorkouts.map(group => ({
+          title: group.title,
+          sessionsCount: group.sessions?.length || 0,
+          sessions: group.sessions?.map(session => ({
+            sessionId: session.sessionId,
+            recordsCount: session.records?.length || 0,
+          })),
+        })),
+      });
+
+      // 계산된 시간이 0보다 작거나 NaN이면 0으로 설정
+      setTodayWorkoutSeconds(totalSeconds > 0 ? totalSeconds : 0);
+
+      // 오늘 완료한 고유한 운동 종목 수 계산
+      const uniqueExerciseNames = new Set<string>();
+      savedWorkouts.forEach((group) => {
+        if (group.sessions && group.sessions.length > 0) {
+          group.sessions.forEach((session) => {
+            // records에서 운동 이름 추출
+            if (session.records && session.records.length > 0) {
+              session.records.forEach((record) => {
+                if (record.exerciseName) {
+                  uniqueExerciseNames.add(record.exerciseName);
+                }
+              });
+            }
+          });
+        }
+      });
+
+      const exerciseCount = uniqueExerciseNames.size;
+      console.log("[HOME][운동종목수] 오늘 완료한 운동 종목 수:", {
+        date: dateString,
+        exerciseCount,
+        exerciseNames: Array.from(uniqueExerciseNames),
+      });
+      setTodayExerciseCount(exerciseCount);
     } catch (e: any) {
-      console.error("오늘 운동 시간 조회 실패:", e);
+      // 500 에러는 서버 측 문제이므로 조용히 처리 (0으로 설정)
+      const status = e?.response?.status || e?.status;
+      if (status === 500) {
+        console.warn("[HOME][운동시간] 서버 오류 (500), 운동 시간 0으로 설정:", {
+          date: formatDateToString(new Date()),
+          error: e?.message || e?.response?.data?.message,
+        });
+      } else {
+        console.error("[HOME][운동시간] 오늘 운동 시간 조회 실패:", e);
+      }
       setTodayWorkoutSeconds(0);
+      setTodayExerciseCount(0);
     }
   };
 
@@ -159,6 +299,8 @@ const HomeScreen = ({ navigation }: any) => {
   // 화면 포커스 시 데이터 로드
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
+      console.log("[HOME] 화면 포커스, 오늘 운동 데이터 새로고침 시작");
+      
       if (isLoadingRef.current) {
         return;
       }
@@ -172,7 +314,22 @@ const HomeScreen = ({ navigation }: any) => {
         loadProfileInfo(),
       ]).finally(() => {
         isLoadingRef.current = false;
+        console.log("[HOME] 화면 포커스, 오늘 운동 데이터 새로고침 완료");
       });
+    });
+
+    // 초기 로드 (로그인 완료 후)
+    console.log("[HOME] 초기 로드 시작 (로그인 완료 후)");
+    isLoadingRef.current = true;
+    Promise.all([
+      loadWeeklyProgress(),
+      loadHomeData(),
+      loadTodayWorkoutTime(),
+      loadInBodyData(),
+      loadProfileInfo(),
+    ]).finally(() => {
+      isLoadingRef.current = false;
+      console.log("[HOME] 초기 로드 완료");
     });
 
     return unsubscribe;
@@ -428,7 +585,7 @@ const HomeScreen = ({ navigation }: any) => {
             <View style={styles.exerciseStatColumn}>
               <Text style={styles.exerciseStatLabel}>소모 칼로리</Text>
               <View style={styles.exerciseStatValueRow}>
-                <Text style={styles.exerciseStatValue}>2,198</Text>
+                <Text style={styles.exerciseStatValue}>-</Text>
                 <Text style={styles.exerciseStatUnit}>kcal</Text>
               </View>
             </View>
@@ -437,7 +594,7 @@ const HomeScreen = ({ navigation }: any) => {
               <Text style={styles.exerciseStatLabel}>완료 운동</Text>
               <View style={styles.exerciseStatValueRow}>
                 <Text style={styles.exerciseStatValue}>
-                  {homeData?.todayExercise?.exerciseCount ?? 0}
+                  {todayExerciseCount}
                 </Text>
                 <Text style={styles.exerciseStatUnit}>개</Text>
               </View>
