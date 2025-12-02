@@ -764,14 +764,37 @@ export const fetchSavedWorkouts = async (
     return Array.isArray(response.data) ? response.data : [];
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      const errorData = error.response?.data;
+      
       console.error("[WORKOUT][SAVED] 조회 에러:", {
         message: error.message,
-        status: error.response?.status,
-        data: error.response?.data,
+        status: status,
+        data: errorData,
       });
+      
+      // 500 서버 내부 오류는 빈 배열 반환 (앱 크래시 방지)
+      if (status === 500) {
+        console.warn("[WORKOUT][SAVED] 서버 내부 오류 (500), 빈 배열 반환");
+        return [];
+      }
+      
+      // 404는 데이터 없음으로 처리 (정상)
+      if (status === 404) {
+        console.log("[WORKOUT][SAVED] 데이터 없음 (404), 빈 배열 반환");
+        return [];
+      }
+      
+      // 400도 데이터 없음으로 처리할 수 있음
+      if (status === 400) {
+        console.log("[WORKOUT][SAVED] 잘못된 요청 (400), 빈 배열 반환");
+        return [];
+      }
     } else {
       console.error("[WORKOUT][SAVED] 조회 예외:", error);
     }
-    throw error;
+    
+    // 기타 에러는 빈 배열 반환 (앱 안정성)
+    return [];
   }
 };
