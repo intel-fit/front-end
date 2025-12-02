@@ -19,9 +19,10 @@ export type RootStackParamList = {
   Graph: undefined;
   MealRecommend: undefined;
   MealRecommendHistory: undefined;
+  TempMealRecommend: undefined;
   RoutineRecommend: undefined;
   RoutineRecommendNew: undefined;
-  TempMealRecommend: undefined;
+  TempRoutineRecommendScreen: undefined;
   InBody: undefined;
   FoodAddOptions: undefined;
   InBodyManual: undefined;

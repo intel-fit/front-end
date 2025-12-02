@@ -18,7 +18,6 @@ import {
 } from "react-native";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
-import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import ExerciseModal from "../../components/modals/ExerciseModal";
 import InBodyCalendarModal from "../../components/common/InBodyCalendarModal";
@@ -41,7 +40,7 @@ import { eventBus } from "../../utils/eventBus";
 import { useDate } from "../../contexts/DateContext";
 import type { DailyProgressWeekItem } from "../../types";
 import { API_BASE_URL } from "../../services/apiConfig";
-
+import { useFocusEffect, useRoute } from "@react-navigation/native";
 interface Activity {
   id: number;
   name: string;
@@ -206,11 +205,12 @@ type ExerciseGoalInfo = {
 };
 
 const ExerciseScreen = ({ navigation }: any) => {
-  const [monthBase, setMonthBase] = useState(new Date());
+  const route = useRoute();
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [calendarVisible, setCalendarVisible] = useState(false);
+  const [monthBase, setMonthBase] = useState(new Date());
   const [allActivities, setAllActivities] = useState<Activity[]>([]); // 모든 날짜의 운동 기록
   const { selectedDate, setSelectedDate } = useDate(); // 선택된 날짜 (전역 상태)
-
   // 선택된 날짜의 운동 기록만 필터링
   const activities = React.useMemo(() => {
     if (!selectedDate) return [];
@@ -956,12 +956,12 @@ const ExerciseScreen = ({ navigation }: any) => {
     if (!userId || !selectedDate) return;
     const userIdNum = parseInt(userId, 10);
     if (isNaN(userIdNum)) return;
-    
+
     // 날짜를 yyyy-MM-dd 형식으로 변환
     const dateStr = `${selectedDate.getFullYear()}-${String(
       selectedDate.getMonth() + 1
     ).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
-    
+
     try {
       setSavedWorkoutsLoading(true);
       setSavedWorkoutsError(null);
@@ -1251,10 +1251,13 @@ const ExerciseScreen = ({ navigation }: any) => {
       Alert.alert("제목 입력 필요", "오늘 운동 제목을 입력해주세요.");
       return;
     }
-    
+
     // saveTitle 최소 길이 검증 (서버에서 최소 3글자 이상 요구할 수 있음)
     if (trimmedTitle.length < 3) {
-      Alert.alert("제목 길이 부족", "운동 제목은 최소 3글자 이상 입력해주세요.");
+      Alert.alert(
+        "제목 길이 부족",
+        "운동 제목은 최소 3글자 이상 입력해주세요."
+      );
       return;
     }
 
@@ -1469,8 +1472,8 @@ const ExerciseScreen = ({ navigation }: any) => {
         setAllActivities((prev) =>
           prev.map((activity) =>
             activity.sessionId && savedSessionIds.includes(activity.sessionId)
-              ? { 
-                  ...activity, 
+              ? {
+                  ...activity,
                   saveTitle: trimmedTitle,
                   groupKey: activity.groupKey || saveGroupKey,
                 }
@@ -1486,13 +1489,18 @@ const ExerciseScreen = ({ navigation }: any) => {
       }
 
       // 현재 세션에서 완료한 세트 수만 계산 (이전에 저장한 세트 제외)
-      const currentSessionSetCount = completedExercises.reduce((total, exercise) => {
-        if (Array.isArray(exercise.sets)) {
-          const completedSets = exercise.sets.filter((set: any) => set?.isCompleted === true);
-          return total + completedSets.length;
-        }
-        return total;
-      }, 0);
+      const currentSessionSetCount = completedExercises.reduce(
+        (total, exercise) => {
+          if (Array.isArray(exercise.sets)) {
+            const completedSets = exercise.sets.filter(
+              (set: any) => set?.isCompleted === true
+            );
+            return total + completedSets.length;
+          }
+          return total;
+        },
+        0
+      );
 
       // 성공 메시지에 저장된 세트 수와 AI 피드백 전송 여부 포함
       const successMessage =
@@ -1726,11 +1734,11 @@ const ExerciseScreen = ({ navigation }: any) => {
         if (!item || !item.date) return;
 
         // exerciseRate가 100이거나, 운동 기록이 있는 경우 (exerciseRate > 0 또는 totalCalorie > 0) 완료로 간주
-        const hasExercise = 
-          item.exerciseRate === 100 || 
+        const hasExercise =
+          item.exerciseRate === 100 ||
           (item.exerciseRate && item.exerciseRate > 0) ||
           (item.totalCalorie && item.totalCalorie > 0);
-        
+
         if (!hasExercise) return;
 
         try {
@@ -1899,18 +1907,36 @@ const ExerciseScreen = ({ navigation }: any) => {
       return;
     }
 
+    // 아직 완료하지 않은 첫 번째 운동을 찾음
     const nextActivity =
       workoutActivities.find(
         (activity) => !isActivityFullyCompleted(activity)
       ) || workoutActivities[0];
+
     const nextIndex = workoutActivities.findIndex(
       (activity) => activity.id === nextActivity.id
     );
 
+    // 이미지 찾기
+    const resolvedImageUrl =
+      nextActivity.imageUrl ||
+      (nextActivity.externalId
+        ? exerciseImages[nextActivity.externalId]
+        : null) ||
+      (nextActivity.name
+        ? exerciseImagesByName[nextActivity.name.toLowerCase()]
+        : null);
+
+    // ✅이미지 포함된 객체 생성
+    const activityWithImage = {
+      ...nextActivity,
+      imageUrl: resolvedImageUrl || undefined,
+    };
+
     setExerciseSequence(workoutActivities);
     setExerciseSequenceIndex(nextIndex);
     setModalMode("edit");
-    setSelectedExercise(nextActivity);
+    setSelectedExercise(activityWithImage);
     setIsModalOpen(true);
   };
 
@@ -1950,18 +1976,32 @@ const ExerciseScreen = ({ navigation }: any) => {
 
     return exerciseSequence.map((seq) => {
       const latest = findLatestMatch(seq);
-      if (!latest) return seq;
+      const target = latest || seq; // 최신 데이터가 있으면 사용
+
+      // 백그라운드에서 로딩된 이미지 찾기
+      const resolvedImageUrl =
+        target.imageUrl ||
+        (target.externalId ? exerciseImages[target.externalId] : null) ||
+        (target.name ? exerciseImagesByName[target.name.toLowerCase()] : null);
+
+      // 데이터 합치기
       return {
         ...seq,
         ...latest,
-        sets: latest.sets || seq.sets,
+        sets: latest?.sets || seq.sets,
         isCompleted:
-          typeof latest.isCompleted === "boolean"
+          typeof latest?.isCompleted === "boolean"
             ? latest.isCompleted
             : seq.isCompleted,
+        imageUrl: resolvedImageUrl || undefined, //  이미지 주입
       };
     });
-  }, [exerciseSequence, workoutActivities]);
+  }, [
+    exerciseSequence,
+    workoutActivities,
+    exerciseImages,
+    exerciseImagesByName,
+  ]);
 
   const handleStretchOptionSelect = () => {
     setShowAddOptions(false);
@@ -2157,7 +2197,9 @@ const ExerciseScreen = ({ navigation }: any) => {
 
   // 운동 기록 영속화: 페이지 전환해도 유지되도록 저장/복원
   React.useEffect(() => {
+    // userId가 없으면 실행하지 않음
     if (!userIdLoaded) return;
+
     (async () => {
       try {
         const saved = await AsyncStorage.getItem(
@@ -2167,11 +2209,18 @@ const ExerciseScreen = ({ navigation }: any) => {
           const parsed: Activity[] = JSON.parse(saved);
           if (Array.isArray(parsed)) {
             setAllActivities(parsed);
+            console.log("✅ [LOAD] 저장된 운동 불러오기 완료");
+            setInitialLoadComplete(true); // 로딩 완료 신호!
             return;
           }
         }
         setAllActivities([]);
-      } catch {}
+      } catch (e) {
+        console.error("데이터 로드 실패", e);
+        setAllActivities([]);
+      } finally {
+        setInitialLoadComplete(true); // 실패해도 로딩은 끝난 것임
+      }
     })();
   }, [userIdLoaded, getStorageKey]);
 
@@ -2187,8 +2236,78 @@ const ExerciseScreen = ({ navigation }: any) => {
     })();
   }, [allActivities, userIdLoaded, getStorageKey]);
 
+  // AI 추천 운동 수신
+  useFocusEffect(
+    React.useCallback(() => {
+      // 1. 로딩 대기
+      if (!initialLoadComplete) return;
+
+      // 2. 파라미터 구조 유연하게 확인 (route.params 또는 route.params.params)
+      const rawParams = (route.params as any) || {};
+      const recommendedExercises =
+        rawParams.recommendedExercises ||
+        rawParams.params?.recommendedExercises; // 👈 여기가 핵심! 한 단계 더 깊이 확인
+
+      if (
+        recommendedExercises &&
+        Array.isArray(recommendedExercises) &&
+        recommendedExercises.length > 0
+      ) {
+        console.log(
+          `🚀 [AI] 추천 운동 ${recommendedExercises.length}개 수신 성공!`
+        );
+
+        // 3. 날짜 동기화
+        const routineDateStr = recommendedExercises[0].date;
+        if (routineDateStr) {
+          const [year, month, day] = routineDateStr.split("-").map(Number);
+          const newDate = new Date(year, month - 1, day);
+
+          if (selectedDate?.toDateString() !== newDate.toDateString()) {
+            console.log(
+              `📅 날짜 이동: ${selectedDate?.toDateString()} -> ${newDate.toDateString()}`
+            );
+            setSelectedDate(newDate);
+            setMonthBase(new Date(year, month - 1, 1));
+          }
+        }
+
+        // 4. 데이터 추가
+        setAllActivities((prev) => {
+          const existingGroupKey = recommendedExercises[0]?.groupKey;
+          const alreadyExists = prev.some(
+            (activity) => activity.groupKey === existingGroupKey
+          );
+
+          if (alreadyExists) {
+            console.log("⚠️ [AI] 이미 추가된 루틴입니다.");
+            return prev;
+          }
+
+          console.log("✅ [AI] 리스트에 운동 추가 완료!");
+          return [...prev, ...recommendedExercises];
+        });
+
+        // 5. 파라미터 초기화 (재실행 방지)
+        navigation.setParams({
+          recommendedExercises: undefined,
+          params: undefined, // 중첩된 params도 초기화
+        });
+
+        // 6. 알림
+        setTimeout(() => {
+          Alert.alert(
+            "루틴 추가 완료",
+            "AI 추천 운동이 리스트에 추가되었습니다!",
+            [{ text: "확인" }]
+          );
+        }, 500);
+      }
+    }, [initialLoadComplete, route.params, selectedDate])
+  );
   // (임시 API 테스트 버튼 제거)
 
+  //클릭 시 찾아놓은 이미지를 합쳐서 모달에 전달
   const handleExerciseClick = (exercise: Activity) => {
     const isCompleted = isActivityFullyCompleted(exercise);
     setModalMode("edit");
@@ -2198,8 +2317,21 @@ const ExerciseScreen = ({ navigation }: any) => {
     );
     setExerciseSequenceIndex(index);
 
-    // 저장된 운동 기록에서 세트 정보 불러오기
-    let exerciseWithSets = { ...exercise };
+    // 1. 🔍 이미지를 찾습니다. (기존 이미지 or 백그라운드에서 로딩한 이미지)
+    const resolvedImageUrl =
+      exercise.imageUrl ||
+      (exercise.externalId ? exerciseImages[exercise.externalId] : null) ||
+      (exercise.name
+        ? exerciseImagesByName[exercise.name.toLowerCase()]
+        : null);
+
+    // 2. 저장된 운동 기록에서 세트 정보 불러오기 + 이미지 합치기
+    // 👇 imageUrl: resolvedImageUrl || undefined 부분을 추가했습니다.
+    let exerciseWithSets = {
+      ...exercise,
+      imageUrl: resolvedImageUrl || undefined,
+    };
+
     if (exercise.sessionId && savedWorkouts.length > 0) {
       // savedWorkouts에서 해당 sessionId의 세트 정보 찾기
       for (const group of savedWorkouts) {
@@ -2208,15 +2340,14 @@ const ExerciseScreen = ({ navigation }: any) => {
             session.sessionId === exercise.sessionId &&
             session.records.length > 0
           ) {
-            // SavedWorkoutRecord를 Activity의 sets 형식으로 변환
             const sets = session.records
-              .sort((a, b) => a.setNumber - b.setNumber) // setNumber 순서대로 정렬
+              .sort((a, b) => a.setNumber - b.setNumber)
               .map((record, index) => ({
                 id: record.id,
-                order: record.setNumber || index + 1, // setNumber를 order로 매핑
+                order: record.setNumber || index + 1,
                 weight: record.weight,
                 reps: record.reps,
-                isCompleted: true, // 저장된 기록은 모두 완료된 것으로 표시
+                isCompleted: true,
               }));
             exerciseWithSets = {
               ...exerciseWithSets,
@@ -2228,9 +2359,10 @@ const ExerciseScreen = ({ navigation }: any) => {
       }
     }
 
+    console.log("🖼️ 모달 열기 - 이미지 확인:", exerciseWithSets.imageUrl); // 로그 확인용
+
     setSelectedExercise(exerciseWithSets);
     setIsModalOpen(true);
-    // 완료된 운동인지 상태로 저장 (ExerciseModal에 전달하기 위해)
     setSelectedExerciseCompleted(isCompleted);
   };
 
@@ -2895,6 +3027,11 @@ const ExerciseScreen = ({ navigation }: any) => {
                   }
                 : null;
               const isSavedRecord = !!groupInfo;
+              const isAIRecommended =
+                activity.saveTitle?.includes("AI 추천") ||
+                groupInfo?.title?.includes("AI 추천") ||
+                false;
+
               const showCompletedVisuals = activityCompleted && !isSavedRecord;
               const detailText = cleanExerciseDetails(activity.details);
               const savedTime =
@@ -2924,7 +3061,12 @@ const ExerciseScreen = ({ navigation }: any) => {
               return (
                 <View key={activity.id}>
                   {groupInfo?.isFirst && (
-                    <View style={styles.logGroupHeader}>
+                    <View
+                      style={[
+                        styles.logGroupHeader,
+                        isAIRecommended && styles.logGroupHeaderAI, // ✅ AI 추천용 스타일
+                      ]}
+                    >
                       <Text style={styles.logGroupTitle}>
                         {groupInfo.title}
                       </Text>
@@ -2952,6 +3094,13 @@ const ExerciseScreen = ({ navigation }: any) => {
                         groupInfo && styles.logCardGrouped,
                         groupInfo?.isFirst && styles.logCardGroupFirst,
                         groupInfo?.isLast && styles.logCardGroupLast,
+                        isAIRecommended && groupInfo && styles.logCardGroupedAI,
+                        isAIRecommended &&
+                          groupInfo?.isFirst &&
+                          styles.logCardGroupFirstAI,
+                        isAIRecommended &&
+                          groupInfo?.isLast &&
+                          styles.logCardGroupLastAI,
                       ]}
                       onPress={() => handleExerciseClick(activity)}
                     >
@@ -3051,7 +3200,9 @@ const ExerciseScreen = ({ navigation }: any) => {
         return (
           <>
             {showAddOptions && (
-              <TouchableWithoutFeedback onPress={() => setShowAddOptions(false)}>
+              <TouchableWithoutFeedback
+                onPress={() => setShowAddOptions(false)}
+              >
                 <View style={styles.fabBackdrop} />
               </TouchableWithoutFeedback>
             )}
@@ -3110,42 +3261,58 @@ const ExerciseScreen = ({ navigation }: any) => {
           const pendingSessionIds = new Set(pendingSavedRefs.sessionIds);
           const pendingActivityIds = new Set(pendingSavedRefs.activityIds);
           const pendingExternalKeys = new Set(pendingSavedRefs.externalKeys);
-          
+
           // allActivities에서 saveTitle이 있는 운동도 확인
           const activitiesWithSaveTitle = new Set<string>();
           allActivities.forEach((activity) => {
             if (activity.saveTitle) {
-              if (activity.sessionId) activitiesWithSaveTitle.add(`session:${activity.sessionId}`);
-              if (typeof activity.id === "number") activitiesWithSaveTitle.add(`activity:${activity.id}`);
+              if (activity.sessionId)
+                activitiesWithSaveTitle.add(`session:${activity.sessionId}`);
+              if (typeof activity.id === "number")
+                activitiesWithSaveTitle.add(`activity:${activity.id}`);
               if (activity.externalId && activity.name) {
-                activitiesWithSaveTitle.add(`external:${activity.externalId}__${activity.name}`);
+                activitiesWithSaveTitle.add(
+                  `external:${activity.externalId}__${activity.name}`
+                );
               }
             }
           });
-          
+
           const filteredExercises = exercises.filter((ex) => {
             const sessionId = ex.sessionId;
             const activityId = ex.activityId;
-            const externalKey = ex.externalId && ex.name ? `${ex.externalId}__${ex.name}` : null;
-            
+            const externalKey =
+              ex.externalId && ex.name ? `${ex.externalId}__${ex.name}` : null;
+
             // 이미 저장된 운동인지 확인
-            const alreadySavedBySession = sessionId && 
-              (savedSessionIds.has(sessionId) || pendingSessionIds.has(sessionId));
-            const alreadySavedByActivity = typeof activityId === "number" && 
+            const alreadySavedBySession =
+              sessionId &&
+              (savedSessionIds.has(sessionId) ||
+                pendingSessionIds.has(sessionId));
+            const alreadySavedByActivity =
+              typeof activityId === "number" &&
               pendingActivityIds.has(activityId);
-            const alreadySavedByExternal = externalKey && 
-              pendingExternalKeys.has(externalKey);
-            
+            const alreadySavedByExternal =
+              externalKey && pendingExternalKeys.has(externalKey);
+
             // saveTitle이 있는 운동인지 확인
-            const hasSaveTitle = 
-              (sessionId && activitiesWithSaveTitle.has(`session:${sessionId}`)) ||
-              (typeof activityId === "number" && activitiesWithSaveTitle.has(`activity:${activityId}`)) ||
-              (externalKey && activitiesWithSaveTitle.has(`external:${externalKey}`));
-            
+            const hasSaveTitle =
+              (sessionId &&
+                activitiesWithSaveTitle.has(`session:${sessionId}`)) ||
+              (typeof activityId === "number" &&
+                activitiesWithSaveTitle.has(`activity:${activityId}`)) ||
+              (externalKey &&
+                activitiesWithSaveTitle.has(`external:${externalKey}`));
+
             // 이미 저장되었거나 saveTitle이 있으면 제외
-            return !(alreadySavedBySession || alreadySavedByActivity || alreadySavedByExternal || hasSaveTitle);
+            return !(
+              alreadySavedBySession ||
+              alreadySavedByActivity ||
+              alreadySavedByExternal ||
+              hasSaveTitle
+            );
           });
-          
+
           setCompletedExercises(filteredExercises);
           setCompletionSummaryTitle("오늘의 운동");
           setShowCompletionModal(true);
@@ -3395,45 +3562,73 @@ const ExerciseScreen = ({ navigation }: any) => {
                       }
                     });
                   });
-                  const pendingSessionIds = new Set(pendingSavedRefs.sessionIds);
-                  const pendingActivityIds = new Set(pendingSavedRefs.activityIds);
-                  const pendingExternalKeys = new Set(pendingSavedRefs.externalKeys);
-                  
+                  const pendingSessionIds = new Set(
+                    pendingSavedRefs.sessionIds
+                  );
+                  const pendingActivityIds = new Set(
+                    pendingSavedRefs.activityIds
+                  );
+                  const pendingExternalKeys = new Set(
+                    pendingSavedRefs.externalKeys
+                  );
+
                   // allActivities에서 saveTitle이 있는 운동도 확인
                   const activitiesWithSaveTitle = new Set<string>();
                   allActivities.forEach((activity) => {
                     if (activity.saveTitle) {
-                      if (activity.sessionId) activitiesWithSaveTitle.add(`session:${activity.sessionId}`);
-                      if (typeof activity.id === "number") activitiesWithSaveTitle.add(`activity:${activity.id}`);
+                      if (activity.sessionId)
+                        activitiesWithSaveTitle.add(
+                          `session:${activity.sessionId}`
+                        );
+                      if (typeof activity.id === "number")
+                        activitiesWithSaveTitle.add(`activity:${activity.id}`);
                       if (activity.externalId && activity.name) {
-                        activitiesWithSaveTitle.add(`external:${activity.externalId}__${activity.name}`);
+                        activitiesWithSaveTitle.add(
+                          `external:${activity.externalId}__${activity.name}`
+                        );
                       }
                     }
                   });
-                  
+
                   const filteredExercises = exercises.filter((ex) => {
                     const sessionId = ex.sessionId;
                     const activityId = ex.activityId;
-                    const externalKey = ex.externalId && ex.name ? `${ex.externalId}__${ex.name}` : null;
-                    
+                    const externalKey =
+                      ex.externalId && ex.name
+                        ? `${ex.externalId}__${ex.name}`
+                        : null;
+
                     // 이미 저장된 운동인지 확인
-                    const alreadySavedBySession = sessionId && 
-                      (savedSessionIds.has(sessionId) || pendingSessionIds.has(sessionId));
-                    const alreadySavedByActivity = typeof activityId === "number" && 
+                    const alreadySavedBySession =
+                      sessionId &&
+                      (savedSessionIds.has(sessionId) ||
+                        pendingSessionIds.has(sessionId));
+                    const alreadySavedByActivity =
+                      typeof activityId === "number" &&
                       pendingActivityIds.has(activityId);
-                    const alreadySavedByExternal = externalKey && 
-                      pendingExternalKeys.has(externalKey);
-                    
+                    const alreadySavedByExternal =
+                      externalKey && pendingExternalKeys.has(externalKey);
+
                     // saveTitle이 있는 운동인지 확인
-                    const hasSaveTitle = 
-                      (sessionId && activitiesWithSaveTitle.has(`session:${sessionId}`)) ||
-                      (typeof activityId === "number" && activitiesWithSaveTitle.has(`activity:${activityId}`)) ||
-                      (externalKey && activitiesWithSaveTitle.has(`external:${externalKey}`));
-                    
+                    const hasSaveTitle =
+                      (sessionId &&
+                        activitiesWithSaveTitle.has(`session:${sessionId}`)) ||
+                      (typeof activityId === "number" &&
+                        activitiesWithSaveTitle.has(
+                          `activity:${activityId}`
+                        )) ||
+                      (externalKey &&
+                        activitiesWithSaveTitle.has(`external:${externalKey}`));
+
                     // 이미 저장되었거나 saveTitle이 있으면 제외
-                    return !(alreadySavedBySession || alreadySavedByActivity || alreadySavedByExternal || hasSaveTitle);
+                    return !(
+                      alreadySavedBySession ||
+                      alreadySavedByActivity ||
+                      alreadySavedByExternal ||
+                      hasSaveTitle
+                    );
                   });
-                  
+
                   setCompletedExercises(filteredExercises);
                   setShowCompletionModal(true);
                   setIsIntroVisible(false);
@@ -4848,6 +5043,24 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontWeight: "600",
   },
+  //ai 추천 세트 테두리 색상
+  logGroupHeaderAI: {
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    borderTopColor: "#ffffffff",
+    borderLeftColor: "#ffffffff",
+    borderRightColor: "#ffffffff",
+    borderBottomColor: "#ffffffff",
+  },
+  logCardGroupedAI: {
+    borderLeftColor: "#ffffffff",
+    borderRightColor: "#ffffffff",
+  },
+  logCardGroupFirstAI: {
+    borderTopColor: "#ffffffff",
+  },
+  logCardGroupLastAI: {
+    borderBottomColor: "#ffffffff",
+  },
 });
 
 interface StretchSelectionContentProps {
@@ -4894,6 +5107,9 @@ interface WorkoutIntroModalProps {
         name: string;
         targetMuscle?: string;
         imageUrl?: string;
+        sessionId?: string;
+        activityId?: number;
+        externalId?: string;
       }>
     ) => void;
     onFeedbackUpdate?: (

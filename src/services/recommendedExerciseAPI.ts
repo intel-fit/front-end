@@ -22,21 +22,50 @@ export const recommendedExerciseAPI = {
       throw error;
     }
   },
+
   /**
-   * 1. 운동 플랜 생성
+   * 1. 일일 운동 플랜 생성
    * @param baseDate - 기준 날짜 (yyyy-MM-dd 형식)
+   * @param requestBody - 운동 추천 요청 바디
+   * @returns 생성된 운동 플랜 정보
+   *
+   * @example
+   * generateExercisePlan("2025-12-02", {
+   *   experienceLevel: "INTERMEDIATE",
+   *   environment: "gym",
+   *   availableEquipment: ["덤벨", "머신"],
+   *   likeMuscles: ["가슴", "어깨"],
+   *   healthConditions: ["허리"],
+   *   targetTimeMin: 60
+   * })
    */
-  generateExercisePlan: async (baseDate?: string): Promise<any> => {
+  generateExercisePlan: async (
+    baseDate?: string,
+    requestBody?: {
+      experienceLevel: string;
+      environment: string;
+      availableEquipment: string[];
+      likeMuscles: string[];
+      healthConditions: string[];
+      targetTimeMin: number;
+    }
+  ): Promise<any> => {
     try {
       // baseDate가 없으면 오늘 날짜 사용
       const date = baseDate || new Date().toISOString().split("T")[0];
 
-      console.log("💪 운동 플랜 생성 요청, baseDate:", date);
+      console.log("💪 운동 플랜 생성 요청");
+      console.log("📅 baseDate:", date);
+      console.log("📦 requestBody:", JSON.stringify(requestBody, null, 2));
 
       const response = await request(
-        `/api/exercise-recommendations/generate?baseDate=${date}`,
+        `/api/exercise-recommendations/generate/daily?baseDate=${date}`,
         {
           method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: requestBody ? JSON.stringify(requestBody) : undefined,
         }
       );
 
@@ -47,6 +76,11 @@ export const recommendedExerciseAPI = {
 
       if (error.status === 401) {
         throw new Error("로그인이 필요합니다. 다시 로그인해주세요.");
+      }
+
+      // 토큰 부족 예외 처리
+      if (error.code === "NO_WORKOUT_TOKENS") {
+        throw error; // 원본 에러 그대로 전달
       }
 
       throw error;
