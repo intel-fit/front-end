@@ -1706,15 +1706,21 @@ const ExerciseScreen = ({ navigation }: any) => {
     thisWeekStart.setDate(now.getDate() - now.getDay()); // 일요일로 설정
     thisWeekStart.setHours(0, 0, 0, 0);
 
-    // weeklyProgress에서 이번 주 완료된 날짜 개수 계산 (exerciseRate가 100인 날짜만)
+    // weeklyProgress에서 이번 주 완료된 날짜 개수 계산
+    // 운동 기록이 있는 날짜 (exerciseRate > 0 또는 totalCalorie > 0)를 완료로 간주
     const completedDates = new Set<string>();
 
     if (Array.isArray(weeklyProgress) && weeklyProgress.length > 0) {
       weeklyProgress.forEach((item) => {
         if (!item || !item.date) return;
 
-        // exerciseRate가 100이 아니면 완료로 간주하지 않음
-        if (item.exerciseRate !== 100) return;
+        // exerciseRate가 100이거나, 운동 기록이 있는 경우 (exerciseRate > 0 또는 totalCalorie > 0) 완료로 간주
+        const hasExercise = 
+          item.exerciseRate === 100 || 
+          (item.exerciseRate && item.exerciseRate > 0) ||
+          (item.totalCalorie && item.totalCalorie > 0);
+        
+        if (!hasExercise) return;
 
         try {
           const itemDate = new Date(item.date);
