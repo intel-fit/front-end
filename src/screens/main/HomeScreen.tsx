@@ -29,6 +29,7 @@ const HomeScreen = ({ navigation }: any) => {
   );
   const [homeData, setHomeData] = useState<HomeResponse | null>(null);
   const [todayWorkoutSeconds, setTodayWorkoutSeconds] = useState(0);
+  const [todayExerciseCount, setTodayExerciseCount] = useState(0);
   const [inBodyData, setInBodyData] = useState<any>(null);
   const isLoadingRef = useRef(false);
 
@@ -203,6 +204,31 @@ const HomeScreen = ({ navigation }: any) => {
 
       // 계산된 시간이 0보다 작거나 NaN이면 0으로 설정
       setTodayWorkoutSeconds(totalSeconds > 0 ? totalSeconds : 0);
+
+      // 오늘 완료한 고유한 운동 종목 수 계산
+      const uniqueExerciseNames = new Set<string>();
+      savedWorkouts.forEach((group) => {
+        if (group.sessions && group.sessions.length > 0) {
+          group.sessions.forEach((session) => {
+            // records에서 운동 이름 추출
+            if (session.records && session.records.length > 0) {
+              session.records.forEach((record) => {
+                if (record.exerciseName) {
+                  uniqueExerciseNames.add(record.exerciseName);
+                }
+              });
+            }
+          });
+        }
+      });
+
+      const exerciseCount = uniqueExerciseNames.size;
+      console.log("[HOME][운동종목수] 오늘 완료한 운동 종목 수:", {
+        date: dateString,
+        exerciseCount,
+        exerciseNames: Array.from(uniqueExerciseNames),
+      });
+      setTodayExerciseCount(exerciseCount);
     } catch (e: any) {
       // 500 에러는 서버 측 문제이므로 조용히 처리 (0으로 설정)
       const status = e?.response?.status || e?.status;
@@ -215,6 +241,7 @@ const HomeScreen = ({ navigation }: any) => {
         console.error("[HOME][운동시간] 오늘 운동 시간 조회 실패:", e);
       }
       setTodayWorkoutSeconds(0);
+      setTodayExerciseCount(0);
     }
   };
 
@@ -567,7 +594,7 @@ const HomeScreen = ({ navigation }: any) => {
               <Text style={styles.exerciseStatLabel}>완료 운동</Text>
               <View style={styles.exerciseStatValueRow}>
                 <Text style={styles.exerciseStatValue}>
-                  {homeData?.todayExercise?.exerciseCount ?? 0}
+                  {todayExerciseCount}
                 </Text>
                 <Text style={styles.exerciseStatUnit}>개</Text>
               </View>

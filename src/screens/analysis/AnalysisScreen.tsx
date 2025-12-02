@@ -449,7 +449,12 @@ const AnalysisScreen = ({ navigation }: any) => {
         }
       }
 
-      // 로컬 저장소에서 확인
+      // 로컬 저장소에서 확인 (단, workoutHistory가 비어있으면 로컬 정보도 무시)
+      // workoutHistory가 비어있으면 운동 기록이 없는 것이므로 로컬 완료 정보를 사용하지 않음
+      if (workoutHistory.length === 0) {
+        return false;
+      }
+
       const sessionKey =
         session.sessionId !== undefined && session.sessionId !== null
           ? String(session.sessionId)
@@ -479,13 +484,29 @@ const AnalysisScreen = ({ navigation }: any) => {
 
       return false;
     },
-    [interpretCompletion, localSessionCompletion, localCompletionByNameDate]
+    [
+      interpretCompletion,
+      localSessionCompletion,
+      localCompletionByNameDate,
+      workoutHistory,
+    ]
   );
 
-  const completedWorkoutHistory = useMemo(
-    () => workoutHistory.filter(isSessionCompleted),
-    [workoutHistory, isSessionCompleted]
-  );
+  const completedWorkoutHistory = useMemo(() => {
+    const completed = workoutHistory.filter(isSessionCompleted);
+    if (__DEV__) {
+      console.log("[ANALYSIS] completedWorkoutHistory 계산:", {
+        total: workoutHistory.length,
+        completed: completed.length,
+        sample: completed.slice(0, 3).map((s) => ({
+          exerciseName: s.exerciseName,
+          workoutDate: s.workoutDate,
+          setsCount: s.sets?.length || 0,
+        })),
+      });
+    }
+    return completed;
+  }, [workoutHistory, isSessionCompleted]);
 
   // 운동별 고유 key 생성 유틸 함수
   const makeExerciseKey = useCallback(
@@ -527,17 +548,52 @@ const AnalysisScreen = ({ navigation }: any) => {
   );
 
   const exercises = useMemo(() => {
-    console.log("[ANALYSIS] exercises 계산:", {
+    console.log("[ANALYSIS] exercises 계산 시작:", {
       workoutHistoryLength: workoutHistory.length,
       completedWorkoutHistoryLength: completedWorkoutHistory.length,
+      completedWorkoutHistorySample: completedWorkoutHistory
+        .slice(0, 2)
+        .map((s) => ({
+          exerciseName: s.exerciseName,
+          workoutDate: s.workoutDate,
+          setsCount: s.sets?.length || 0,
+          isCompleted: (s as any).isCompleted,
+          completed: (s as any).completed,
+        })),
     });
     if (completedWorkoutHistory.length === 0) {
-      console.log("[ANALYSIS] completedWorkoutHistory가 비어있음");
+      console.log(
+        "[ANALYSIS] completedWorkoutHistory가 비어있음 - exercises 빈 배열 반환"
+      );
       return [];
     }
 
-    // 운동 이름별로 그룹화
-    const groupedByExercise = completedWorkoutHistory.reduce((acc, session) => {
+    // 오늘 날짜 계산 (한국 시간대 기준)
+    const today = new Date();
+    const todayStr = today.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }); // "YYYY-MM-DD" 형식
+
+    // 오늘 완료한 운동만 필터링
+    const todayCompletedExercises = completedWorkoutHistory.filter((session) => {
+      if (!session.workoutDate) return false;
+      // workoutDate가 ISO 문자열인 경우 날짜 부분만 추출
+      const sessionDate = session.workoutDate.slice(0, 10);
+      return sessionDate === todayStr;
+    });
+
+    console.log("[ANALYSIS] 오늘 완료한 운동 필터링:", {
+      todayStr,
+      totalCompleted: completedWorkoutHistory.length,
+      todayCompleted: todayCompletedExercises.length,
+      todayExerciseNames: [...new Set(todayCompletedExercises.map(s => s.exerciseName))],
+    });
+
+    if (todayCompletedExercises.length === 0) {
+      console.log("[ANALYSIS] 오늘 완료한 운동이 없음 - exercises 빈 배열 반환");
+      return [];
+    }
+
+    // 운동 이름별로 그룹화 (오늘 완료한 운동만)
+    const groupedByExercise = todayCompletedExercises.reduce((acc, session) => {
       const name = session.exerciseName;
       if (!acc[name]) {
         acc[name] = [];
@@ -550,34 +606,50 @@ const AnalysisScreen = ({ navigation }: any) => {
     const recentExercises: any[] = [];
 
     Object.entries(groupedByExercise).forEach(([name, sessions]) => {
+      // 오늘 완료한 세션들 (이미 오늘 날짜로 필터링됨)
       // 날짜순 정렬 (최신순)
       const sorted = sessions.sort(
         (a, b) =>
           new Date(b.workoutDate).getTime() - new Date(a.workoutDate).getTime()
       );
 
-      // 최근 8개만
-      const recent = sorted.slice(0, 8);
+      // 가장 최근 세션 (오늘 완료한 세션 중)
+      const latest = sorted[0];
 
-      if (recent.length > 0) {
-        // 가장 최근 세션
-        const latest = recent[0];
+      if (!latest || !latest.sets || latest.sets.length === 0) {
+        return; // 세트가 없으면 스킵
+      }
 
-        // 최대 중량 계산 (가장 무거운 세트)
-        const maxWeight = Math.max(...latest.sets.map((s) => s.weight));
-        const maxWeightSet = latest.sets.find((s) => s.weight === maxWeight);
+      // 최대 중량 계산 (가장 무거운 세트)
+      const maxWeight = Math.max(...latest.sets.map((s) => s.weight));
+      const maxWeightSet = latest.sets.find((s) => s.weight === maxWeight);
 
-        // 1RM 계산
-        const oneRM = maxWeightSet
-          ? calculate1RM(maxWeightSet.weight, maxWeightSet.reps)
-          : 0;
+      // 1RM 계산
+      const oneRM = maxWeightSet
+        ? calculate1RM(maxWeightSet.weight, maxWeightSet.reps)
+        : 0;
 
-        // 이전 기록과 비교 (2번째 최근 기록) - 중량 변화만 추적
-        let change = 0;
-        let changeType: "positive" | "negative" | "neutral" = "neutral";
+      // 이전 기록과 비교 (오늘 이전의 가장 최근 기록) - 중량 변화만 추적
+      let change = 0;
+      let changeType: "positive" | "negative" | "neutral" = "neutral";
 
-        if (recent.length > 1) {
-          const previous = recent[1];
+      // 전체 완료 기록에서 같은 운동 이름의 이전 기록 찾기 (오늘 이전)
+      const allPreviousSessions = completedWorkoutHistory.filter((s) => {
+        if (!s.workoutDate || s.exerciseName !== name) return false;
+        const sessionDate = s.workoutDate.slice(0, 10);
+        return sessionDate < todayStr; // 오늘 이전의 기록만
+      });
+
+      if (allPreviousSessions.length > 0) {
+        // 날짜순 정렬 (최신순)
+        const sortedPrevious = allPreviousSessions.sort(
+          (a, b) =>
+            new Date(b.workoutDate).getTime() - new Date(a.workoutDate).getTime()
+        );
+        
+        // 가장 최근 이전 기록
+        const previous = sortedPrevious[0];
+        if (previous.sets && previous.sets.length > 0) {
           const prevMaxWeight = Math.max(...previous.sets.map((s) => s.weight));
           const weightChange = maxWeight - prevMaxWeight;
 
@@ -592,39 +664,47 @@ const AnalysisScreen = ({ navigation }: any) => {
             }
           }
         }
-
-        const canonicalExerciseId = resolveExerciseIdentifier(latest);
-
-        recentExercises.push({
-          id: makeExerciseKey(latest.sessionId, canonicalExerciseId || name),
-          name,
-          change: Math.abs(change),
-          changeType,
-          rm: oneRM,
-          recordCount: recent.length,
-          exerciseId: canonicalExerciseId,
-          imageUrl:
-            latest.imageUrl ||
-            latest.exerciseImageUrl ||
-            latest.image ||
-            latest.imgUrl ||
-            latest.photoUrl ||
-            "",
-        });
       }
+
+      const canonicalExerciseId = resolveExerciseIdentifier(latest);
+
+      // 전체 기록 수 계산 (오늘 포함)
+      const allSessionsForExercise = completedWorkoutHistory.filter(
+        (s) => s.exerciseName === name
+      );
+      const totalRecordCount = allSessionsForExercise.length;
+
+      recentExercises.push({
+        id: makeExerciseKey(latest.sessionId, canonicalExerciseId || name),
+        name,
+        change: Math.abs(change),
+        changeType,
+        rm: oneRM,
+        recordCount: totalRecordCount, // 전체 기록 수 (오늘 포함)
+        exerciseId: canonicalExerciseId,
+        imageUrl:
+          latest.imageUrl ||
+          latest.exerciseImageUrl ||
+          latest.image ||
+          latest.imgUrl ||
+          latest.photoUrl ||
+          "",
+      });
     });
 
-    // 최근 운동순으로 정렬 (가장 최근에 한 운동이 위로)
-    return recentExercises
+    // 운동 이름순으로 정렬 (오늘 완료한 운동이므로 날짜는 모두 같음)
+    const result = recentExercises
       .sort((a, b) => {
-        const aLatest = groupedByExercise[a.name][0];
-        const bLatest = groupedByExercise[b.name][0];
-        return (
-          new Date(bLatest.workoutDate).getTime() -
-          new Date(aLatest.workoutDate).getTime()
-        );
-      })
-      .slice(0, 8); // 최대 8개
+        // 이름순 정렬 (가나다순)
+        return a.name.localeCompare(b.name, "ko");
+      });
+
+    console.log("[ANALYSIS] exercises 계산 완료:", {
+      resultCount: result.length,
+      exerciseNames: result.map((e) => e.name),
+    });
+
+    return result;
   }, [completedWorkoutHistory, resolveExerciseIdentifier, makeExerciseKey]);
 
   const [exerciseImages, setExerciseImages] = useState<Record<string, string>>(
@@ -869,6 +949,8 @@ const AnalysisScreen = ({ navigation }: any) => {
     try {
       console.log("[ANALYSIS] 운동 기록 조회 시작");
       setLoading(true);
+      // 먼저 빈 배열로 초기화하여 이전 데이터가 표시되지 않도록 함
+      setWorkoutHistory([]);
 
       // 최근 30일간의 저장된 운동 기록 조회
       // userId는 문자열일 수 있으므로 숫자로 변환 시도, 실패하면 그대로 사용
@@ -960,7 +1042,34 @@ const AnalysisScreen = ({ navigation }: any) => {
           workoutDate: w.workoutDate,
         })),
       });
+
+      // 서버에서 가져온 데이터로 업데이트 (빈 배열이어도 명시적으로 설정)
       setWorkoutHistory(allWorkouts);
+
+      // 운동 기록이 없으면 로컬 완료 정보도 초기화하여 삭제된 운동이 표시되지 않도록 함
+      if (allWorkouts.length === 0) {
+        setLocalSessionCompletion({});
+        setLocalCompletionByNameDate({});
+        if (__DEV__) {
+          console.log("[ANALYSIS] 운동 기록 없음, 로컬 완료 정보 초기화");
+        }
+      } else {
+        // 운동 기록이 있으면 상세 로그 출력
+        if (__DEV__) {
+          console.log(
+            `[ANALYSIS] workoutHistory 업데이트: ${allWorkouts.length}개 세션`
+          );
+          console.log("[ANALYSIS] 운동 기록 상세:", {
+            dates: [
+              ...new Set(allWorkouts.map((w) => w.workoutDate?.slice(0, 10))),
+            ],
+            exerciseNames: [...new Set(allWorkouts.map((w) => w.exerciseName))],
+            sessionsWithSets: allWorkouts.filter(
+              (w) => w.sets && w.sets.length > 0
+            ).length,
+          });
+        }
+      }
     } catch (error: any) {
       const status = error?.response?.status;
       // 404나 데이터 없음은 정상 (에러 표시 안 함)

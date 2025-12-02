@@ -385,18 +385,15 @@ export const fetchMonthlyProgress = async (
     const url = `${API_BASE_URL}/api/daily-progress/month?yearMonth=${encodeURIComponent(
       yearMonth
     )}`;
-    console.log("월별 진행률 API 호출:", url);
+    if (__DEV__) {
+      console.log(`[월별 진행률] ${yearMonth} 조회`);
+    }
     const response = await axios.get(url, {
       headers: {
         Authorization: `Bearer ${token || ""}`,
         Accept: "application/json",
       },
     });
-    console.log("월별 진행률 API 응답 상태:", response.status);
-    console.log(
-      "월별 진행률 API 응답 데이터:",
-      JSON.stringify(response.data, null, 2)
-    );
 
     // 응답이 객체로 감싸져 있는 경우 처리
     let rawData = response.data;
@@ -430,7 +427,9 @@ export const fetchMonthlyProgress = async (
         0,
     })) as DailyProgressWeekItem[];
 
-    console.log("월별 진행률 파싱된 데이터:", JSON.stringify(data, null, 2));
+    if (__DEV__) {
+      console.log(`[월별 진행률] ${yearMonth}: ${data.length}일 데이터 로드 완료`);
+    }
     return data;
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
