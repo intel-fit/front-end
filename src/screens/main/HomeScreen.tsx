@@ -39,12 +39,9 @@ const HomeScreen = ({ navigation }: any) => {
   // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
   // 한국 시간대(UTC+9) 기준으로 날짜 계산
   const formatDateToString = (date: Date): string => {
-    // 한국 시간대(Asia/Seoul) 기준으로 날짜 가져오기
-    const koreaTime = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
-    const year = koreaTime.getFullYear();
-    const month = String(koreaTime.getMonth() + 1).padStart(2, "0");
-    const day = String(koreaTime.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+    // 한국 시간대(Asia/Seoul) 기준으로 날짜 문자열 생성
+    const koreaDateStr = date.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }); // "YYYY-MM-DD" 형식
+    return koreaDateStr;
   };
 
   // 운동 시간을 시:분:초 형식으로 변환
@@ -95,10 +92,26 @@ const HomeScreen = ({ navigation }: any) => {
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
       
+      // 날짜 형식 검증
+      if (!dateString || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+        console.error("[HOME][홈데이터] 잘못된 날짜 형식:", dateString);
+        setHomeData(null);
+        return;
+      }
+      
       const data = await homeAPI.getHomeData(dateString);
       setHomeData(data);
     } catch (e: any) {
-      console.error("홈 데이터 로드 실패:", e);
+      // 500 에러는 서버 측 문제이므로 조용히 처리
+      const status = e?.status || e?.response?.status;
+      if (status === 500) {
+        console.warn("[HOME][홈데이터] 서버 오류 (500):", {
+          date: formatDateToString(new Date()),
+          error: e?.message || e?.data?.message,
+        });
+      } else {
+        console.error("[HOME][홈데이터] 홈 데이터 로드 실패:", e);
+      }
       setHomeData(null);
     }
   };
@@ -129,6 +142,13 @@ const HomeScreen = ({ navigation }: any) => {
         day: today.getDate(),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
+      
+      // 날짜 형식 검증
+      if (!dateString || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+        console.error("[HOME][운동시간] 잘못된 날짜 형식:", dateString);
+        setTodayWorkoutSeconds(0);
+        return;
+      }
       
       const savedWorkouts = await fetchSavedWorkouts(userId, dateString);
 
@@ -184,7 +204,16 @@ const HomeScreen = ({ navigation }: any) => {
       // 계산된 시간이 0보다 작거나 NaN이면 0으로 설정
       setTodayWorkoutSeconds(totalSeconds > 0 ? totalSeconds : 0);
     } catch (e: any) {
-      console.error("오늘 운동 시간 조회 실패:", e);
+      // 500 에러는 서버 측 문제이므로 조용히 처리 (0으로 설정)
+      const status = e?.response?.status || e?.status;
+      if (status === 500) {
+        console.warn("[HOME][운동시간] 서버 오류 (500), 운동 시간 0으로 설정:", {
+          date: formatDateToString(new Date()),
+          error: e?.message || e?.response?.data?.message,
+        });
+      } else {
+        console.error("[HOME][운동시간] 오늘 운동 시간 조회 실패:", e);
+      }
       setTodayWorkoutSeconds(0);
     }
   };
