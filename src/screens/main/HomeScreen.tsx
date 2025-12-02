@@ -17,7 +17,10 @@ import { colors } from "../../theme/colors";
 import { ROUTES } from "../../constants/routes";
 import { useDate } from "../../contexts/DateContext";
 import { homeAPI, authAPI } from "../../services";
-import { getTodayWorkoutTime, fetchSavedWorkouts } from "../../utils/exerciseApi";
+import {
+  getTodayWorkoutTime,
+  fetchSavedWorkouts,
+} from "../../utils/exerciseApi";
 import { getLatestInBody } from "../../utils/inbodyApi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { DailyProgressWeekItem, HomeResponse } from "../../types";
@@ -41,7 +44,9 @@ const HomeScreen = ({ navigation }: any) => {
   // 한국 시간대(UTC+9) 기준으로 날짜 계산
   const formatDateToString = (date: Date): string => {
     // 한국 시간대(Asia/Seoul) 기준으로 날짜 문자열 생성
-    const koreaDateStr = date.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }); // "YYYY-MM-DD" 형식
+    const koreaDateStr = date.toLocaleDateString("en-CA", {
+      timeZone: "Asia/Seoul",
+    }); // "YYYY-MM-DD" 형식
     return koreaDateStr;
   };
 
@@ -83,7 +88,7 @@ const HomeScreen = ({ navigation }: any) => {
     try {
       const today = new Date();
       const dateString = formatDateToString(today);
-      
+
       console.log("[HOME][홈데이터] 날짜 확인:", {
         today: today.toISOString(),
         dateString,
@@ -92,14 +97,14 @@ const HomeScreen = ({ navigation }: any) => {
         day: today.getDate(),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
-      
+
       // 날짜 형식 검증
       if (!dateString || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
         console.error("[HOME][홈데이터] 잘못된 날짜 형식:", dateString);
         setHomeData(null);
         return;
       }
-      
+
       const data = await homeAPI.getHomeData(dateString);
       setHomeData(data);
     } catch (e: any) {
@@ -134,7 +139,7 @@ const HomeScreen = ({ navigation }: any) => {
       // 백엔드 API가 누적 시간을 반환하므로, 오늘 날짜의 운동 데이터를 직접 가져와서 계산
       const today = new Date();
       const dateString = formatDateToString(today);
-      
+
       console.log("[HOME][운동시간] 날짜 확인:", {
         today: today.toISOString(),
         dateString,
@@ -143,14 +148,14 @@ const HomeScreen = ({ navigation }: any) => {
         day: today.getDate(),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
-      
+
       // 날짜 형식 검증
       if (!dateString || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
         console.error("[HOME][운동시간] 잘못된 날짜 형식:", dateString);
         setTodayWorkoutSeconds(0);
         return;
       }
-      
+
       const savedWorkouts = await fetchSavedWorkouts(userId, dateString);
 
       // 운동 기록이 없으면 0으로 설정
@@ -166,7 +171,7 @@ const HomeScreen = ({ navigation }: any) => {
       // 오늘 날짜의 운동 시간 계산
       // 세션별로 실제 운동 시간이 있으면 사용하고, 없으면 세트 수 기반으로 추정
       let totalSeconds = 0;
-      
+
       savedWorkouts.forEach((group) => {
         if (group.sessions && group.sessions.length > 0) {
           group.sessions.forEach((session) => {
@@ -174,7 +179,10 @@ const HomeScreen = ({ navigation }: any) => {
             // 현재는 세트 수 기반으로 대략적인 시간 추정
             if (session.records && session.records.length > 0) {
               // 세트당 평균 2-3분으로 추정 (휴식 시간 포함)
-              const estimatedMinutes = Math.max(5, session.records.length * 2.5); // 최소 5분
+              const estimatedMinutes = Math.max(
+                5,
+                session.records.length * 2.5
+              ); // 최소 5분
               totalSeconds += estimatedMinutes * 60;
             }
           });
@@ -186,16 +194,23 @@ const HomeScreen = ({ navigation }: any) => {
         totalSeconds,
         formattedTime: formatWorkoutTime(totalSeconds),
         savedWorkoutsLength: savedWorkouts.length,
-        sessionCount: savedWorkouts.reduce((sum, group) => sum + (group.sessions?.length || 0), 0),
-        totalSets: savedWorkouts.reduce(
-          (sum, group) => 
-            sum + (group.sessions || []).reduce((sSum, session) => sSum + (session.records?.length || 0), 0),
+        sessionCount: savedWorkouts.reduce(
+          (sum, group) => sum + (group.sessions?.length || 0),
           0
         ),
-        savedWorkouts: savedWorkouts.map(group => ({
+        totalSets: savedWorkouts.reduce(
+          (sum, group) =>
+            sum +
+            (group.sessions || []).reduce(
+              (sSum, session) => sSum + (session.records?.length || 0),
+              0
+            ),
+          0
+        ),
+        savedWorkouts: savedWorkouts.map((group) => ({
           title: group.title,
           sessionsCount: group.sessions?.length || 0,
-          sessions: group.sessions?.map(session => ({
+          sessions: group.sessions?.map((session) => ({
             sessionId: session.sessionId,
             recordsCount: session.records?.length || 0,
           })),
@@ -233,10 +248,13 @@ const HomeScreen = ({ navigation }: any) => {
       // 500 에러는 서버 측 문제이므로 조용히 처리 (0으로 설정)
       const status = e?.response?.status || e?.status;
       if (status === 500) {
-        console.warn("[HOME][운동시간] 서버 오류 (500), 운동 시간 0으로 설정:", {
-          date: formatDateToString(new Date()),
-          error: e?.message || e?.response?.data?.message,
-        });
+        console.warn(
+          "[HOME][운동시간] 서버 오류 (500), 운동 시간 0으로 설정:",
+          {
+            date: formatDateToString(new Date()),
+            error: e?.message || e?.response?.data?.message,
+          }
+        );
       } else {
         console.error("[HOME][운동시간] 오늘 운동 시간 조회 실패:", e);
       }
@@ -296,11 +314,32 @@ const HomeScreen = ({ navigation }: any) => {
     }
   };
 
+  // 운동 추천 네비게이션 핸들러 (멤버십 분기 처리)
+  const handleRoutineRecommendNavigation = async () => {
+    try {
+      // 최신 프로필 정보 확인 (또는 state인 membershipType 사용)
+      const profile = await authAPI.getProfile();
+
+      // PREMIUM이면 정식 추천 화면 (RoutineRecommendNewScreen 등)
+      if (profile.membershipType === "PREMIUM") {
+        navigation.navigate(ROUTES.ROUTINE_RECOMMEND_NEW); // 기존: "RoutineRecommendNew"
+        return;
+      }
+
+      // FREE인 경우 임시 추천 화면 (TempRoutineRecommendScreen)
+      navigation.navigate("TempRoutineRecommendScreen");
+    } catch (error) {
+      console.error("❌ 운동 추천 네비게이션 실패:", error);
+      // 에러 시 기본 동작 (임시 화면 또는 알림)
+      navigation.navigate("TempRoutineRecommendScreen");
+    }
+  };
+
   // 화면 포커스 시 데이터 로드
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
       console.log("[HOME] 화면 포커스, 오늘 운동 데이터 새로고침 시작");
-      
+
       if (isLoadingRef.current) {
         return;
       }
@@ -416,9 +455,7 @@ const HomeScreen = ({ navigation }: any) => {
               {/* 루틴 */}
               <TouchableOpacity
                 style={styles.enhancedRecButtonWrapper}
-                onPress={() =>
-                  navigation.navigate(ROUTES.ROUTINE_RECOMMEND_NEW)
-                }
+                onPress={handleRoutineRecommendNavigation}
               >
                 <LinearGradient
                   colors={["#e3ff7c", "#b5ff70"]}

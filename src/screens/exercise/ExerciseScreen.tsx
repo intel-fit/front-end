@@ -1907,18 +1907,36 @@ const ExerciseScreen = ({ navigation }: any) => {
       return;
     }
 
+    // 아직 완료하지 않은 첫 번째 운동을 찾음
     const nextActivity =
       workoutActivities.find(
         (activity) => !isActivityFullyCompleted(activity)
       ) || workoutActivities[0];
+
     const nextIndex = workoutActivities.findIndex(
       (activity) => activity.id === nextActivity.id
     );
 
+    // 이미지 찾기
+    const resolvedImageUrl =
+      nextActivity.imageUrl ||
+      (nextActivity.externalId
+        ? exerciseImages[nextActivity.externalId]
+        : null) ||
+      (nextActivity.name
+        ? exerciseImagesByName[nextActivity.name.toLowerCase()]
+        : null);
+
+    // ✅이미지 포함된 객체 생성
+    const activityWithImage = {
+      ...nextActivity,
+      imageUrl: resolvedImageUrl || undefined,
+    };
+
     setExerciseSequence(workoutActivities);
     setExerciseSequenceIndex(nextIndex);
     setModalMode("edit");
-    setSelectedExercise(nextActivity);
+    setSelectedExercise(activityWithImage);
     setIsModalOpen(true);
   };
 
@@ -1958,18 +1976,32 @@ const ExerciseScreen = ({ navigation }: any) => {
 
     return exerciseSequence.map((seq) => {
       const latest = findLatestMatch(seq);
-      if (!latest) return seq;
+      const target = latest || seq; // 최신 데이터가 있으면 사용
+
+      // 백그라운드에서 로딩된 이미지 찾기
+      const resolvedImageUrl =
+        target.imageUrl ||
+        (target.externalId ? exerciseImages[target.externalId] : null) ||
+        (target.name ? exerciseImagesByName[target.name.toLowerCase()] : null);
+
+      // 데이터 합치기
       return {
         ...seq,
         ...latest,
-        sets: latest.sets || seq.sets,
+        sets: latest?.sets || seq.sets,
         isCompleted:
-          typeof latest.isCompleted === "boolean"
+          typeof latest?.isCompleted === "boolean"
             ? latest.isCompleted
             : seq.isCompleted,
+        imageUrl: resolvedImageUrl || undefined, //  이미지 주입
       };
     });
-  }, [exerciseSequence, workoutActivities]);
+  }, [
+    exerciseSequence,
+    workoutActivities,
+    exerciseImages,
+    exerciseImagesByName,
+  ]);
 
   const handleStretchOptionSelect = () => {
     setShowAddOptions(false);
@@ -2995,6 +3027,11 @@ const ExerciseScreen = ({ navigation }: any) => {
                   }
                 : null;
               const isSavedRecord = !!groupInfo;
+              const isAIRecommended =
+                activity.saveTitle?.includes("AI 추천") ||
+                groupInfo?.title?.includes("AI 추천") ||
+                false;
+
               const showCompletedVisuals = activityCompleted && !isSavedRecord;
               const detailText = cleanExerciseDetails(activity.details);
               const savedTime =
@@ -3024,7 +3061,12 @@ const ExerciseScreen = ({ navigation }: any) => {
               return (
                 <View key={activity.id}>
                   {groupInfo?.isFirst && (
-                    <View style={styles.logGroupHeader}>
+                    <View
+                      style={[
+                        styles.logGroupHeader,
+                        isAIRecommended && styles.logGroupHeaderAI, // ✅ AI 추천용 스타일
+                      ]}
+                    >
                       <Text style={styles.logGroupTitle}>
                         {groupInfo.title}
                       </Text>
@@ -3052,6 +3094,13 @@ const ExerciseScreen = ({ navigation }: any) => {
                         groupInfo && styles.logCardGrouped,
                         groupInfo?.isFirst && styles.logCardGroupFirst,
                         groupInfo?.isLast && styles.logCardGroupLast,
+                        isAIRecommended && groupInfo && styles.logCardGroupedAI,
+                        isAIRecommended &&
+                          groupInfo?.isFirst &&
+                          styles.logCardGroupFirstAI,
+                        isAIRecommended &&
+                          groupInfo?.isLast &&
+                          styles.logCardGroupLastAI,
                       ]}
                       onPress={() => handleExerciseClick(activity)}
                     >
@@ -4993,6 +5042,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#ffffff",
     fontWeight: "600",
+  },
+  //ai 추천 세트 테두리 색상
+  logGroupHeaderAI: {
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    borderTopColor: "#ffffffff",
+    borderLeftColor: "#ffffffff",
+    borderRightColor: "#ffffffff",
+    borderBottomColor: "#ffffffff",
+  },
+  logCardGroupedAI: {
+    borderLeftColor: "#ffffffff",
+    borderRightColor: "#ffffffff",
+  },
+  logCardGroupFirstAI: {
+    borderTopColor: "#ffffffff",
+  },
+  logCardGroupLastAI: {
+    borderBottomColor: "#ffffffff",
   },
 });
 
