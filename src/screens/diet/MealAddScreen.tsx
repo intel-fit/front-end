@@ -678,7 +678,14 @@ const MealAddScreen = ({navigation, route}: any) => {
       // memo가 비어있지 않으면 추가 (길이 제한, 빈 문자열은 제외)
       const trimmedMemo = mealName?.trim() || '';
       if (trimmedMemo.length > 0) {
-        mealRequestData.memo = trimmedMemo.length > 500 ? trimmedMemo.substring(0, 500) : trimmedMemo;
+        // 수정 모드이고 원본 memo에 " - "가 포함되어 있으면 추천 식단 형식 유지
+        if (isEditMode && mealData?.memo && mealData.memo.includes(' - ')) {
+          const parts = mealData.memo.split(' - ');
+          const originalPlanName = parts[0]; // 원본 플랜 이름
+          mealRequestData.memo = `${originalPlanName} - ${trimmedMemo.length > 500 ? trimmedMemo.substring(0, 500) : trimmedMemo}`;
+        } else {
+          mealRequestData.memo = trimmedMemo.length > 500 ? trimmedMemo.substring(0, 500) : trimmedMemo;
+        }
       }
       
       // undefined 필드 제거 (서버가 거부할 수 있음)
