@@ -1,3 +1,5 @@
+// src/screens/main/HomeScreen.tsx
+
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -6,6 +8,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
@@ -13,13 +16,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../../theme/colors";
 import { ROUTES } from "../../constants/routes";
 import { useDate } from "../../contexts/DateContext";
-import { homeAPI } from "../../services";
+import { homeAPI, authAPI } from "../../services";
 import { getTodayWorkoutTime, fetchSavedWorkouts } from "../../utils/exerciseApi";
 import { getLatestInBody } from "../../utils/inbodyApi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { DailyProgressWeekItem, HomeResponse } from "../../types";
-import { getMembershipType } from "../../utils/membership-utils";
-import PremiumModal from "../../components/modals/PremiumModal";
 
 const HomeScreen = ({ navigation }: any) => {
   const { selectedDate, setSelectedDate } = useDate();
@@ -29,9 +30,11 @@ const HomeScreen = ({ navigation }: any) => {
   const [homeData, setHomeData] = useState<HomeResponse | null>(null);
   const [todayWorkoutSeconds, setTodayWorkoutSeconds] = useState(0);
   const [inBodyData, setInBodyData] = useState<any>(null);
-  const [todayExerciseCount, setTodayExerciseCount] = useState<number>(0);
   const isLoadingRef = useRef(false);
-  const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
+
+  // 멤버십 정보 state
+  const [membershipType, setMembershipType] = useState<string>("FREE");
+  const [mealTokens, setMealTokens] = useState<number>(0);
 
   // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
   // 한국 시간대(UTC+9) 기준으로 날짜 계산
@@ -49,7 +52,10 @@ const HomeScreen = ({ navigation }: any) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
+      2,
+      "0"
+    )}:${String(secs).padStart(2, "0")}`;
   };
 
   // 주간 진행률 데이터 로드
@@ -58,19 +64,12 @@ const HomeScreen = ({ navigation }: any) => {
       const data = await homeAPI.getWeeklyProgress();
 
       if (Array.isArray(data) && data.length > 0) {
-        console.log("주간 진행률 데이터 로드 성공");
         setWeeklyProgress(data);
       } else {
-        console.warn("주간 진행률 데이터 비어있음");
         setWeeklyProgress([]);
       }
     } catch (e: any) {
       console.error("주간 진행률 로드 실패:", e);
-      console.error("에러 상세:", {
-        message: e.message,
-        status: e.status,
-        data: e.data,
-      });
       setWeeklyProgress([]);
     }
   };
@@ -78,13 +77,7 @@ const HomeScreen = ({ navigation }: any) => {
   // 특정 날짜의 진행률 데이터 가져오기
   const getDayProgress = (date: Date): DailyProgressWeekItem | undefined => {
     const dateStr = formatDateToString(date);
-    const progress = weeklyProgress.find((item) => item.date === dateStr);
-
-    if (!progress) {
-      return undefined;
-    }
-
-    return progress;
+    return weeklyProgress.find((item) => item.date === dateStr);
   };
 
   // 홈 데이터 로드
@@ -201,7 +194,9 @@ const HomeScreen = ({ navigation }: any) => {
     try {
       const latestRecord = await getLatestInBody();
       if (latestRecord) {
-        const latestData = latestRecord?.success ? latestRecord.inBody : latestRecord;
+        const latestData = latestRecord?.success
+          ? latestRecord.inBody
+          : latestRecord;
         setInBodyData(latestData);
       } else {
         setInBodyData(null);
@@ -212,78 +207,36 @@ const HomeScreen = ({ navigation }: any) => {
     }
   };
 
-  // 오늘 완료한 운동 종목 수 계산
-  const loadTodayExerciseCount = async () => {
+  // 프로필 정보 로드 (멤버십 확인용)
+  const loadProfileInfo = async () => {
     try {
-      const userIdStr = await AsyncStorage.getItem("userId");
-      if (!userIdStr) {
-        setTodayExerciseCount(0);
-        return;
-      }
-      const userId = parseInt(userIdStr, 10);
-      if (isNaN(userId)) {
-        setTodayExerciseCount(0);
-        return;
-      }
+      const profile = await authAPI.getProfile();
+      setMembershipType(profile.membershipType);
+      setMealTokens(profile.mealRecommendTokens ?? 1);
+    } catch (error) {
+      console.error("프로필 로드 실패:", error);
+      setMembershipType("FREE");
+      setMealTokens(1);
+    }
+  };
 
-      const today = new Date();
-      const dateString = formatDateToString(today);
-      
-      console.log("[HOME][운동개수] 날짜 확인:", {
-        today: today.toISOString(),
-        dateString,
-        year: today.getFullYear(),
-        month: today.getMonth() + 1,
-        day: today.getDate(),
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      });
-      
-      const savedWorkouts = await fetchSavedWorkouts(userId, dateString);
+  //식단 추천 네비게이션 핸들러 (멤버십 분기 처리)
+  const handleMealRecommendNavigation = async () => {
+    try {
+      const profile = await authAPI.getProfile();
 
-      // 운동 기록이 없으면 0으로 설정
-      if (!savedWorkouts || savedWorkouts.length === 0) {
-        console.log("[HOME][운동개수] 오늘 운동 기록 없음, 운동 개수 0으로 설정", {
-          date: dateString,
-          savedWorkoutsLength: savedWorkouts?.length || 0,
-        });
-        setTodayExerciseCount(0);
+      // PREMIUM이면 무제한 사용 가능 (기존 추천 화면)
+      if (profile.membershipType === "PREMIUM") {
+        navigation.navigate(ROUTES.MEAL_RECOMMEND);
         return;
       }
 
-      // 모든 세션에서 고유한 운동 종목 수 계산
-      const uniqueExercises = new Set<string>();
-      savedWorkouts.forEach((group) => {
-        if (group.sessions && group.sessions.length > 0) {
-          group.sessions.forEach((session) => {
-            if (session.records && session.records.length > 0) {
-              session.records.forEach((record) => {
-                // 운동 이름을 기준으로 고유한 종목 수 계산
-                if (record.exerciseName) {
-                  uniqueExercises.add(record.exerciseName);
-                }
-              });
-            }
-          });
-        }
-      });
-
-      const count = uniqueExercises.size;
-      console.log("[HOME][운동개수] 오늘 완료한 운동 종목 수:", {
-        date: dateString,
-        count,
-        uniqueExercises: Array.from(uniqueExercises),
-        savedWorkoutsLength: savedWorkouts.length,
-        sessionCount: savedWorkouts.reduce((sum, group) => sum + (group.sessions?.length || 0), 0),
-        totalRecords: savedWorkouts.reduce(
-          (sum, group) => 
-            sum + (group.sessions || []).reduce((sSum, session) => sSum + (session.records?.length || 0), 0),
-          0
-        ),
-      });
-      setTodayExerciseCount(count);
-    } catch (e: any) {
-      console.error("오늘 운동 종목 수 계산 실패:", e);
-      setTodayExerciseCount(0);
+      // FREE인 경우 (임시 추천 화면)
+      navigation.navigate(ROUTES.TEMP_MEAL_RECOMMEND);
+    } catch (error) {
+      console.error("❌ 식단 추천 네비게이션 실패:", error);
+      // 에러 발생 시 기본 동작 (임시 화면으로 이동)
+      navigation.navigate(ROUTES.TEMP_MEAL_RECOMMEND);
     }
   };
 
@@ -292,13 +245,17 @@ const HomeScreen = ({ navigation }: any) => {
     const unsubscribe = navigation.addListener("focus", () => {
       console.log("[HOME] 화면 포커스, 오늘 운동 데이터 새로고침 시작");
       
+      if (isLoadingRef.current) {
+        return;
+      }
+
       isLoadingRef.current = true;
       Promise.all([
         loadWeeklyProgress(),
         loadHomeData(),
         loadTodayWorkoutTime(),
         loadInBodyData(),
-        loadTodayExerciseCount(),
+        loadProfileInfo(),
       ]).finally(() => {
         isLoadingRef.current = false;
         console.log("[HOME] 화면 포커스, 오늘 운동 데이터 새로고침 완료");
@@ -313,7 +270,7 @@ const HomeScreen = ({ navigation }: any) => {
       loadHomeData(),
       loadTodayWorkoutTime(),
       loadInBodyData(),
-      loadTodayExerciseCount(),
+      loadProfileInfo(),
     ]).finally(() => {
       isLoadingRef.current = false;
       console.log("[HOME] 초기 로드 완료");
@@ -324,22 +281,6 @@ const HomeScreen = ({ navigation }: any) => {
 
   const handleCalendarClick = () => {
     navigation.navigate("Calendar");
-  };
-
-  // 추천 식단/운동 버튼 클릭 핸들러
-  const handleRecommendationClick = async (route: string) => {
-    try {
-      const membershipType = await getMembershipType();
-      if (membershipType === "FREE") {
-        setIsPremiumModalOpen(true);
-      } else {
-        navigation.navigate(route);
-      }
-    } catch (error) {
-      console.error("멤버십 확인 실패:", error);
-      // 에러 발생 시 기본적으로 모달 표시
-      setIsPremiumModalOpen(true);
-    }
   };
 
   return (
@@ -379,53 +320,60 @@ const HomeScreen = ({ navigation }: any) => {
           </View>
         </View>
 
+        {/* ✅ 식단/운동 추천 카드 */}
         <View style={styles.enhancedRecommendationWrapper}>
           <View style={styles.enhancedRecommendationCard}>
-            <View style={styles.titleContainer}>
-              <Text style={styles.enhancedRecommendationTitle}>
-                <Text style={styles.titleNormal}>회원님만을 위한</Text>
-              </Text>
-              <View style={styles.titleSecondLine}>
-                <Text style={styles.titleNormal}>
-                  <Text style={styles.titleHighlight}>맞춤형 식단과 운동</Text>을 받아보세요
+            <View style={styles.enhancedRecommendationHeader}>
+              <View style={styles.iconCircle}>
+                <LinearGradient
+                  colors={["#e3ff7c", "#a8e063"]}
+                  style={styles.iconCircleGradient}
+                >
+                  <Ionicons name="star" size={24} color="#111" />
+                </LinearGradient>
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <Text style={styles.enhancedRecommendationTitle}>
+                  회원님만을 위한{"\n"}맞춤형 식단/루틴을 받아보세요!
                 </Text>
-                <Ionicons name="heart" size={16} color="#e3ff7c" style={styles.heartIcon} />
               </View>
             </View>
 
             <View style={styles.enhancedRecommendationButtons}>
-              {/* 식단 */}
               <TouchableOpacity
                 style={styles.enhancedRecButtonWrapper}
-                onPress={() => handleRecommendationClick(ROUTES.MEAL_RECOMMEND)}
-                activeOpacity={0.8}
+                onPress={handleMealRecommendNavigation}
               >
-                <View style={styles.enhancedRecButton}>
+                <LinearGradient
+                  colors={["#e3ff7c", "#b5ff70"]}
+                  style={styles.enhancedRecButton}
+                >
+                  <Ionicons name="restaurant" size={18} color="#111" />
                   <Text style={styles.enhancedRecButtonText}>
-                    추천 식단 받기
+                    식단 추천 받기
                   </Text>
-                  <View style={styles.chevronContainer}>
-                    <Ionicons name="chevron-forward" size={20} color="#000000" />
-                  </View>
-                </View>
+                  <Ionicons name="chevron-forward" size={18} color="#111" />
+                </LinearGradient>
               </TouchableOpacity>
 
               {/* 루틴 */}
               <TouchableOpacity
                 style={styles.enhancedRecButtonWrapper}
                 onPress={() =>
-                  handleRecommendationClick(ROUTES.ROUTINE_RECOMMEND_NEW)
+                  navigation.navigate(ROUTES.ROUTINE_RECOMMEND_NEW)
                 }
-                activeOpacity={0.8}
               >
-                <View style={styles.enhancedRecButton}>
+                <LinearGradient
+                  colors={["#e3ff7c", "#b5ff70"]}
+                  style={styles.enhancedRecButton}
+                >
+                  <Ionicons name="barbell" size={18} color="#111" />
                   <Text style={styles.enhancedRecButtonText}>
-                    추천 운동 받기
+                    운동 추천 받기
                   </Text>
-                  <View style={styles.chevronContainer}>
-                    <Ionicons name="chevron-forward" size={20} color="#000000" />
-                  </View>
-                </View>
+                  <Ionicons name="chevron-forward" size={18} color="#111" />
+                </LinearGradient>
               </TouchableOpacity>
             </View>
           </View>
@@ -590,7 +538,7 @@ const HomeScreen = ({ navigation }: any) => {
               <Text style={styles.exerciseStatLabel}>완료 운동</Text>
               <View style={styles.exerciseStatValueRow}>
                 <Text style={styles.exerciseStatValue}>
-                  {todayExerciseCount}
+                  {homeData?.todayExercise?.exerciseCount ?? 0}
                 </Text>
                 <Text style={styles.exerciseStatUnit}>개</Text>
               </View>
@@ -603,10 +551,15 @@ const HomeScreen = ({ navigation }: any) => {
           <View style={[styles.bodyStatCard]}>
             <Text style={styles.bodyStatLabel}>체중</Text>
             <Text style={styles.bodyStatValue}>
-              {inBodyData?.weight 
+              {inBodyData?.weight
                 ? `${inBodyData.weight.toFixed(1)}kg`
                 : inBodyData?.bodyComposition?.weight
-                ? `${parseFloat(String(inBodyData.bodyComposition.weight).replace(/[^\d.]/g, '')).toFixed(1)}kg`
+                ? `${parseFloat(
+                    String(inBodyData.bodyComposition.weight).replace(
+                      /[^\d.]/g,
+                      ""
+                    )
+                  ).toFixed(1)}kg`
                 : inBodyData?.muscleFatAnalysis?.weight
                 ? `${inBodyData.muscleFatAnalysis.weight.toFixed(1)}kg`
                 : "-"}
@@ -619,7 +572,9 @@ const HomeScreen = ({ navigation }: any) => {
               {inBodyData?.skeletalMuscleMass
                 ? `${inBodyData.skeletalMuscleMass.toFixed(1)}kg`
                 : inBodyData?.muscleFatAnalysis?.skeletalMuscleMass
-                ? `${inBodyData.muscleFatAnalysis.skeletalMuscleMass.toFixed(1)}kg`
+                ? `${inBodyData.muscleFatAnalysis.skeletalMuscleMass.toFixed(
+                    1
+                  )}kg`
                 : "-"}
             </Text>
           </View>
@@ -632,7 +587,12 @@ const HomeScreen = ({ navigation }: any) => {
                 : inBodyData?.muscleFatAnalysis?.bodyFatMass
                 ? `${inBodyData.muscleFatAnalysis.bodyFatMass.toFixed(1)}kg`
                 : inBodyData?.bodyComposition?.bodyFatMass
-                ? `${parseFloat(String(inBodyData.bodyComposition.bodyFatMass).replace(/[^\d.]/g, '')).toFixed(1)}kg`
+                ? `${parseFloat(
+                    String(inBodyData.bodyComposition.bodyFatMass).replace(
+                      /[^\d.]/g,
+                      ""
+                    )
+                  ).toFixed(1)}kg`
                 : "-"}
             </Text>
           </View>
@@ -660,14 +620,6 @@ const HomeScreen = ({ navigation }: any) => {
           </View>
         </View>
       </ScrollView>
-      <PremiumModal
-        isOpen={isPremiumModalOpen}
-        onClose={() => setIsPremiumModalOpen(false)}
-        onContinue={() => {
-          setIsPremiumModalOpen(false);
-          // 결제 완료 후 처리 로직은 여기에 추가
-        }}
-      />
     </SafeAreaView>
   );
 };
@@ -1122,111 +1074,61 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   enhancedRecommendationCard: {
-    backgroundColor: "transparent",
-    padding: 22,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: "#e3ff7c",
-    shadowColor: "#e3ff7c",
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
-    shadowOpacity: 0.7,
-    shadowRadius: 14,
-    elevation: 10,
+    backgroundColor: "#393a38",
+    padding: 24,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  enhancedRecommendationHeader: {
+    flexDirection: "row",
+    gap: 16,
+    marginBottom: 20,
+  },
+  iconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     overflow: "hidden",
   },
-  titleContainer: {
-    marginBottom: 8,
+  iconCircleGradient: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   enhancedRecommendationTitle: {
-    fontSize: 17,
+    flex: 1,
+    fontSize: 18,
     fontWeight: "700",
+    color: "#fff",
     lineHeight: 26,
+  },
+  tokenInfo: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#a8e063",
+    marginTop: 8,
     letterSpacing: 0.3,
   },
-  titleSecondLine: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  heartIcon: {
-    marginTop: 2,
-  },
-  titleHighlight: {
-    color: "#e3ff7c",
-    fontSize: 17,
-    fontWeight: "800",
-  },
-  titleNormal: {
-    color: "#ffffff",
-    fontSize: 17,
-    fontWeight: "700",
-  },
   enhancedRecommendationButtons: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 8,
-    backgroundColor: "transparent",
-    shadowColor: "transparent",
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
-    shadowOpacity: 0,
-    shadowRadius: 0,
-    elevation: 0,
+    gap: 12,
   },
   enhancedRecButtonWrapper: {
-    flex: 1,
-    borderRadius: 10,
+    borderRadius: 14,
     overflow: "hidden",
-    backgroundColor: "transparent",
-    shadowColor: "transparent",
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
-    shadowOpacity: 0,
-    shadowRadius: 0,
-    elevation: 0,
   },
   enhancedRecButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    minHeight: 44,
-    gap: 8,
-    backgroundColor: "#e3ff7c",
-    borderRadius: 10,
-    shadowColor: "transparent",
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
-    shadowOpacity: 0,
-    shadowRadius: 0,
-    elevation: 0,
-  },
-  buttonIcon: {
-    fontSize: 20,
-    lineHeight: 24,
-    includeFontPadding: false,
-    textAlignVertical: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 18,
   },
   enhancedRecButtonText: {
     flex: 1,
-    fontSize: 13,
+    textAlign: "center",
+    fontSize: 16,
     fontWeight: "700",
-    color: "#000000",
-    lineHeight: 16,
-    letterSpacing: 0.1,
-    textAlign: "left",
-  },
-  chevronContainer: {
-    marginLeft: "auto",
+    color: "#111",
   },
 });
 

@@ -142,6 +142,7 @@ export interface AddMealRequest {
   mealType: "BREAKFAST" | "LUNCH" | "DINNER" | "SNACK" | "OTHER";
   foods: AddMealFoodRequest[];
   memo?: string;
+  timeTaken?: string; // ISO 8601 형식 (YYYY-MM-DDTHH:mm:ss.sssZ)
 }
 
 export interface AddMealResponse {
@@ -175,6 +176,7 @@ export interface SetNutritionGoalRequest {
   targetProtein: number;
   targetFat: number;
   goalType?: "AUTO" | "MANUAL";
+  date?: string; // YYYY-MM-DD 형식, 지정 날짜부터 말일까지 일괄 적용
 }
 
 // 영양 목표 설정 응답 타입

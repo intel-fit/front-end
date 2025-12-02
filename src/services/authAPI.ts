@@ -367,6 +367,12 @@ export const authAPI = {
     workoutDaysPerWeek?: string;
     lastLoginAt: string;
     createdAt: string;
+    mealRecommendTokens?: number;
+    workoutRecommendTokens?: number;
+    chatbotTokens?: number;
+    mealRecommendLastReset?: string;
+    workoutRecommendLastReset?: string;
+    chatbotLastReset?: string;
   }> => {
     return request<{
       id: number;
@@ -384,6 +390,12 @@ export const authAPI = {
       workoutDaysPerWeek?: string;
       lastLoginAt: string;
       createdAt: string;
+      mealRecommendTokens?: number;
+      workoutRecommendTokens?: number;
+      chatbotTokens?: number;
+      mealRecommendLastReset?: string;
+      workoutRecommendLastReset?: string;
+      chatbotLastReset?: string;
     }>("/api/profile", {
       method: "GET",
     });
