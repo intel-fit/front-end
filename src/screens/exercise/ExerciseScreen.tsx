@@ -18,7 +18,6 @@ import {
 } from "react-native";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
-import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import ExerciseModal from "../../components/modals/ExerciseModal";
 import InBodyCalendarModal from "../../components/common/InBodyCalendarModal";
@@ -41,7 +40,7 @@ import { eventBus } from "../../utils/eventBus";
 import { useDate } from "../../contexts/DateContext";
 import type { DailyProgressWeekItem } from "../../types";
 import { API_BASE_URL } from "../../services/apiConfig";
-
+import { useFocusEffect, useRoute } from "@react-navigation/native";
 interface Activity {
   id: number;
   name: string;
@@ -205,12 +204,13 @@ type ExerciseGoalInfo = {
   weeklyCalorieGoal?: number;
 };
 
-const ExerciseScreen = ({ navigation, route }: any) => {
-  const [monthBase, setMonthBase] = useState(new Date());
+const ExerciseScreen = ({ navigation }: any) => {
+  const route = useRoute();
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [calendarVisible, setCalendarVisible] = useState(false);
+  const [monthBase, setMonthBase] = useState(new Date());
   const [allActivities, setAllActivities] = useState<Activity[]>([]); // 모든 날짜의 운동 기록
   const { selectedDate, setSelectedDate } = useDate(); // 선택된 날짜 (전역 상태)
-
   // 선택된 날짜의 운동 기록만 필터링
   const activities = React.useMemo(() => {
     if (!selectedDate) return [];
@@ -1734,11 +1734,11 @@ const ExerciseScreen = ({ navigation, route }: any) => {
         if (!item || !item.date) return;
 
         // exerciseRate가 100이거나, 운동 기록이 있는 경우 (exerciseRate > 0 또는 totalCalorie > 0) 완료로 간주
-        const hasExercise = 
-          item.exerciseRate === 100 || 
+        const hasExercise =
+          item.exerciseRate === 100 ||
           (item.exerciseRate && item.exerciseRate > 0) ||
           (item.totalCalorie && item.totalCalorie > 0);
-        
+
         if (!hasExercise) return;
 
         try {
@@ -2165,7 +2165,9 @@ const ExerciseScreen = ({ navigation, route }: any) => {
 
   // 운동 기록 영속화: 페이지 전환해도 유지되도록 저장/복원
   React.useEffect(() => {
+    // userId가 없으면 실행하지 않음
     if (!userIdLoaded) return;
+
     (async () => {
       try {
         const saved = await AsyncStorage.getItem(
@@ -2175,11 +2177,18 @@ const ExerciseScreen = ({ navigation, route }: any) => {
           const parsed: Activity[] = JSON.parse(saved);
           if (Array.isArray(parsed)) {
             setAllActivities(parsed);
+            console.log("✅ [LOAD] 저장된 운동 불러오기 완료");
+            setInitialLoadComplete(true); // 로딩 완료 신호!
             return;
           }
         }
         setAllActivities([]);
-      } catch {}
+      } catch (e) {
+        console.error("데이터 로드 실패", e);
+        setAllActivities([]);
+      } finally {
+        setInitialLoadComplete(true); // 실패해도 로딩은 끝난 것임
+      }
     })();
   }, [userIdLoaded, getStorageKey]);
 
@@ -2196,64 +2205,77 @@ const ExerciseScreen = ({ navigation, route }: any) => {
   }, [allActivities, userIdLoaded, getStorageKey]);
 
   // AI 추천 운동 수신
-  React.useEffect(() => {
-    const { recommendedExercises } = route?.params || {};
-    console.log("🔍 route.params 확인:", route?.params);
-    console.log("🔍 recommendedExercises:", recommendedExercises);
-    if (
-      recommendedExercises &&
-      Array.isArray(recommendedExercises) &&
-      recommendedExercises.length > 0
-    ) {
-      console.log("🎯 AI 추천 운동 수신:", {
-        count: recommendedExercises.length,
-        groupTitle: recommendedExercises[0]?.saveTitle,
-        groupKey: recommendedExercises[0]?.groupKey,
-        exercises: recommendedExercises.map((ex: any) => ({
-          name: ex.name,
-          details: ex.details,
-          externalId: ex.externalId,
-        })),
-      });
+  useFocusEffect(
+    React.useCallback(() => {
+      // 1. 로딩 대기
+      if (!initialLoadComplete) return;
 
-      // allActivities에 추가
-      setAllActivities((prev) => {
-        // 중복 방지: 같은 groupKey가 이미 있으면 추가하지 않음
-        const existingGroupKey = recommendedExercises[0]?.groupKey;
-        const alreadyExists = prev.some(
-          (activity) => activity.groupKey === existingGroupKey
+      // 2. 파라미터 구조 유연하게 확인 (route.params 또는 route.params.params)
+      const rawParams = (route.params as any) || {};
+      const recommendedExercises =
+        rawParams.recommendedExercises ||
+        rawParams.params?.recommendedExercises; // 👈 여기가 핵심! 한 단계 더 깊이 확인
+
+      if (
+        recommendedExercises &&
+        Array.isArray(recommendedExercises) &&
+        recommendedExercises.length > 0
+      ) {
+        console.log(
+          `🚀 [AI] 추천 운동 ${recommendedExercises.length}개 수신 성공!`
         );
 
-        if (alreadyExists) {
-          console.log("⚠️ 이미 추가된 그룹입니다:", existingGroupKey);
-          return prev;
+        // 3. 날짜 동기화
+        const routineDateStr = recommendedExercises[0].date;
+        if (routineDateStr) {
+          const [year, month, day] = routineDateStr.split("-").map(Number);
+          const newDate = new Date(year, month - 1, day);
+
+          if (selectedDate?.toDateString() !== newDate.toDateString()) {
+            console.log(
+              `📅 날짜 이동: ${selectedDate?.toDateString()} -> ${newDate.toDateString()}`
+            );
+            setSelectedDate(newDate);
+            setMonthBase(new Date(year, month - 1, 1));
+          }
         }
 
-        console.log("✅ AI 추천 운동 추가:", {
-          기존운동: prev.length,
-          추가운동: recommendedExercises.length,
-          총운동: prev.length + recommendedExercises.length,
+        // 4. 데이터 추가
+        setAllActivities((prev) => {
+          const existingGroupKey = recommendedExercises[0]?.groupKey;
+          const alreadyExists = prev.some(
+            (activity) => activity.groupKey === existingGroupKey
+          );
+
+          if (alreadyExists) {
+            console.log("⚠️ [AI] 이미 추가된 루틴입니다.");
+            return prev;
+          }
+
+          console.log("✅ [AI] 리스트에 운동 추가 완료!");
+          return [...prev, ...recommendedExercises];
         });
 
-        return [...prev, ...recommendedExercises];
-      });
+        // 5. 파라미터 초기화 (재실행 방지)
+        navigation.setParams({
+          recommendedExercises: undefined,
+          params: undefined, // 중첩된 params도 초기화
+        });
 
-      // 파라미터 초기화 (중복 추가 방지)
-      navigation.setParams({ recommendedExercises: undefined });
-
-      // 성공 메시지
-      setTimeout(() => {
-        Alert.alert(
-          "운동 추가 완료",
-          `${recommendedExercises.length}개의 AI 추천 운동이 추가되었습니다.\n\n"시작" 버튼을 눌러 운동을 시작하세요!`,
-          [{ text: "확인" }]
-        );
-      }, 300);
-    }
-  }, [route?.params, navigation]);
-
+        // 6. 알림
+        setTimeout(() => {
+          Alert.alert(
+            "루틴 추가 완료",
+            "AI 추천 운동이 리스트에 추가되었습니다!",
+            [{ text: "확인" }]
+          );
+        }, 500);
+      }
+    }, [initialLoadComplete, route.params, selectedDate])
+  );
   // (임시 API 테스트 버튼 제거)
 
+  //클릭 시 찾아놓은 이미지를 합쳐서 모달에 전달
   const handleExerciseClick = (exercise: Activity) => {
     const isCompleted = isActivityFullyCompleted(exercise);
     setModalMode("edit");
@@ -2263,8 +2285,21 @@ const ExerciseScreen = ({ navigation, route }: any) => {
     );
     setExerciseSequenceIndex(index);
 
-    // 저장된 운동 기록에서 세트 정보 불러오기
-    let exerciseWithSets = { ...exercise };
+    // 1. 🔍 이미지를 찾습니다. (기존 이미지 or 백그라운드에서 로딩한 이미지)
+    const resolvedImageUrl =
+      exercise.imageUrl ||
+      (exercise.externalId ? exerciseImages[exercise.externalId] : null) ||
+      (exercise.name
+        ? exerciseImagesByName[exercise.name.toLowerCase()]
+        : null);
+
+    // 2. 저장된 운동 기록에서 세트 정보 불러오기 + 이미지 합치기
+    // 👇 imageUrl: resolvedImageUrl || undefined 부분을 추가했습니다.
+    let exerciseWithSets = {
+      ...exercise,
+      imageUrl: resolvedImageUrl || undefined,
+    };
+
     if (exercise.sessionId && savedWorkouts.length > 0) {
       // savedWorkouts에서 해당 sessionId의 세트 정보 찾기
       for (const group of savedWorkouts) {
@@ -2273,15 +2308,14 @@ const ExerciseScreen = ({ navigation, route }: any) => {
             session.sessionId === exercise.sessionId &&
             session.records.length > 0
           ) {
-            // SavedWorkoutRecord를 Activity의 sets 형식으로 변환
             const sets = session.records
-              .sort((a, b) => a.setNumber - b.setNumber) // setNumber 순서대로 정렬
+              .sort((a, b) => a.setNumber - b.setNumber)
               .map((record, index) => ({
                 id: record.id,
-                order: record.setNumber || index + 1, // setNumber를 order로 매핑
+                order: record.setNumber || index + 1,
                 weight: record.weight,
                 reps: record.reps,
-                isCompleted: true, // 저장된 기록은 모두 완료된 것으로 표시
+                isCompleted: true,
               }));
             exerciseWithSets = {
               ...exerciseWithSets,
@@ -2293,9 +2327,10 @@ const ExerciseScreen = ({ navigation, route }: any) => {
       }
     }
 
+    console.log("🖼️ 모달 열기 - 이미지 확인:", exerciseWithSets.imageUrl); // 로그 확인용
+
     setSelectedExercise(exerciseWithSets);
     setIsModalOpen(true);
-    // 완료된 운동인지 상태로 저장 (ExerciseModal에 전달하기 위해)
     setSelectedExerciseCompleted(isCompleted);
   };
 
@@ -5005,6 +5040,9 @@ interface WorkoutIntroModalProps {
         name: string;
         targetMuscle?: string;
         imageUrl?: string;
+        sessionId?: string;
+        activityId?: number;
+        externalId?: string;
       }>
     ) => void;
     onFeedbackUpdate?: (
