@@ -121,25 +121,83 @@ export const recommendedMealAPI = {
 
         console.log(`📆 ${plan.bundleDay}일차 → ${actualDateStr}`);
 
-        plan.meals.forEach((meal) => {
-          flattenedMeals.push({
-            id: meal.id,
-            planId: plan.id,
-            planName: plan.planName,
-            bundleId: plan.bundleId,
-            bundleDay: plan.bundleDay,
-            mealType: meal.mealType,
-            mealTypeName: meal.mealTypeName,
-            totalCalories: meal.totalCalories,
-            totalCarbs: meal.totalCarbs,
-            totalProtein: meal.totalProtein,
-            totalFat: meal.totalFat,
-            foods: meal.foods,
-            targetDate: actualDateStr, // ✅ bundleDay 기반 날짜 사용
-            originalPlanDate: plan.planDate,
-            createdAt: plan.createdAt,
+        // ✅ SNACK을 BREAKFAST/LUNCH/DINNER로 변환
+        const meals = plan.meals || [];
+        const breakfast = meals.find((m: any) => m.mealType === "BREAKFAST");
+        const lunch = meals.find((m: any) => m.mealType === "LUNCH");
+        const dinner = meals.find((m: any) => m.mealType === "DINNER");
+
+        // BREAKFAST, LUNCH, DINNER가 없고 SNACK만 있는 경우 변환
+        if (!breakfast && !lunch && !dinner) {
+          const snacks = meals.filter((m: any) => m.mealType === "SNACK");
+          
+          if (snacks.length >= 1) {
+            flattenedMeals.push({
+              ...snacks[0],
+              id: snacks[0].id,
+              planId: plan.id,
+              planName: plan.planName,
+              bundleId: plan.bundleId,
+              bundleDay: plan.bundleDay,
+              mealType: "BREAKFAST",
+              mealTypeName: "아침",
+              targetDate: actualDateStr,
+              originalPlanDate: plan.planDate,
+              createdAt: plan.createdAt,
+            });
+          }
+          if (snacks.length >= 2) {
+            flattenedMeals.push({
+              ...snacks[1],
+              id: snacks[1].id,
+              planId: plan.id,
+              planName: plan.planName,
+              bundleId: plan.bundleId,
+              bundleDay: plan.bundleDay,
+              mealType: "LUNCH",
+              mealTypeName: "점심",
+              targetDate: actualDateStr,
+              originalPlanDate: plan.planDate,
+              createdAt: plan.createdAt,
+            });
+          }
+          if (snacks.length >= 3) {
+            flattenedMeals.push({
+              ...snacks[2],
+              id: snacks[2].id,
+              planId: plan.id,
+              planName: plan.planName,
+              bundleId: plan.bundleId,
+              bundleDay: plan.bundleDay,
+              mealType: "DINNER",
+              mealTypeName: "저녁",
+              targetDate: actualDateStr,
+              originalPlanDate: plan.planDate,
+              createdAt: plan.createdAt,
+            });
+          }
+        } else {
+          // BREAKFAST, LUNCH, DINNER가 있는 경우 그대로 사용
+          plan.meals.forEach((meal: any) => {
+            flattenedMeals.push({
+              id: meal.id,
+              planId: plan.id,
+              planName: plan.planName,
+              bundleId: plan.bundleId,
+              bundleDay: plan.bundleDay,
+              mealType: meal.mealType,
+              mealTypeName: meal.mealTypeName,
+              totalCalories: meal.totalCalories,
+              totalCarbs: meal.totalCarbs,
+              totalProtein: meal.totalProtein,
+              totalFat: meal.totalFat,
+              foods: meal.foods,
+              targetDate: actualDateStr,
+              originalPlanDate: plan.planDate,
+              createdAt: plan.createdAt,
+            });
           });
-        });
+        }
       });
 
       console.log("✅ 평탄화 완료:", flattenedMeals.length, "개 끼니");

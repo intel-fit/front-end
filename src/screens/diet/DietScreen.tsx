@@ -7,16 +7,31 @@ import {
   SafeAreaView,
   ScrollView,
   Alert,
+  Modal,
 } from 'react-native';
 import { Ionicons as Icon } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import {colors} from '../../theme/colors';
 import {useDate} from '../../contexts/DateContext';
-import {mealAPI} from '../../services';
+import {mealAPI, recommendedMealAPI} from '../../services';
 import {useFocusEffect} from '@react-navigation/native';
 // 진행률 API 호출 제거
 // import {fetchWeeklyProgress, fetchMonthlyProgress} from '../../utils/exerciseApi';
-import type {DailyMealsResponse, DailyMeal, NutritionGoal, DailyProgressWeekItem} from '../../types';
+import type {DailyMealsResponse, DailyMeal, NutritionGoal, DailyProgressWeekItem, AddMealRequest} from '../../types';
 import NutritionGoalModal from '../../components/modals/NutritionGoalModal';
+
+// MealPlanDetail 모달에서 사용할 타입 정의 (간소화)
+interface MealPlanDay {
+  date: string;
+  bundleDay: number;
+  meals: any[]; // MealDetail 타입을 대신하여 any 사용
+}
+
+interface SelectedPlan {
+  bundleId: string;
+  planName: string;
+  days: MealPlanDay[];
+}
 
 const DietScreen = ({navigation, route}: any) => {
   // 달력 관련 상태
@@ -34,6 +49,15 @@ const DietScreen = ({navigation, route}: any) => {
   const [monthlyProgress, setMonthlyProgress] = useState<DailyProgressWeekItem[]>([]);
   // 칼로리 캐시 사용 안 함
   // const [dailyCaloriesCache, setDailyCaloriesCache] = useState<Record<string, number>>({});
+
+  // 추천 식단 관련 상태
+  const [savedMealPlans, setSavedMealPlans] = useState<any[]>([]);
+  const [selectedPlan, setSelectedPlan] = useState<SelectedPlan | null>(null);
+  const [showPlanModal, setShowPlanModal] = useState<boolean>(false);
+  const [recommendedMealsForSelectedDate, setRecommendedMealsForSelectedDate] = useState<any[]>([]);
+  
+  // 토글 상태: 'meals' (식단 내역) 또는 'recommendations' (추천 식단)
+  const [activeTab, setActiveTab] = useState<'meals' | 'recommendations'>('meals');
 
   // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
   const formatDateToString = (date: Date): string => {
@@ -73,6 +97,251 @@ const DietScreen = ({navigation, route}: any) => {
     };
   };
 
+  // 저장된 식단 플랜 목록 로드
+  const loadSavedMealPlans = async () => {
+    try {
+      const response = await recommendedMealAPI.getSavedMealPlans();
+
+      const bundleMap = new Map<string, any>();
+
+      response.forEach((plan: any) => {
+        if (!bundleMap.has(plan.bundleId)) {
+          bundleMap.set(plan.bundleId, {
+            bundleId: plan.bundleId,
+            planName: plan.planName,
+            description: plan.description,
+            createdAt: plan.createdAt,
+            mealCount: 0,
+            totalCalories: 0,
+          });
+        }
+
+        const bundle = bundleMap.get(plan.bundleId)!;
+        bundle.mealCount++;
+        bundle.totalCalories += plan.totalCalories || 0;
+      });
+
+      const plans = Array.from(bundleMap.values()).map((bundle) => ({
+        ...bundle,
+        avgCalories: Math.round(bundle.totalCalories / (bundle.mealCount || 1)),
+        description: `${Math.ceil(bundle.mealCount / 3)}일 식단`,
+      }));
+
+      setSavedMealPlans(plans);
+    } catch (error) {
+      console.error('저장된 식단 로드 실패:', error);
+      setSavedMealPlans([]);
+    }
+  };
+
+  // 선택된 날짜의 추천 식단 찾기
+  const loadRecommendedMealsForDate = async (date: Date) => {
+    try {
+      if (savedMealPlans.length === 0) {
+        console.log('🔍 추천 식단 로드: 저장된 플랜 없음');
+        setRecommendedMealsForSelectedDate([]);
+        return;
+      }
+
+      const dateStr = formatDateToString(date);
+      console.log('🔍 추천 식단 로드 시작:', dateStr, '저장된 플랜:', savedMealPlans.length, '개');
+
+      // 모든 플랜의 추천 식단을 수집
+      const allMealsForDate: any[] = [];
+
+      for (const plan of savedMealPlans) {
+        const details = await recommendedMealAPI.getSavedMealPlansByBundle(
+          plan.bundleId
+        );
+
+        console.log('📦 번들 상세 조회 결과:', plan.bundleId, '→', details.length, '개 끼니');
+        console.log('📅 날짜별 분포:', details.reduce((acc: any, meal: any) => {
+          acc[meal.targetDate] = (acc[meal.targetDate] || 0) + 1;
+          return acc;
+        }, {}));
+
+        const mealsForDate = details.filter(
+          (meal: any) => meal.targetDate === dateStr
+        );
+
+        console.log('✅ 찾은 식단:', dateStr, '→', mealsForDate.length, '개');
+
+        if (mealsForDate.length > 0) {
+          const mealsWithBundleInfo = mealsForDate.map((meal: any) => ({
+            ...meal,
+            sourceBundleId: plan.bundleId,
+            sourcePlanName: plan.planName,
+          }));
+
+          allMealsForDate.push(...mealsWithBundleInfo);
+        }
+      }
+
+      if (allMealsForDate.length > 0) {
+        console.log('✅ 추천 식단 설정 완료:', allMealsForDate.length, '개');
+        setRecommendedMealsForSelectedDate(allMealsForDate);
+      } else {
+        console.log('⚠️ 해당 날짜의 추천 식단 없음:', dateStr);
+        setRecommendedMealsForSelectedDate([]);
+      }
+    } catch (error) {
+      console.error('❌ 날짜별 추천 식단 로드 실패:', error);
+      setRecommendedMealsForSelectedDate([]);
+    }
+  };
+
+  // 플랜 상세 조회
+  const loadPlanDetails = async (bundleId: string) => {
+    try {
+      setLoading(true);
+
+      const response = await recommendedMealAPI.getSavedMealPlansByBundle(
+        bundleId
+      );
+
+      if (response.length === 0) {
+        Alert.alert('알림', '식단 정보가 없습니다.');
+        return;
+      }
+
+      const dayMap = new Map<string, any>();
+
+      response.forEach((meal: any) => {
+        const dateStr = meal.targetDate;
+
+        if (!dateStr) {
+          console.warn('targetDate가 없는 끼니:', meal);
+          return;
+        }
+
+        if (!dayMap.has(dateStr)) {
+          dayMap.set(dateStr, {
+            date: dateStr,
+            bundleDay: meal.bundleDay,
+            meals: [],
+          });
+        }
+
+        dayMap.get(dateStr)!.meals.push(meal);
+      });
+
+      const sortedDays = Array.from(dayMap.values()).sort((a, b) =>
+        a.date.localeCompare(b.date)
+      );
+
+      setSelectedPlan({
+        bundleId: bundleId,
+        planName: response[0]?.planName || '식단 플랜',
+        days: sortedDays,
+      });
+
+      setShowPlanModal(true);
+    } catch (error: any) {
+      console.error('플랜 상세 조회 실패:', error);
+      Alert.alert('오류', error.message || '플랜을 불러올 수 없습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 플랜 적용
+  const handleApplyPlanToDate = async (dayMeals: any[], targetDate: Date) => {
+    try {
+      setLoading(true);
+      const dateStr = formatDateToString(targetDate);
+
+      for (const meal of dayMeals) {
+        const mealTypeMap: Record<string, string> = {
+          'BREAKFAST': '아침',
+          'LUNCH': '점심',
+          'DINNER': '저녁',
+          'SNACK': '야식',
+          'OTHER': '기타',
+        };
+        const mealTypeName = mealTypeMap[meal.mealType] || meal.mealTypeName || '기타';
+        
+        // foods 데이터 처리: food_name으로 검색해서 올바른 food_id 찾기
+        const processedFoods = await Promise.all(
+          (meal.foods || []).map(async (food: any) => {
+            let foodId = 0;
+            
+            // food_name으로 검색해서 올바른 food_id 찾기
+            try {
+              const searchResults = await mealAPI.searchFood(food.foodName);
+              if (searchResults && searchResults.length > 0) {
+                // 정확히 일치하는 음식 찾기
+                const exactMatch = searchResults.find(
+                  (result: any) => result.name === food.foodName || result.name_ko === food.foodName
+                );
+                // 정확히 일치하는 것이 없으면 첫 번째 결과 사용
+                foodId = exactMatch ? exactMatch.id : searchResults[0].id;
+                console.log(`🔍 음식 검색: "${food.foodName}" → food_id: ${foodId}`);
+              } else {
+                console.warn(`⚠️ 음식 검색 실패: "${food.foodName}" - food_id를 0으로 설정`);
+                // 검색 실패 시 기존 food_id 사용 (있다면)
+                foodId = food.id || food.food_id || 0;
+              }
+            } catch (error) {
+              console.error(`❌ 음식 검색 오류: "${food.foodName}"`, error);
+              // 검색 오류 시 기존 food_id 사용 (있다면)
+              foodId = food.id || food.food_id || 0;
+            }
+            
+            return {
+              foodName: food.foodName,
+              servingSize: food.servingSize || 100,
+              calories: food.calories || 0,
+              carbs: food.carbs || 0,
+              protein: food.protein || 0,
+              fat: food.fat || 0,
+              sodium: food.sodium,
+              cholesterol: food.cholesterol,
+              sugar: food.sugar,
+              fiber: food.fiber,
+              imageUrl: food.imageUrl,
+              aiConfidenceScore: food.aiConfidenceScore,
+              id: foodId,
+              food_id: foodId,
+            };
+          })
+        );
+        
+        const addMealData: AddMealRequest = {
+          mealDate: dateStr,
+          mealType: meal.mealType as
+            | 'BREAKFAST'
+            | 'LUNCH'
+            | 'DINNER'
+            | 'SNACK'
+            | 'OTHER',
+          memo: `${
+            selectedPlan?.planName || meal.sourcePlanName || '추천 식단'
+          } - ${mealTypeName}`,
+          foods: processedFoods,
+        };
+
+        await mealAPI.addMeal(addMealData);
+      }
+
+      Alert.alert('성공', `${dayMeals.length}개 식사가 추가되었습니다!`, [
+        {
+          text: '확인',
+          onPress: async () => {
+            setShowPlanModal(false);
+            setSelectedDate(targetDate);
+            await fetchDailyMeals(targetDate);
+            await loadRecommendedMealsForDate(targetDate);
+          },
+        },
+      ]);
+    } catch (error: any) {
+      console.error('식단 적용 실패:', error);
+      Alert.alert('오류', error.message || '식단 적용에 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   // API 호출 함수
   const fetchDailyMeals = async (date: Date) => {
@@ -105,13 +374,13 @@ const DietScreen = ({navigation, route}: any) => {
             try {
               setLoading(true);
               const dateToFetch = selectedDate || new Date();
-              const dateStr = formatDateToString(dateToFetch);
               
               await mealAPI.deleteMeal(mealId);
               Alert.alert('성공', '식사가 삭제되었습니다.');
               
               // 삭제 후 데이터 새로고침
               await fetchDailyMeals(dateToFetch);
+              await loadRecommendedMealsForDate(dateToFetch);
             } catch (error: any) {
               console.error('식사 삭제 실패:', error);
               let errorMessage = '식사 삭제에 실패했습니다.';
@@ -140,7 +409,11 @@ const DietScreen = ({navigation, route}: any) => {
     // 날짜가 바뀔 때 이전 dailyMealsData를 초기화하여 이전 날짜의 데이터가 달력에 표시되지 않도록 함
     setDailyMealsData(null);
     fetchDailyMeals(dateToFetch);
-  }, [selectedDate]);
+
+    if (savedMealPlans.length > 0) {
+      loadRecommendedMealsForDate(dateToFetch);
+    }
+  }, [selectedDate, savedMealPlans.length]);
 
   // route params에서 업데이트된 진행률과 날짜 받기
   useEffect(() => {
@@ -184,6 +457,10 @@ const DietScreen = ({navigation, route}: any) => {
     React.useCallback(() => {
       const dateToFetch = selectedDate || new Date();
       fetchDailyMeals(dateToFetch);
+
+      loadSavedMealPlans().then(() => {
+        loadRecommendedMealsForDate(dateToFetch);
+      });
       // 진행률 API 호출 제거
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedDate])
@@ -241,8 +518,6 @@ const DietScreen = ({navigation, route}: any) => {
                 targetFat: 0,
                 goalType: 'AUTO',
                 goalTypeDescription: '자동 계산',
-                isManual: false,
-                exists: false,
               });
             }
           }
@@ -298,9 +573,49 @@ const DietScreen = ({navigation, route}: any) => {
   const meals = (dailyMealsData?.meals || [])
     .slice() // 원본 배열 복사
     .sort((a: DailyMeal, b: DailyMeal) => {
-      // createdAt 기준으로 시간순 정렬 (이른 시간부터)
-      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      // createdAt 기준으로 시간순 정렬 (00:00부터 끝까지)
+      // 같은 날짜 내에서 시간만 비교
+      let timeA: number;
+      let timeB: number;
+      
+      if (a.createdAt) {
+        try {
+          const dateA = new Date(a.createdAt);
+          if (isNaN(dateA.getTime())) {
+            timeA = Number.MAX_SAFE_INTEGER;
+          } else {
+            // 같은 날짜 기준으로 시간만 추출 (시:분:초)
+            const hours = dateA.getHours();
+            const minutes = dateA.getMinutes();
+            const seconds = dateA.getSeconds();
+            timeA = hours * 3600 + minutes * 60 + seconds;
+          }
+        } catch (e) {
+          timeA = Number.MAX_SAFE_INTEGER;
+        }
+      } else {
+        timeA = Number.MAX_SAFE_INTEGER;
+      }
+      
+      if (b.createdAt) {
+        try {
+          const dateB = new Date(b.createdAt);
+          if (isNaN(dateB.getTime())) {
+            timeB = Number.MAX_SAFE_INTEGER;
+          } else {
+            // 같은 날짜 기준으로 시간만 추출 (시:분:초)
+            const hours = dateB.getHours();
+            const minutes = dateB.getMinutes();
+            const seconds = dateB.getSeconds();
+            timeB = hours * 3600 + minutes * 60 + seconds;
+          }
+        } catch (e) {
+          timeB = Number.MAX_SAFE_INTEGER;
+        }
+      } else {
+        timeB = Number.MAX_SAFE_INTEGER;
+      }
+      
       return timeA - timeB;
     })
     .map((meal: DailyMeal) => {
@@ -322,8 +637,35 @@ const DietScreen = ({navigation, route}: any) => {
           })
         : '추천 식단';
 
+      // 추천 식단에서 추가된 식단인지 확인
+      // 1. memo에 "추천 식단", "식단 플랜", " - "가 포함되어 있으면 추천 식단
+      // 2. 또는 mealType이 BREAKFAST, LUNCH, DINNER이고 memo가 있으면 추천 식단일 가능성
+      const hasRecommendedPattern = meal.memo && (
+        meal.memo.includes('추천 식단') || 
+        meal.memo.includes('식단 플랜') ||
+        meal.memo.includes(' - ')
+      );
+      
+      // mealType이 유효한 끼니 타입이고 memo가 있으면 추천 식단으로 간주
+      const isValidMealType = ['BREAKFAST', 'LUNCH', 'DINNER'].includes(meal.mealType);
+      const isRecommendedMeal = hasRecommendedPattern || (isValidMealType && meal.memo && meal.memo.trim().length > 0);
+      
+      // 식단 이름 결정
+      let mealTypeName = meal.memo || mealTypeMap[meal.mealType] || meal.mealTypeName || '기타';
+      
+      // memo가 있지만 추천 식단 형식이면 끼니 이름만 추출
+      if (isRecommendedMeal && meal.memo && meal.memo.includes(' - ')) {
+        const parts = meal.memo.split(' - ');
+        mealTypeName = parts[parts.length - 1]; // 마지막 부분이 끼니 이름 (예: "점심")
+      } else if (isRecommendedMeal && !meal.memo.includes(' - ')) {
+        // memo에 " - "가 없으면 mealType을 사용
+        mealTypeName = mealTypeMap[meal.mealType] || meal.mealTypeName || '기타';
+      }
+
       return {
-        type: meal.memo || mealTypeMap[meal.mealType] || meal.mealTypeName,
+        mealType: meal.mealType,
+        type: mealTypeName,
+        isRecommended: isRecommendedMeal,
         time: mealTime,
         calories: meal.totalCalories,
         foods: meal.foods.map(food => ({
@@ -332,6 +674,39 @@ const DietScreen = ({navigation, route}: any) => {
         })),
       };
     });
+
+  // 기록 안 된 끼니의 추천만 필터링
+  const getAvailableRecommendations = () => {
+    if (recommendedMealsForSelectedDate.length === 0) return [];
+
+    const recordedMealTypes = new Set(meals.map((meal) => meal.mealType));
+
+    return recommendedMealsForSelectedDate.filter(
+      (recommended: any) => !recordedMealTypes.has(recommended.mealType)
+    );
+  };
+
+  const availableRecommendations = getAvailableRecommendations();
+
+  // UI 표시 조건 변수
+  // 식사가 없을 때: 전체 추천 식단 표시
+  const shouldShowFullRecommendation =
+    meals.length === 0 && recommendedMealsForSelectedDate.length > 0;
+
+  // 식사가 있을 때: 기록 안 된 끼니 추천 표시
+  const shouldShowPartialRecommendation =
+    meals.length > 0 && availableRecommendations.length > 0;
+
+  // 추천 식단이 있지만 기록 안 된 끼니가 없을 때도 전체 추천 식단 표시
+  const shouldShowFullRecommendationEvenWithMeals =
+    meals.length > 0 && 
+    recommendedMealsForSelectedDate.length > 0 && 
+    availableRecommendations.length === 0;
+
+  const shouldShowSavedPlans =
+    meals.length === 0 &&
+    recommendedMealsForSelectedDate.length === 0 &&
+    savedMealPlans.length > 0;
 
   // StatsScreen 내부에서 사용될 때는 SafeAreaView 제거
   const ContainerComponent = View;
@@ -651,77 +1026,210 @@ const DietScreen = ({navigation, route}: any) => {
           </View>
         </View>
 
-        {/* 식단 기록하기 섹션: 새로운 식단을 추가하는 화면으로 이동 */}
-        <View style={styles.addMealSection}>
-          <View style={styles.mealRecordHeader}>
-            <Text style={styles.mealRecordTitle}>식단 기록하기</Text>
+        {/* 탭: 식단 내역 / 추천 식단 + 추가 버튼 */}
+        <View style={styles.tabHeaderContainer}>
+          <View style={styles.tabContainer}>
             <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => {
-                // 선택한 날짜를 MealAddScreen으로 전달 (문자열로 변환하여 전달)
-                const dateToPass = selectedDate || new Date();
-                const dateString = formatDateToString(dateToPass);
-                navigation.navigate('MealAdd', { selectedDate: dateString });
-              }}>
-              <Icon name="add" size={18} color={colors.text} />
+              style={styles.tab}
+              onPress={() => setActiveTab('meals')}
+            >
+              <Text style={[styles.tabText, activeTab === 'meals' && styles.tabTextActive]}>
+                식단 내역
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.tab}
+              onPress={() => setActiveTab('recommendations')}
+            >
+              <View style={styles.tabTextContainer}>
+                <Text style={[styles.tabText, activeTab === 'recommendations' && styles.tabTextActive]}>
+                  추천 식단
+                </Text>
+                {activeTab === 'recommendations' ? (
+                  <LinearGradient
+                    colors={['#e3ff7c', '#fff9c4', '#ffffff']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.premiumBadgeGradient}
+                  >
+                    <Text style={styles.premiumBadgeText}>premium</Text>
+                  </LinearGradient>
+                ) : (
+                  <View style={styles.premiumBadge}>
+                    <Text style={styles.premiumBadgeTextGray}>premium</Text>
+                  </View>
+                )}
+              </View>
             </TouchableOpacity>
           </View>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => {
+              // 선택한 날짜를 MealAddScreen으로 전달 (문자열로 변환하여 전달)
+              const dateToPass = selectedDate || new Date();
+              const dateString = formatDateToString(dateToPass);
+              navigation.navigate('MealAdd', { selectedDate: dateString });
+            }}>
+            <Icon name="add" size={18} color={colors.text} />
+          </TouchableOpacity>
         </View>
 
-        {/* 식사별 섹션: 아침, 점심, 저녁, 야식 등 각 식사 정보 표시 */}
-        <View style={styles.mealsContainer}>
-          {meals.map((meal, index) => {
-            const originalMeal = dailyMealsData?.meals[index];
-            return (
-              <View key={index} style={styles.mealSection}>
-                <TouchableOpacity
-                  style={styles.mealContent}
-                  onPress={() => {
-                    if (originalMeal) {
-                      navigation.navigate('MealAdd', { meal: originalMeal });
-                    }
-                  }}
-                  activeOpacity={0.7}>
-                  {/* 식사 헤더: 식사 종류, 시간, 칼로리 */}
-                  <View style={styles.mealHeader}>
-                    <View style={styles.mealLeft}>
-                      <Text style={styles.mealTitle}>{meal.type}</Text>
-                      <Text style={styles.mealTime}>{meal.time}</Text>
+        {/* 식단 내역 탭 */}
+        {activeTab === 'meals' && (
+          <>
+
+            {/* 식사별 섹션: 아침, 점심, 저녁, 야식 등 각 식사 정보 표시 */}
+            <View style={styles.mealsContainer}>
+              {meals.map((meal, index) => {
+                const originalMeal = dailyMealsData?.meals[index];
+                return (
+                  <View key={index} style={styles.mealSection}>
+                    <TouchableOpacity
+                      style={styles.mealContent}
+                      onPress={() => {
+                        if (originalMeal) {
+                          navigation.navigate('MealAdd', { meal: originalMeal });
+                        }
+                      }}
+                      activeOpacity={0.7}>
+                      {/* 식사 헤더: 식사 종류, 시간, 칼로리 */}
+                      <View style={styles.mealHeader}>
+                        <View style={styles.mealLeft}>
+                          <View style={styles.mealTitleContainer}>
+                            <Text style={styles.mealTitle}>{meal.type}</Text>
+                            {meal.isRecommended && (
+                              <Icon name="sparkles" size={16} color="#e3ff7c" />
+                            )}
+                          </View>
+                          <Text style={styles.mealTime}>{meal.time}</Text>
+                        </View>
+                        {/* 해당 식사의 총 칼로리 및 삭제 버튼 */}
+                        <View style={styles.mealRight}>
+                          <Text style={styles.mealCalories}>{Math.round(meal.calories)} kcal</Text>
+                          {originalMeal && (
+                            <TouchableOpacity
+                              style={styles.deleteButton}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleDeleteMeal(originalMeal.id);
+                              }}
+                              activeOpacity={0.7}>
+                              <Icon name="trash-outline" size={20} color={colors.textLight} />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                      {/* 섭취한 음식 목록: 음식명을 태그 형태로 표시 */}
+                      <View style={styles.foodTags}>
+                        {meal.foods.map((food, foodIndex) => (
+                          <View
+                            key={foodIndex}
+                            style={[
+                              styles.foodTag,
+                              {backgroundColor: food.color},
+                            ]}>
+                            <Text style={styles.foodTagText} numberOfLines={2}>{food.name}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
+
+        {/* 추천 식단 탭 */}
+        {activeTab === 'recommendations' && (
+          <>
+            {/* 추천 식단이 있으면 항상 표시 */}
+            {recommendedMealsForSelectedDate.length > 0 && (
+              <View style={styles.recommendationSection}>
+                <Text style={styles.recommendationSubtitle}>
+                  {recommendedMealsForSelectedDate[0]?.sourcePlanName ||
+                    'AI 추천 식단'}
+                </Text>
+
+            <View style={styles.recommendationCards}>
+              {recommendedMealsForSelectedDate
+                .sort((a, b) => {
+                  const order: { [key: string]: number } = {
+                    BREAKFAST: 0,
+                    LUNCH: 1,
+                    DINNER: 2,
+                    SNACK: 3,
+                    OTHER: 4,
+                  };
+                  const orderA = order[a.mealType] ?? 99;
+                  const orderB = order[b.mealType] ?? 99;
+                  return orderA - orderB;
+                })
+                .map((meal: any, index: number) => (
+                  <View key={index} style={styles.recommendationCard}>
+                    <View style={styles.recommendationCardHeader}>
+                      <Text style={styles.recommendationEmoji}>
+                        {meal.mealType === 'BREAKFAST'
+                          ? '🌅'
+                          : meal.mealType === 'LUNCH'
+                          ? '☀️'
+                          : '🌙'}
+                      </Text>
+                      <View style={styles.recommendationCardInfo}>
+                        <Text style={styles.recommendationCardTitle}>
+                          {(() => {
+                            const mealTypeMap: Record<string, string> = {
+                              'BREAKFAST': '아침',
+                              'LUNCH': '점심',
+                              'DINNER': '저녁',
+                              'SNACK': '야식',
+                              'OTHER': '기타',
+                            };
+                            return mealTypeMap[meal.mealType] || meal.mealTypeName || '기타';
+                          })()}
+                        </Text>
+                        <Text style={styles.recommendationCardCalories}>
+                          {meal.totalCalories}kcal
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.quickAddButton}
+                        onPress={async () => {
+                          const targetDate = selectedDate || new Date();
+                          await handleApplyPlanToDate([meal], targetDate);
+                        }}
+                      >
+                        <Icon name="add-circle" size={24} color="#e3ff7c" />
+                      </TouchableOpacity>
                     </View>
-                    {/* 해당 식사의 총 칼로리 및 삭제 버튼 */}
-                    <View style={styles.mealRight}>
-                      <Text style={styles.mealCalories}>{Math.round(meal.calories)} kcal</Text>
-                      {originalMeal && (
-                        <TouchableOpacity
-                          style={styles.deleteButton}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            handleDeleteMeal(originalMeal.id);
-                          }}
-                          activeOpacity={0.7}>
-                          <Icon name="trash-outline" size={20} color={colors.textLight} />
-                        </TouchableOpacity>
+                    <View style={styles.recommendationCardFoods}>
+                      {meal.foods
+                        ?.slice(0, 3)
+                        .map((food: any, foodIdx: number) => (
+                          <Text
+                            key={foodIdx}
+                            style={styles.recommendationCardFoodName}
+                          >
+                            {food.foodName}
+                            {foodIdx < Math.min(meal.foods.length - 1, 2) &&
+                              ', '}
+                          </Text>
+                        ))}
+                      {meal.foods?.length > 3 && (
+                        <Text style={styles.recommendationCardFoodName}>
+                          외 {meal.foods.length - 3}개
+                        </Text>
                       )}
                     </View>
                   </View>
-                  {/* 섭취한 음식 목록: 음식명을 태그 형태로 표시 */}
-                  <View style={styles.foodTags}>
-                    {meal.foods.map((food, foodIndex) => (
-                      <View
-                        key={foodIndex}
-                        style={[
-                          styles.foodTag,
-                          {backgroundColor: food.color},
-                        ]}>
-                        <Text style={styles.foodTagText} numberOfLines={2}>{food.name}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </TouchableOpacity>
-              </View>
-            );
-          })}
-        </View>
+                ))}
+            </View>
+          </View>
+        )}
+
+
+          </>
+        )}
       </ScrollView>
 
       {/* 영양 목표 설정 모달 */}
@@ -734,6 +1242,80 @@ const DietScreen = ({navigation, route}: any) => {
         }}
         date={formatDateToString(selectedDate || new Date())}
       />
+
+      {/* 플랜 상세 모달 */}
+      <Modal
+        visible={showPlanModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowPlanModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowPlanModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {selectedPlan?.planName || '식단 플랜'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowPlanModal(false)}>
+                <Icon name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              {selectedPlan?.days.map((day, dayIndex) => (
+                <View key={dayIndex} style={styles.dayCard}>
+                  <Text style={styles.dayTitle}>
+                    {day.date} ({day.bundleDay}일차)
+                  </Text>
+                  {day.meals.map((meal: any, mealIndex: number) => {
+                    const mealTypeMap: Record<string, string> = {
+                      'BREAKFAST': '아침',
+                      'LUNCH': '점심',
+                      'DINNER': '저녁',
+                      'SNACK': '야식',
+                      'OTHER': '기타',
+                    };
+                    const mealTypeName = mealTypeMap[meal.mealType] || meal.mealTypeName || '기타';
+                    return (
+                      <View key={mealIndex} style={styles.mealItem}>
+                        <Text style={styles.mealTypeName}>
+                          {mealTypeName} - {meal.totalCalories}kcal
+                        </Text>
+                        <View style={styles.foodList}>
+                          {meal.foods?.map((food: any, foodIndex: number) => (
+                            <Text key={foodIndex} style={styles.foodName}>
+                              • {food.foodName}
+                            </Text>
+                          ))}
+                        </View>
+                      </View>
+                    );
+                  })}
+                  <TouchableOpacity
+                    style={styles.applyDayButton}
+                    onPress={async () => {
+                      const targetDate = parseDateString(day.date);
+                      await handleApplyPlanToDate(day.meals, targetDate);
+                    }}
+                  >
+                    <Text style={styles.applyDayButtonText}>
+                      이 날짜에 적용하기
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </ContainerComponent>
   );
 };
@@ -1009,8 +1591,8 @@ const styles = StyleSheet.create({
   },
   mealSection: {
     backgroundColor: colors.cardBackground,
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 4,
     position: 'relative',
   },
@@ -1021,47 +1603,53 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 15,
+    marginBottom: 12,
   },
   mealLeft: {
     flexDirection: 'column',
-    gap: 5,
+    gap: 4,
+  },
+  mealTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   mealRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   mealTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: colors.text,
   },
   mealTime: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '400',
     color: colors.text,
     textAlign: 'left',
   },
   mealCalories: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: colors.text,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 20,
   },
   foodTags: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
+    marginTop: 4,
   },
   foodTag: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 7,
   },
   foodTagText: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '700',
     color: '#000000',
   },
@@ -1069,6 +1657,61 @@ const styles = StyleSheet.create({
     padding: 4,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // 탭 스타일
+  tabHeaderContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 12,
+    gap: 12,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    gap: 20,
+    flex: 1,
+  },
+  tab: {
+    paddingVertical: 4,
+    paddingHorizontal: 0,
+  },
+  tabTextContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tabText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textLight,
+  },
+  tabTextActive: {
+    color: '#e3ff7c',
+    fontWeight: '700',
+  },
+  premiumBadge: {
+    backgroundColor: colors.textLight,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  premiumBadgeGradient: {
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  premiumBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#000000',
+    letterSpacing: 0.5,
+  },
+  premiumBadgeTextGray: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.text,
+    letterSpacing: 0.5,
   },
   addMealSection: {
     marginTop: 0,
@@ -1092,6 +1735,267 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cardBackground,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+
+  // 추천 식단 스타일 (식사 기록 없을 때)
+  recommendationSection: {
+    marginTop: 12,
+    marginBottom: 20,
+  },
+  recommendationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  recommendationTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  recommendationSubtitle: {
+    fontSize: 14,
+    color: colors.textLight,
+    marginBottom: 12,
+  },
+  recommendationCards: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  recommendationCard: {
+    backgroundColor: colors.cardBackground,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(227, 255, 124, 0.2)',
+    position: 'relative',
+  },
+  recommendationCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 8,
+  },
+  recommendationEmoji: {
+    fontSize: 32,
+  },
+  recommendationCardInfo: {
+    flex: 1,
+  },
+  recommendationCardTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  recommendationCardCalories: {
+    fontSize: 13,
+    color: colors.textLight,
+  },
+  recommendationCardFoods: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingLeft: 44,
+  },
+  recommendationCardFoodName: {
+    fontSize: 13,
+    color: colors.textLight,
+  },
+  applyAllButton: {
+    backgroundColor: '#e3ff7c',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  applyAllButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#000000',
+  },
+
+  // 저장된 플랜 섹션
+  savedPlansSection: {
+    marginTop: 12,
+    marginBottom: 20,
+  },
+  savedPlansHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  savedPlansTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  savedPlanCard: {
+    backgroundColor: colors.cardBackground,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(227, 255, 124, 0.2)',
+  },
+  savedPlanContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  savedPlanInfo: {
+    flex: 1,
+  },
+  savedPlanName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  savedPlanDescription: {
+    fontSize: 13,
+    color: colors.textLight,
+  },
+
+  // 추가 추천 섹션 (식사 있을 때)
+  additionalRecommendationSection: {
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  additionalRecommendationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  additionalRecommendationTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  additionalRecommendationSubtitle: {
+    fontSize: 13,
+    color: colors.textLight,
+    marginBottom: 16,
+  },
+  additionalRecommendationCards: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  additionalRecommendationCard: {
+    backgroundColor: colors.cardBackground,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(227, 255, 124, 0.3)',
+  },
+  additionalRecommendationCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 12,
+  },
+  additionalRecommendationEmoji: {
+    fontSize: 28,
+  },
+  additionalRecommendationCardInfo: {
+    flex: 1,
+  },
+  additionalRecommendationCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  additionalRecommendationCardCalories: {
+    fontSize: 13,
+    color: colors.textLight,
+  },
+  quickAddButton: {
+    padding: 4,
+  },
+  additionalRecommendationCardFoods: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingLeft: 40,
+  },
+  additionalRecommendationCardFoodName: {
+    fontSize: 13,
+    color: colors.textLight,
+  },
+
+  // 모달 스타일
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.cardBackground,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  modalBody: {
+    padding: 20,
+  },
+  dayCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  dayTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 12,
+  },
+  mealItem: {
+    marginBottom: 12,
+  },
+  mealTypeName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 6,
+  },
+  foodList: {
+    paddingLeft: 8,
+  },
+  foodName: {
+    fontSize: 13,
+    color: colors.textLight,
+    marginBottom: 2,
+  },
+  applyDayButton: {
+    backgroundColor: '#e3ff7c',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  applyDayButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#000000',
   },
 });
 

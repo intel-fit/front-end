@@ -247,8 +247,23 @@ export const mealAPI = {
     // meal_name 결정: memo가 있으면 memo를 사용, 없으면 mealType 사용
     let mealName: string;
     if (mealData.memo && mealData.memo.trim().length > 0) {
-      // 식단 이름이 있으면 memo를 meal_name으로 사용
-      mealName = mealData.memo.trim();
+      // memo에 " - "가 포함되어 있으면 추천 식단 형식이므로 끼니 이름만 추출
+      if (mealData.memo.includes(' - ')) {
+        const parts = mealData.memo.split(' - ');
+        const mealTypeName = parts[parts.length - 1]; // 마지막 부분이 끼니 이름 (예: "점심")
+        // 끼니 이름을 영어로 변환
+        const mealNameMap: Record<string, string> = {
+          '아침': 'breakfast',
+          '점심': 'lunch',
+          '저녁': 'dinner',
+          '야식': 'snack',
+          '기타': 'other',
+        };
+        mealName = mealNameMap[mealTypeName] || mealData.mealType.toLowerCase();
+      } else {
+        // memo가 있지만 추천 식단 형식이 아니면 memo를 그대로 사용
+        mealName = mealData.memo.trim();
+      }
     } else {
       // 식단 이름이 없으면 mealType을 소문자로 변환하여 사용
       const mealNameMap: Record<string, string> = {
