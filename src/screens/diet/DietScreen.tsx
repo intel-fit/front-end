@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import { Ionicons as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import {colors} from '../../theme/colors';
 import {useDate} from '../../contexts/DateContext';
-import {mealAPI, recommendedMealAPI} from '../../services';
+import {mealAPI, recommendedMealAPI, homeAPI} from '../../services';
 import {useFocusEffect} from '@react-navigation/native';
 // 진행률 API 호출 제거
 // import {fetchWeeklyProgress, fetchMonthlyProgress} from '../../utils/exerciseApi';
@@ -80,21 +80,41 @@ const DietScreen = ({navigation, route}: any) => {
     setWeeklyProgress([]);
   };
 
-  // 월별 데이터 로드 (비활성화)
+  // 월별 데이터 로드 (중복 호출 방지)
+  const loadMonthlyProgressRef = useRef<string | null>(null);
   const loadMonthlyProgress = async (year: number, month: number) => {
-    // API 호출 제거 - 진행률 데이터 사용 안 함
-    setMonthlyProgress([]);
+    const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
+    
+    // 이미 같은 월의 데이터를 로드 중이면 중복 호출 방지
+    if (loadMonthlyProgressRef.current === yearMonth) {
+      console.log('[DIET] 월별 진행률 중복 호출 방지:', yearMonth);
+      return;
+    }
+    
+    try {
+      loadMonthlyProgressRef.current = yearMonth;
+      console.log('[DIET] 월별 진행률 로드 시작:', yearMonth);
+      const data = await homeAPI.getMonthlyProgress(yearMonth);
+      setMonthlyProgress(Array.isArray(data) ? data : []);
+      console.log('[DIET] 월별 진행률 로드 완료:', data.length, '개');
+    } catch (error: any) {
+      console.error('[DIET] 월별 진행률 로드 실패:', error);
+      setMonthlyProgress([]);
+    } finally {
+      // 로드 완료 후 ref 초기화 (다음 달 로드 가능하도록)
+      setTimeout(() => {
+        if (loadMonthlyProgressRef.current === yearMonth) {
+          loadMonthlyProgressRef.current = null;
+        }
+      }, 1000);
+    }
   };
 
-  // 특정 날짜의 진행률 데이터 가져오기 (비활성화 - 항상 빈 값 반환)
+  // 특정 날짜의 진행률 데이터 가져오기
   const getDayProgress = (date: Date): DailyProgressWeekItem | undefined => {
-    // 진행률 API 사용 안 함 - 항상 빈 값 반환
     const dateStr = formatDateToString(date);
-    return {
-      date: dateStr,
-      exerciseRate: 0,
-      totalCalorie: 0,
-    };
+    // 월별 진행률 데이터에서 찾기
+    return monthlyProgress.find((item) => item.date === dateStr);
   };
 
   // 저장된 식단 플랜 목록 로드
@@ -471,20 +491,15 @@ const DietScreen = ({navigation, route}: any) => {
     // 진행률 API 호출 제거
   }, []);
 
-  // monthBase가 변경될 때 월별 데이터 로드 (비활성화)
+  // 월별 데이터 로드 (통합된 useEffect - 중복 호출 방지)
   useEffect(() => {
-    // 진행률 API 호출 제거
+    if (showMonthView) {
+      // monthBase를 기준으로 월별 데이터 로드
+      const year = monthBase.getFullYear();
+      const month = monthBase.getMonth() + 1;
+      loadMonthlyProgress(year, month);
+    }
   }, [monthBase, showMonthView]);
-
-  // 달력을 펼치거나 접을 때 해당 달의 월별 데이터 가져오기 (비활성화)
-  useEffect(() => {
-    // 진행률 API 호출 제거
-  }, [showMonthView, selectedDate]);
-
-  // 선택된 날짜가 변경될 때 해당 달의 월별 데이터 가져오기 (비활성화)
-  useEffect(() => {
-    // 진행률 API 호출 제거
-  }, [selectedDate]);
 
 
 
@@ -799,11 +814,14 @@ const DietScreen = ({navigation, route}: any) => {
                       >
                         <View style={[
                           styles.monthDateBadge,
-                          isSelected && styles.monthDateBadgeToday
+                          isToday && !isSelected && styles.monthDateBadgeToday,
+                          isSelected && styles.monthDateBadgeSelected
                         ]}>
                           <Text style={[
                             styles.monthDateText,
-                            isSelected && styles.monthDateTextToday,
+                            isToday && !isSelected && styles.monthDateTextToday,
+                            isSelected && styles.monthDateTextSelected,
+                            !isToday && !isSelected && styles.monthDateTextNotSelected,
                             !isCurrentMonth && styles.monthDateTextMuted
                           ]}>
                             {d.getDate()}
@@ -872,15 +890,16 @@ const DietScreen = ({navigation, route}: any) => {
                         <View
                           style={[
                             styles.calendarNumberInner,
+                            isToday && !isSelected && styles.calendarNumberToday,
                             isSelected && styles.calendarNumberSelected,
-                            isToday && styles.calendarNumberToday,
                           ]}
                         >
                           <Text
                             style={[
                               styles.calendarNumberText,
+                              isToday && !isSelected && styles.calendarNumberTextToday,
                               isSelected && styles.calendarNumberSelectedText,
-                              isToday && styles.calendarNumberTextToday,
+                              !isToday && !isSelected && styles.calendarNumberTextNotSelected,
                             ]}
                           >
                             {d.getDate()}
@@ -1393,7 +1412,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
   },
   monthDateText: {
-    color: '#e3ff7c',
     fontSize: 16,
     fontWeight: '700',
     lineHeight: 19,
@@ -1402,6 +1420,9 @@ const styles = StyleSheet.create({
   monthDateTextToday: {
     color: '#000',
   },
+  monthDateTextNotSelected: {
+    color: '#e3ff7c',
+  },
   monthDateTextMuted: {
     color: '#777777',
   },
@@ -1409,12 +1430,10 @@ const styles = StyleSheet.create({
     color: '#777777',
   },
   monthDateBadgeSelected: {
-    backgroundColor: 'rgba(227, 255, 124, 0.5)', // 반투명한 선택 색상
-    borderWidth: 2,
-    borderColor: '#e3ff7c',
+    backgroundColor: '#e3ff7c',
   },
   monthDateTextSelected: {
-    color: '#e3ff7c',
+    color: '#000',
   },
   calendarItem: {
     flex: 1,
@@ -1436,27 +1455,24 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'transparent',
-  },
-  calendarNumberSelected: {
-    backgroundColor: '#e3ff7c',
   },
   calendarNumberToday: {
+    backgroundColor: '#ffffff',
+  },
+  calendarNumberSelected: {
     backgroundColor: '#e3ff7c',
   },
   calendarNumberText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#e3ff7c',
     lineHeight: 19,
     textAlign: 'center',
   },
   calendarNumberTextToday: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1c1c1c',
-    lineHeight: 19,
-    textAlign: 'center',
+    color: '#000',
+  },
+  calendarNumberTextNotSelected: {
+    color: '#e3ff7c',
   },
   calendarNumberSelectedText: {
     color: '#000000',

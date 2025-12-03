@@ -1,4 +1,5 @@
 // src/screens/exercise/TempRoutineRecommendScreen.tsx
+
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -15,7 +16,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { recommendedExerciseAPI } from "../../services";
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -28,6 +28,74 @@ const LOADING_MESSAGES = [
   "가장 효과적인 운동 조합을 찾는 중...",
   "거의 다 됐어요! 득근할 준비 되셨나요?",
 ];
+
+// ✅ LoadingStyles 정의
+const loadingStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  container: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    paddingHorizontal: 20,
+  },
+  spinnerContainer: {
+    marginBottom: 40,
+  },
+  spinnerOuter: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 4,
+    borderColor: "rgba(227, 255, 124, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  spinnerInner: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 4,
+    borderColor: "#e3ff7c",
+    borderTopColor: "transparent",
+    borderRightColor: "transparent",
+  },
+  textContainer: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 70,
+  },
+  message: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#ffffff",
+    textAlign: "center",
+    lineHeight: 28,
+    letterSpacing: 0.5,
+  },
+  cancelButton: {
+    marginTop: 50,
+    borderRadius: 30,
+    overflow: "hidden",
+  },
+  cancelButtonGradient: {
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    borderRadius: 30,
+  },
+  cancelText: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
+});
 
 const LoadingOverlay = ({
   visible,
@@ -190,132 +258,68 @@ const getExerciseIcon = (category: string, muscleName: string) => {
   return muscleIcons[muscleName] || "💪";
 };
 
-const transformAIExerciseToUI = (apiResponse: any) => {
-  const { plan } = apiResponse;
-  const weekRoutines: any[] = Array.from({ length: 7 }, () => []);
-
-  const dayNameToIndex: { [key: string]: number } = {
-    월요일: 0,
-    화요일: 1,
-    수요일: 2,
-    목요일: 3,
-    금요일: 4,
-    토요일: 5,
-    일요일: 6,
+const mapFocusToKorean = (focus: string): string => {
+  const focusMap: { [key: string]: string } = {
+    Upper: "상체",
+    Core: "코어",
+    Lower: "하체",
+    Arms: "팔",
+    Legs: "하체",
+    Chest: "가슴",
+    Back: "등",
+    Shoulders: "어깨",
+    "Full Body": "전신",
+    Cardio: "유산소",
   };
+  return focusMap[focus] || focus;
+};
 
-  console.log("\n=== 📥 API 응답 분석 ===");
-  console.log("플랜 이름:", plan.planName);
-  console.log("루틴 개수:", plan.routines.length);
+const transformDailyExerciseToUI = (apiResponse: any) => {
+  console.log("\n=== 📥 일일 운동 추천 API 응답 분석 (Temp) ===");
+  const exercises = (apiResponse.exercises || []).map((item: any) => {
+    let icon = getExerciseIcon("RESISTANCE", item.target || "");
 
-  plan.routines.forEach((routine: any, idx: number) => {
-    console.log(`\n[루틴 ${idx + 1}] ${routine.routineName}`);
-    console.log("요일:", routine.dayOfWeek);
-    console.log("운동 개수:", routine.items?.length || 0);
+    const details = [];
+    if (item.sets) details.push(`${item.sets}세트`);
+    if (item.reps) details.push(`${item.reps}회`);
+    if (item.weight_kg) details.push(`${item.weight_kg}kg`);
 
-    const dayIndex = dayNameToIndex[routine.dayOfWeek];
+    const detail = details.join(" × ");
 
-    if (dayIndex === undefined) {
-      console.warn(`⚠️ 알 수 없는 요일: ${routine.dayOfWeek}`);
-      return;
-    }
-
-    const sortedItems = [...(routine.items || [])].sort(
-      (a: any, b: any) => (a.exerciseOrder || 0) - (b.exerciseOrder || 0)
-    );
-
-    const exercises = sortedItems.map((item: any) => {
-      let name = "";
-      let detail = "";
-      let icon = "";
-
-      if (item.cardioTypeName) {
-        name = item.cardioTypeName;
-        icon = "🏃";
-
-        const details = [];
-        if (item.targetDurationMinutes) {
-          details.push(`${item.targetDurationMinutes}분`);
-        }
-        if (item.targetDistance) {
-          details.push(`${item.targetDistance}km`);
-        }
-        if (item.targetCaloriesBurn) {
-          details.push(`${item.targetCaloriesBurn}kcal`);
-        }
-        detail = details.join(" · ");
-      } else if (item.resistanceExerciseTypeName) {
-        name = item.resistanceExerciseTypeName;
-        icon = getExerciseIcon("RESISTANCE", item.muscleGroupName || "");
-
-        const details = [];
-        if (item.recommendedSets) {
-          details.push(`${item.recommendedSets}세트`);
-        }
-        if (item.recommendedReps) {
-          details.push(`${item.recommendedReps}회`);
-        }
-        if (item.recommendedWeight) {
-          const weightStr = String(item.recommendedWeight).includes("1RM")
-            ? "적정 중량"
-            : `${item.recommendedWeight}kg`;
-          details.push(weightStr);
-        }
-        detail = details.join(" × ");
-      }
-
-      console.log(`  ✓ ${name}: ${detail}`);
-
-      return {
-        name: name || "운동",
-        detail: detail || item.description || "",
-        icon: icon || "💪",
-      };
-    });
-
-    weekRoutines[dayIndex] = [...weekRoutines[dayIndex], ...exercises];
+    return {
+      name: item.name || "운동",
+      detail: detail || `${item.intensity || "중간"} 강도`,
+      icon: icon,
+      exerciseId: item.exerciseId,
+      target: item.target,
+      sets: item.sets,
+      reps: item.reps,
+      weight_kg: item.weight_kg,
+      category: item.category,
+    };
   });
-
-  console.log("\n=== 📊 최종 변환 결과 ===");
-  weekRoutines.forEach((day, index) => {
-    const dayName = ["월", "화", "수", "목", "금", "토", "일"][index];
-    console.log(
-      `${dayName}요일 (${index + 1}일차): ${day.length}개 운동`,
-      day.length > 0 ? `- ${day.map((e: any) => e.name).join(", ")}` : ""
-    );
-  });
-
-  return weekRoutines;
+  return exercises;
 };
 
 const TempRoutineRecommendScreen = ({ navigation }: any) => {
   const [showRoutine, setShowRoutine] = useState(false);
-  const [selectedDay, setSelectedDay] = useState(0);
   const [showWeakPanel, setShowWeakPanel] = useState(false);
   const [showLevelPanel, setShowLevelPanel] = useState(false);
   const [showTargetPanel, setShowTargetPanel] = useState(false);
+  const [showEquipmentPanel, setShowEquipmentPanel] = useState(false);
+
   const [weakParts, setWeakParts] = useState<string[]>([]);
   const [level, setLevel] = useState("");
   const [targetParts, setTargetParts] = useState<string[]>([]);
-  const [savedRoutines, setSavedRoutines] = useState<any[]>([]);
+  const [equipment, setEquipment] = useState<string[]>(["덤벨"]);
+
   const [loading, setLoading] = useState(false);
-  const [currentPlanId, setCurrentPlanId] = useState<number | null>(null);
 
-  //  무료/프리미엄 회원 상태
-  const [isFreeUser, setIsFreeUser] = useState<boolean>(true);
-  const [hasUsedWeeklyRecommendation, setHasUsedWeeklyRecommendation] =
-    useState<boolean>(false);
-  const [selectedPeriod, setSelectedPeriod] = useState<"daily" | "weekly">(
-    "daily"
-  );
+  const [todayRoutine, setTodayRoutine] = useState<any[]>([]);
+  const [todayFocus, setTodayFocus] = useState<string>("");
 
-  const [weekRoutines, setWeekRoutines] = useState([
-    [
-      { name: "시작 스트레칭", detail: "6회차 스트레칭", icon: "🏃" },
-      { name: "레그 프레스", detail: "4세트 X 20kg X 15회", icon: "🦵" },
-      { name: "레그 컬", detail: "3세트 X 12kg X 15회", icon: "🦵" },
-    ],
-  ]);
+  // ✅ TempMealRecommendScreen 방식으로 변경: 토큰 부족 상태 관리
+  const [isTokenDepleted, setIsTokenDepleted] = useState<boolean>(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -327,107 +331,19 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
     }).start();
   }, [showRoutine]);
 
-  const weekDays = [
-    "1일차",
-    "2일차",
-    "3일차",
-    "4일차",
-    "5일차",
-    "6일차",
-    "7일차",
-  ];
   const bodyParts = ["목", "어깨", "팔꿈치", "손목", "허리", "무릎", "발목"];
   const targetAreas = ["가슴", "등", "배", "어깨", "팔", "하체"];
   const levels = ["초급", "중급", "고급"];
-
-  useEffect(() => {
-    loadSavedRoutines();
-    loadUserData();
-  }, []);
-
-  //사용자 데이터 로드
-  const loadUserData = async () => {
-    try {
-      const testType = await AsyncStorage.getItem("testRoutineMembershipType");
-      setIsFreeUser(testType !== "PREMIUM");
-
-      const lastUsedDate = await AsyncStorage.getItem(
-        "lastRoutineRecommendDate"
-      );
-      if (lastUsedDate) {
-        const lastDate = new Date(lastUsedDate);
-        const today = new Date();
-        const weekStart = getWeekStart(today);
-
-        if (lastDate >= weekStart && testType !== "PREMIUM") {
-          setHasUsedWeeklyRecommendation(true);
-        }
-      }
-    } catch (error) {
-      console.error("사용자 데이터 로드 실패:", error);
-    }
-  };
-
-  // 주의 시작일 계산
-  const getWeekStart = (date: Date): Date => {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(d.setDate(diff));
-  };
-
-  // 회원 등급 테스트 전환
-  const toggleMembershipTest = async () => {
-    const newType = isFreeUser ? "PREMIUM" : "FREE";
-    await AsyncStorage.setItem("testRoutineMembershipType", newType);
-    setIsFreeUser(!isFreeUser);
-
-    if (newType === "FREE") {
-      const lastUsedDate = await AsyncStorage.getItem(
-        "lastRoutineRecommendDate"
-      );
-      if (lastUsedDate) {
-        const lastDate = new Date(lastUsedDate);
-        const today = new Date();
-        const weekStart = getWeekStart(today);
-
-        if (lastDate >= weekStart) {
-          setHasUsedWeeklyRecommendation(true);
-        }
-      }
-    } else {
-      setHasUsedWeeklyRecommendation(false);
-    }
-
-    Alert.alert(
-      "테스트 모드",
-      `${newType === "FREE" ? "무료" : "프리미엄"} 회원으로 전환되었습니다.`
-    );
-  };
-
-  const loadSavedRoutines = async () => {
-    try {
-      const serverResponse =
-        await recommendedExerciseAPI.getSavedExercisePlans();
-      const serverPlans = serverResponse.plans || [];
-
-      const stored = await AsyncStorage.getItem("savedRoutines");
-      const localPlans = stored ? JSON.parse(stored) : [];
-
-      const allPlans = [...serverPlans, ...localPlans];
-
-      setSavedRoutines(allPlans);
-      console.log(`📋 총 ${allPlans.length}개 루틴 로드 완료`);
-    } catch (error) {
-      console.log("저장된 루틴 불러오기 실패:", error);
-      try {
-        const stored = await AsyncStorage.getItem("savedRoutines");
-        if (stored) setSavedRoutines(JSON.parse(stored));
-      } catch (e) {
-        console.error("로컬 데이터도 불러오기 실패:", e);
-      }
-    }
-  };
+  const equipmentOptions = [
+    "덤벨",
+    "머신",
+    "케이블",
+    "밴드",
+    "볼",
+    "바벨",
+    "케틀벨",
+    "로프",
+  ];
 
   const handleWeakPartToggle = (part: string) => {
     if (weakParts.includes(part))
@@ -441,40 +357,54 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
     else setTargetParts([...targetParts, part]);
   };
 
+  const handleEquipmentToggle = (item: string) => {
+    if (equipment.includes(item)) {
+      if (equipment.length === 1) {
+        Alert.alert("알림", "최소 1개의 장비를 선택해야 합니다.");
+        return;
+      }
+      setEquipment(equipment.filter((e) => e !== item));
+    } else {
+      setEquipment([...equipment, item]);
+    }
+  };
+
   const handleCancelLoading = () => {
     Alert.alert("요청 취소", "운동 루틴 생성을 취소하시겠습니까?", [
       { text: "계속 기다리기", style: "cancel" },
       {
         text: "취소",
         style: "destructive",
-        onPress: () => {
-          console.log("⚠️ 사용자가 로딩을 취소함");
-          setLoading(false);
-        },
+        onPress: () => setLoading(false),
       },
     ]);
   };
 
+  const mapLevelToAPI = (level: string): string => {
+    const levelMap: { [key: string]: string } = {
+      초급: "BEGINNER",
+      중급: "INTERMEDIATE",
+      고급: "ADVANCED",
+    };
+    return levelMap[level] || "INTERMEDIATE";
+  };
+
   const handleGetRoutine = async () => {
-    // 무료 회원 제한 체크
-    if (hasUsedWeeklyRecommendation && isFreeUser) {
-      Alert.alert(
-        "알림",
-        "이번 주 무료 추천을 이미 사용했습니다.\n다음 주에 다시 시도해주세요."
-      );
+    // ✅ 토큰 소진 상태일 때 차단
+    if (isTokenDepleted) {
+      Alert.alert("알림", "이미 이번 주 추천 횟수를 모두 사용했습니다.");
       return;
     }
 
     setLoading(true);
 
     try {
-      console.log("🏋️ 운동 루틴 추천 시작");
+      console.log("🏋️ 운동 루틴 추천 시작 (무료)");
 
+      // 프로필 확인
       let userProfile;
       try {
         userProfile = await recommendedExerciseAPI.getProfile();
-        console.log("✅ 프로필 조회 성공:", userProfile);
-        await AsyncStorage.setItem("userInfo", JSON.stringify(userProfile));
       } catch (error: any) {
         if (error.status === 401) {
           Alert.alert("로그인 필요", "로그인이 만료되었습니다.", [
@@ -483,15 +413,11 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
           setLoading(false);
           return;
         }
-
         if (error.status === 404) {
-          Alert.alert("프로필 설정 필요", "먼저 프로필을 설정해주세요.", [
-            { text: "확인", style: "cancel" },
-          ]);
+          Alert.alert("프로필 설정 필요", "먼저 프로필을 설정해주세요.");
           setLoading(false);
           return;
         }
-
         throw error;
       }
 
@@ -502,54 +428,42 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
       ) {
         Alert.alert(
           "프로필 정보 부족",
-          "키, 몸무게, 운동 목표를 입력해주세요.\n" +
-            "프로필 화면에서 정보를 완성해주세요.",
-          [{ text: "확인", style: "cancel" }]
+          "키, 몸무게, 운동 목표를 입력해주세요."
         );
         setLoading(false);
         return;
       }
 
-      console.log("💪 운동 플랜 생성 요청");
-      console.log("📊 프로필 정보:", {
-        height: userProfile.height,
-        weight: userProfile.weight,
-        healthGoal: userProfile.healthGoal,
-        workoutDaysPerWeek: userProfile.workoutDaysPerWeek,
-      });
+      const requestBody = {
+        experienceLevel: level ? mapLevelToAPI(level) : "INTERMEDIATE",
+        environment: "gym",
+        availableEquipment: equipment,
+        likeMuscles: targetParts.length > 0 ? targetParts : [],
+        healthConditions: weakParts.length > 0 ? weakParts : [],
+        targetTimeMin: 40,
+      };
+
+      console.log(
+        "📤 운동 플랜 생성 요청 body:",
+        JSON.stringify(requestBody, null, 2)
+      );
 
       const today = new Date().toISOString().split("T")[0];
       const apiResponse = await recommendedExerciseAPI.generateExercisePlan(
-        today
+        today,
+        requestBody
       );
 
-      console.log("📦 API 전체 응답:", JSON.stringify(apiResponse, null, 2));
-
-      if (apiResponse && apiResponse.success && apiResponse.plan) {
-        console.log("✅ API 응답 성공:", apiResponse.message);
-
-        const planId = apiResponse.plan.id;
-        setCurrentPlanId(planId);
-
-        const convertedRoutines = transformAIExerciseToUI(apiResponse);
-
-        setWeekRoutines(convertedRoutines);
-        setShowRoutine(true);
-        setSelectedDay(0);
-
-        // 무료 회원 사용 기록
-        if (isFreeUser) {
-          await AsyncStorage.setItem(
-            "lastRoutineRecommendDate",
-            new Date().toISOString()
-          );
-          setHasUsedWeeklyRecommendation(true);
+      if (apiResponse && apiResponse.success && apiResponse.exercises) {
+        if (apiResponse.focus) {
+          setTodayFocus(apiResponse.focus);
         }
 
-        Alert.alert(
-          "성공",
-          apiResponse.message || "운동 루틴이 생성되었습니다!"
-        );
+        const todayExercises = transformDailyExerciseToUI(apiResponse);
+        setTodayRoutine(todayExercises);
+        setShowRoutine(true);
+
+        Alert.alert("성공", "운동 루틴이 생성되었습니다!");
         return;
       }
 
@@ -557,222 +471,89 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
     } catch (error: any) {
       console.error("❌ 운동 루틴 생성 실패:", error);
 
-      if (error.status === 500) {
+      // ✅ TempMealRecommendScreen 방식: 에러 메시지로 토큰 소진 판단
+      const errorMessage = error.message || "";
+      if (
+        errorMessage.includes("토큰이 부족") ||
+        errorMessage.includes("무료 운동 추천") ||
+        error.code === "NO_WORKOUT_TOKENS" ||
+        error.status === 403
+      ) {
+        setIsTokenDepleted(true);
         Alert.alert(
-          "서버 오류",
-          "서버에서 오류가 발생했습니다.\n" + "잠시 후 다시 시도해주세요.",
-          [{ text: "확인" }]
+          "알림",
+          "이번 주 무료 추천 횟수를 모두 사용했습니다.\n다음 주 월요일에 다시 시도해주세요."
         );
-        return;
+      } else {
+        Alert.alert("오류", errorMessage || "운동 루틴 생성에 실패했습니다.");
       }
-
-      Alert.alert("오류", error.message || "운동 루틴 생성에 실패했습니다.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleSaveRoutine = async () => {
-    const token = await AsyncStorage.getItem("access_token");
-    console.log("🔑 현재 토큰:", token ? "존재함" : "❌ 없음");
+    const currentDate = new Date();
+    const dateStr = `${currentDate.getFullYear()}-${String(
+      currentDate.getMonth() + 1
+    ).padStart(2, "0")}-${String(currentDate.getDate()).padStart(2, "0")}`;
 
-    if (!token) {
-      Alert.alert(
-        "로그인 필요",
-        "로그인이 필요합니다. 로그인 화면으로 이동합니다.",
-        [
-          {
-            text: "확인",
-            onPress: () => navigation.navigate("Login"),
-          },
-        ]
-      );
-      return;
-    }
+    const groupKey = `ai_recommend_free_${Date.now()}`;
+    const groupTitle = todayFocus
+      ? `AI 추천 (무료) - ${mapFocusToKorean(todayFocus)}`
+      : "AI 추천 (무료)";
 
-    if (currentPlanId) {
-      try {
-        setLoading(true);
+    const activities = todayRoutine.map((exercise: any, index: number) => {
+      const setsCount = exercise.sets || 3;
+      const sets = Array.from({ length: setsCount }, (_, i) => ({
+        id: i + 1,
+        order: i + 1,
+        weight: exercise.weight_kg || 0,
+        reps: exercise.reps || 0,
+        isCompleted: false,
+      }));
 
-        const response = await recommendedExerciseAPI.saveExercisePlan(
-          currentPlanId
-        );
-
-        if (response.success) {
-          Alert.alert(
-            "저장 완료",
-            response.message || "루틴이 저장되었습니다!",
-            [
-              {
-                text: "확인",
-                onPress: async () => {
-                  await loadSavedRoutines();
-                  navigation.navigate("RoutineRecommend");
-                },
-              },
-            ]
-          );
-          return;
-        }
-      } catch (error: any) {
-        console.error("❌ 서버 저장 실패:", error);
-
-        if (error.status === 401 || error.message?.includes("인증")) {
-          Alert.alert(
-            "로그인 필요",
-            "로그인이 만료되었습니다. 다시 로그인해주세요.",
-            [
-              {
-                text: "확인",
-                onPress: () => navigation.navigate("Login"),
-              },
-            ]
-          );
-          return;
-        }
-
-        Alert.alert("오류", error.message || "저장에 실패했습니다.");
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      const currentDate = new Date();
-      const savedRoutine = {
-        id: Date.now(),
-        date: currentDate.toLocaleDateString("ko-KR"),
-        routine: weekRoutines,
-        level: level,
-        weakParts: [...weakParts],
-        targetParts: [...targetParts],
+      return {
+        id: Date.now() + index,
+        name: exercise.name || "운동",
+        details: `${exercise.weight_kg || 0}kg ${
+          exercise.reps || 0
+        }회 ${setsCount}세트`,
+        time: currentDate.toLocaleTimeString("ko-KR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        }),
+        date: dateStr,
+        isCompleted: false,
+        externalId: exercise.exerciseId,
+        targetMuscle: exercise.target,
+        sets: sets,
+        saveTitle: groupTitle,
+        groupKey: groupKey,
       };
+    });
 
-      try {
-        const existingRoutines = JSON.parse(
-          (await AsyncStorage.getItem("savedRoutines")) || "[]"
-        );
-        const updatedRoutines = [...existingRoutines, savedRoutine];
-        await AsyncStorage.setItem(
-          "savedRoutines",
-          JSON.stringify(updatedRoutines)
-        );
-        setSavedRoutines(updatedRoutines);
+    console.log("🚀 ExerciseScreen으로 이동:", {
+      activitiesCount: activities.length,
+    });
 
-        await addRoutineToActivities(savedRoutine);
-
-        Alert.alert("저장 완료", "루틴이 로컬에 저장되었습니다!", [
-          {
-            text: "확인",
-            onPress: () => navigation.navigate("RoutineRecommend"),
-          },
-        ]);
-      } catch (error) {
-        Alert.alert("오류", "저장 실패");
-      }
-    }
-  };
-
-  const addRoutineToActivities = async (routine: any) => {
-    try {
-      const userId = await AsyncStorage.getItem("userId");
-      const storageKey = userId
-        ? `user_activities_v1:${userId}`
-        : "user_activities_v1";
-
-      const existingActivities = JSON.parse(
-        (await AsyncStorage.getItem(storageKey)) || "[]"
-      );
-
-      const today = new Date();
-      const newActivities: any[] = [];
-
-      routine.routine.forEach((dayExercises: any[], dayIndex: number) => {
-        const targetDate = new Date(today);
-        const todayDayOfWeek = today.getDay();
-        const routineDayOfWeek = dayIndex === 6 ? 0 : dayIndex + 1;
-
-        let daysUntilTarget = routineDayOfWeek - todayDayOfWeek;
-        if (daysUntilTarget < 0) daysUntilTarget += 7;
-
-        targetDate.setDate(today.getDate() + daysUntilTarget);
-
-        const dateStr = `${targetDate.getFullYear()}-${String(
-          targetDate.getMonth() + 1
-        ).padStart(2, "0")}-${String(targetDate.getDate()).padStart(2, "0")}`;
-
-        dayExercises.forEach((exercise, exerciseIndex) => {
-          newActivities.push({
-            id: Date.now() + dayIndex * 1000 + exerciseIndex,
-            name: exercise.name,
-            details: exercise.detail,
-            time: "00:00",
-            date: dateStr,
-            isCompleted: false,
-            isFromRoutine: true,
-            sets: [],
-          });
-        });
-      });
-
-      const updatedActivities = [...existingActivities, ...newActivities];
-      await AsyncStorage.setItem(storageKey, JSON.stringify(updatedActivities));
-
-      console.log(`✅ ${newActivities.length}개 운동이 기록에 추가되었습니다`);
-    } catch (error) {
-      console.error("기록 추가 실패:", error);
-    }
+    navigation.navigate("Stats", {
+      screen: "Exercise",
+      params: {
+        recommendedExercises: activities,
+      },
+    });
   };
 
   const handleRecommendAgain = () => {
     setShowRoutine(false);
-    setSelectedDay(0);
-    setCurrentPlanId(null);
+    setTodayRoutine([]);
+    setTodayFocus("");
   };
 
-  const handleDeleteSavedRoutine = async (routine: any) => {
-    const isServerPlan = typeof routine.id === "number";
-
-    Alert.alert(
-      "삭제",
-      `이 루틴을 삭제하시겠습니까?${
-        isServerPlan ? "\n(서버에서도 삭제됩니다)" : "\n(로컬에서만 삭제됩니다)"
-      }`,
-      [
-        { text: "취소", style: "cancel" },
-        {
-          text: "삭제",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              if (isServerPlan) {
-                await recommendedExerciseAPI.deleteExercisePlan(routine.id);
-                console.log("✅ 서버 플랜 삭제 성공");
-              } else {
-                const stored = await AsyncStorage.getItem("savedRoutines");
-                const localRoutines = stored ? JSON.parse(stored) : [];
-                const updated = localRoutines.filter(
-                  (r: any) => r.id !== routine.id
-                );
-                await AsyncStorage.setItem(
-                  "savedRoutines",
-                  JSON.stringify(updated)
-                );
-                console.log("✅ 로컬 플랜 삭제 성공");
-              }
-
-              await loadSavedRoutines();
-              Alert.alert("성공", "루틴이 삭제되었습니다.");
-            } catch (error: any) {
-              console.error("❌ 삭제 실패:", error);
-              Alert.alert("오류", error.message || "삭제에 실패했습니다.");
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  // ✅ isDisabled 변수 선언
-  const isDisabled = loading || (hasUsedWeeklyRecommendation && isFreeUser);
+  // ✅ 버튼 비활성화 조건: 로딩 중이거나 토큰 소진
+  const isDisabled = loading || isTokenDepleted;
 
   return (
     <View style={styles.container}>
@@ -798,17 +579,7 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
             </View>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>운동 루틴</Text>
-          {/* 테스트 버튼 */}
-          <TouchableOpacity
-            onPress={toggleMembershipTest}
-            style={styles.testButton}
-          >
-            <View style={styles.iconButton}>
-              <Text style={styles.testButtonText}>
-                {isFreeUser ? "🆓" : "⭐"}
-              </Text>
-            </View>
-          </TouchableOpacity>
+          <View style={{ width: 40 }} />
         </View>
 
         {!showRoutine ? (
@@ -823,237 +594,58 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
                   colors={["#e3ff7c", "#a8e063"]}
                   style={styles.welcomeIcon}
                 >
-                  <Text style={styles.welcomeEmoji}>💪</Text>
+                  <Text style={styles.welcomeEmoji}>🎁</Text>
                 </LinearGradient>
               </View>
 
-              <Text style={styles.title}>맞춤 운동 루틴</Text>
+              <Text style={styles.title}>오늘의 무료 루틴</Text>
               <Text style={styles.subtitle}>
-                AI가 당신의 목표에 맞는{"\n"}완벽한 루틴을 설계합니다
+                매주 1회 제공되는 무료 AI 추천 루틴입니다.{"\n"}더 많은 추천은
+                프리미엄을 이용해주세요!
               </Text>
 
-              {/* 무료 회원 배너 */}
-              {isFreeUser && (
-                <View style={styles.freeUserBannerContainer}>
-                  <LinearGradient
-                    colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
-                    style={styles.freeUserBanner}
-                  >
-                    <View style={styles.freeUserBadge}>
-                      <LinearGradient
-                        colors={["#e3ff7c", "#a8e063"]}
-                        style={styles.freeUserBadgeGradient}
-                      >
-                        <Icon name="gift-outline" size={16} color="#111827" />
-                        <Text style={styles.freeUserBadgeText}>무료 회원</Text>
-                      </LinearGradient>
-                    </View>
-
-                    <Text style={styles.freeUserTitle}>
-                      일주일에 단 한 번만 추천 가능!
-                    </Text>
-
-                    <View style={styles.remainingCount}>
-                      <View style={styles.remainingCountInner}>
-                        <Icon
-                          name="calendar-outline"
-                          size={16}
-                          color="#e3ff7c"
-                        />
-                        <Text style={styles.remainingText}>
-                          이번 주 남은 추천:{" "}
-                          <Text style={styles.remainingNumber}>
-                            {hasUsedWeeklyRecommendation ? "0회" : "1회"}
-                          </Text>
-                        </Text>
-                      </View>
-                    </View>
-
-                    <TouchableOpacity
-                      style={styles.premiumButton}
-                      onPress={() => {
-                        Alert.alert(
-                          "프리미엄 업그레이드",
-                          "매일 무제한 루틴 추천을 받으시겠습니까?",
-                          [
-                            { text: "나중에", style: "cancel" },
-                            {
-                              text: "업그레이드",
-                              onPress: () => {
-                                Alert.alert(
-                                  "준비 중",
-                                  "프리미엄 기능은 곧 출시됩니다!"
-                                );
-                              },
-                            },
-                          ]
-                        );
-                      }}
-                      activeOpacity={0.9}
+              <View style={styles.freeUserBannerContainer}>
+                <LinearGradient
+                  colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
+                  style={styles.freeUserBanner}
+                >
+                  <View style={styles.freeUserBadge}>
+                    <LinearGradient
+                      colors={["#e3ff7c", "#a8e063"]}
+                      style={styles.freeUserBadgeGradient}
                     >
-                      <LinearGradient
-                        colors={["#e3ff7c", "#a8e063"]}
-                        style={styles.premiumButtonGradient}
-                      >
-                        <Icon name="star" size={16} color="#111827" />
-                        <Text style={styles.premiumButtonText}>
-                          프리미엄으로 매일 추천받기
-                        </Text>
-                        <Icon name="arrow-forward" size={16} color="#111827" />
-                      </LinearGradient>
-                    </TouchableOpacity>
-                  </LinearGradient>
-                </View>
-              )}
+                      <Icon name="gift-outline" size={16} color="#111827" />
+                      <Text style={styles.freeUserBadgeText}>무료 체험</Text>
+                    </LinearGradient>
+                  </View>
 
-              {/* ✅ 추가: 기간 선택 섹션 */}
-              <View style={styles.periodSection}>
-                <View style={styles.sectionHeader}>
-                  <Icon name="calendar-outline" size={22} color="#e3ff7c" />
-                  <Text style={styles.sectionTitle}>루틴 기간</Text>
-                </View>
+                  <Text style={styles.freeUserTitle}>
+                    일주일에 단 한 번만 추천 가능!
+                  </Text>
 
-                <View style={styles.periodButtons}>
-                  {/* 1일 버튼 */}
                   <TouchableOpacity
-                    style={styles.periodButtonContainer}
-                    onPress={() => setSelectedPeriod("daily")}
-                    activeOpacity={0.8}
+                    style={styles.premiumButton}
+                    onPress={() =>
+                      navigation.navigate("Main", {
+                        screen: "MyPage",
+                        params: { openPlanModal: true },
+                      } as any)
+                    }
+                    activeOpacity={0.9}
                   >
-                    {selectedPeriod === "daily" ? (
-                      <LinearGradient
-                        colors={["#e3ff7c", "#a8e063"]}
-                        style={styles.periodButton}
-                      >
-                        <Icon
-                          name="barbell-outline"
-                          size={28}
-                          color="#111827"
-                        />
-                        <Text style={styles.periodButtonTextActive}>
-                          1일 루틴
-                        </Text>
-                        <Text style={styles.periodButtonSubtextActive}>
-                          오늘 하루
-                        </Text>
-                      </LinearGradient>
-                    ) : (
-                      <View style={styles.periodButton}>
-                        <Icon
-                          name="barbell-outline"
-                          size={28}
-                          color="#e3ff7c"
-                        />
-                        <Text style={styles.periodButtonText}>1일 루틴</Text>
-                        <Text style={styles.periodButtonSubtext}>
-                          오늘 하루
-                        </Text>
-                      </View>
-                    )}
+                    <LinearGradient
+                      colors={["#e3ff7c", "#a8e063"]}
+                      style={styles.premiumButtonGradient}
+                    >
+                      <Icon name="star" size={16} color="#111827" />
+                      <Text style={styles.premiumButtonText}>
+                        프리미엄으로 무제한 추천받기
+                      </Text>
+                      <Icon name="arrow-forward" size={16} color="#111827" />
+                    </LinearGradient>
                   </TouchableOpacity>
-
-                  {/* 7일 버튼 - 무료 회원은 잠김 */}
-                  <TouchableOpacity
-                    style={[
-                      styles.periodButtonContainer,
-                      isFreeUser && styles.periodButtonLocked,
-                    ]}
-                    onPress={() => {
-                      if (isFreeUser) {
-                        Alert.alert(
-                          "프리미엄 기능",
-                          "7일 루틴 추천은 프리미엄 회원 전용입니다.\n업그레이드하시겠습니까?",
-                          [
-                            { text: "취소", style: "cancel" },
-                            {
-                              text: "업그레이드",
-                              onPress: () => {
-                                navigation.navigate("MyPage", {
-                                  openPlanModal: true,
-                                } as never);
-                              },
-                            },
-                          ]
-                        );
-                      } else {
-                        setSelectedPeriod("weekly");
-                      }
-                    }}
-                    disabled={isFreeUser}
-                    activeOpacity={0.8}
-                  >
-                    {isFreeUser && (
-                      <View style={styles.lockOverlay}>
-                        <Icon name="lock-closed" size={32} color="#e3ff7c" />
-                      </View>
-                    )}
-
-                    {selectedPeriod === "weekly" && !isFreeUser ? (
-                      <LinearGradient
-                        colors={["#e3ff7c", "#a8e063"]}
-                        style={styles.periodButton}
-                      >
-                        <Icon name="calendar" size={28} color="#111827" />
-                        <Text style={styles.periodButtonTextActive}>
-                          7일 루틴
-                        </Text>
-                        <View style={styles.premiumTag}>
-                          <Icon name="star" size={10} color="#111827" />
-                          <Text style={styles.premiumTagTextActive}>
-                            프리미엄
-                          </Text>
-                        </View>
-                      </LinearGradient>
-                    ) : (
-                      <View style={styles.periodButton}>
-                        <Icon
-                          name="calendar"
-                          size={28}
-                          color={isFreeUser ? "#666" : "#e3ff7c"}
-                        />
-                        <Text
-                          style={[
-                            styles.periodButtonText,
-                            isFreeUser && styles.periodButtonTextLocked,
-                          ]}
-                        >
-                          7일 루틴
-                        </Text>
-                        <View style={styles.premiumTag}>
-                          <Icon name="star" size={10} color="#e3ff7c" />
-                          <Text style={styles.premiumTagText}>프리미엄</Text>
-                        </View>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                </View>
+                </LinearGradient>
               </View>
-
-              {/* ✅ 추가: 안내 메시지 */}
-              {isFreeUser && (
-                <View style={styles.infoBox}>
-                  <LinearGradient
-                    colors={["rgba(227,255,124,0.1)", "rgba(168,224,99,0.05)"]}
-                    style={styles.infoBoxGradient}
-                  >
-                    <Icon
-                      name="information-circle-outline"
-                      size={20}
-                      color="#e3ff7c"
-                    />
-                    <View style={styles.infoTextContainer}>
-                      <Text style={styles.infoText}>
-                        💡 무료 회원은 일주일에 1회만 루틴을 추천받을 수
-                        있습니다.
-                      </Text>
-                      <Text style={styles.infoSubtext}>
-                        매일 새로운 루틴을 추천받으려면 프리미엄으로
-                        업그레이드하세요!
-                      </Text>
-                    </View>
-                  </LinearGradient>
-                </View>
-              )}
 
               <View style={styles.buttonGroup}>
                 <TouchableOpacity
@@ -1070,35 +662,19 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
                       colors={["#4b5563", "#374151"]}
                       style={styles.primaryButtonGradient}
                     >
-                      {loading ? (
-                        <>
-                          <ActivityIndicator size="small" color="#ffffff" />
-                          <Text
-                            style={[
-                              styles.primaryButtonTextDisabled,
-                              { color: "#ffffff" },
-                            ]}
-                          >
-                            생성 중...
-                          </Text>
-                        </>
-                      ) : (
-                        <>
-                          <Icon
-                            name="checkmark-circle-outline"
-                            size={20}
-                            color="#ffffff"
-                          />
-                          <Text
-                            style={[
-                              styles.primaryButtonTextDisabled,
-                              { color: "#ffffff" },
-                            ]}
-                          >
-                            이번 주 추천 완료
-                          </Text>
-                        </>
-                      )}
+                      <Icon
+                        name="checkmark-circle-outline"
+                        size={20}
+                        color="#ffffff"
+                      />
+                      <Text
+                        style={[
+                          styles.primaryButtonTextDisabled,
+                          { color: "#ffffff" },
+                        ]}
+                      >
+                        이번 주 추천 완료
+                      </Text>
                     </LinearGradient>
                   ) : (
                     <LinearGradient
@@ -1112,27 +688,77 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
                         style={{ marginRight: 8 }}
                       />
                       <Text style={styles.primaryButtonText}>
-                        추천 루틴 받기
+                        무료 루틴 받기
                       </Text>
                     </LinearGradient>
                   )}
                 </TouchableOpacity>
 
-                {/* ✅ 추가: 사용 완료 안내 */}
-                {hasUsedWeeklyRecommendation && isFreeUser && (
+                {isTokenDepleted && (
                   <View style={styles.usedNotice}>
-                    <LinearGradient
-                      colors={["rgba(74,222,128,0.15)", "rgba(74,222,128,0.1)"]}
-                      style={styles.usedNoticeGradient}
-                    >
-                      <Icon name="checkmark-circle" size={20} color="#4ade80" />
-                      <Text style={styles.usedNoticeText}>
-                        이번 주 무료 추천을 모두 사용했습니다. 다음 주 월요일에
-                        다시 추천받을 수 있습니다.
-                      </Text>
-                    </LinearGradient>
+                    <Icon
+                      name="alert-circle-outline"
+                      size={16}
+                      color="#ef4444"
+                      style={{ marginBottom: 6 }}
+                    />
+                    <Text style={styles.usedNoticeText}>
+                      이번 주 무료 추천을 모두 사용하였습니다.{"\n"}
+                      다음 주 월요일에 다시 추천 받을 수 있습니다.
+                    </Text>
                   </View>
                 )}
+
+                <View style={styles.optionCard}>
+                  <TouchableOpacity
+                    style={styles.optionButton}
+                    onPress={() => setShowEquipmentPanel(true)}
+                    activeOpacity={0.8}
+                  >
+                    <LinearGradient
+                      colors={[
+                        "rgba(255,255,255,0.1)",
+                        "rgba(255,255,255,0.05)",
+                      ]}
+                      style={styles.optionButtonGradient}
+                    >
+                      <View style={styles.optionButtonLeft}>
+                        <View style={styles.optionIconContainer}>
+                          <LinearGradient
+                            colors={[
+                              "rgba(139,92,246,0.3)",
+                              "rgba(139,92,246,0.1)",
+                            ]}
+                            style={styles.optionIcon}
+                          >
+                            <Icon name="barbell" size={20} color="#8b5cf6" />
+                          </LinearGradient>
+                        </View>
+                        <Text style={styles.optionButtonText}>
+                          사용가능한 장비
+                        </Text>
+                      </View>
+                      <Icon name="chevron-forward" size={20} color="#6b7280" />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                  {equipment.length > 0 && (
+                    <View style={styles.selectedTags}>
+                      {equipment.map((item, index) => (
+                        <View key={index} style={styles.tag}>
+                          <LinearGradient
+                            colors={[
+                              "rgba(139,92,246,0.2)",
+                              "rgba(139,92,246,0.1)",
+                            ]}
+                            style={styles.tagGradient}
+                          >
+                            <Text style={styles.tagText}>{item}</Text>
+                          </LinearGradient>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
 
                 <View style={styles.optionCard}>
                   <TouchableOpacity
@@ -1280,65 +906,6 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
                 </View>
               </View>
             </Animated.View>
-
-            {savedRoutines.length > 0 && (
-              <View style={styles.savedRoutines}>
-                <Text style={styles.sectionTitle}>저장된 루틴</Text>
-                {savedRoutines.map((routine) => (
-                  <TouchableOpacity
-                    key={routine.id}
-                    style={styles.savedRoutineItem}
-                    onPress={() => {
-                      if (typeof routine.id === "number") {
-                        navigation.navigate("RoutineRecommend");
-                      } else {
-                        navigation.navigate("RoutineRecommend");
-                      }
-                    }}
-                    onLongPress={() => handleDeleteSavedRoutine(routine)}
-                    activeOpacity={0.8}
-                  >
-                    <LinearGradient
-                      colors={[
-                        "rgba(255,255,255,0.08)",
-                        "rgba(255,255,255,0.04)",
-                      ]}
-                      style={styles.savedRoutineGradient}
-                    >
-                      <View style={styles.savedRoutineHeader}>
-                        <View style={styles.savedRoutineTitleRow}>
-                          <Icon
-                            name="barbell-outline"
-                            size={20}
-                            color="#e3ff7c"
-                          />
-                          <Text style={styles.savedRoutineDate}>
-                            {routine.planName || routine.date}
-                          </Text>
-                        </View>
-                        {routine.level && (
-                          <View style={styles.levelBadge}>
-                            <LinearGradient
-                              colors={["#e3ff7c", "#a8e063"]}
-                              style={styles.levelBadgeGradient}
-                            >
-                              <Text style={styles.levelBadgeText}>
-                                {routine.level}
-                              </Text>
-                            </LinearGradient>
-                          </View>
-                        )}
-                      </View>
-                      {routine.targetParts?.length > 0 && (
-                        <Text style={styles.savedRoutineInfo}>
-                          집중 부위: {routine.targetParts.join(", ")}
-                        </Text>
-                      )}
-                    </LinearGradient>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
           </ScrollView>
         ) : (
           <ScrollView
@@ -1349,73 +916,22 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
             <View style={styles.routineView}>
               <View style={styles.routineHeader}>
                 <View>
-                  <Text style={styles.routineTitle}>10월 2주차 루틴</Text>
-                  <Text style={styles.routineDate}>10/10 - 10/17</Text>
+                  <Text style={styles.routineTitle}>
+                    오늘의 무료 루틴
+                    {todayFocus ? ` - ${mapFocusToKorean(todayFocus)}` : ""}
+                  </Text>
+                  <Text style={styles.routineDate}>
+                    {new Date().toLocaleDateString("ko-KR", {
+                      month: "long",
+                      day: "numeric",
+                      weekday: "short",
+                    })}
+                  </Text>
                 </View>
-                <View style={styles.routineHeaderIcon}>
-                  <LinearGradient
-                    colors={["rgba(227,255,124,0.2)", "rgba(168,224,99,0.1)"]}
-                    style={styles.routineHeaderIconGradient}
-                  >
-                    <Icon name="calendar" size={24} color="#e3ff7c" />
-                  </LinearGradient>
-                </View>
-              </View>
-
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.dayTabsContainer}
-                contentContainerStyle={styles.dayTabs}
-              >
-                {weekDays.map((day, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.dayTabWrapper}
-                    onPress={() => setSelectedDay(index)}
-                    activeOpacity={0.8}
-                  >
-                    {selectedDay === index ? (
-                      <LinearGradient
-                        colors={["#e3ff7c", "#a8e063"]}
-                        style={styles.dayTabActive}
-                      >
-                        <Text style={styles.dayTabTextActive}>{day}</Text>
-                      </LinearGradient>
-                    ) : (
-                      <View style={styles.dayTab}>
-                        <Text style={styles.dayTabText}>{day}</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              <View style={styles.routineInfoCard}>
-                <LinearGradient
-                  colors={["rgba(255,255,255,0.08)", "rgba(255,255,255,0.04)"]}
-                  style={styles.routineInfoGradient}
-                >
-                  <View style={styles.routineInfoItem}>
-                    <View style={styles.routineInfoIconContainer}>
-                      <Icon name="list" size={18} color="#e3ff7c" />
-                    </View>
-                    <Text style={styles.routineInfoText}>
-                      {weekRoutines[selectedDay]?.length || 0}개 운동
-                    </Text>
-                  </View>
-                  <View style={styles.routineInfoDivider} />
-                  <View style={styles.routineInfoItem}>
-                    <View style={styles.routineInfoIconContainer}>
-                      <Icon name="time" size={18} color="#e3ff7c" />
-                    </View>
-                    <Text style={styles.routineInfoText}>60분</Text>
-                  </View>
-                </LinearGradient>
               </View>
 
               <View style={styles.exerciseList}>
-                {weekRoutines[selectedDay]?.map((exercise, index) => (
+                {todayRoutine.map((exercise, index) => (
                   <View key={index} style={styles.exerciseCardWrapper}>
                     <LinearGradient
                       colors={[
@@ -1473,6 +989,7 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
                   </LinearGradient>
                 </TouchableOpacity>
 
+                {/* 다시 추천받기 (무료는 제한이 있으므로 UI 리셋 용도) */}
                 <TouchableOpacity
                   style={styles.refreshButton}
                   onPress={handleRecommendAgain}
@@ -1488,7 +1005,7 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
                       color="#ffffff"
                       style={{ marginRight: 8 }}
                     />
-                    <Text style={styles.refreshButtonText}>다시 추천받기</Text>
+                    <Text style={styles.refreshButtonText}>다시 선택하기</Text>
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
@@ -1496,7 +1013,77 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
           </ScrollView>
         )}
 
-        {/* Modal Components (기존과 동일) */}
+        {/* Modal Components */}
+        <Modal
+          visible={showEquipmentPanel}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowEquipmentPanel(false)}
+        >
+          <TouchableOpacity
+            style={styles.panelOverlay}
+            activeOpacity={1}
+            onPress={() => setShowEquipmentPanel(false)}
+          >
+            <View style={styles.bottomPanel}>
+              <LinearGradient
+                colors={["#1a1a2e", "#16213e"]}
+                style={styles.bottomPanelGradient}
+              >
+                <View style={styles.panelHandle} />
+                <Text style={styles.panelHeaderText}>사용가능한 장비 선택</Text>
+                <ScrollView
+                  style={styles.panelBody}
+                  showsVerticalScrollIndicator={false}
+                >
+                  <View style={styles.optionGrid}>
+                    {equipmentOptions.map((item) => (
+                      <TouchableOpacity
+                        key={item}
+                        style={styles.modalOptionWrapper}
+                        onPress={() => handleEquipmentToggle(item)}
+                        activeOpacity={0.8}
+                      >
+                        {equipment.includes(item) ? (
+                          <LinearGradient
+                            colors={["#e3ff7c", "#a8e063"]}
+                            style={styles.modalOptionSelected}
+                          >
+                            <Icon
+                              name="checkmark-circle"
+                              size={18}
+                              color="#111827"
+                            />
+                            <Text style={styles.modalOptionTextSelected}>
+                              {item}
+                            </Text>
+                          </LinearGradient>
+                        ) : (
+                          <View style={styles.modalOption}>
+                            <Text style={styles.modalOptionText}>{item}</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TouchableOpacity
+                    style={styles.confirmButton}
+                    onPress={() => setShowEquipmentPanel(false)}
+                    activeOpacity={0.9}
+                  >
+                    <LinearGradient
+                      colors={["#e3ff7c", "#a8e063"]}
+                      style={styles.confirmButtonGradient}
+                    >
+                      <Text style={styles.confirmButtonText}>선택 완료</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </ScrollView>
+              </LinearGradient>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
         <Modal
           visible={showWeakPanel}
           transparent={true}
@@ -1711,73 +1298,7 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
   );
 };
 
-const loadingStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  container: {
-    alignItems: "center",
-    justifyContent: "center",
-    width: "100%",
-    paddingHorizontal: 20,
-  },
-  spinnerContainer: {
-    marginBottom: 40,
-  },
-  spinnerOuter: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 4,
-    borderColor: "rgba(227, 255, 124, 0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  spinnerInner: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 4,
-    borderColor: "#e3ff7c",
-    borderTopColor: "transparent",
-    borderRightColor: "transparent",
-  },
-  textContainer: {
-    width: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 70,
-  },
-  message: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#ffffff",
-    textAlign: "center",
-    lineHeight: 28,
-    letterSpacing: 0.5,
-  },
-  cancelButton: {
-    marginTop: 50,
-    borderRadius: 30,
-    overflow: "hidden",
-  },
-  cancelButtonGradient: {
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-    borderRadius: 30,
-  },
-  cancelText: {
-    color: "#ffffff",
-    fontSize: 15,
-    fontWeight: "600",
-    letterSpacing: 0.5,
-  },
-});
-
+// ✅ 스타일은 동일하게 유지
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1809,14 +1330,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#ffffff",
     letterSpacing: 0.5,
-  },
-  // ✅ 추가: 테스트 버튼
-  testButton: {
-    width: 40,
-    height: 40,
-  },
-  testButtonText: {
-    fontSize: 18,
   },
   content: {
     flex: 1,
@@ -1865,7 +1378,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // ✅ 추가: 무료 회원 배너
+  // 무료 회원 배너
   freeUserBannerContainer: {
     width: "100%",
     marginBottom: 24,
@@ -1933,11 +1446,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: "hidden",
     marginTop: 4,
-    shadowColor: "#e3ff7c",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
   },
   premiumButtonGradient: {
     flexDirection: "row",
@@ -1950,140 +1458,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     color: "#111827",
-    letterSpacing: 0.3,
   },
 
-  // ✅ 추가: 기간 선택 섹션
-  periodSection: {
-    width: "100%",
-    marginBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#ffffff",
-    letterSpacing: 0.3,
-  },
-  periodButtons: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  periodButtonContainer: {
-    flex: 1,
-    borderRadius: 16,
-    overflow: "hidden",
-  },
-  periodButton: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 20,
-    borderRadius: 16,
-    alignItems: "center",
-    gap: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  periodButtonLocked: {
-    opacity: 0.6,
-  },
-  periodButtonText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#e3ff7c",
-    letterSpacing: 0.3,
-  },
-  periodButtonTextActive: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#111827",
-    letterSpacing: 0.3,
-  },
-  periodButtonTextLocked: {
-    color: "#6b7280",
-  },
-  periodButtonSubtext: {
-    fontSize: 12,
-    color: "#6b7280",
-    fontWeight: "500",
-  },
-  periodButtonSubtextActive: {
-    fontSize: 12,
-    color: "#374151",
-    fontWeight: "600",
-  },
-  lockOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 16,
-    zIndex: 1,
-  },
-  premiumTag: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "rgba(227,255,124,0.1)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  premiumTagText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#e3ff7c",
-    letterSpacing: 0.5,
-  },
-  premiumTagTextActive: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#111827",
-    letterSpacing: 0.5,
-  },
-
-  // ✅ 추가: 안내 박스
-  infoBox: {
-    width: "100%",
-    marginBottom: 20,
-    borderRadius: 14,
-    overflow: "hidden",
-  },
-  infoBoxGradient: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "rgba(227,255,124,0.2)",
-    borderRadius: 14,
-  },
-  infoTextContainer: {
-    flex: 1,
-    gap: 6,
-  },
-  infoText: {
-    fontSize: 13,
-    color: "#e3ff7c",
-    lineHeight: 18,
-    fontWeight: "500",
-    letterSpacing: 0.2,
-  },
-  infoSubtext: {
-    fontSize: 12,
-    color: "#9ca3af",
-    lineHeight: 16,
-    letterSpacing: 0.2,
-  },
-
+  // 버튼 그룹
   buttonGroup: {
     width: "100%",
     gap: 16,
@@ -2110,44 +1487,36 @@ const styles = StyleSheet.create({
     color: "#111827",
     letterSpacing: 0.5,
   },
-  // ✅ 추가: 비활성화 버튼 텍스트
   primaryButtonTextDisabled: {
     fontSize: 16,
     fontWeight: "600",
     color: "#6b7280",
     letterSpacing: 0.3,
   },
-  // ✅ 추가: 비활성화 버튼 그림자
   disabledButtonShadow: {
     shadowOpacity: 0,
     elevation: 0,
     shadowColor: "transparent",
   },
 
-  // ✅ 추가: 사용 완료 안내
+  // 사용 완료 안내
   usedNotice: {
-    borderRadius: 14,
-    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 12,
-  },
-  usedNoticeGradient: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "rgba(74,222,128,0.3)",
-    borderRadius: 14,
+    padding: 12,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 12,
   },
   usedNoticeText: {
-    flex: 1,
     fontSize: 13,
-    color: "#4ade80",
-    lineHeight: 18,
+    color: "#9ca3af",
     fontWeight: "500",
-    letterSpacing: 0.2,
+    textAlign: "center",
+    lineHeight: 20,
   },
 
+  // 옵션 카드
   optionCard: {
     width: "100%",
   },
@@ -2210,58 +1579,8 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     letterSpacing: 0.3,
   },
-  savedRoutines: {
-    width: "100%",
-    marginTop: 40,
-  },
-  savedRoutineItem: {
-    marginBottom: 12,
-    borderRadius: 16,
-    overflow: "hidden",
-  },
-  savedRoutineGradient: {
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: 16,
-  },
-  savedRoutineHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  savedRoutineTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  savedRoutineDate: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#ffffff",
-    letterSpacing: 0.3,
-  },
-  levelBadge: {
-    borderRadius: 8,
-    overflow: "hidden",
-  },
-  levelBadgeGradient: {
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-  },
-  levelBadgeText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#111827",
-    letterSpacing: 0.5,
-  },
-  savedRoutineInfo: {
-    fontSize: 14,
-    color: "#6b7280",
-    letterSpacing: 0.2,
-  },
+
+  // 루틴 뷰
   routineView: {
     padding: 20,
   },
@@ -2282,98 +1601,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6b7280",
     letterSpacing: 0.3,
-  },
-  routineHeaderIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    overflow: "hidden",
-  },
-  routineHeaderIconGradient: {
-    width: "100%",
-    height: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dayTabsContainer: {
-    marginBottom: 20,
-  },
-  dayTabs: {
-    gap: 10,
-    paddingBottom: 8,
-  },
-  dayTabWrapper: {
-    borderRadius: 24,
-  },
-  dayTab: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  dayTabActive: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 24,
-    shadowColor: "#e3ff7c",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  dayTabText: {
-    fontSize: 14,
-    color: "#9ca3af",
-    fontWeight: "500",
-    letterSpacing: 0.3,
-  },
-  dayTabTextActive: {
-    fontSize: 14,
-    color: "#111827",
-    fontWeight: "700",
-    letterSpacing: 0.3,
-  },
-  routineInfoCard: {
-    marginBottom: 20,
-    borderRadius: 14,
-    overflow: "hidden",
-  },
-  routineInfoGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: 14,
-  },
-  routineInfoItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    flex: 1,
-  },
-  routineInfoIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "rgba(227,255,124,0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  routineInfoText: {
-    fontSize: 14,
-    color: "#ffffff",
-    fontWeight: "600",
-    letterSpacing: 0.3,
-  },
-  routineInfoDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    marginHorizontal: 8,
   },
   exerciseList: {
     gap: 12,
@@ -2478,6 +1705,8 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     letterSpacing: 0.3,
   },
+
+  // 모달 스타일
   panelOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.7)",
@@ -2521,38 +1750,42 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   modalOptionWrapper: {
-    width: "48%",
+    width: "31%",
     borderRadius: 14,
     overflow: "hidden",
   },
   modalOption: {
-    height: 56,
+    height: 52,
     backgroundColor: "rgba(255,255,255,0.05)",
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     justifyContent: "center",
     alignItems: "center",
+    paddingHorizontal: 6,
   },
   modalOptionSelected: {
-    height: 56,
+    height: 52,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 4,
     borderRadius: 14,
+    paddingHorizontal: 6,
   },
   modalOptionText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "500",
     color: "#ffffff",
     letterSpacing: 0.3,
+    textAlign: "center",
   },
   modalOptionTextSelected: {
-    fontSize: 15,
+    fontSize: 14,
     color: "#111827",
     fontWeight: "700",
     letterSpacing: 0.3,
+    textAlign: "center",
   },
   confirmButton: {
     borderRadius: 16,

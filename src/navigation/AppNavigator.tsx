@@ -36,6 +36,7 @@ import ExerciseScreen from "../screens/exercise/ExerciseScreen";
 import ExerciseDetailScreen from "../screens/exercise/ExerciseDetailScreen";
 import RoutineRecommendScreen from "../screens/exercise/RoutineRecommendScreen";
 import RoutineRecommendNewScreen from "../screens/exercise/RoutineRecommendNewScreen";
+import TempRoutineRecommendScreen from "../screens/exercise/TempRoutineRecommendScreen";
 
 // Analysis Screens
 import AnalysisScreen from "../screens/analysis/AnalysisScreen";
@@ -227,6 +228,10 @@ export default function AppNavigator() {
           <Stack.Screen
             name={ROUTES.ROUTINE_RECOMMEND_NEW}
             component={RoutineRecommendNewScreen}
+          />
+          <Stack.Screen
+            name="TempRoutineRecommendScreen"
+            component={TempRoutineRecommendScreen}
           />
           {/* Analysis Stack */}
           <Stack.Screen name={ROUTES.ANALYSIS} component={AnalysisScreen} />
