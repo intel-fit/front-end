@@ -395,24 +395,6 @@ const HomeScreen = ({ navigation }: any) => {
               {homeData?.userSummary?.name || "회원"}님 어서오세요😊
             </Text>
           </View>
-
-          {/* 메시지 버블 */}
-          <View style={styles.messageContainer}>
-            {homeData?.todayMeal?.message && (
-              <View style={styles.messageBubble}>
-                <Text style={styles.messageText}>
-                  {homeData.todayMeal.message}
-                </Text>
-              </View>
-            )}
-            {homeData?.todayExercise?.message && (
-              <View style={styles.messageBubble}>
-                <Text style={styles.messageText}>
-                  {homeData.todayExercise.message}
-                </Text>
-              </View>
-            )}
-          </View>
         </View>
 
         {/* ✅ 식단/운동 추천 카드 */}
@@ -1179,30 +1161,31 @@ const styles = StyleSheet.create({
   },
   enhancedRecommendationCardBorder: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 20,
+    top: -2,
+    left: -2,
+    right: -2,
+    bottom: -2,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: "#e3ff7c",
+    backgroundColor: "transparent",
     shadowColor: "#e3ff7c",
     shadowOffset: {
       width: 0,
       height: 0,
     },
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
-    elevation: 8,
+    shadowOpacity: 1,
+    shadowRadius: 15,
+    elevation: 15,
     zIndex: 0,
   },
   enhancedRecommendationCard: {
     backgroundColor: colors.background,
     borderRadius: 20,
-    borderWidth: 1,
     borderColor: "#e3ff7c",
     padding: 20,
     zIndex: 1,
+    overflow: "hidden",
   },
   enhancedRecommendationContent: {
     gap: 20,
@@ -1249,33 +1232,34 @@ const styles = StyleSheet.create({
   },
   notificationCardBorder: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 20,
+    top: -2,
+    left: -2,
+    right: -2,
+    bottom: -2,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: "#e3ff7c",
+    backgroundColor: "transparent",
     shadowColor: "#e3ff7c",
     shadowOffset: {
       width: 0,
       height: 0,
     },
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
-    elevation: 8,
+    shadowOpacity: 1,
+    shadowRadius: 15,
+    elevation: 15,
     zIndex: 0,
   },
   notificationCard: {
     backgroundColor: colors.background,
     borderRadius: 20,
-    borderWidth: 1,
     borderColor: "#e3ff7c",
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 16,
     zIndex: 1,
+    overflow: "hidden",
   },
   notificationText: {
     flex: 1,
