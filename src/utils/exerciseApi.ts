@@ -193,21 +193,6 @@ export const postWorkoutSession = async (
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
 
-    // userId 검증 및 수정
-    let userId = payload.userId;
-    if (!userId || isNaN(userId) || userId === null) {
-      // AsyncStorage에서 userId 다시 가져오기
-      const userIdStr = await AsyncStorage.getItem("userId");
-      if (userIdStr) {
-        const parsed = parseInt(userIdStr, 10);
-        userId = isNaN(parsed) ? 1 : parsed;
-      } else {
-        userId = 1; // 기본값
-      }
-      // payload 업데이트
-      payload.userId = userId;
-    }
-
     // 요청 페이로드 상세 로그
     console.log("[WORKOUT][POST] API 요청:", {
       url: WORKOUTS_API_URL,
