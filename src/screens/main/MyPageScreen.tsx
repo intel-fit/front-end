@@ -21,6 +21,7 @@ import ProfileEditModal from "../../components/modals/ProfileEditModal";
 import RoutineRecommendModal from "../../components/modals/RoutineRecommendModal";
 import MealRecommendModal from "../../components/modals/MealRecommendModal";
 import DeleteAccountModal from "../../components/modals/DeleteAccountModal";
+import PremiumModal from "../../components/modals/PremiumModal";
 import { useRoute } from "@react-navigation/native";
 
 const MyPageScreen = ({ navigation }: any) => {
@@ -44,6 +45,7 @@ const MyPageScreen = ({ navigation }: any) => {
     useState(false);
   const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] =
     useState(false);
+  const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
 
   //  1. 외부에서 넘어온 파라미터 감지 (내 플랜 모달 열기)
   useEffect(() => {
@@ -364,7 +366,7 @@ const MyPageScreen = ({ navigation }: any) => {
           <View style={styles.sectionLinks}>
             <TouchableOpacity
               style={styles.linkItem}
-              onPress={() => setIsMyPlanModalOpen(true)}
+              onPress={() => setIsPremiumModalOpen(true)}
             >
               <Text style={styles.linkText}>내 플랜 보기</Text>
               <Icon
@@ -507,6 +509,10 @@ const MyPageScreen = ({ navigation }: any) => {
         isOpen={isDeleteAccountModalOpen}
         onClose={() => setIsDeleteAccountModalOpen(false)}
         onDeleteSuccess={() => navigation.replace("Login")}
+      />
+      <PremiumModal
+        isOpen={isPremiumModalOpen}
+        onClose={() => setIsPremiumModalOpen(false)}
       />
     </SafeAreaView>
   );

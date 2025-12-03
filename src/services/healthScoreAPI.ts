@@ -1,83 +1,128 @@
-import { requestAI } from "./apiConfig";
-import { authAPI } from "./authAPI";
+// src/services/healthScoreAPI.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { requestAI } from "./apiConfig";
 
 export interface ScoreTrendItem {
   date: string;
-  score: number;
+  nutrition: number;
+  exercise: number;
+  balance: number;
+  total: number;
 }
 
-// userId 가져오기 (Profile API 사용)
+// 주간 데이터 원본 타입
+interface WeeklyScoreItem {
+  week_start: string;
+  week_end: string;
+  nutrition_avg: number;
+  exercise_avg: number;
+  balance_avg: number;
+  total_avg: number;
+}
+
+// 월간 데이터 원본 타입
+interface MonthlyScoreItem {
+  month: string;
+  nutrition_avg: number;
+  exercise_avg: number;
+  balance_avg: number;
+  total_avg: number;
+}
+
 const getUserId = async (): Promise<string> => {
-  try {
-    // 1. 캐시에서 먼저 확인
-    let userId = await AsyncStorage.getItem("userIdString");
-    if (userId) {
-      return userId;
-    }
-
-    // 2. Profile API 호출
-    const profile = await authAPI.getProfile();
-    userId = profile.userId;
-
-    // 3. 캐시에 저장
-    await AsyncStorage.setItem("userIdString", userId);
-
-    return userId;
-  } catch (error) {
-    throw new Error("사용자 ID를 찾을 수 없습니다.");
+  const userId = await AsyncStorage.getItem("userId");
+  if (!userId) {
+    throw new Error("로그인이 필요합니다");
   }
+  return userId;
 };
 
 export const healthScoreAPI = {
+  // ✅ 일일 점수
   getDailyTrend: async (): Promise<ScoreTrendItem[]> => {
     try {
-      const userId = await getUserId();
-      const response = await requestAI<ScoreTrendItem[]>(
-        `/score/trend/daily/${userId}`,
+      const userId = await getUserId(); // ⭐ 실제 userId 사용
+      console.log("📊 [DAILY] 사용자 ID:", userId);
+
+      const response = await requestAI<{ daily_scores: ScoreTrendItem[] }>(
+        `/score/daily/${userId}`,
         { method: "GET" }
       );
-      return Array.isArray(response) ? response : [];
+
+      console.log("📊 [DAILY] 전체 응답:", JSON.stringify(response, null, 2));
+      return Array.isArray(response.daily_scores) ? response.daily_scores : [];
     } catch (error: any) {
-      // 404는 정상적인 "데이터 없음" 상태
-      if (error.status === 404) {
-        return [];
-      }
-      // 다른 에러는 그대로 전달
+      if (error.status === 404) return [];
       console.error("[HEALTH_SCORE] 일일 점수 로드 실패:", error.message);
       throw error;
     }
   },
 
+  // ✅ 주간 점수
   getWeeklyTrend: async (): Promise<ScoreTrendItem[]> => {
     try {
-      const userId = await getUserId();
-      const response = await requestAI<ScoreTrendItem[]>(
-        `/score/trend/weekly/${userId}`,
+      const userId = await getUserId(); // ⭐ 실제 userId 사용
+      console.log("📊 [WEEKLY] 사용자 ID:", userId);
+
+      const response = await requestAI<{ weekly_scores: WeeklyScoreItem[] }>(
+        `/score/weekly/${userId}`,
         { method: "GET" }
       );
-      return Array.isArray(response) ? response : [];
+
+      console.log("📊 [WEEKLY] 전체 응답:", JSON.stringify(response, null, 2));
+
+      // 데이터 변환: week_start → date, total_avg → total
+      const transformedData: ScoreTrendItem[] = Array.isArray(
+        response.weekly_scores
+      )
+        ? response.weekly_scores.map((item) => ({
+            date: item.week_start,
+            nutrition: item.nutrition_avg,
+            exercise: item.exercise_avg,
+            balance: item.balance_avg,
+            total: item.total_avg,
+          }))
+        : [];
+
+      console.log("✅ [WEEKLY] 변환된 데이터:", transformedData);
+      return transformedData;
     } catch (error: any) {
-      if (error.status === 404) {
-        return [];
-      }
+      if (error.status === 404) return [];
       console.error("[HEALTH_SCORE] 주간 점수 로드 실패:", error.message);
       throw error;
     }
   },
 
+  // ✅ 월간 점수
   getMonthlyTrend: async (): Promise<ScoreTrendItem[]> => {
     try {
-      const userId = await getUserId();
-      const response = await requestAI<ScoreTrendItem[]>(
-        `/score/trend/monthly/${userId}`,
+      const userId = await getUserId(); // ⭐ 실제 userId 사용
+      console.log("📊 [MONTHLY] 사용자 ID:", userId);
+
+      const response = await requestAI<{ monthly_scores: MonthlyScoreItem[] }>(
+        `/score/monthly/${userId}`,
         { method: "GET" }
       );
-      return Array.isArray(response) ? response : [];
+
+      console.log("📊 [MONTHLY] 전체 응답:", JSON.stringify(response, null, 2));
+
+      // 데이터 변환: month → date, total_avg → total
+      const transformedData: ScoreTrendItem[] = Array.isArray(
+        response.monthly_scores
+      )
+        ? response.monthly_scores.map((item) => ({
+            date: item.month,
+            nutrition: item.nutrition_avg,
+            exercise: item.exercise_avg,
+            balance: item.balance_avg,
+            total: item.total_avg,
+          }))
+        : [];
+
+      console.log("✅ [MONTHLY] 변환된 데이터:", transformedData);
+      return transformedData;
     } catch (error: any) {
-      if (error.status === 404) {
-        return [];
-      }
+      if (error.status === 404) return [];
       console.error("[HEALTH_SCORE] 월간 점수 로드 실패:", error.message);
       throw error;
     }

@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
     "jsx": "react-jsx"
   },
   "extends": "expo/tsconfig.base"
