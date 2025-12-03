@@ -3260,12 +3260,6 @@ const ExerciseScreen = ({ navigation }: any) => {
 
         return (
           <>
-<<<<<<< HEAD
-      {showAddOptions && (
-        <TouchableWithoutFeedback onPress={() => setShowAddOptions(false)}>
-          <View style={styles.fabBackdrop} />
-        </TouchableWithoutFeedback>
-      )}
             {showAddOptions && (
               <TouchableWithoutFeedback
                 onPress={() => setShowAddOptions(false)}
