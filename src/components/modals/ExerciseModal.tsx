@@ -62,10 +62,12 @@ interface ExerciseModalProps {
     meta?: {
       externalId?: string;
       category?: string;
+      imageUrl?: string;
     },
     comment?: string,
     options?: {
       keepModalOpen?: boolean;
+      skipServerSave?: boolean;
     }
   ) => Promise<string | undefined> | void; // sessionId 반환 가능
   onWorkoutComplete?: (exercises: Array<{
@@ -183,6 +185,50 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   const [isWorkoutTimerRunning, setIsWorkoutTimerRunning] = useState(false);
   const workoutTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sequenceSetsRef = useRef<Map<string | number, Set[]>>(new Map());
+
+  // 인코딩 정규화 함수
+  const normalizeEncoding = (text: string): string => {
+    if (!text) return "";
+    const candidates: string[] = [text];
+    try {
+      // eslint-disable-next-line no-undef
+      candidates.push(decodeURIComponent(escape(text)));
+    } catch {}
+    try {
+      // 반대 방향도 시도 (이미 두 번 깨진 경우 대비)
+      // eslint-disable-next-line no-undef
+      candidates.push(unescape(encodeURIComponent(text)));
+    } catch {}
+
+    // 한글 글자 수가 가장 많은 후보를 선택
+    const scoreHangul = (s: string) => (s.match(/[가-힣]/g) || []).length;
+    let best = candidates[0];
+    let bestScore = scoreHangul(best);
+    for (const c of candidates.slice(1)) {
+      const sc = scoreHangul(c);
+      if (sc > bestScore) {
+        best = c;
+        bestScore = sc;
+      }
+    }
+    return best;
+  };
+
+  // 표시용 한국어 이름 우선 선택
+  const getExerciseDisplayName = React.useCallback(
+    (ex: any) => {
+      const raw =
+        ex?.koreanName ||
+        ex?.korName ||
+        ex?.nameKo ||
+        ex?.koName ||
+        ex?.name ||
+        "";
+      return normalizeEncoding(raw);
+    },
+    []
+  );
+
   const emitSetChange = useCallback(
     (updatedSets: Set[]) => {
       if (!onSetChange) return;
@@ -232,9 +278,9 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
       getExerciseDisplayName,
     ]
   );
-  const prefetchedInstructionUrlsRef = useRef<Set<string>>(new Set());
+  const prefetchedInstructionUrlsRef = useRef<globalThis.Set<string>>(new globalThis.Set());
   // 이미지 로드 실패 추적 (URL을 키로 사용)
-  const [failedImageUrls, setFailedImageUrls] = useState<Set<string>>(new Set());
+  const [failedImageUrls, setFailedImageUrls] = useState<globalThis.Set<string>>(new globalThis.Set());
   // 운동별 피드백 상태 관리 (운동 이름을 키로 사용)
   // intensity: "heavy" | "light" | null (무거워요/가벼워요/선택안함)
   // feedback: "like" | "dislike" | null (좋아요/싫어요/선택안함)
@@ -539,6 +585,32 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
     });
   };
 
+  const persistCurrentExerciseState = React.useCallback(() => {
+    if (
+      currentExerciseIndex < 0 ||
+      currentExerciseIndex >= addedExercises.length
+    ) {
+      return;
+    }
+    setAddedExercises((prev) => {
+      if (
+        currentExerciseIndex < 0 ||
+        currentExerciseIndex >= prev.length
+      ) {
+        return prev;
+      }
+      const updated = [...prev];
+      updated[currentExerciseIndex] = {
+        ...updated[currentExerciseIndex],
+        sets: sets.map((set) => ({ ...set })),
+        comment: comment ?? "",
+        instructionText: instructionText ?? "",
+        instructionImageUrl: instructionImageUrl ?? "",
+      };
+      return updated;
+    });
+  }, [currentExerciseIndex, addedExercises.length, sets, comment, instructionText, instructionImageUrl]);
+
   const handleSequenceNavigatePress = useCallback(
     (direction: "prev" | "next") => {
       cacheCurrentExerciseSets();
@@ -569,51 +641,6 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   const [apiExercises, setApiExercises] = useState<any[]>([]);
   const [loadingList, setLoadingList] = useState<boolean>(false);
   const [availableBodyParts, setAvailableBodyParts] = useState<string[]>([]);
-
-  // 서버 인코딩 문제(UTF-8이 Latin-1로 깨진 경우) 복구 시도
-  const normalizeEncoding = (text: string) => {
-    if (!text) return text;
-
-    const candidates: string[] = [text];
-    try {
-      // latin1 -> utf8 복구
-      // eslint-disable-next-line no-undef
-      candidates.push(decodeURIComponent(escape(text)));
-    } catch {}
-    try {
-      // 반대 방향도 시도 (이미 두 번 깨진 경우 대비)
-      // eslint-disable-next-line no-undef
-      candidates.push(unescape(encodeURIComponent(text)));
-    } catch {}
-
-    // 한글 글자 수가 가장 많은 후보를 선택
-    const scoreHangul = (s: string) => (s.match(/[가-힣]/g) || []).length;
-    let best = candidates[0];
-    let bestScore = scoreHangul(best);
-    for (const c of candidates.slice(1)) {
-      const sc = scoreHangul(c);
-      if (sc > bestScore) {
-        best = c;
-        bestScore = sc;
-      }
-    }
-    return best;
-  };
-
-  // 표시용 한국어 이름 우선 선택
-const getExerciseDisplayName = React.useCallback(
-  (ex: any) => {
-    const raw =
-      ex?.koreanName ||
-      ex?.korName ||
-      ex?.nameKo ||
-      ex?.koName ||
-      ex?.name ||
-      "";
-    return normalizeEncoding(raw);
-  },
-  []
-);
 
   // 실제 API bodyPart 값과 UI 카테고리 매핑 (자동 감지)
   const [bodyPartMapping, setBodyPartMapping] = useState<
@@ -868,39 +895,6 @@ const getExerciseDisplayName = React.useCallback(
 
     emitSetChange(newSets);
   };
-
-  const persistCurrentExerciseState = React.useCallback(() => {
-    if (
-      currentExerciseIndex < 0 ||
-      currentExerciseIndex >= addedExercises.length
-    ) {
-      return;
-    }
-    setAddedExercises((prev) => {
-      if (
-        currentExerciseIndex < 0 ||
-        currentExerciseIndex >= prev.length
-      ) {
-        return prev;
-      }
-      const updated = [...prev];
-      updated[currentExerciseIndex] = {
-        ...updated[currentExerciseIndex],
-        sets: sets.map((set) => ({ ...set })),
-        comment: comment ?? "",
-        instructionText,
-        instructionImageUrl,
-      };
-      return updated;
-    });
-  }, [
-    currentExerciseIndex,
-    addedExercises.length,
-    sets,
-    comment,
-    instructionText,
-    instructionImageUrl,
-  ]);
 
   const handleAddSet = () => {
     const lastSet = sets[sets.length - 1];
@@ -1760,27 +1754,29 @@ const getExerciseDisplayName = React.useCallback(
                 keyboardShouldPersistTaps="handled"
               >
                 {/* 운동 이미지 - 항상 표시 */}
-                <View style={styles.exerciseImageContainer}>
-                  {instructionLoading ? (
-                    <View style={styles.exerciseImagePlaceholderLarge}>
-                      <Text style={styles.loadingText}>불러오는 중...</Text>
-                    </View>
-                  ) : instructionImageUrl || selectedExercise?.imageUrl || exerciseData?.imageUrl ? (
-                    <Image
-                      source={{ uri: instructionImageUrl || selectedExercise?.imageUrl || exerciseData?.imageUrl }}
-                      style={styles.exerciseImageLarge}
-                      resizeMode="contain"
-                    />
-                  ) : (
-                    <View style={styles.exerciseImagePlaceholderLarge}>
-                      <Icon name="barbell" size={48} color="#666666" />
-                    </View>
-                  )}
-                  {/* 좌우 화살표 */}
-                  {/* 왼쪽 버튼: 운동이 2개 이상이고, 현재가 첫 번째(인덱스 0)가 아니면 표시 */}
-                  {currentMode === "detail" && addedExercises.length >= 2 && currentExerciseIndex > 0 && (
-                    <TouchableOpacity
-                      style={styles.exerciseImageNavLeft}
+                <View style={styles.exerciseImageWrapper}>
+                  <Text style={styles.exerciseImageLabel}>운동 사진</Text>
+                  <View style={styles.exerciseImageContainer}>
+                    {instructionLoading ? (
+                      <View style={styles.exerciseImagePlaceholderLarge}>
+                        <Text style={styles.loadingText}>불러오는 중...</Text>
+                      </View>
+                    ) : instructionImageUrl || selectedExercise?.imageUrl || exerciseData?.imageUrl ? (
+                      <Image
+                        source={{ uri: instructionImageUrl || selectedExercise?.imageUrl || exerciseData?.imageUrl }}
+                        style={styles.exerciseImageLarge}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={styles.exerciseImagePlaceholderLarge}>
+                        <Icon name="barbell" size={48} color="#666666" />
+                      </View>
+                    )}
+                    {/* 좌우 화살표 */}
+                    {/* 왼쪽 버튼: 운동이 2개 이상이고, 현재가 첫 번째(인덱스 0)가 아니면 표시 */}
+                    {currentMode === "detail" && addedExercises.length >= 2 && currentExerciseIndex > 0 && (
+                      <TouchableOpacity
+                        style={styles.exerciseImageNavLeft}
                       onPress={() => {
                         persistCurrentExerciseState();
                         // 이전 운동으로 이동
@@ -1817,13 +1813,13 @@ const getExerciseDisplayName = React.useCallback(
                         }
                       }}
                     >
-                      <Icon name="chevron-back" size={24} color="#ffffff" />
-                    </TouchableOpacity>
-                  )}
-                  {/* 오른쪽 버튼: 운동이 2개 이상이고, 현재가 마지막이 아니면 표시 */}
-                  {currentMode === "detail" && addedExercises.length >= 2 && currentExerciseIndex >= 0 && currentExerciseIndex < addedExercises.length - 1 && (
-                    <TouchableOpacity
-                      style={styles.exerciseImageNavRight}
+                        <Icon name="chevron-back" size={24} color="#ffffff" />
+                      </TouchableOpacity>
+                    )}
+                    {/* 오른쪽 버튼: 운동이 2개 이상이고, 현재가 마지막이 아니면 표시 */}
+                    {currentMode === "detail" && addedExercises.length >= 2 && currentExerciseIndex >= 0 && currentExerciseIndex < addedExercises.length - 1 && (
+                      <TouchableOpacity
+                        style={styles.exerciseImageNavRight}
                       onPress={() => {
                         persistCurrentExerciseState();
                         // 다음 운동으로 이동
@@ -1860,9 +1856,10 @@ const getExerciseDisplayName = React.useCallback(
                         }
                       }}
                     >
-                      <Icon name="chevron-forward" size={24} color="#ffffff" />
-                    </TouchableOpacity>
-                  )}
+                        <Icon name="chevron-forward" size={24} color="#ffffff" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
 
                 {/* 운동 방법 설명 - 토글 가능 */}
@@ -1876,7 +1873,7 @@ const getExerciseDisplayName = React.useCallback(
                   <Text style={styles.instructionTitle}>운동 방법</Text>
                     <Icon
                       name={showInstructionsSection ? "chevron-up" : "chevron-down"}
-                      size={18}
+                      size={24}
                       color="#ffffff"
                     />
                   </TouchableOpacity>
@@ -2438,22 +2435,25 @@ const getExerciseDisplayName = React.useCallback(
                   keyboardShouldPersistTaps="handled"
                 >
                 {/* 운동 이미지 - 항상 표시 */}
-                <View style={styles.exerciseImageContainer}>
-                  {instructionLoading ? (
-                    <View style={styles.exerciseImagePlaceholderLarge}>
-                      <Text style={styles.loadingText}>불러오는 중...</Text>
-                    </View>
-                  ) : instructionImageUrl || selectedExercise?.imageUrl || exerciseData?.imageUrl ? (
-                    <Image
-                      source={{ uri: instructionImageUrl || selectedExercise?.imageUrl || exerciseData?.imageUrl }}
-                      style={styles.exerciseImageLarge}
-                      resizeMode="contain"
-                    />
-                  ) : (
-                    <View style={styles.exerciseImagePlaceholderLarge}>
-                      <Icon name="barbell" size={48} color="#666666" />
-                    </View>
-                  )}
+                <View style={styles.exerciseImageWrapper}>
+                  <Text style={styles.exerciseImageLabel}>운동 사진</Text>
+                  <View style={styles.exerciseImageContainer}>
+                    {instructionLoading ? (
+                      <View style={styles.exerciseImagePlaceholderLarge}>
+                        <Text style={styles.loadingText}>불러오는 중...</Text>
+                      </View>
+                    ) : instructionImageUrl || selectedExercise?.imageUrl || exerciseData?.imageUrl ? (
+                      <Image
+                        source={{ uri: instructionImageUrl || selectedExercise?.imageUrl || exerciseData?.imageUrl }}
+                        style={styles.exerciseImageLarge}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={styles.exerciseImagePlaceholderLarge}>
+                        <Icon name="barbell" size={48} color="#666666" />
+                      </View>
+                    )}
+                  </View>
                 </View>
 
                 {/* 운동 방법 설명 - 항상 표시, 번호가 있는 리스트 형식 */}
@@ -2974,16 +2974,19 @@ const styles = StyleSheet.create({
   },
   instructionBox: {
     marginHorizontal: 20,
-    marginTop: 0,
+    marginTop: -40,
     marginBottom: 24,
-    backgroundColor: "#333333",
-    borderRadius: 10,
+    backgroundColor: "#464646",
+    borderRadius: 20,
     padding: 16,
+    minHeight: 200,
+    zIndex: 1,
+    position: "relative",
   },
   instructionTitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#ffffff",
-    fontWeight: "600",
+    fontWeight: "700",
     marginBottom: 0,
   },
   instructionHeader: {
@@ -3014,25 +3017,41 @@ const styles = StyleSheet.create({
   instructionContent: {
     flex: 1,
   },
+  exerciseImageWrapper: {
+    marginHorizontal: 20,
+    marginTop: 0,
+    marginBottom: 0,
+    alignItems: "center",
+  },
+  exerciseImageLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#000000",
+    marginBottom: 8,
+    textAlign: "center",
+  },
   exerciseImageContainer: {
     position: "relative",
-    width: "100%",
-    height: 270,
-    marginTop: 0,
-    marginBottom: 24,
-    backgroundColor: "#1a1a1a",
+    width: "70%",
+    aspectRatio: 1,
+    backgroundColor: "#d9d9d9",
     justifyContent: "center",
     alignItems: "center",
+    borderRadius: 20,
+    overflow: "hidden",
+    zIndex: 2,
   },
   exerciseImageLarge: {
     width: "100%",
     height: "100%",
+    borderRadius: 20,
   },
   exerciseImagePlaceholderLarge: {
     width: "100%",
     height: "100%",
     justifyContent: "center",
     alignItems: "center",
+    borderRadius: 20,
   },
   exerciseImageNavLeft: {
     position: "absolute",
@@ -3198,54 +3217,6 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 12,
     fontWeight: "600",
-  },
-  exerciseListOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  exerciseListContainer: {
-    width: "100%",
-    maxWidth: 420,
-    backgroundColor: "#ffffff",
-    borderRadius: 18,
-    padding: 20,
-  },
-  exerciseListHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  exerciseListTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#000000",
-  },
-  exerciseListCloseBtn: {
-    padding: 4,
-  },
-  exerciseListScroll: {
-    maxHeight: 320,
-  },
-  exerciseListScrollContent: {
-    paddingBottom: 6,
-  },
-  exerciseListEmptyText: {
-    textAlign: "center",
-    color: "#666666",
-    paddingVertical: 24,
-    fontSize: 14,
-  },
-  exerciseListItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
   },
   endWorkoutBtn: {
     backgroundColor: "#404040",
