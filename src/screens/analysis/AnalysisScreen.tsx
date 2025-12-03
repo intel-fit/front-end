@@ -919,12 +919,11 @@ const AnalysisScreen = ({ navigation }: any) => {
       return;
     }
     try {
-      console.log("[ANALYSIS] 운동 기록 조회 시작");
+      console.log("[ANALYSIS] 운동 기록 조회 시작 (오늘 날짜만)");
       setLoading(true);
       // 먼저 빈 배열로 초기화하여 이전 데이터가 표시되지 않도록 함
       setWorkoutHistory([]);
 
-      // 최근 30일간의 저장된 운동 기록 조회
       // userId는 문자열일 수 있으므로 숫자로 변환 시도, 실패하면 그대로 사용
       let userIdNum: number | string = userId;
       if (typeof userId === "string") {
@@ -934,79 +933,65 @@ const AnalysisScreen = ({ navigation }: any) => {
 
       const allWorkouts: WorkoutSession[] = [];
       const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(
+        today.getMonth() + 1
+      ).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 
-      // 최근 30일간의 데이터를 가져옴
-      for (let i = 0; i < 30; i++) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - i);
-        const dateStr = `${date.getFullYear()}-${String(
-          date.getMonth() + 1
-        ).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      console.log(`[ANALYSIS] ${todayStr} 운동 기록 조회 중...`);
+      const savedGroups = await fetchSavedWorkouts(userIdNum, todayStr);
+      console.log(
+        `[ANALYSIS] ${todayStr} 조회 결과:`,
+        savedGroups.length,
+        "개 그룹"
+      );
 
-        try {
-          console.log(`[ANALYSIS] ${dateStr} 운동 기록 조회 중...`);
-          const savedGroups = await fetchSavedWorkouts(userIdNum, dateStr);
-          console.log(
-            `[ANALYSIS] ${dateStr} 조회 결과:`,
-            savedGroups.length,
-            "개 그룹"
-          );
+      // SavedWorkoutGroup[]을 WorkoutSession[]로 변환
+      // 같은 sessionId와 exerciseName을 가진 레코드들을 하나의 WorkoutSession으로 합침
+      savedGroups.forEach((group) => {
+        if (!group.sessions || group.sessions.length === 0) return;
 
-          // SavedWorkoutGroup[]을 WorkoutSession[]로 변환
-          // 같은 sessionId와 exerciseName을 가진 레코드들을 하나의 WorkoutSession으로 합침
-          savedGroups.forEach((group) => {
-            group.sessions.forEach((session) => {
-              if (!session.records || session.records.length === 0) return;
+        group.sessions.forEach((session) => {
+          if (!session.records || session.records.length === 0) return;
 
-              // records를 exerciseName별로 그룹화
-              const exerciseMap = new Map<string, SavedWorkoutRecord[]>();
-              session.records.forEach((record) => {
-                const key = record.exerciseName || "unknown";
-                if (!exerciseMap.has(key)) {
-                  exerciseMap.set(key, []);
-                }
-                exerciseMap.get(key)!.push(record);
-              });
+          // records를 exerciseName별로 그룹화
+          const exerciseMap = new Map<string, SavedWorkoutRecord[]>();
+          session.records.forEach((record) => {
+            const key = record.exerciseName || "unknown";
+            if (!exerciseMap.has(key)) {
+              exerciseMap.set(key, []);
+            }
+            exerciseMap.get(key)!.push(record);
+          });
 
-              // 각 운동별로 WorkoutSession 생성
-              exerciseMap.forEach((records, exerciseName) => {
-                const firstRecord = records[0];
-                allWorkouts.push({
-                  sessionId: session.sessionId,
-                  exerciseName: exerciseName,
-                  category: firstRecord.category || "",
-                  workoutDate: firstRecord.workoutDate,
-                  sets: records
-                    .sort((a, b) => a.setNumber - b.setNumber)
-                    .map((record) => ({
-                      setNumber: record.setNumber,
-                      weight: record.weight,
-                      reps: record.reps,
-                      completed: true, // 저장된 운동은 완료된 것으로 표시
-                      isCompleted: true,
-                    })),
-                  userId: userIdNum,
-                  exerciseId: undefined,
-                  // @ts-ignore - 저장된 운동은 완료된 것으로 표시
+          // 각 운동별로 WorkoutSession 생성
+          exerciseMap.forEach((records, exerciseName) => {
+            const firstRecord = records[0];
+            allWorkouts.push({
+              sessionId: session.sessionId,
+              exerciseName: exerciseName,
+              category: firstRecord.category || "",
+              workoutDate: firstRecord.workoutDate,
+              sets: records
+                .sort((a, b) => a.setNumber - b.setNumber)
+                .map((record) => ({
+                  setNumber: record.setNumber,
+                  weight: record.weight,
+                  reps: record.reps,
+                  completed: true, // 저장된 운동은 완료된 것으로 표시
                   isCompleted: true,
-                  // @ts-ignore
-                  completed: true,
-                });
-              });
+                })),
+              userId: userIdNum,
+              exerciseId: undefined,
+              // @ts-ignore - 저장된 운동은 완료된 것으로 표시
+              isCompleted: true,
+              // @ts-ignore
+              completed: true,
             });
           });
-        } catch (error: any) {
-          // 특정 날짜의 데이터가 없으면 무시 (404는 정상)
-          if (error?.response?.status !== 404) {
-            console.warn(
-              `[ANALYSIS] ${dateStr} 운동 기록 조회 실패:`,
-              error?.response?.status
-            );
-          }
-        }
-      }
+        });
+      });
 
-      console.log("[ANALYSIS] 운동 기록 로드 완료:", {
+      console.log("[ANALYSIS] 운동 기록 로드 완료 (오늘):", {
         count: allWorkouts.length,
         sample: allWorkouts.slice(0, 2).map((w) => ({
           exerciseName: w.exerciseName,

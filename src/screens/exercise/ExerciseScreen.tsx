@@ -1695,14 +1695,16 @@ const ExerciseScreen = ({ navigation }: any) => {
   // 서버 목록 섹션 제거됨
 
   const getProgressPercentage = React.useMemo(() => {
-    if (!goalData) {
+    if (!goalData || !Array.isArray(weeklyProgress) || weeklyProgress.length === 0) {
       if (__DEV__) {
-        console.log("[PROGRESS] goalData 없음, 0% 반환");
+        console.log("[PROGRESS] goalData 또는 weeklyProgress 없음, 0% 반환", {
+          hasGoalData: !!goalData,
+          weeklyLength: weeklyProgress?.length || 0,
+        });
       }
       return 0;
     }
 
-    // 서버 데이터(weeklyProgress)를 우선적으로 사용
     const now = new Date();
     const todayEnd = new Date(
       now.getFullYear(),
@@ -1713,92 +1715,13 @@ const ExerciseScreen = ({ navigation }: any) => {
       59,
       999
     );
-    const thisWeekStart = new Date(now);
-    thisWeekStart.setDate(now.getDate() - now.getDay()); // 일요일로 설정
+
+    // 이번 주의 월요일 0시 계산 (백엔드 주간 기준과 맞추기)
+    const thisWeekStart = new Date(todayEnd);
+    thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay() + 1);
     thisWeekStart.setHours(0, 0, 0, 0);
 
-    // weeklyProgress에서 이번 주 완료된 날짜 개수 계산
-    // 운동 기록이 있는 날짜 (exerciseRate > 0 또는 totalCalorie > 0)를 완료로 간주
-    const completedDates = new Set<string>();
-
-    if (Array.isArray(weeklyProgress) && weeklyProgress.length > 0) {
-      weeklyProgress.forEach((item) => {
-        if (!item || !item.date) return;
-
-        // exerciseRate가 100이거나, 운동 기록이 있는 경우 (exerciseRate > 0 또는 totalCalorie > 0) 완료로 간주
-        const hasExercise = 
-          item.exerciseRate === 100 || 
-          (item.exerciseRate && item.exerciseRate > 0) ||
-          (item.totalCalorie && item.totalCalorie > 0);
-        
-        if (!hasExercise) return;
-
-        try {
-          const itemDate = new Date(item.date);
-          if (isNaN(itemDate.getTime())) return;
-
-          const itemDateOnly = new Date(
-            itemDate.getFullYear(),
-            itemDate.getMonth(),
-            itemDate.getDate()
-          );
-          const weekStartOnly = new Date(
-            thisWeekStart.getFullYear(),
-            thisWeekStart.getMonth(),
-            thisWeekStart.getDate()
-          );
-          const todayEndOnly = new Date(
-            todayEnd.getFullYear(),
-            todayEnd.getMonth(),
-            todayEnd.getDate()
-          );
-
-          // 이번 주 범위 내에 있고, exerciseRate가 100이면 완료된 날짜로 간주
-          if (itemDateOnly >= weekStartOnly && itemDateOnly <= todayEndOnly) {
-            const dateKey = `${itemDateOnly.getFullYear()}-${String(
-              itemDateOnly.getMonth() + 1
-            ).padStart(2, "0")}-${String(itemDateOnly.getDate()).padStart(
-              2,
-              "0"
-            )}`;
-            completedDates.add(dateKey);
-          }
-        } catch (error) {
-          // 날짜 파싱 에러 무시
-        }
-      });
-    }
-
-    // 고유한 날짜의 개수가 실제 완료 횟수 (하루에 여러 운동을 해도 1회로 카운트)
-    const actualCompletedThisWeek = completedDates.size;
-
-    // 디버깅: 진행률 계산 로그
-    if (__DEV__) {
-      console.log(
-        "[PROGRESS] weeklyProgress 개수:",
-        weeklyProgress?.length || 0
-      );
-      console.log("[PROGRESS] 완료된 날짜:", Array.from(completedDates));
-      console.log("[PROGRESS] 완료된 날짜 개수:", actualCompletedThisWeek);
-      console.log(
-        "[PROGRESS] goalData:",
-        goalData
-          ? {
-              weeklyFrequency: goalData.weeklyFrequency,
-              weeklyCalorieGoal: goalData.weeklyCalorieGoal,
-            }
-          : null
-      );
-    }
-
-    // 이번 주에 완료된 운동이 전혀 없으면 0% 반환
-    if (actualCompletedThisWeek === 0) {
-      if (__DEV__) {
-        console.log("[PROGRESS] 완료된 운동 없음, 0% 반환");
-      }
-      return 0;
-    }
-
+    // 주 목표 횟수 (예: "주 5회" → 5)
     const frequencyValue = goalData.weeklyFrequency
       ? parseInt(goalData.weeklyFrequency.replace(/[^0-9]/g, ""), 10)
       : NaN;
@@ -1807,39 +1730,64 @@ const ExerciseScreen = ({ navigation }: any) => {
       Number.isNaN(frequencyValue) || frequencyValue <= 0 ? 1 : frequencyValue
     );
 
-    // 운동 횟수 목표를 모두 완료했으면 100% 반환
-    if (actualCompletedThisWeek >= countTarget) {
-      if (__DEV__) {
-        console.log(
-          "[PROGRESS] 목표 달성:",
-          actualCompletedThisWeek,
-          ">=",
-          countTarget
+    // 하루가 기여할 수 있는 최대 비율 (예: 주 5회 → 하루 최대 20%)
+    const maxDailyShare = 100 / countTarget;
+
+    let accumulated = 0;
+
+    weeklyProgress.forEach((item) => {
+      if (!item || !item.date) return;
+
+      try {
+        const itemDate = new Date(item.date);
+        if (isNaN(itemDate.getTime())) return;
+
+        const itemDateOnly = new Date(
+          itemDate.getFullYear(),
+          itemDate.getMonth(),
+          itemDate.getDate()
         );
+        const weekStartOnly = new Date(
+          thisWeekStart.getFullYear(),
+          thisWeekStart.getMonth(),
+          thisWeekStart.getDate()
+        );
+        const todayEndOnly = new Date(
+          todayEnd.getFullYear(),
+          todayEnd.getMonth(),
+          todayEnd.getDate()
+        );
+
+        // 이번 주 범위 내 데이터만 사용
+        if (itemDateOnly < weekStartOnly || itemDateOnly > todayEndOnly) {
+          return;
+        }
+
+        // exerciseRate(0~100)를 일일 달성률로 사용
+        const rawRate =
+          typeof item.exerciseRate === "number" ? item.exerciseRate : 0;
+        const clampedRate = Math.min(100, Math.max(0, rawRate));
+        const dailyRatio = clampedRate / 100; // 0~1
+
+        // 하루 기여도 = (100 / 주 횟수) * (해당 날 달성률)
+        const dailyContribution = maxDailyShare * dailyRatio;
+        accumulated += dailyContribution;
+      } catch {
+        // 날짜 파싱 에러 무시
       }
-      return 100;
-    }
+    });
 
-    // 운동 목표 설정 진행률은 운동 횟수만으로 계산 (칼로리 제외)
-    const countRate = Math.min(
-      1,
-      Math.max(0, actualCompletedThisWeek / countTarget)
-    );
-
-    // 운동 횟수 진행률을 그대로 표시 (0~100%)
-    const actualProgress = Math.round(countRate * 100);
-    const finalProgress = Math.min(100, Math.max(0, actualProgress));
+    const finalProgress = Math.min(100, Math.max(0, Math.round(accumulated)));
 
     if (__DEV__) {
-      console.log(
-        "[PROGRESS] 최종 진행률:",
-        finalProgress,
-        "% (완료:",
-        actualCompletedThisWeek,
-        "/ 목표:",
+      console.log("[PROGRESS] 주간 진행률 계산:", {
+        weeklyLength: weeklyProgress.length,
+        weeklyFrequency: goalData.weeklyFrequency,
         countTarget,
-        ")"
-      );
+        maxDailyShare,
+        accumulated,
+        finalProgress,
+      });
     }
 
     return finalProgress;
@@ -2582,6 +2530,93 @@ const ExerciseScreen = ({ navigation }: any) => {
     ]);
   };
 
+  // 현재 선택된 날짜에 대해, 저장된 모든 운동 제목/세션을 한 번에 삭제
+  const handleDeleteAllSavedWorkoutsForSelectedDate = () => {
+    if (!savedWorkouts || savedWorkouts.length === 0) {
+      return;
+    }
+
+    Alert.alert(
+      "저장된 운동 전체 삭제",
+      "현재 날짜에 저장된 모든 운동 제목과 기록을 삭제할까요? 이 작업은 되돌릴 수 없습니다.",
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "삭제",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // savedWorkouts 에서 sessionId / 운동명 / 날짜를 모두 수집
+              const sessionMetaMap = new Map<
+                string,
+                { exerciseName?: string; workoutDate?: string }
+              >();
+
+              savedWorkouts.forEach((group) => {
+                group.sessions?.forEach((session) => {
+                  if (!session?.sessionId) return;
+                  if (!sessionMetaMap.has(session.sessionId)) {
+                    const firstRecord = session.records?.[0];
+                    sessionMetaMap.set(session.sessionId, {
+                      exerciseName: firstRecord?.exerciseName,
+                      workoutDate: firstRecord?.workoutDate,
+                    });
+                  }
+                });
+              });
+
+              const deletedSessionIds = new Set<string>(
+                Array.from(sessionMetaMap.keys())
+              );
+
+              for (const [sessionId, meta] of sessionMetaMap.entries()) {
+                try {
+                  const res = await deleteWorkoutSession(sessionId);
+                  console.log("[WORKOUT][DELETE_ALL][OK]", sessionId, res);
+
+                  eventBus.emit("workoutSessionDeleted", {
+                    sessionId,
+                    exerciseName: meta.exerciseName,
+                    workoutDate: meta.workoutDate,
+                  });
+                } catch (error) {
+                  console.error(
+                    "[WORKOUT][DELETE_ALL][FAIL] 세션 삭제 실패:",
+                    sessionId,
+                    error
+                  );
+                }
+              }
+
+              // 로컬 상태 정리: 저장된 제목 + 타임라인 둘 다 비우기
+              setSavedWorkouts([]);
+              if (deletedSessionIds.size > 0) {
+                setAllActivities((prev) =>
+                  prev.filter((activity) => {
+                    if (!activity.sessionId) return true;
+                    return !deletedSessionIds.has(activity.sessionId);
+                  })
+                );
+              }
+
+              // 오늘 날짜라면 홈/분석 쪽에서도 시간이 바로 0으로 반영되도록
+              try {
+                await loadTodayWorkoutTime();
+              } catch (e) {
+                console.error(
+                  "[WORKOUT][DELETE_ALL] 오늘 운동 시간 재조회 실패:",
+                  e
+                );
+              }
+            } catch (error) {
+              console.error("[WORKOUT][DELETE_ALL] 전체 삭제 실패:", error);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // StatsScreen 내부에서 사용될 때는 SafeAreaView 제거
   const ContainerComponent = View;
 
@@ -2872,14 +2907,21 @@ const ExerciseScreen = ({ navigation }: any) => {
         <View style={styles.logSection}>
           <View style={styles.sectionTitleRow}>
             <Text style={styles.sectionTitle}>운동 기록하기</Text>
-            {hasIncompleteActivities && workoutActivities.length > 0 ? (
-              <TouchableOpacity
-                style={styles.startWorkoutButton}
-                onPress={handleStartWorkoutSequence}
-              >
-                <Text style={styles.startWorkoutButtonText}>시작</Text>
-              </TouchableOpacity>
-            ) : null}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              {savedWorkouts.length > 0 && (
+                <TouchableOpacity onPress={handleDeleteAllSavedWorkoutsForSelectedDate}>
+                  <Text style={styles.todayWorkoutTimeText}>전체 삭제</Text>
+                </TouchableOpacity>
+              )}
+              {hasIncompleteActivities && workoutActivities.length > 0 ? (
+                <TouchableOpacity
+                  style={styles.startWorkoutButton}
+                  onPress={handleStartWorkoutSequence}
+                >
+                  <Text style={styles.startWorkoutButtonText}>시작</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
           </View>
 
           <View style={styles.logTimeline}>
@@ -3098,55 +3140,8 @@ const ExerciseScreen = ({ navigation }: any) => {
         onSave={handleExerciseSave}
         isCompleted={selectedExerciseCompleted}
         onWorkoutComplete={async (exercises) => {
-          // 이미 저장된 운동들 제외 (savedWorkouts + pendingSavedRefs 기준)
-          const savedSessionIds = new Set<string>();
-          savedWorkouts.forEach((group) => {
-            group.sessions.forEach((session) => {
-              if (session.sessionId) {
-                savedSessionIds.add(session.sessionId);
-              }
-            });
-          });
-          const pendingSessionIds = new Set(pendingSavedRefs.sessionIds);
-          const pendingActivityIds = new Set(pendingSavedRefs.activityIds);
-          const pendingExternalKeys = new Set(pendingSavedRefs.externalKeys);
-          
-          // allActivities에서 saveTitle이 있는 운동도 확인
-          const activitiesWithSaveTitle = new Set<string>();
-          allActivities.forEach((activity) => {
-            if (activity.saveTitle) {
-              if (activity.sessionId) activitiesWithSaveTitle.add(`session:${activity.sessionId}`);
-              if (typeof activity.id === "number") activitiesWithSaveTitle.add(`activity:${activity.id}`);
-              if (activity.externalId && activity.name) {
-                activitiesWithSaveTitle.add(`external:${activity.externalId}__${activity.name}`);
-              }
-            }
-          });
-          
-          const filteredExercises = exercises.filter((ex) => {
-            const sessionId = ex.sessionId;
-            const activityId = ex.activityId;
-            const externalKey = ex.externalId && ex.name ? `${ex.externalId}__${ex.name}` : null;
-            
-            // 이미 저장된 운동인지 확인
-            const alreadySavedBySession = sessionId && 
-              (savedSessionIds.has(sessionId) || pendingSessionIds.has(sessionId));
-            const alreadySavedByActivity = typeof activityId === "number" && 
-              pendingActivityIds.has(activityId);
-            const alreadySavedByExternal = externalKey && 
-              pendingExternalKeys.has(externalKey);
-            
-            // saveTitle이 있는 운동인지 확인
-            const hasSaveTitle = 
-              (sessionId && activitiesWithSaveTitle.has(`session:${sessionId}`)) ||
-              (typeof activityId === "number" && activitiesWithSaveTitle.has(`activity:${activityId}`)) ||
-              (externalKey && activitiesWithSaveTitle.has(`external:${externalKey}`));
-            
-            // 이미 저장되었거나 saveTitle이 있으면 제외
-            return !(alreadySavedBySession || alreadySavedByActivity || alreadySavedByExternal || hasSaveTitle);
-          });
-          
-          setCompletedExercises(filteredExercises);
+          // 이번 세션에서 완료한 모든 운동을 그대로 완료 페이지에 표시
+          setCompletedExercises(exercises);
           setCompletionSummaryTitle("오늘의 운동");
           setShowCompletionModal(true);
 
@@ -3516,61 +3511,12 @@ const ExerciseScreen = ({ navigation }: any) => {
                   {String(new Date().getDate()).padStart(2, "0")}
                 </Text>
                 <View style={styles.completedExercisesList}>
-                  {/* completedExercises를 직접 표시 - 이미 저장된 내역은 제외 */}
-                  {(() => {
-                    // savedWorkouts + pendingSavedRefs 를 기준으로 이미 저장된 내역 제외
-                    const savedSessionIds = new Set<string>();
-                    savedWorkouts.forEach((group) => {
-                      group.sessions.forEach((session) => {
-                        if (session.sessionId) {
-                          savedSessionIds.add(session.sessionId);
-                        }
-                      });
-                    });
-                    const pendingSessionIds = new Set(
-                      pendingSavedRefs.sessionIds
-                    );
-                    const pendingActivityIds = new Set(
-                      pendingSavedRefs.activityIds
-                    );
-                    const pendingExternalKeys = new Set(
-                      pendingSavedRefs.externalKeys
-                    );
-
-                    const newCompletedExercises = completedExercises.filter(
-                      (ex) => {
-                        const sessionId = ex.sessionId;
-                        const activityId = ex.activityId;
-                        const externalKey =
-                          ex.externalId && ex.name
-                            ? `${ex.externalId}__${ex.name}`
-                            : null;
-                        const alreadySavedBySession =
-                          sessionId &&
-                          (savedSessionIds.has(sessionId) ||
-                            pendingSessionIds.has(sessionId));
-                        const alreadySavedByActivity =
-                          typeof activityId === "number" &&
-                          pendingActivityIds.has(activityId);
-                        const alreadySavedByExternal =
-                          externalKey && pendingExternalKeys.has(externalKey);
-                        return !(
-                          alreadySavedBySession ||
-                          alreadySavedByActivity ||
-                          alreadySavedByExternal
-                        );
-                      }
-                    );
-
-                    if (newCompletedExercises.length === 0) {
-                      return (
-                        <Text style={styles.completedExerciseName}>
-                          완료된 운동이 없습니다.
-                        </Text>
-                      );
-                    }
-
-                    return newCompletedExercises.map((ex, index) => {
+                  {completedExercises.length === 0 ? (
+                    <Text style={styles.completedExerciseName}>
+                      완료된 운동이 없습니다.
+                    </Text>
+                  ) : (
+                    completedExercises.map((ex, index) => {
                       const externalId = ex.externalId;
                       const idKey = externalId ? String(externalId) : undefined;
                       const nameKey = ex.name
@@ -3583,21 +3529,12 @@ const ExerciseScreen = ({ navigation }: any) => {
                         (idKey ? exerciseImages[idKey] : undefined) ||
                         (nameKey ? exerciseImagesByName[nameKey] : undefined);
 
-                      const setsCompleted = Array.isArray(ex.sets)
-                        ? ex.sets.filter(
-                            (set: any) => set?.isCompleted === true
-                          ).length
-                        : 0;
-                      const totalSets = Array.isArray(ex.sets)
-                        ? ex.sets.length
-                        : 0;
-
                       return (
                         <View
                           key={index}
                           style={[
                             styles.completedExerciseItem,
-                            index === newCompletedExercises.length - 1 &&
+                            index === completedExercises.length - 1 &&
                               styles.completedExerciseItemLast,
                           ]}
                         >
@@ -3622,8 +3559,8 @@ const ExerciseScreen = ({ navigation }: any) => {
                           </View>
                         </View>
                       );
-                    });
-                  })()}
+                    })
+                  )}
                 </View>
               </View>
 
