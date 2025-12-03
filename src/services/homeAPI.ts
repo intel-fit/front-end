@@ -1,5 +1,64 @@
 import { request } from './apiConfig';
 import type { HomeResponse, DailyProgressWeekItem } from '../types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ACCESS_TOKEN_KEY } from './apiConfig';
+
+// 코치 주간 리포트 타입
+export interface WeeklyCoachReport {
+  summary: string;
+  metrics: {
+    avg_kcal: number;
+    avg_protein: number;
+    avg_fat: number;
+    avg_carb: number;
+    avg_sodium_mg: number;
+    processed_ratio: number;
+    exercise_days: number;
+    avg_ex_duration: number;
+    avg_ex_intensity: number;
+    avg_burned: number;
+    health_score: number;
+    score_trend_delta: number;
+  };
+  action_items: string[];
+  motivation: string;
+}
+
+// userId 가져오기 (JWT에서 sub 추출)
+const getUserId = async (): Promise<string> => {
+  try {
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    if (token) {
+      try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+          atob(base64)
+            .split('')
+            .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
+        );
+        const payload = JSON.parse(jsonPayload);
+        if (payload.sub) {
+          return String(payload.sub);
+        }
+      } catch (e) {
+        console.error('[HOME] JWT 디코딩 실패:', e);
+      }
+    }
+    
+    // AsyncStorage에서 userId 가져오기 시도
+    const userId = await AsyncStorage.getItem('userId');
+    if (userId) {
+      return userId;
+    }
+    
+    throw new Error('사용자 ID를 찾을 수 없습니다.');
+  } catch (error) {
+    console.error('[HOME] userId 가져오기 실패:', error);
+    throw error;
+  }
+};
 
 export const homeAPI = {
   // 홈 화면 메인 정보 조회
@@ -32,6 +91,36 @@ export const homeAPI = {
       return [];
     } catch (error: any) {
       console.error('주간 진행률 API 호출 실패:', error);
+      throw error;
+    }
+  },
+
+  // 코치 주간 리포트 조회
+  // GET /coach/weekly_report/{user_id}
+  getWeeklyCoachReport: async (): Promise<WeeklyCoachReport> => {
+    try {
+      const userId = await getUserId();
+      const url = `http://43.200.40.140:8000/coach/weekly_report/${userId}`;
+      
+      console.log('[HOME] 코치 리포트 API 호출:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('[HOME] 코치 리포트 응답:', data);
+      
+      return data;
+    } catch (error: any) {
+      console.error('[HOME] 코치 리포트 API 호출 실패:', error);
       throw error;
     }
   },

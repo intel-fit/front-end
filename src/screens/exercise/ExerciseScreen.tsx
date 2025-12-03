@@ -2411,7 +2411,13 @@ const ExerciseScreen = ({ navigation }: any) => {
 
     // userId 가져오기
     const userIdStr = await AsyncStorage.getItem("userId");
-    const userId = userIdStr ? parseInt(userIdStr, 10) : 1; // 기본값 1
+    let userId: number;
+    if (userIdStr) {
+      const parsed = parseInt(userIdStr, 10);
+      userId = isNaN(parsed) ? 1 : parsed; // NaN 체크
+    } else {
+      userId = 1; // 기본값 1
+    }
 
     // 선택된 날짜로 workoutDate 생성 (시간은 현재 시간 사용)
     const activeDate = selectedDate || new Date();

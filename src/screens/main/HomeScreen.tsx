@@ -17,6 +17,7 @@ import { colors } from "../../theme/colors";
 import { ROUTES } from "../../constants/routes";
 import { useDate } from "../../contexts/DateContext";
 import { homeAPI, authAPI } from "../../services";
+import type { WeeklyCoachReport } from "../../services/homeAPI";
 import {
   getTodayWorkoutTime,
   fetchSavedWorkouts,
@@ -39,6 +40,10 @@ const HomeScreen = ({ navigation }: any) => {
   // 멤버십 정보 state
   const [membershipType, setMembershipType] = useState<string>("FREE");
   const [mealTokens, setMealTokens] = useState<number>(0);
+
+  // 코치 리포트 state
+  const [coachReport, setCoachReport] = useState<WeeklyCoachReport | null>(null);
+  const [randomActionItem, setRandomActionItem] = useState<string | null>(null);
 
   // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
   // 한국 시간대(UTC+9) 기준으로 날짜 계산
@@ -294,6 +299,31 @@ const HomeScreen = ({ navigation }: any) => {
     }
   };
 
+  // 코치 리포트 로드
+  const loadCoachReport = async () => {
+    try {
+      const report = await homeAPI.getWeeklyCoachReport();
+      setCoachReport(report);
+      
+      // action_items에서 랜덤으로 1개 선택
+      selectRandomActionItem(report);
+    } catch (error: any) {
+      console.error("코치 리포트 로드 실패:", error);
+      setCoachReport(null);
+      setRandomActionItem(null);
+    }
+  };
+
+  // 랜덤 action_item 선택 함수
+  const selectRandomActionItem = (report: WeeklyCoachReport | null) => {
+    if (report && report.action_items && report.action_items.length > 0) {
+      const randomIndex = Math.floor(Math.random() * report.action_items.length);
+      setRandomActionItem(report.action_items[randomIndex]);
+    } else {
+      setRandomActionItem(null);
+    }
+  };
+
   //식단 추천 네비게이션 핸들러 (멤버십 분기 처리)
   const handleMealRecommendNavigation = async () => {
     try {
@@ -355,6 +385,14 @@ const HomeScreen = ({ navigation }: any) => {
         isLoadingRef.current = false;
         console.log("[HOME] 화면 포커스, 오늘 운동 데이터 새로고침 완료");
       });
+
+      // 코치 리포트가 있으면 새로운 랜덤 선택 (API 호출 없이)
+      if (coachReport) {
+        selectRandomActionItem(coachReport);
+      } else {
+        // 코치 리포트가 없으면 로드
+        loadCoachReport();
+      }
     });
 
     // 초기 로드 (로그인 완료 후)
@@ -366,6 +404,7 @@ const HomeScreen = ({ navigation }: any) => {
       loadTodayWorkoutTime(),
       loadInBodyData(),
       loadProfileInfo(),
+      loadCoachReport(),
     ]).finally(() => {
       isLoadingRef.current = false;
       console.log("[HOME] 초기 로드 완료");
@@ -386,17 +425,6 @@ const HomeScreen = ({ navigation }: any) => {
       <View style={styles.divider} />
 
       <ScrollView style={styles.content}>
-        <View style={styles.greetingSection}>
-          <View style={styles.profileGroup}>
-            <View style={styles.profileImage}>
-              <Text style={styles.profilePlaceholder}>👤</Text>
-            </View>
-            <Text style={styles.greetingText}>
-              {homeData?.userSummary?.name || "회원"}님 어서오세요😊
-            </Text>
-          </View>
-        </View>
-
         {/* ✅ 식단/운동 추천 카드 */}
         <View style={styles.enhancedRecommendationWrapper}>
           <View style={styles.enhancedRecommendationCardContainer}>
@@ -404,7 +432,7 @@ const HomeScreen = ({ navigation }: any) => {
             <View style={styles.enhancedRecommendationCard}>
               <View style={styles.enhancedRecommendationContent}>
                 <Text style={styles.enhancedRecommendationTitle}>
-                  회원님만을 위한{"\n"}
+                  {homeData?.userSummary?.name}회원님을 위한{"\n"}
                   <Text style={styles.enhancedRecommendationTitleGreen}>
                     맞춤형 식단과 운동
                   </Text>
@@ -449,14 +477,14 @@ const HomeScreen = ({ navigation }: any) => {
           </View>
         </View>
 
-        {/* 알림 카드 */}
-        {homeData?.todayMeal?.message && (
+        {/* 알림 카드 - 코치 리포트 */}
+        {randomActionItem && (
           <View style={styles.notificationCardContainer}>
             <View style={styles.notificationCardBorder} />
             <View style={styles.notificationCard}>
               <Ionicons name="sparkles" size={25} color="#e3ff7c" />
               <Text style={styles.notificationText}>
-                {homeData.todayMeal.message}
+                {randomActionItem}
               </Text>
             </View>
           </View>
@@ -1041,12 +1069,14 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     marginBottom: 8,
     lineHeight: 14.5,
+    textAlign: "center",
   },
   bodyStatValue: {
     fontSize: 20,
     fontWeight: "700",
     color: "#e3ff7c",
     lineHeight: 24,
+    textAlign: "center",
   },
   additionalMenuSection: {
     marginBottom: 20,
@@ -1263,10 +1293,10 @@ const styles = StyleSheet.create({
   },
   notificationText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "700",
     color: "#ffffff",
-    lineHeight: 22,
+    lineHeight: 18,
   },
 });
 
