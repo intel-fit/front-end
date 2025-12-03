@@ -1516,7 +1516,6 @@ const ExerciseScreen = ({ navigation }: any) => {
           ? `오늘의 운동 "${trimmedTitle}"이 저장되었어요.\n\n${currentSessionSetCount}개의 세트가 저장되었고, AI 피드백이 전송되었습니다.`
           : `오늘의 운동 "${trimmedTitle}"이 저장되었어요.\n\nAI 피드백이 전송되었습니다.`;
 
-<<<<<<< HEAD
       // 확인 버튼을 누르자마자 완료된 운동 목록을 먼저 초기화하여 완료 페이지가 보이지 않도록 함
       setCompletedExercises([]);
       setCompletionSummaryTitle(""); // 제목 초기화
