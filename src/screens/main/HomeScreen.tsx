@@ -16,7 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../../theme/colors";
 import { ROUTES } from "../../constants/routes";
 import { useDate } from "../../contexts/DateContext";
-import { homeAPI, authAPI } from "../../services";
+import { homeAPI, authAPI, mealAPI } from "../../services";
 import type { WeeklyCoachReport } from "../../services/homeAPI";
 import {
   getTodayWorkoutTime,
@@ -110,7 +110,107 @@ const HomeScreen = ({ navigation }: any) => {
         return;
       }
 
-      const data = await homeAPI.getHomeData(dateString);
+      // 홈 데이터, 식단 데이터, 영양 목표를 병렬로 가져오기
+      const [homeDataResponse, dailyMealsResponse, nutritionGoalResponse] = await Promise.allSettled([
+        homeAPI.getHomeData(dateString),
+        mealAPI.getDailyMeals(dateString).catch((err) => {
+          console.warn("[HOME][식단데이터] 식단 데이터 로드 실패:", err);
+          return null;
+        }),
+        homeAPI.getNutritionGoal(dateString).catch((err) => {
+          console.warn("[HOME][영양목표] 영양 목표 로드 실패:", err);
+          return null;
+        }),
+      ]);
+
+      let data: HomeResponse | null = null;
+      if (homeDataResponse.status === "fulfilled") {
+        data = homeDataResponse.value;
+      } else {
+        console.error("[HOME][홈데이터] 홈 데이터 로드 실패:", homeDataResponse.reason);
+      }
+
+      // 식단 데이터가 있으면 영양소 정보 업데이트
+      if (data && dailyMealsResponse.status === "fulfilled" && dailyMealsResponse.value) {
+        const dailyMeals = dailyMealsResponse.value;
+        if (data.todayMeal) {
+          // 식단 데이터가 있으면 무조건 업데이트 (0이어도)
+          data.todayMeal.totalCalories = dailyMeals.dailyTotalCalories || 0;
+          data.todayMeal.totalCarbs = dailyMeals.dailyTotalCarbs || 0;
+          data.todayMeal.totalProtein = dailyMeals.dailyTotalProtein || 0;
+          data.todayMeal.totalFat = dailyMeals.dailyTotalFat || 0;
+        }
+        console.log("[HOME][식단데이터] 영양소 정보 업데이트:", {
+          dailyMeals: {
+            dailyTotalCalories: dailyMeals.dailyTotalCalories,
+            dailyTotalCarbs: dailyMeals.dailyTotalCarbs,
+            dailyTotalProtein: dailyMeals.dailyTotalProtein,
+            dailyTotalFat: dailyMeals.dailyTotalFat,
+            mealsCount: dailyMeals.meals?.length || 0,
+          },
+          updated: {
+            carbs: data.todayMeal?.totalCarbs,
+            protein: data.todayMeal?.totalProtein,
+            fat: data.todayMeal?.totalFat,
+            calories: data.todayMeal?.totalCalories,
+          },
+        });
+      } else if (data && dailyMealsResponse.status === "rejected") {
+        console.warn("[HOME][식단데이터] 식단 데이터 로드 실패:", dailyMealsResponse.reason);
+      }
+
+      // 영양 목표가 있으면 목표 칼로리 업데이트
+      if (data && nutritionGoalResponse.status === "fulfilled" && nutritionGoalResponse.value) {
+        const nutritionGoal = nutritionGoalResponse.value;
+        if (data.todayMeal) {
+          // target_calorie 또는 target_calories 필드 확인
+          const targetCalories = nutritionGoal.target_calorie || nutritionGoal.target_calories;
+          if (targetCalories) {
+            data.todayMeal.targetCalories = targetCalories;
+            // 달성률 재계산
+            if (data.todayMeal.totalCalories > 0 && data.todayMeal.targetCalories > 0) {
+              data.todayMeal.calorieAchievementRate = Math.min(
+                100,
+                (data.todayMeal.totalCalories / data.todayMeal.targetCalories) * 100
+              );
+            } else {
+              data.todayMeal.calorieAchievementRate = 0;
+            }
+          }
+        }
+        console.log("[HOME][영양목표] 목표 칼로리 업데이트:", {
+          nutritionGoal,
+          targetCalories: data.todayMeal?.targetCalories,
+          achievementRate: data.todayMeal?.calorieAchievementRate,
+        });
+      }
+
+      // 식단 데이터가 없어도 todayMeal이 없으면 기본값 설정
+      if (data && !data.todayMeal) {
+        data.todayMeal = {
+          date: dateString,
+          totalCalories: 0,
+          targetCalories: 0,
+          calorieAchievementRate: 0,
+          totalCarbs: 0,
+          totalProtein: 0,
+          totalFat: 0,
+          mealCount: 0,
+          message: "",
+        };
+      }
+
+      // 식단 데이터가 없을 때도 기본값 설정
+      if (data && data.todayMeal) {
+        // 식단 데이터가 없으면 0으로 설정 (이미 위에서 처리됨)
+        if (dailyMealsResponse.status !== "fulfilled" || !dailyMealsResponse.value) {
+          data.todayMeal.totalCalories = data.todayMeal.totalCalories || 0;
+          data.todayMeal.totalCarbs = data.todayMeal.totalCarbs || 0;
+          data.todayMeal.totalProtein = data.todayMeal.totalProtein || 0;
+          data.todayMeal.totalFat = data.todayMeal.totalFat || 0;
+        }
+      }
+
       setHomeData(data);
     } catch (e: any) {
       // 500 에러는 서버 측 문제이므로 조용히 처리
@@ -572,32 +672,44 @@ const HomeScreen = ({ navigation }: any) => {
 
         {/* 칼로리 섹션 */}
         <View style={styles.calorieSection}>
-          <View style={styles.calorieHeader}>
-            <View style={styles.calorieLeft}>
-              <Text style={styles.calorieCurrent}>
-                {homeData?.todayMeal?.totalCalories || 0}
-              </Text>
-              <Text style={styles.calorieGoal}>
-                {" "}
-                / {homeData?.todayMeal?.targetCalories || 0}kcal
-              </Text>
+          <View style={styles.calorieStatsContent}>
+            <View style={[styles.calorieStatColumn, styles.calorieStatColumnWide]}>
+              <Text style={styles.calorieStatLabel}>칼로리</Text>
+                <View style={styles.calorieStatValueRow}>
+                  <Text style={styles.calorieStatValue}>
+                    {Math.round(homeData?.todayMeal?.totalCalories || 0)}
+                  </Text>
+                  <Text style={styles.calorieStatDivider}>/</Text>
+                  <Text style={styles.calorieStatGoal}>
+                    {Math.round(homeData?.todayMeal?.targetCalories || 0)}
+                  </Text>
+                </View>
+              <Text style={styles.calorieStatUnit}>kcal</Text>
             </View>
-            <Text style={styles.caloriePercentage}>
-              {Math.round(homeData?.todayMeal?.calorieAchievementRate || 0)}%
-            </Text>
-          </View>
-          <View style={styles.calorieProgressBar}>
-            <View
-              style={[
-                styles.calorieProgressFill,
-                {
-                  width: `${Math.min(
-                    100,
-                    homeData?.todayMeal?.calorieAchievementRate || 0
-                  )}%`,
-                },
-              ]}
-            />
+            <View style={styles.calorieStatDividerLine} />
+            <View style={[styles.calorieStatColumn, styles.calorieStatColumnNarrow]}>
+              <Text style={styles.calorieStatLabel}>탄수화물</Text>
+              <Text style={styles.calorieStatValueSmall}>
+                {Math.round(homeData?.todayMeal?.totalCarbs || 0)}
+              </Text>
+              <Text style={styles.calorieStatUnit}>g</Text>
+            </View>
+            <View style={styles.calorieStatDividerLine} />
+            <View style={[styles.calorieStatColumn, styles.calorieStatColumnNarrow]}>
+              <Text style={styles.calorieStatLabel}>단백질</Text>
+              <Text style={styles.calorieStatValueSmall}>
+                {Math.round(homeData?.todayMeal?.totalProtein || 0)}
+              </Text>
+              <Text style={styles.calorieStatUnit}>g</Text>
+            </View>
+            <View style={styles.calorieStatDividerLine} />
+            <View style={[styles.calorieStatColumn, styles.calorieStatColumnNarrow]}>
+              <Text style={styles.calorieStatLabel}>지방</Text>
+              <Text style={styles.calorieStatValueSmall}>
+                {Math.round(homeData?.todayMeal?.totalFat || 0)}
+              </Text>
+              <Text style={styles.calorieStatUnit}>g</Text>
+            </View>
           </View>
         </View>
 
@@ -606,17 +718,17 @@ const HomeScreen = ({ navigation }: any) => {
           <Text style={styles.routineTitle}>Day 1 하체</Text>
           <View style={styles.routineStats}>
             <View style={styles.routineStatItem}>
-              <Ionicons name="barbell" size={45} color="#ffffff" />
+              <Ionicons name="barbell" size={40} color="#ffffff" />
               <Text style={styles.routineStatText}>4가지 운동</Text>
             </View>
             <View style={styles.routineStatItem}>
-              <Ionicons name="stopwatch-outline" size={45} color="#ffffff" />
+              <Ionicons name="stopwatch-outline" size={40} color="#ffffff" />
               <Text style={styles.routineStatText}>13세트</Text>
             </View>
             <View style={styles.routineStatItem}>
               <MaterialIcons
                 name="local-fire-department"
-                size={45}
+                size={40}
                 color="#ffffff"
               />
               <Text style={styles.routineStatText}>229 kcal</Text>
@@ -770,16 +882,18 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingTop: 10,
+    paddingTop: 20,
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
   exerciseProgressSection: {
-    backgroundColor: colors.cardBackground,
+    backgroundColor: "#393a38",
     borderRadius: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#2a2a2a",
   },
   weekCalendar: {
     marginTop: 1,
@@ -826,62 +940,94 @@ const styles = StyleSheet.create({
   },
   calendarCalories: {
     fontSize: 12,
-    fontWeight: "400",
-    color: colors.text,
+    fontWeight: "500",
+    color: "#ffffff",
     textAlign: "center",
     height: 15,
     lineHeight: 14.5,
   },
   calendarPercentage: {
     fontSize: 12,
-    fontWeight: "400",
-    color: colors.text,
+    fontWeight: "500",
+    color: "#ffffff",
     textAlign: "center",
     height: 15,
     lineHeight: 14.5,
   },
   calorieSection: {
-    backgroundColor: colors.cardBackground,
+    backgroundColor: "#393a38",
     borderRadius: 20,
-    padding: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#2a2a2a",
   },
-  calorieHeader: {
+  calorieStatsContent: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
+    height: 60,
   },
-  calorieLeft: {
+  calorieStatColumn: {
+    alignItems: "center",
+    minWidth: 0,
+  },
+  calorieStatColumnWide: {
+    flex: 2,
+    minWidth: 0,
+  },
+  calorieStatColumnNarrow: {
+    flex: 1,
+    minWidth: 0,
+  },
+  calorieStatLabel: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#cccccc",
+    marginBottom: 6,
+    lineHeight: 14.5,
+  },
+  calorieStatValue: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#ffffff",
+    lineHeight: 19,
+  },
+  calorieStatValueSmall: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#ffffff",
+    lineHeight: 17,
+  },
+  calorieStatValueRow: {
     flexDirection: "row",
     alignItems: "baseline",
     gap: 4,
+    marginBottom: 2,
   },
-  calorieCurrent: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  calorieGoal: {
-    fontSize: 14,
-    fontWeight: "400",
-    color: colors.text,
-  },
-  caloriePercentage: {
+  calorieStatDivider: {
     fontSize: 16,
-    fontWeight: "700",
-    color: colors.text,
+    fontWeight: "400",
+    color: "#ffffff",
   },
-  calorieProgressBar: {
-    height: 16,
-    backgroundColor: "#555",
-    borderRadius: 8,
-    overflow: "hidden",
+  calorieStatGoal: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#ffffff",
   },
-  calorieProgressFill: {
-    height: "100%",
-    backgroundColor: "#e3ff7c",
-    borderRadius: 8,
+  calorieStatUnit: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#cccccc",
+    lineHeight: 14.5,
+  },
+  calorieStatDividerLine: {
+    width: 1,
+    height: 40,
+    backgroundColor: "#2a2a2a",
+    marginHorizontal: 6,
+    flexShrink: 0,
   },
   recommendationCard: {
     backgroundColor: "#393a38",
@@ -914,10 +1060,12 @@ const styles = StyleSheet.create({
     color: "#000000",
   },
   dietRecommendationSection: {
-    backgroundColor: colors.cardBackground,
+    backgroundColor: "#393a38",
     borderRadius: 20,
     padding: 20,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#2a2a2a",
   },
   recommendationContent: {
     maxWidth: 249,
@@ -931,7 +1079,7 @@ const styles = StyleSheet.create({
   recommendationSubtitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: colors.text,
+    color: "#ffffff",
     marginBottom: 10,
   },
   foodRecommendations: {
@@ -954,18 +1102,20 @@ const styles = StyleSheet.create({
   recommendationQuestion: {
     fontSize: 16,
     fontWeight: "700",
-    color: colors.text,
+    color: "#ffffff",
   },
   routineCard: {
     backgroundColor: "#393a38",
     borderRadius: 20,
     padding: 20,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#2a2a2a",
   },
   routineTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#ffffff",
+    color: "#e3ff7c",
     marginBottom: 20,
     lineHeight: 19,
   },
@@ -982,8 +1132,8 @@ const styles = StyleSheet.create({
   },
   routineStatText: {
     fontSize: 12,
-    fontWeight: "400",
-    color: "#ffffff",
+    fontWeight: "500",
+    color: "#cccccc",
     textAlign: "center",
     lineHeight: 14.5,
   },
@@ -1005,9 +1155,11 @@ const styles = StyleSheet.create({
   exerciseStatsCard: {
     backgroundColor: "#393a38",
     borderRadius: 20,
-    paddingVertical: 12,
+    paddingVertical: 16,
     paddingHorizontal: 20,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#2a2a2a",
   },
   exerciseStatsContent: {
     flexDirection: "row",
@@ -1021,15 +1173,15 @@ const styles = StyleSheet.create({
   },
   exerciseStatLabel: {
     fontSize: 12,
-    fontWeight: "400",
+    fontWeight: "500",
     color: "#ffffff",
-    marginBottom: 8,
+    marginBottom: 6,
     lineHeight: 14.5,
   },
   exerciseStatValue: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#ffffff",
+    color: "#e3ff7c",
     lineHeight: 19,
   },
   exerciseStatValueRow: {
@@ -1039,14 +1191,14 @@ const styles = StyleSheet.create({
   },
   exerciseStatUnit: {
     fontSize: 12,
-    fontWeight: "400",
-    color: "#ffffff",
+    fontWeight: "500",
+    color: "#cccccc",
     lineHeight: 14.5,
   },
   exerciseStatDivider: {
     width: 1,
     height: 40,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#2a2a2a",
     marginHorizontal: 10,
   },
   bodyStatsContainer: {
@@ -1062,12 +1214,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     minHeight: 70,
+    borderWidth: 1,
+    borderColor: "#2a2a2a",
   },
   bodyStatLabel: {
     fontSize: 12,
-    fontWeight: "400",
+    fontWeight: "500",
     color: "#ffffff",
-    marginBottom: 8,
+    marginBottom: 6,
     lineHeight: 14.5,
     textAlign: "center",
   },
@@ -1109,10 +1263,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     lineHeight: 18,
     textAlign: "center",
-  },
-  nutritionItem: {
-    justifyContent: "center",
-    alignItems: "center",
   },
   nutritionContent: {
     gap: 5,
@@ -1294,10 +1444,11 @@ const styles = StyleSheet.create({
   notificationText: {
     flex: 1,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "600",
     color: "#ffffff",
-    lineHeight: 18,
+    lineHeight: 20,
   },
 });
 
 export default HomeScreen;
+

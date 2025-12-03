@@ -95,6 +95,31 @@ export const homeAPI = {
     }
   },
 
+  // 월별 운동 달성률 및 칼로리 목록 조회
+  // GET /api/daily-progress/month?yearMonth=2025-12
+  // 응답: [{ date: "2025-12-03", exerciseRate: 0, totalCalorie: 0 }, ...]
+  getMonthlyProgress: async (yearMonth: string): Promise<DailyProgressWeekItem[]> => {
+    try {
+      console.log('월별 진행률 API 호출: GET /api/daily-progress/month', { yearMonth });
+      const response = await request<DailyProgressWeekItem[]>(`/api/daily-progress/month?yearMonth=${yearMonth}`, {
+        method: 'GET',
+      });
+      
+      // 배열로 반환
+      if (Array.isArray(response)) {
+        console.log('월별 진행률 데이터 수신:', response.length, '개');
+        return response;
+      }
+      
+      // 예외 처리
+      console.warn('월별 진행률 응답이 배열이 아닙니다:', response);
+      return [];
+    } catch (error: any) {
+      console.error('월별 진행률 API 호출 실패:', error);
+      throw error;
+    }
+  },
+
   // 코치 주간 리포트 조회
   // GET /coach/weekly_report/{user_id}
   getWeeklyCoachReport: async (): Promise<WeeklyCoachReport> => {
@@ -122,6 +147,49 @@ export const homeAPI = {
     } catch (error: any) {
       console.error('[HOME] 코치 리포트 API 호출 실패:', error);
       throw error;
+    }
+  },
+
+  // 영양 목표 조회
+  // GET /food/nutrition-goal/get?user_id={user_id}&date={date}
+  getNutritionGoal: async (date: string): Promise<any> => {
+    try {
+      const userId = await getUserId();
+      const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+      
+      const url = `http://43.200.40.140:8000/food/nutrition-goal/get?user_id=${encodeURIComponent(userId)}&date=${encodeURIComponent(date)}`;
+      
+      console.log('[HOME] 영양 목표 API 호출:', url);
+      
+      const headers: HeadersInit = {
+        'accept': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers,
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          // 목표가 없는 경우 null 반환
+          console.log('[HOME] 영양 목표 없음');
+          return null;
+        }
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('[HOME] 영양 목표 응답:', data);
+      
+      return data;
+    } catch (error: any) {
+      console.error('[HOME] 영양 목표 API 호출 실패:', error);
+      return null;
     }
   },
 };
