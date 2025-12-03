@@ -1246,14 +1246,20 @@ const ExerciseScreen = ({ navigation }: any) => {
   }, []);
 
   const handleCompletionConfirm = React.useCallback(async () => {
+    // 확인 버튼을 누르는 즉시 완료 페이지를 숨기기 위해 먼저 초기화
+    setCompletedExercises([]);
+    setIsSavingCompletionTitle(true); // 저장 중 상태로 설정하여 완료 페이지 숨기기
+    
     const trimmedTitle = completionSummaryTitle.trim();
     if (!trimmedTitle) {
+      setIsSavingCompletionTitle(false); // early return 시 상태 복원
       Alert.alert("제목 입력 필요", "오늘 운동 제목을 입력해주세요.");
       return;
     }
 
     // saveTitle 최소 길이 검증 (서버에서 최소 3글자 이상 요구할 수 있음)
     if (trimmedTitle.length < 3) {
+      setIsSavingCompletionTitle(false); // early return 시 상태 복원
       Alert.alert(
         "제목 길이 부족",
         "운동 제목은 최소 3글자 이상 입력해주세요."
@@ -1262,6 +1268,7 @@ const ExerciseScreen = ({ navigation }: any) => {
     }
 
     if (!userId) {
+      setIsSavingCompletionTitle(false); // early return 시 상태 복원
       Alert.alert(
         "사용자 정보 없음",
         "사용자 정보를 불러오지 못했어요. 다시 시도해주세요."
@@ -1275,6 +1282,7 @@ const ExerciseScreen = ({ navigation }: any) => {
 
     const userIdNum = parseInt(userId, 10);
     if (isNaN(userIdNum)) {
+      setIsSavingCompletionTitle(false); // early return 시 상태 복원
       Alert.alert(
         "사용자 정보 오류",
         "사용자 정보를 확인할 수 없습니다. 다시 로그인해주세요."
@@ -1508,99 +1516,99 @@ const ExerciseScreen = ({ navigation }: any) => {
           ? `오늘의 운동 "${trimmedTitle}"이 저장되었어요.\n\n${currentSessionSetCount}개의 세트가 저장되었고, AI 피드백이 전송되었습니다.`
           : `오늘의 운동 "${trimmedTitle}"이 저장되었어요.\n\nAI 피드백이 전송되었습니다.`;
 
-      // Alert 팝업을 먼저 표시하고, 사용자가 확인 버튼을 누른 후에 모달을 닫음
-      Alert.alert("저장 완료", successMessage, [
-        {
-          text: "확인",
-          onPress: () => {
-            // 사용자가 확인 버튼을 누른 후에 모달 닫기
-            setShowCompletionModal(false);
-            setCompletionSummaryTitle(""); // 제목 초기화
-            loadTodayWorkoutTime();
-            loadSavedWorkouts();
-            // 운동 목표 데이터도 다시 불러와서 게이지 업데이트
-            loadGoalData();
+      // 확인 버튼을 누르자마자 완료된 운동 목록을 먼저 초기화하여 완료 페이지가 보이지 않도록 함
+      setCompletedExercises([]);
+      setCompletionSummaryTitle(""); // 제목 초기화
+      // 그 다음 모달 닫기 (완료 페이지가 이미 숨겨진 상태에서 모달이 닫힘)
+      setShowCompletionModal(false);
+      
+      // 데이터 새로고침
+      loadTodayWorkoutTime();
+      loadSavedWorkouts();
+      loadGoalData();
 
-            // 운동 제목 저장 후 주간 진행률을 다시 가져와서 게이지 업데이트
-            // 서버에서 exerciseRate 계산에 시간이 걸릴 수 있으므로 여러 번 재시도
-            const retryLoadProgress = async (
-              retryCount: number = 0,
-              maxRetries: number = 3
-            ) => {
-              try {
-                // 목표 데이터와 주간 진행률을 함께 업데이트
-                await loadGoalData();
-                await loadWeeklyCalories();
+      // 운동 제목 저장 후 주간 진행률을 다시 가져와서 게이지 업데이트
+      // 서버에서 exerciseRate 계산에 시간이 걸릴 수 있으므로 여러 번 재시도
+      const retryLoadProgress = async (
+        retryCount: number = 0,
+        maxRetries: number = 3
+      ) => {
+        try {
+          // 목표 데이터와 주간 진행률을 함께 업데이트
+          await loadGoalData();
+          await loadWeeklyCalories();
 
-                // exerciseRate가 업데이트되었는지 확인하기 위해 잠시 대기 후 다시 확인
-                setTimeout(async () => {
-                  try {
-                    const freshData = await fetchWeeklyProgress();
-                    if (Array.isArray(freshData)) {
-                      setWeeklyProgress(freshData);
-                      const sum = freshData.reduce(
-                        (s: number, d) => s + Number(d?.totalCalorie || 0),
-                        0
-                      );
-                      setWeeklyCalories(sum);
-
-                      // 오늘 날짜의 exerciseRate 확인
-                      const today = new Date();
-                      const todayStr = formatDateToString(today);
-                      const todayProgress = freshData.find(
-                        (item) => item.date === todayStr
-                      );
-
-                      // exerciseRate가 여전히 0이고 재시도 횟수가 남아있으면 다시 시도
-                      if (
-                        (!todayProgress || todayProgress.exerciseRate === 0) &&
-                        retryCount < maxRetries
-                      ) {
-                        setTimeout(() => {
-                          retryLoadProgress(retryCount + 1, maxRetries);
-                        }, 2000 * (retryCount + 1)); // 재시도마다 대기 시간 증가 (2초, 4초, 6초)
-                      } else if (
-                        todayProgress &&
-                        todayProgress.exerciseRate === 100
-                      ) {
-                        console.log(
-                          "[PROGRESS] exerciseRate 업데이트 확인됨:",
-                          todayProgress
-                        );
-                      }
-                    }
-                  } catch (error) {
-                    console.error(
-                      `[PROGRESS] 진행률 확인 실패 (재시도 ${retryCount}/${maxRetries}):`,
-                      error
-                    );
-                    if (retryCount < maxRetries) {
-                      setTimeout(() => {
-                        retryLoadProgress(retryCount + 1, maxRetries);
-                      }, 2000 * (retryCount + 1));
-                    }
-                  }
-                }, 1000);
-              } catch (error) {
-                console.error(
-                  `[PROGRESS] 운동 제목 저장 후 주간 진행률 새로고침 실패 (재시도 ${retryCount}/${maxRetries}):`,
-                  error
+          // exerciseRate가 업데이트되었는지 확인하기 위해 잠시 대기 후 다시 확인
+          setTimeout(async () => {
+            try {
+              const freshData = await fetchWeeklyProgress();
+              if (Array.isArray(freshData)) {
+                setWeeklyProgress(freshData);
+                const sum = freshData.reduce(
+                  (s: number, d) => s + Number(d?.totalCalorie || 0),
+                  0
                 );
-                if (retryCount < maxRetries) {
+                setWeeklyCalories(sum);
+
+                // 오늘 날짜의 exerciseRate 확인
+                const today = new Date();
+                const todayStr = formatDateToString(today);
+                const todayProgress = freshData.find(
+                  (item) => item.date === todayStr
+                );
+
+                // exerciseRate가 여전히 0이고 재시도 횟수가 남아있으면 다시 시도
+                if (
+                  (!todayProgress || todayProgress.exerciseRate === 0) &&
+                  retryCount < maxRetries
+                ) {
                   setTimeout(() => {
                     retryLoadProgress(retryCount + 1, maxRetries);
-                  }, 2000 * (retryCount + 1));
+                  }, 2000 * (retryCount + 1)); // 재시도마다 대기 시간 증가 (2초, 4초, 6초)
+                } else if (
+                  todayProgress &&
+                  todayProgress.exerciseRate === 100
+                ) {
+                  console.log(
+                    "[PROGRESS] exerciseRate 업데이트 확인됨:",
+                    todayProgress
+                  );
                 }
               }
-            };
-
-            // 첫 시도는 2초 후에
+            } catch (error) {
+              console.error(
+                `[PROGRESS] 진행률 확인 실패 (재시도 ${retryCount}/${maxRetries}):`,
+                error
+              );
+              if (retryCount < maxRetries) {
+                setTimeout(() => {
+                  retryLoadProgress(retryCount + 1, maxRetries);
+                }, 2000 * (retryCount + 1));
+              }
+            }
+          }, 1000);
+        } catch (error) {
+          console.error(
+            `[PROGRESS] 운동 제목 저장 후 주간 진행률 새로고침 실패 (재시도 ${retryCount}/${maxRetries}):`,
+            error
+          );
+          if (retryCount < maxRetries) {
             setTimeout(() => {
-              retryLoadProgress(0, 3);
-            }, 2000);
-          },
-        },
-      ]);
+              retryLoadProgress(retryCount + 1, maxRetries);
+            }, 2000 * (retryCount + 1));
+          }
+        }
+      };
+
+      // 첫 시도는 2초 후에
+      setTimeout(() => {
+        retryLoadProgress(0, 3);
+      }, 2000);
+
+      // 모달을 닫은 후 Alert 팝업 표시 (약간의 딜레이를 주어 모달이 완전히 닫힌 후 표시)
+      setTimeout(() => {
+        Alert.alert("저장 완료", successMessage);
+      }, 300);
     } catch (error) {
       console.error("[WORKOUT][SAVE] 저장 실패:", error);
       setCompletionSaveErrorDetail(extractSaveErrorDetail(error));
@@ -3648,7 +3656,7 @@ const ExerciseScreen = ({ navigation }: any) => {
       {/* 운동 완료 모달 */}
       <Modal
         visible={showCompletionModal}
-        animationType="fade"
+        animationType="none"
         transparent={true}
         statusBarTranslucent={true}
         onRequestClose={() => {
@@ -3704,15 +3712,21 @@ const ExerciseScreen = ({ navigation }: any) => {
               )}
 
               {/* 완료된 운동 및 스트레칭 목록 */}
-              <View style={styles.completedExercisesCard}>
-                <Text style={styles.completedExercisesDate}>
-                  {new Date().getFullYear()}.
-                  {String(new Date().getMonth() + 1).padStart(2, "0")}.
-                  {String(new Date().getDate()).padStart(2, "0")}
-                </Text>
-                <View style={styles.completedExercisesList}>
-                  {/* completedExercises를 직접 표시 - 이미 저장된 내역은 제외 */}
-                  {(() => {
+              {/* 모달이 열려있고, 저장 중이 아니며, completedExercises가 있을 때만 표시 */}
+              <View 
+                style={[
+                  styles.completedExercisesCard,
+                  (!showCompletionModal || isSavingCompletionTitle || completedExercises.length === 0) && styles.hidden
+                ]}
+              >
+                  <Text style={styles.completedExercisesDate}>
+                    {new Date().getFullYear()}.
+                    {String(new Date().getMonth() + 1).padStart(2, "0")}.
+                    {String(new Date().getDate()).padStart(2, "0")}
+                  </Text>
+                  <View style={styles.completedExercisesList}>
+                    {/* completedExercises를 직접 표시 - 이미 저장된 내역은 제외 */}
+                    {(() => {
                     // savedWorkouts + pendingSavedRefs 를 기준으로 이미 저장된 내역 제외
                     const savedSessionIds = new Set<string>();
                     savedWorkouts.forEach((group) => {
@@ -3768,8 +3782,36 @@ const ExerciseScreen = ({ navigation }: any) => {
                     return newCompletedExercises.map((ex, index) => {
                       const externalId = ex.externalId;
                       const idKey = externalId ? String(externalId) : undefined;
-                      const nameKey = ex.name
-                        ? ex.name.toLowerCase()
+                      
+                      // name이 없으면 allActivities에서 찾기
+                      let displayName = ex.name;
+                      let displayTargetMuscle = ex.targetMuscle;
+                      
+                      if (!displayName || displayName.trim() === "") {
+                        // allActivities에서 해당 운동 찾기
+                        const matchedActivity = allActivities.find((activity) => {
+                          if (ex.activityId && activity.id === ex.activityId) {
+                            return true;
+                          }
+                          if (ex.sessionId && activity.sessionId === ex.sessionId) {
+                            return true;
+                          }
+                          if (ex.externalId && activity.externalId === ex.externalId) {
+                            return true;
+                          }
+                          return false;
+                        });
+                        
+                        if (matchedActivity) {
+                          displayName = matchedActivity.name || "운동";
+                          displayTargetMuscle = matchedActivity.targetMuscle || matchedActivity.bodyPart || displayTargetMuscle;
+                        } else {
+                          displayName = "운동";
+                        }
+                      }
+                      
+                      const nameKey = displayName
+                        ? displayName.toLowerCase()
                         : undefined;
 
                       // 이미지 URL 우선순위: ex.imageUrl > exerciseImages[externalId] > exerciseImagesByName[name]
@@ -3786,6 +3828,27 @@ const ExerciseScreen = ({ navigation }: any) => {
                       const totalSets = Array.isArray(ex.sets)
                         ? ex.sets.length
                         : 0;
+
+                      // 디버깅: name이 없는 경우 로그
+                      if (__DEV__ && (!ex.name || ex.name.trim() === "")) {
+                        console.log("[EXERCISE][COMPLETION] name이 없는 운동 발견:", {
+                          index,
+                          ex,
+                          displayName,
+                          matchedActivity: allActivities.find((activity) => {
+                            if (ex.activityId && activity.id === ex.activityId) {
+                              return true;
+                            }
+                            if (ex.sessionId && activity.sessionId === ex.sessionId) {
+                              return true;
+                            }
+                            if (ex.externalId && activity.externalId === ex.externalId) {
+                              return true;
+                            }
+                            return false;
+                          }),
+                        });
+                      }
 
                       return (
                         <View
@@ -3809,18 +3872,18 @@ const ExerciseScreen = ({ navigation }: any) => {
                           </View>
                           <View style={styles.completedExerciseInfo}>
                             <Text style={styles.completedExerciseName}>
-                              {ex.name}
+                              {displayName}
                             </Text>
                             <Text style={styles.completedExerciseMuscle}>
-                              {ex.targetMuscle || ""}
+                              {displayTargetMuscle || ""}
                             </Text>
                           </View>
                         </View>
                       );
                     });
                   })()}
+                  </View>
                 </View>
-              </View>
 
               {/* 확인 버튼 */}
               <TouchableOpacity
@@ -4786,6 +4849,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
+  },
+  hidden: {
+    height: 0,
+    overflow: "hidden",
+    opacity: 0,
+    marginBottom: 0,
+    padding: 0,
   },
   completedExercisesDate: {
     fontSize: 16,
