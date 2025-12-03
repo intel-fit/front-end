@@ -89,15 +89,25 @@ export const getInBodyList = async (): Promise<any> => {
     return response.data;
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      const errorData = error.response?.data;
+
       console.error("[INBODY][GET] API 에러:", {
         message: error.message,
-        status: error.response?.status,
+        status,
         statusText: error.response?.statusText,
-        data: error.response?.data,
+        data: errorData,
       });
+
+      // 서버 내부 오류(COMMON_002, 500) 등은 "목록 없음"으로 처리해서
+      // 화면이 크래시되지 않고 그냥 인바디 기록이 없는 것처럼 동작하게 한다.
+      if (status === 500) {
+        return null;
+      }
     } else {
       console.error("[INBODY][GET] 예상치 못한 에러:", error);
     }
+    // 기타 에러는 상위에서 처리
     throw error;
   }
 };

@@ -227,21 +227,29 @@ const HomeScreen = ({ navigation }: any) => {
     }
   };
 
-  // 오늘의 총 운동 시간 조회 (오늘 날짜의 운동만 계산)
+  // 오늘의 총 운동 시간 조회 (백엔드 API 사용)
   const loadTodayWorkoutTime = async () => {
     try {
       const userIdStr = await AsyncStorage.getItem("userId");
       if (!userIdStr) {
         setTodayWorkoutSeconds(0);
+        setTodayExerciseCount(0);
         return;
       }
       const userId = parseInt(userIdStr, 10);
       if (isNaN(userId)) {
         setTodayWorkoutSeconds(0);
+        setTodayExerciseCount(0);
         return;
       }
 
-      // 백엔드 API가 누적 시간을 반환하므로, 오늘 날짜의 운동 데이터를 직접 가져와서 계산
+      // 1) 오늘의 운동 시간은 백엔드 API에서 그대로 사용
+      const timeResponse = await getTodayWorkoutTime(userId);
+      const totalSeconds = Number(timeResponse?.totalSeconds) || 0;
+      console.log("[HOME][운동시간] API 응답:", timeResponse);
+      setTodayWorkoutSeconds(totalSeconds >= 0 ? totalSeconds : 0);
+
+      // 2) 오늘 완료한 고유 운동 종목 수는 savedWorkouts 기반으로 계산
       const today = new Date();
       const dateString = formatDateToString(today);
 
@@ -258,88 +266,33 @@ const HomeScreen = ({ navigation }: any) => {
       if (!dateString || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
         console.error("[HOME][운동시간] 잘못된 날짜 형식:", dateString);
         setTodayWorkoutSeconds(0);
+        setTodayExerciseCount(0);
         return;
       }
-
       const savedWorkouts = await fetchSavedWorkouts(userId, dateString);
 
-      // 운동 기록이 없으면 0으로 설정
       if (!savedWorkouts || savedWorkouts.length === 0) {
-        console.log("[HOME][운동시간] 오늘 운동 기록 없음, 시간 0으로 설정", {
-          date: dateString,
-          savedWorkoutsLength: savedWorkouts?.length || 0,
-        });
-        setTodayWorkoutSeconds(0);
+        console.log(
+          "[HOME][운동종목수] 오늘 운동 기록 없음, 개수 0으로 설정",
+          {
+            date: dateString,
+            savedWorkoutsLength: savedWorkouts?.length || 0,
+          }
+        );
+        setTodayExerciseCount(0);
         return;
       }
-
-      // 오늘 날짜의 운동 시간 계산
-      // 세션별로 실제 운동 시간이 있으면 사용하고, 없으면 세트 수 기반으로 추정
-      let totalSeconds = 0;
-
-      savedWorkouts.forEach((group) => {
-        if (group.sessions && group.sessions.length > 0) {
-          group.sessions.forEach((session) => {
-            // 세션에 실제 시간 정보가 있는지 확인 (백엔드 응답 구조에 따라 수정 필요)
-            // 현재는 세트 수 기반으로 대략적인 시간 추정
-            if (session.records && session.records.length > 0) {
-              // 세트당 평균 2-3분으로 추정 (휴식 시간 포함)
-              const estimatedMinutes = Math.max(
-                5,
-                session.records.length * 2.5
-              ); // 최소 5분
-              totalSeconds += estimatedMinutes * 60;
-            }
-          });
-        }
-      });
-
-      console.log("[HOME][운동시간] 오늘 운동 시간 계산:", {
-        date: dateString,
-        totalSeconds,
-        formattedTime: formatWorkoutTime(totalSeconds),
-        savedWorkoutsLength: savedWorkouts.length,
-        sessionCount: savedWorkouts.reduce(
-          (sum, group) => sum + (group.sessions?.length || 0),
-          0
-        ),
-        totalSets: savedWorkouts.reduce(
-          (sum, group) =>
-            sum +
-            (group.sessions || []).reduce(
-              (sSum, session) => sSum + (session.records?.length || 0),
-              0
-            ),
-          0
-        ),
-        savedWorkouts: savedWorkouts.map((group) => ({
-          title: group.title,
-          sessionsCount: group.sessions?.length || 0,
-          sessions: group.sessions?.map((session) => ({
-            sessionId: session.sessionId,
-            recordsCount: session.records?.length || 0,
-          })),
-        })),
-      });
-
-      // 계산된 시간이 0보다 작거나 NaN이면 0으로 설정
-      setTodayWorkoutSeconds(totalSeconds > 0 ? totalSeconds : 0);
 
       // 오늘 완료한 고유한 운동 종목 수 계산
       const uniqueExerciseNames = new Set<string>();
       savedWorkouts.forEach((group) => {
-        if (group.sessions && group.sessions.length > 0) {
-          group.sessions.forEach((session) => {
-            // records에서 운동 이름 추출
-            if (session.records && session.records.length > 0) {
-              session.records.forEach((record) => {
-                if (record.exerciseName) {
-                  uniqueExerciseNames.add(record.exerciseName);
-                }
-              });
+        group.sessions?.forEach((session) => {
+          session.records?.forEach((record) => {
+            if (record.exerciseName) {
+              uniqueExerciseNames.add(record.exerciseName);
             }
           });
-        }
+        });
       });
 
       const exerciseCount = uniqueExerciseNames.size;
@@ -350,11 +303,10 @@ const HomeScreen = ({ navigation }: any) => {
       });
       setTodayExerciseCount(exerciseCount);
     } catch (e: any) {
-      // 500 에러는 서버 측 문제이므로 조용히 처리 (0으로 설정)
       const status = e?.response?.status || e?.status;
       if (status === 500) {
         console.warn(
-          "[HOME][운동시간] 서버 오류 (500), 운동 시간 0으로 설정:",
+          "[HOME][운동시간] 서버 오류 (500), 운동 시간/종목 0으로 설정:",
           {
             date: formatDateToString(new Date()),
             error: e?.message || e?.response?.data?.message,

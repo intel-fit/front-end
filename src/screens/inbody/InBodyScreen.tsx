@@ -10,15 +10,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
-import {
-  getLatestInBody,
-  getInBodyByDatePath,
-  getInBodyList,
-} from "../../utils/inbodyApi";
+import { getLatestInBody, getInBodyByDatePath } from "../../utils/inbodyApi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { eventBus } from "../../utils/eventBus";
 import InbodyDateNavigator from "../../components/common/InbodyDateNavigator";
 import InBodyCalendarModal from "../../components/common/InBodyCalendarModal";
+import { ROUTES } from "../../constants/routes";
 
 const InBodyScreen = ({ navigation, route }: any) => {
   const [inBodyData, setInBodyData] = useState<any>(null);
@@ -361,119 +358,14 @@ const InBodyScreen = ({ navigation, route }: any) => {
     }
   }, []);
 
-  // 인바디 목록 조회하여 날짜 목록 가져오기
-  const fetchInBodyDates = useCallback(async () => {
-    try {
-      const list = await getInBodyList();
-      console.log("[INBODY SCREEN] 날짜 목록 API 응답:", {
-        isArray: Array.isArray(list),
-        isObject: typeof list === "object",
-        hasData: !!list?.data,
-        listKeys: list && typeof list === "object" ? Object.keys(list) : [],
-      });
-
-      if (Array.isArray(list)) {
-        const rawDates = list
-          .map((item: any) => item.measurementDate || item.date)
-          .filter((date: any) => date);
-        console.log("[INBODY SCREEN] 원본 날짜 목록:", rawDates.slice(0, 5));
-
-        const dates = rawDates.map((date: string) => {
-          // 날짜 형식 정규화 (YYYY-MM-DD 또는 YYYY.MM.DD -> YYYY.MM.DD)
-          const normalized = date
-            .replace(/-/g, ".")
-            .split("T")[0]
-            .split(" ")[0];
-          return normalized;
-        });
-
-        setAvailableDates(dates);
-        console.log(
-          "[INBODY SCREEN] 사용 가능한 날짜 목록:",
-          dates.length,
-          "개",
-          dates
-        );
-
-        // 오늘 날짜 확인
-        const today = new Date();
-        const todayKey = `${today.getFullYear()}.${String(
-          today.getMonth() + 1
-        ).padStart(2, "0")}.${String(today.getDate()).padStart(2, "0")}`;
-        console.log("[INBODY SCREEN] 오늘 날짜 확인:", {
-          todayKey,
-          isInList: dates.includes(todayKey),
-          allDates: dates,
-        });
-      } else if (list && typeof list === "object") {
-        // 응답이 객체인 경우 (예: { data: [...] })
-        const data = list.data || list.list || list.items || [];
-        if (Array.isArray(data)) {
-          const rawDates = data
-            .map((item: any) => item.measurementDate || item.date)
-            .filter((date: any) => date);
-          console.log(
-            "[INBODY SCREEN] 원본 날짜 목록 (객체):",
-            rawDates.slice(0, 5)
-          );
-
-          const dates = rawDates.map((date: string) => {
-            // 날짜 형식 정규화 (YYYY-MM-DD 또는 YYYY.MM.DD -> YYYY.MM.DD)
-            const normalized = date
-              .replace(/-/g, ".")
-              .split("T")[0]
-              .split(" ")[0];
-            return normalized;
-          });
-
-          setAvailableDates(dates);
-          console.log(
-            "[INBODY SCREEN] 사용 가능한 날짜 목록:",
-            dates.length,
-            "개",
-            dates
-          );
-
-          // 오늘 날짜 확인
-          const today = new Date();
-          const todayKey = `${today.getFullYear()}.${String(
-            today.getMonth() + 1
-          ).padStart(2, "0")}.${String(today.getDate()).padStart(2, "0")}`;
-          console.log("[INBODY SCREEN] 오늘 날짜 확인:", {
-            todayKey,
-            isInList: dates.includes(todayKey),
-            allDates: dates,
-          });
-        }
-      }
-    } catch (error: any) {
-      // 목록 조회 실패해도 날짜별 조회 기능은 동작하도록 에러만 로그
-      const status = error?.response?.status;
-      if (status === 500) {
-        console.warn("[INBODY SCREEN] 날짜 목록 조회 실패 (서버 오류):", {
-          status,
-          message: error?.message,
-        });
-      } else {
-        console.warn("[INBODY SCREEN] 날짜 목록 조회 실패:", {
-          status,
-          message: error?.message,
-        });
-      }
-      // 에러 발생 시 빈 배열 유지 (캘린더에서 모든 날짜 선택 가능)
-      setAvailableDates([]);
-    }
-  }, []);
-
   // 화면이 포커스될 때마다 최신 데이터 조회 (날짜가 선택되지 않은 경우만)
   useFocusEffect(
     useCallback(() => {
-      fetchInBodyDates();
       if (!selectedDate) {
         fetchInBodyData();
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedDate]) // fetchInBodyData, fetchInBodyDates 제거하여 무한 루프 방지
+    }, [selectedDate])
   );
 
   // 날짜 변경 핸들러
@@ -567,22 +459,6 @@ const InBodyScreen = ({ navigation, route }: any) => {
               });
               console.log("[INBODY SCREEN] 저장된 날짜의 데이터 로드 완료");
 
-              // 날짜 목록도 새로고침
-              await fetchInBodyDates();
-
-              // 저장된 날짜를 목록에 추가 (API 응답이 늦을 수 있으므로)
-              setAvailableDates((prev) => {
-                const dateKey = normalizedDateStr;
-                if (!prev.includes(dateKey)) {
-                  const updated = [...prev, dateKey].sort().reverse(); // 최신 날짜가 앞에 오도록 정렬
-                  console.log("[INBODY SCREEN] 저장된 날짜를 목록에 추가:", {
-                    dateKey,
-                    updatedDates: updated,
-                  });
-                  return updated;
-                }
-                return prev;
-              });
               return;
             }
           }
@@ -607,25 +483,6 @@ const InBodyScreen = ({ navigation, route }: any) => {
               measurementDate: normalizedDate,
             });
             console.log("[INBODY SCREEN] 최신 데이터 로드 완료");
-
-            // 날짜 목록도 새로고침
-            await fetchInBodyDates();
-
-            // 최신 날짜를 목록에 추가 (API 응답이 늦을 수 있으므로)
-            if (normalizedDate) {
-              setAvailableDates((prev) => {
-                const dateKey = normalizedDate;
-                if (!prev.includes(dateKey)) {
-                  const updated = [...prev, dateKey].sort().reverse(); // 최신 날짜가 앞에 오도록 정렬
-                  console.log("[INBODY SCREEN] 최신 날짜를 목록에 추가:", {
-                    dateKey,
-                    updatedDates: updated,
-                  });
-                  return updated;
-                }
-                return prev;
-              });
-            }
           } else {
             setInBodyData(null);
           }
@@ -962,8 +819,13 @@ const InBodyScreen = ({ navigation, route }: any) => {
         <TouchableOpacity
           onPress={() => {
             if (fromPhotoUpload) {
-              // 사진 입력 후 저장한 경우 분석하기 페이지로 이동
-              navigation.navigate("Analysis");
+              // 사진 입력 후 저장한 경우: 메인 탭의 분석하기 탭으로 이동 (하단 바 함께 표시)
+              navigation.navigate(
+                ROUTES.MAIN as never,
+                {
+                  screen: "Analysis",
+                } as never
+              );
             } else {
               // 일반적인 경우 이전 화면으로 돌아가기
               navigation.goBack();

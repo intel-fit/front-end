@@ -652,7 +652,7 @@ export const mealAPI = {
     
     try {
       const response = await fetch(url, {
-        method: 'GET',
+      method: 'GET',
         headers,
       });
       
@@ -1186,7 +1186,7 @@ export const mealAPI = {
             });
             errorMessage = errorMessages.join(', ');
           } else if (errorData.detail && typeof errorData.detail === 'string') {
-            errorMessage = errorData.detail;
+          errorMessage = errorData.detail;
           } else if (errorData.message) {
             errorMessage = errorData.message;
           }
@@ -1304,7 +1304,7 @@ export const mealAPI = {
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
-      
+
       // API 호출
       const response = await fetch(`${AI_API_BASE_URL}/food/upload_food`, {
         method: 'POST',
@@ -1352,7 +1352,7 @@ export const mealAPI = {
         // 422 Validation Error 처리
         else if (response.status === 422) {
           if (errorData.detail) {
-            if (Array.isArray(errorData.detail)) {
+          if (Array.isArray(errorData.detail)) {
               const errorMessages = errorData.detail.map((err: any) => {
                 const field = err.loc && Array.isArray(err.loc)
                   ? err.loc.filter((loc: any) => typeof loc === 'string').join('.')
@@ -1360,8 +1360,8 @@ export const mealAPI = {
                 return `${field}: ${err.msg || '검증 오류'}`;
               });
               errorMessage = errorMessages.join(', ');
-            } else if (typeof errorData.detail === 'string') {
-              errorMessage = errorData.detail;
+          } else if (typeof errorData.detail === 'string') {
+            errorMessage = errorData.detail;
             }
           } else if (errorData.message) {
             errorMessage = errorData.message;
@@ -1442,7 +1442,7 @@ export const mealAPI = {
           // JWT 토큰 가져오기
           const retryToken = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
           const retryHeaders: HeadersInit = {
-            'accept': 'application/json',
+              'accept': 'application/json',
           };
           
           if (retryToken) {
