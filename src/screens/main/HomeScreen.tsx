@@ -417,60 +417,68 @@ const HomeScreen = ({ navigation }: any) => {
 
         {/* ✅ 식단/운동 추천 카드 */}
         <View style={styles.enhancedRecommendationWrapper}>
-          <View style={styles.enhancedRecommendationCard}>
-            <View style={styles.enhancedRecommendationHeader}>
-              <View style={styles.iconCircle}>
-                <LinearGradient
-                  colors={["#e3ff7c", "#a8e063"]}
-                  style={styles.iconCircleGradient}
-                >
-                  <Ionicons name="star" size={24} color="#111" />
-                </LinearGradient>
-              </View>
-
-              <View style={{ flex: 1 }}>
+          <View style={styles.enhancedRecommendationCardContainer}>
+            <View style={styles.enhancedRecommendationCardBorder} />
+            <View style={styles.enhancedRecommendationCard}>
+              <View style={styles.enhancedRecommendationContent}>
                 <Text style={styles.enhancedRecommendationTitle}>
-                  회원님만을 위한{"\n"}맞춤형 식단/루틴을 받아보세요!
+                  회원님만을 위한{"\n"}
+                  <Text style={styles.enhancedRecommendationTitleGreen}>
+                    맞춤형 식단과 운동
+                  </Text>
+                  을 받아보세요!
                 </Text>
+
+                <View style={styles.enhancedRecommendationButtons}>
+                  <TouchableOpacity
+                    style={styles.enhancedRecButtonWrapper}
+                    onPress={handleMealRecommendNavigation}
+                  >
+                    <LinearGradient
+                      colors={["#e3ff7c", "#e8ff93"]}
+                      style={styles.enhancedRecButton}
+                    >
+                      <Ionicons name="restaurant" size={14} color="#000" />
+                      <Text style={styles.enhancedRecButtonText}>
+                        추천 식단 받기
+                      </Text>
+                      <Ionicons name="chevron-forward" size={16} color="#000" />
+                    </LinearGradient>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.enhancedRecButtonWrapper}
+                    onPress={handleRoutineRecommendNavigation}
+                  >
+                    <LinearGradient
+                      colors={["#e3ff7c", "#e8ff93"]}
+                      style={styles.enhancedRecButton}
+                    >
+                      <Ionicons name="barbell" size={14} color="#000" />
+                      <Text style={styles.enhancedRecButtonText}>
+                        추천 운동 받기
+                      </Text>
+                      <Ionicons name="chevron-forward" size={16} color="#000" />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
-
-            <View style={styles.enhancedRecommendationButtons}>
-              <TouchableOpacity
-                style={styles.enhancedRecButtonWrapper}
-                onPress={handleMealRecommendNavigation}
-              >
-                <LinearGradient
-                  colors={["#e3ff7c", "#b5ff70"]}
-                  style={styles.enhancedRecButton}
-                >
-                  <Ionicons name="restaurant" size={18} color="#111" />
-                  <Text style={styles.enhancedRecButtonText}>
-                    식단 추천 받기
-                  </Text>
-                  <Ionicons name="chevron-forward" size={18} color="#111" />
-                </LinearGradient>
-              </TouchableOpacity>
-
-              {/* 루틴 */}
-              <TouchableOpacity
-                style={styles.enhancedRecButtonWrapper}
-                onPress={handleRoutineRecommendNavigation}
-              >
-                <LinearGradient
-                  colors={["#e3ff7c", "#b5ff70"]}
-                  style={styles.enhancedRecButton}
-                >
-                  <Ionicons name="barbell" size={18} color="#111" />
-                  <Text style={styles.enhancedRecButtonText}>
-                    운동 추천 받기
-                  </Text>
-                  <Ionicons name="chevron-forward" size={18} color="#111" />
-                </LinearGradient>
-              </TouchableOpacity>
             </View>
           </View>
         </View>
+
+        {/* 알림 카드 */}
+        {homeData?.todayMeal?.message && (
+          <View style={styles.notificationCardContainer}>
+            <View style={styles.notificationCardBorder} />
+            <View style={styles.notificationCard}>
+              <Ionicons name="sparkles" size={25} color="#e3ff7c" />
+              <Text style={styles.notificationText}>
+                {homeData.todayMeal.message}
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* 주간 진행률 섹션 */}
         <TouchableOpacity
@@ -1164,64 +1172,117 @@ const styles = StyleSheet.create({
   },
 
   enhancedRecommendationWrapper: {
-    marginBottom: 24,
-  },
-  enhancedRecommendationCard: {
-    backgroundColor: "#393a38",
-    padding: 24,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  enhancedRecommendationHeader: {
-    flexDirection: "row",
-    gap: 16,
     marginBottom: 20,
   },
-  iconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    overflow: "hidden",
+  enhancedRecommendationCardContainer: {
+    position: "relative",
   },
-  iconCircleGradient: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
+  enhancedRecommendationCardBorder: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#e3ff7c",
+    shadowColor: "#e3ff7c",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 8,
+    zIndex: 0,
+  },
+  enhancedRecommendationCard: {
+    backgroundColor: colors.background,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#e3ff7c",
+    padding: 20,
+    zIndex: 1,
+  },
+  enhancedRecommendationContent: {
+    gap: 20,
   },
   enhancedRecommendationTitle: {
-    flex: 1,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
-    color: "#fff",
-    lineHeight: 26,
+    color: "#ffffff",
+    lineHeight: 24,
   },
-  tokenInfo: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#a8e063",
-    marginTop: 8,
-    letterSpacing: 0.3,
+  enhancedRecommendationTitleGreen: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#e3ff7c",
+    lineHeight: 24,
   },
   enhancedRecommendationButtons: {
-    gap: 12,
+    flexDirection: "row",
+    gap: 10,
   },
   enhancedRecButtonWrapper: {
-    borderRadius: 14,
+    borderRadius: 10,
     overflow: "hidden",
+    flex: 1,
   },
   enhancedRecButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 18,
+    justifyContent: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    height: 33,
+    gap: 6,
   },
   enhancedRecButtonText: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: "700",
-    color: "#111",
+    color: "#000000",
+    lineHeight: 14.5,
+  },
+  notificationCardContainer: {
+    position: "relative",
+    marginBottom: 20,
+  },
+  notificationCardBorder: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#e3ff7c",
+    shadowColor: "#e3ff7c",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 8,
+    zIndex: 0,
+  },
+  notificationCard: {
+    backgroundColor: colors.background,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#e3ff7c",
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    zIndex: 1,
+  },
+  notificationText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#ffffff",
+    lineHeight: 22,
   },
 });
 
