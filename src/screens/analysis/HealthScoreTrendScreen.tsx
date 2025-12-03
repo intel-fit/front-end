@@ -39,7 +39,23 @@ const HealthScoreTrendScreen = ({ navigation }: any) => {
         data = await healthScoreAPI.getMonthlyTrend();
       }
 
-      setTrendData(data);
+      console.log("🎯 [SCREEN] 받아온 데이터:", data);
+      console.log("🎯 [SCREEN] 데이터 길이:", data.length);
+      console.log("🎯 [SCREEN] 첫 번째 아이템:", data[0]);
+
+      // ⭐ 유효한 데이터만 필터링
+      const validData = data.filter(
+        (item) =>
+          item &&
+          typeof item.total === "number" &&
+          !isNaN(item.total) &&
+          item.date
+      );
+
+      console.log("✅ [SCREEN] 유효한 데이터:", validData);
+      console.log("✅ [SCREEN] 유효한 데이터 길이:", validData.length);
+
+      setTrendData(validData);
     } catch (error) {
       console.error("건강점수 트렌드 로드 실패:", error);
       setTrendData([]);
@@ -48,6 +64,7 @@ const HealthScoreTrendScreen = ({ navigation }: any) => {
     }
   };
 
+  // ⭐ 차트 데이터 생성 시 추가 검증
   const chartData = {
     labels:
       trendData.length > 0
@@ -60,20 +77,33 @@ const HealthScoreTrendScreen = ({ navigation }: any) => {
         : [""],
     datasets: [
       {
-        data: trendData.length > 0 ? trendData.map((item) => item.score) : [0],
+        data:
+          trendData.length > 0
+            ? trendData.map((item) => {
+                const value = Number(item.total);
+                return isNaN(value) ? 0 : value; // ⭐ NaN 방지
+              })
+            : [0],
         color: (opacity = 1) => `rgba(227, 255, 124, ${opacity})`,
         strokeWidth: 3,
       },
     ],
   };
 
+  // ⭐ 최근 점수 계산 시 검증
   const latestScore =
-    trendData.length > 0 ? trendData[trendData.length - 1].score : 0;
+    trendData.length > 0
+      ? Math.round(trendData[trendData.length - 1].total || 0)
+      : 0;
+
+  // ⭐ 평균 점수 계산 시 검증
   const averageScore =
     trendData.length > 0
       ? Math.round(
-          trendData.reduce((sum, item) => sum + item.score, 0) /
-            trendData.length
+          trendData.reduce((sum, item) => {
+            const value = Number(item.total);
+            return sum + (isNaN(value) ? 0 : value);
+          }, 0) / trendData.length
         )
       : 0;
 
@@ -207,12 +237,15 @@ const HealthScoreTrendScreen = ({ navigation }: any) => {
               {trendData
                 .slice()
                 .reverse()
-                .map((item, index) => (
-                  <View key={index} style={styles.historyItem}>
-                    <Text style={styles.historyDate}>{item.date}</Text>
-                    <Text style={styles.historyScore}>{item.score}점</Text>
-                  </View>
-                ))}
+                .map((item, index) => {
+                  const score = Math.round(item.total || 0); // ⭐ NaN 방지
+                  return (
+                    <View key={index} style={styles.historyItem}>
+                      <Text style={styles.historyDate}>{item.date}</Text>
+                      <Text style={styles.historyScore}>{score}점</Text>
+                    </View>
+                  );
+                })}
             </View>
           </>
         )}
@@ -354,21 +387,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#E3FF7C",
-  },
-  healthScoreLoading: {
-    width: 100,
-    height: 100,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  healthScoreNoData: {
-    fontSize: 12,
-    color: "#888",
-  },
-  healthScoreFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
   },
 });
 
