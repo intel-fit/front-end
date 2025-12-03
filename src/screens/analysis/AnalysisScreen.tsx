@@ -252,16 +252,18 @@ const AnalysisScreen = ({ navigation }: any) => {
   const [localCompletionByNameDate, setLocalCompletionByNameDate] = useState<
     Record<string, boolean>
   >({});
-  
+
   // 식단 그래프 state
-  const [nutritionGraphUrl, setNutritionGraphUrl] = useState<string | null>(null);
+  const [nutritionGraphUrl, setNutritionGraphUrl] = useState<string | null>(
+    null
+  );
   const [nutritionGraphLoading, setNutritionGraphLoading] = useState(false);
   const [nutritionWeeks, setNutritionWeeks] = useState<string>("");
-  
+
   // 운동 그래프 state
   const [exerciseGraphUrl, setExerciseGraphUrl] = useState<string | null>(null);
   const [exerciseWeeks, setExerciseWeeks] = useState<string>("");
-  
+
   // 건강점수 state
   const [healthScore, setHealthScore] = useState<number>(0);
   const [healthScoreTrend, setHealthScoreTrend] = useState<ScoreTrendItem[]>(
@@ -542,25 +544,33 @@ const AnalysisScreen = ({ navigation }: any) => {
 
     // 오늘 날짜 계산 (한국 시간대 기준)
     const today = new Date();
-    const todayStr = today.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }); // "YYYY-MM-DD" 형식
+    const todayStr = today.toLocaleDateString("en-CA", {
+      timeZone: "Asia/Seoul",
+    }); // "YYYY-MM-DD" 형식
 
     // 오늘 완료한 운동만 필터링
-    const todayCompletedExercises = completedWorkoutHistory.filter((session) => {
-      if (!session.workoutDate) return false;
-      // workoutDate가 ISO 문자열인 경우 날짜 부분만 추출
-      const sessionDate = session.workoutDate.slice(0, 10);
-      return sessionDate === todayStr;
-    });
+    const todayCompletedExercises = completedWorkoutHistory.filter(
+      (session) => {
+        if (!session.workoutDate) return false;
+        // workoutDate가 ISO 문자열인 경우 날짜 부분만 추출
+        const sessionDate = session.workoutDate.slice(0, 10);
+        return sessionDate === todayStr;
+      }
+    );
 
     console.log("[ANALYSIS] 오늘 완료한 운동 필터링:", {
       todayStr,
       totalCompleted: completedWorkoutHistory.length,
       todayCompleted: todayCompletedExercises.length,
-      todayExerciseNames: [...new Set(todayCompletedExercises.map(s => s.exerciseName))],
+      todayExerciseNames: [
+        ...new Set(todayCompletedExercises.map((s) => s.exerciseName)),
+      ],
     });
 
     if (todayCompletedExercises.length === 0) {
-      console.log("[ANALYSIS] 오늘 완료한 운동이 없음 - exercises 빈 배열 반환");
+      console.log(
+        "[ANALYSIS] 오늘 완료한 운동이 없음 - exercises 빈 배열 반환"
+      );
       return [];
     }
 
@@ -616,9 +626,10 @@ const AnalysisScreen = ({ navigation }: any) => {
         // 날짜순 정렬 (최신순)
         const sortedPrevious = allPreviousSessions.sort(
           (a, b) =>
-            new Date(b.workoutDate).getTime() - new Date(a.workoutDate).getTime()
+            new Date(b.workoutDate).getTime() -
+            new Date(a.workoutDate).getTime()
         );
-        
+
         // 가장 최근 이전 기록
         const previous = sortedPrevious[0];
         if (previous.sets && previous.sets.length > 0) {
@@ -665,11 +676,10 @@ const AnalysisScreen = ({ navigation }: any) => {
     });
 
     // 운동 이름순으로 정렬 (오늘 완료한 운동이므로 날짜는 모두 같음)
-    const result = recentExercises
-      .sort((a, b) => {
-        // 이름순 정렬 (가나다순)
-        return a.name.localeCompare(b.name, "ko");
-      });
+    const result = recentExercises.sort((a, b) => {
+      // 이름순 정렬 (가나다순)
+      return a.name.localeCompare(b.name, "ko");
+    });
 
     console.log("[ANALYSIS] exercises 계산 완료:", {
       resultCount: result.length,
@@ -1165,12 +1175,15 @@ const AnalysisScreen = ({ navigation }: any) => {
         isArray: Array.isArray(responseData),
         arrayLength: Array.isArray(responseData) ? responseData.length : null,
         isObject: responseData && typeof responseData === "object",
-        dataKeys: responseData && typeof responseData === "object" ? Object.keys(responseData) : null,
+        dataKeys:
+          responseData && typeof responseData === "object"
+            ? Object.keys(responseData)
+            : null,
       });
 
       // 응답 구조 확인: { user_id, weeks_requested, weekly_summary: [...] }
       const weeklySummary = responseData?.weekly_summary;
-      
+
       if (!Array.isArray(weeklySummary)) {
         console.log("[ANALYSIS] 식단 비교: weekly_summary가 배열이 아님", {
           responseData,
@@ -1209,16 +1222,16 @@ const AnalysisScreen = ({ navigation }: any) => {
       // 영양성분 추출: nutrition_avg 객체에서 kcal, protein, fat, carb 필드 사용
       const thisWeekNutrition = thisWeek?.nutrition_avg || {};
       const lastWeekNutrition = lastWeek?.nutrition_avg || {};
-      
+
       const thisWeekCalories = thisWeekNutrition?.kcal || 0;
       const lastWeekCalories = lastWeekNutrition?.kcal || 0;
-      
+
       const thisWeekCarbs = thisWeekNutrition?.carb || 0;
       const lastWeekCarbs = lastWeekNutrition?.carb || 0;
-      
+
       const thisWeekProtein = thisWeekNutrition?.protein || 0;
       const lastWeekProtein = lastWeekNutrition?.protein || 0;
-      
+
       const thisWeekFat = thisWeekNutrition?.fat || 0;
       const lastWeekFat = lastWeekNutrition?.fat || 0;
 
@@ -1228,36 +1241,66 @@ const AnalysisScreen = ({ navigation }: any) => {
 
       // 변화량 계산
       const caloriesDifference = thisWeekCalories - lastWeekCalories;
-      const caloriesChangeRate = lastWeekCalories > 0 
-        ? ((caloriesDifference / lastWeekCalories) * 100) 
-        : (thisWeekCalories > 0 ? 100 : 0);
+      const caloriesChangeRate =
+        lastWeekCalories > 0
+          ? (caloriesDifference / lastWeekCalories) * 100
+          : thisWeekCalories > 0
+          ? 100
+          : 0;
 
-      const carbsChangeRate = lastWeekCarbs > 0
-        ? (((thisWeekCarbs - lastWeekCarbs) / lastWeekCarbs) * 100)
-        : (thisWeekCarbs > 0 ? 100 : 0);
+      const carbsChangeRate =
+        lastWeekCarbs > 0
+          ? ((thisWeekCarbs - lastWeekCarbs) / lastWeekCarbs) * 100
+          : thisWeekCarbs > 0
+          ? 100
+          : 0;
 
-      const proteinChangeRate = lastWeekProtein > 0
-        ? (((thisWeekProtein - lastWeekProtein) / lastWeekProtein) * 100)
-        : (thisWeekProtein > 0 ? 100 : 0);
+      const proteinChangeRate =
+        lastWeekProtein > 0
+          ? ((thisWeekProtein - lastWeekProtein) / lastWeekProtein) * 100
+          : thisWeekProtein > 0
+          ? 100
+          : 0;
 
-      const fatChangeRate = lastWeekFat > 0
-        ? (((thisWeekFat - lastWeekFat) / lastWeekFat) * 100)
-        : (thisWeekFat > 0 ? 100 : 0);
+      const fatChangeRate =
+        lastWeekFat > 0
+          ? ((thisWeekFat - lastWeekFat) / lastWeekFat) * 100
+          : thisWeekFat > 0
+          ? 100
+          : 0;
 
       // 매크로 비율 계산
       const thisWeekTotalMacro = thisWeekCarbs + thisWeekProtein + thisWeekFat;
       const lastWeekTotalMacro = lastWeekCarbs + lastWeekProtein + lastWeekFat;
 
       const thisWeekMacroRatio: MacroRatio = {
-        carbs: thisWeekTotalMacro > 0 ? (thisWeekCarbs / thisWeekTotalMacro) * 100 : null,
-        protein: thisWeekTotalMacro > 0 ? (thisWeekProtein / thisWeekTotalMacro) * 100 : null,
-        fat: thisWeekTotalMacro > 0 ? (thisWeekFat / thisWeekTotalMacro) * 100 : null,
+        carbs:
+          thisWeekTotalMacro > 0
+            ? (thisWeekCarbs / thisWeekTotalMacro) * 100
+            : null,
+        protein:
+          thisWeekTotalMacro > 0
+            ? (thisWeekProtein / thisWeekTotalMacro) * 100
+            : null,
+        fat:
+          thisWeekTotalMacro > 0
+            ? (thisWeekFat / thisWeekTotalMacro) * 100
+            : null,
       };
 
       const lastWeekMacroRatio: MacroRatio = {
-        carbs: lastWeekTotalMacro > 0 ? (lastWeekCarbs / lastWeekTotalMacro) * 100 : null,
-        protein: lastWeekTotalMacro > 0 ? (lastWeekProtein / lastWeekTotalMacro) * 100 : null,
-        fat: lastWeekTotalMacro > 0 ? (lastWeekFat / lastWeekTotalMacro) * 100 : null,
+        carbs:
+          lastWeekTotalMacro > 0
+            ? (lastWeekCarbs / lastWeekTotalMacro) * 100
+            : null,
+        protein:
+          lastWeekTotalMacro > 0
+            ? (lastWeekProtein / lastWeekTotalMacro) * 100
+            : null,
+        fat:
+          lastWeekTotalMacro > 0
+            ? (lastWeekFat / lastWeekTotalMacro) * 100
+            : null,
       };
 
       // MealComparison 객체 생성
@@ -1316,7 +1359,9 @@ const AnalysisScreen = ({ navigation }: any) => {
       console.error("[ANALYSIS] 식단 비교 API 에러:", {
         status,
         statusText: error?.statusText || error?.response?.statusText,
-        url: `${AI_API_BASE_URL}/analytics/custom/weekly/${aiUserIdForError || "unknown"}?weeks=2`,
+        url: `${AI_API_BASE_URL}/analytics/custom/weekly/${
+          aiUserIdForError || "unknown"
+        }?weeks=2`,
         errorData,
         errorMessage: error?.message,
         fullError: JSON.stringify(errorData, null, 2),
@@ -1354,7 +1399,9 @@ const AnalysisScreen = ({ navigation }: any) => {
         setMealError(null);
       }
     } finally {
-      console.log("[ANALYSIS] loadMealComparison 완료, mealLoading false로 설정");
+      console.log(
+        "[ANALYSIS] loadMealComparison 완료, mealLoading false로 설정"
+      );
       setMealLoading(false);
     }
   }, []);
@@ -1466,10 +1513,10 @@ const AnalysisScreen = ({ navigation }: any) => {
 
       // 3) API URL 생성 (image/png 반환) - 즉시 설정하여 빠른 렌더링
       const url = `${AI_API_BASE_URL}/analytics/custom/weekly-graph/nutrition/${aiUserId}?weeks=${weeks}&_ts=${Date.now()}`;
-      
+
       // URL 즉시 설정 (로딩 상태 없이 바로 표시 시작)
       setNutritionGraphUrl(url);
-      
+
       // 캐시 저장 (백그라운드)
       AsyncStorage.setItem(
         cacheKey,
@@ -1478,7 +1525,6 @@ const AnalysisScreen = ({ navigation }: any) => {
           timestamp: Date.now(),
         })
       ).catch(() => {}); // 캐시 실패는 무시
-      
     } catch (error: any) {
       console.error("[ANALYSIS] 식단 주간 그래프 로드 실패:", {
         message: error?.message,
@@ -1539,10 +1585,10 @@ const AnalysisScreen = ({ navigation }: any) => {
 
       // 3) API URL 생성 (image/png 반환) - 즉시 설정하여 빠른 렌더링
       const url = `${AI_API_BASE_URL}/analytics/custom/weekly-graph/exercise/${aiUserId}?weeks=${weeks}&_ts=${Date.now()}`;
-      
+
       // URL 즉시 설정 (로딩 상태 없이 바로 표시 시작)
       setExerciseGraphUrl(url);
-      
+
       // 캐시 저장 (백그라운드)
       AsyncStorage.setItem(
         cacheKey,
@@ -1551,7 +1597,6 @@ const AnalysisScreen = ({ navigation }: any) => {
           timestamp: Date.now(),
         })
       ).catch(() => {}); // 캐시 실패는 무시
-      
     } catch (error: any) {
       console.error("[ANALYSIS] 운동 주간 그래프 로드 실패:", {
         message: error?.message,
@@ -1672,7 +1717,14 @@ const AnalysisScreen = ({ navigation }: any) => {
         }
       }
     }
-  }, [userIdLoaded, userId, nutritionWeeks, exerciseWeeks, loadNutritionWeeklyGraph, loadExerciseWeeklyGraph]);
+  }, [
+    userIdLoaded,
+    userId,
+    nutritionWeeks,
+    exerciseWeeks,
+    loadNutritionWeeklyGraph,
+    loadExerciseWeeklyGraph,
+  ]);
 
   const loadHealthScore = useCallback(async () => {
     try {
@@ -2026,7 +2078,11 @@ const AnalysisScreen = ({ navigation }: any) => {
                     onChangeText={(text) => {
                       // 숫자만 입력 허용
                       const numericValue = text.replace(/[^0-9]/g, "");
-                      if (numericValue === "" || (parseInt(numericValue, 10) >= 1 && parseInt(numericValue, 10) <= 52)) {
+                      if (
+                        numericValue === "" ||
+                        (parseInt(numericValue, 10) >= 1 &&
+                          parseInt(numericValue, 10) <= 52)
+                      ) {
                         setExerciseWeeks(numericValue);
                         if (numericValue && userIdLoaded && userId) {
                           const weeks = parseInt(numericValue, 10) || 3;
@@ -2054,10 +2110,13 @@ const AnalysisScreen = ({ navigation }: any) => {
                     accessibilityLabel="운동 주간 분석 그래프"
                     cache="force-cache"
                     onError={(e) => {
-                      console.error("[ANALYSIS] 운동 그래프 이미지 로드 실패:", {
-                        error: e.nativeEvent.error,
-                        url: exerciseGraphUrl,
-                      });
+                      console.error(
+                        "[ANALYSIS] 운동 그래프 이미지 로드 실패:",
+                        {
+                          error: e.nativeEvent.error,
+                          url: exerciseGraphUrl,
+                        }
+                      );
                     }}
                   />
                 </View>
@@ -2081,7 +2140,11 @@ const AnalysisScreen = ({ navigation }: any) => {
                   onChangeText={(text) => {
                     // 숫자만 입력 허용
                     const numericValue = text.replace(/[^0-9]/g, "");
-                    if (numericValue === "" || (parseInt(numericValue, 10) >= 1 && parseInt(numericValue, 10) <= 52)) {
+                    if (
+                      numericValue === "" ||
+                      (parseInt(numericValue, 10) >= 1 &&
+                        parseInt(numericValue, 10) <= 52)
+                    ) {
                       setExerciseWeeks(numericValue);
                       if (numericValue && userIdLoaded && userId) {
                         const weeks = parseInt(numericValue, 10) || 3;
@@ -2218,7 +2281,11 @@ const AnalysisScreen = ({ navigation }: any) => {
                     onChangeText={(text) => {
                       // 숫자만 입력 허용
                       const numericValue = text.replace(/[^0-9]/g, "");
-                      if (numericValue === "" || (parseInt(numericValue, 10) >= 1 && parseInt(numericValue, 10) <= 52)) {
+                      if (
+                        numericValue === "" ||
+                        (parseInt(numericValue, 10) >= 1 &&
+                          parseInt(numericValue, 10) <= 52)
+                      ) {
                         setNutritionWeeks(numericValue);
                         if (numericValue && userIdLoaded && userId) {
                           const weeks = parseInt(numericValue, 10) || 3;
@@ -2246,10 +2313,13 @@ const AnalysisScreen = ({ navigation }: any) => {
                     accessibilityLabel="식단 주간 분석 그래프"
                     cache="force-cache"
                     onError={(e) => {
-                      console.error("[ANALYSIS] 식단 그래프 이미지 로드 실패:", {
-                        error: e.nativeEvent.error,
-                        url: nutritionGraphUrl,
-                      });
+                      console.error(
+                        "[ANALYSIS] 식단 그래프 이미지 로드 실패:",
+                        {
+                          error: e.nativeEvent.error,
+                          url: nutritionGraphUrl,
+                        }
+                      );
                     }}
                   />
                 </View>
@@ -2273,7 +2343,11 @@ const AnalysisScreen = ({ navigation }: any) => {
                   onChangeText={(text) => {
                     // 숫자만 입력 허용
                     const numericValue = text.replace(/[^0-9]/g, "");
-                    if (numericValue === "" || (parseInt(numericValue, 10) >= 1 && parseInt(numericValue, 10) <= 52)) {
+                    if (
+                      numericValue === "" ||
+                      (parseInt(numericValue, 10) >= 1 &&
+                        parseInt(numericValue, 10) <= 52)
+                    ) {
                       setNutritionWeeks(numericValue);
                       if (numericValue && userIdLoaded && userId) {
                         const weeks = parseInt(numericValue, 10) || 3;
