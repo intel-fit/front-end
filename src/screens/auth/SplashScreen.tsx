@@ -3,6 +3,7 @@ import {View, Text, StyleSheet, Animated} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {colors} from '../../theme/colors';
 import {ROUTES} from '../../constants/routes';
+import {request} from '../../services/apiConfig';
 
 const ONBOARDING_KEY = '@intelfit_onboarding_completed';
 
@@ -36,9 +37,42 @@ const SplashScreen = ({navigation}: any) => {
     );
     dotAnimation.start();
 
+    // 테스트 유저 생성 API 호출 (앱 시작 시 무조건 실행)
+    const createTestUser = async () => {
+      try {
+        console.log('========================================');
+        console.log('🚀 [SPLASH] 테스트 유저 생성 API 호출 시작');
+        console.log('📍 URL: https://intelfits.com/api/users/create-test-user');
+        console.log('⏰ 시간:', new Date().toISOString());
+        console.log('========================================');
+        
+        const response = await request('/api/users/create-test-user', {
+          method: 'POST',
+        });
+        
+        console.log('========================================');
+        console.log('✅ [SPLASH] 테스트 유저 생성 API 호출 성공');
+        console.log('📦 응답 데이터:', JSON.stringify(response, null, 2));
+        console.log('⏰ 완료 시간:', new Date().toISOString());
+        console.log('========================================');
+      } catch (error: any) {
+        console.log('========================================');
+        console.error('❌ [SPLASH] 테스트 유저 생성 API 호출 실패');
+        console.error('📦 에러 메시지:', error?.message || '알 수 없는 오류');
+        console.error('📦 에러 상태:', error?.status);
+        console.error('📦 에러 데이터:', error?.data);
+        console.error('⏰ 실패 시간:', new Date().toISOString());
+        console.log('========================================');
+        // 에러가 발생해도 앱은 정상적으로 진행
+      }
+    };
+
     // 온보딩 완료 여부 확인 후 적절한 화면으로 이동
     const checkOnboarding = async () => {
       try {
+        // 테스트 유저 생성 API 호출
+        await createTestUser();
+        
         const onboardingCompleted = await AsyncStorage.getItem(ONBOARDING_KEY);
         const timer = setTimeout(() => {
           if (onboardingCompleted === 'true') {

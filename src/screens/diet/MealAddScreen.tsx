@@ -970,15 +970,15 @@ const MealAddScreen = ({navigation, route}: any) => {
       // ai_result가 있는 경우 (사진 업로드 응답)
       // 응답 형식: { "ai_result": [{ "food_id": 162608, "name": "...", "name_ko": "...", ... }] }
       // 다중 음식 감지 지원: ai_result는 배열로 여러 음식을 반환할 수 있음
+      const detectedFoods: Food[] = [];
+      
       if (response.ai_result) {
         const aiResults = Array.isArray(response.ai_result) 
           ? response.ai_result 
           : [response.ai_result];
         
-        if (aiResults.length > 0) {
-          // 첫 번째 음식 사용 (다중 음식인 경우 사용자가 선택할 수 있도록 개선 가능)
-          const aiResult = aiResults[0];
-          
+        // 모든 음식을 처리
+        aiResults.forEach((aiResult: any) => {
           // 숫자 타입 보장 및 검증
           const calories = typeof aiResult.calories === 'number' 
             ? aiResult.calories 
@@ -1003,7 +1003,7 @@ const MealAddScreen = ({navigation, route}: any) => {
           // food_id 사용 (API 응답의 food_id 필드)
           const foodId = aiResult.food_id || aiResult.id || 0;
           
-          foodData = {
+          const food: Food = {
             id: foodId, // food_id (검색/직접 입력과 동일하게 사용)
             name: name,
             calories: Math.max(0, calories),
@@ -1013,20 +1013,18 @@ const MealAddScreen = ({navigation, route}: any) => {
             weight: Math.max(1, weight), // weight는 최소 1
           };
           
-          console.log('사진 업로드로 변환된 음식 데이터:', foodData);
-          console.log('원본 AI 응답:', aiResult);
-          
-          // 다중 음식 감지 시 로그
-          if (aiResults.length > 1) {
-            console.log(`⚠️ 다중 음식 감지됨 (${aiResults.length}개), 첫 번째 음식만 추가됨`);
-            console.log('감지된 모든 음식:', aiResults.map((r: any) => r.name_ko || r.name));
-          }
+          detectedFoods.push(food);
+        });
+        
+        console.log(`사진 업로드로 변환된 음식 데이터 (${detectedFoods.length}개):`, detectedFoods);
+        if (aiResults.length > 1) {
+          console.log(`✅ 다중 음식 감지됨 (${aiResults.length}개), 모든 음식 추가됨`);
+          console.log('감지된 모든 음식:', aiResults.map((r: any) => r.name_ko || r.name));
         }
       } else if (Array.isArray(response)) {
-        // 배열인 경우 첫 번째 음식 사용
-        if (response.length > 0) {
-          const item = response[0];
-          foodData = {
+        // 배열인 경우 모든 음식 처리
+        response.forEach((item: any) => {
+          detectedFoods.push({
             id: item.id || 0, // food_id (없으면 0, 신규 음식으로 처리)
             name: item.name || '음식',
             calories: item.calories || 0,
@@ -1034,23 +1032,24 @@ const MealAddScreen = ({navigation, route}: any) => {
             protein: item.protein || 0,
             fat: item.fat || 0,
             weight: item.weight || 100,
-          };
-        }
+          });
+        });
       } else if (response.foods && Array.isArray(response.foods) && response.foods.length > 0) {
-        // foods 배열이 있는 경우
-        const item = response.foods[0];
-        foodData = {
-          id: item.id || 0, // food_id (없으면 0, 신규 음식으로 처리)
-          name: item.name || item.foodName || '음식',
-          calories: item.calories || 0,
-          carbs: item.carbs || 0,
-          protein: item.protein || 0,
-          fat: item.fat || 0,
-          weight: item.weight || item.servingSize || 100,
-        };
+        // foods 배열이 있는 경우 모든 음식 처리
+        response.foods.forEach((item: any) => {
+          detectedFoods.push({
+            id: item.id || 0, // food_id (없으면 0, 신규 음식으로 처리)
+            name: item.name || item.foodName || '음식',
+            calories: item.calories || 0,
+            carbs: item.carbs || 0,
+            protein: item.protein || 0,
+            fat: item.fat || 0,
+            weight: item.weight || item.servingSize || 100,
+          });
+        });
       } else if (response.name) {
         // 직접 음식 객체인 경우
-        foodData = {
+        detectedFoods.push({
           id: response.id || 0, // food_id (없으면 0, 신규 음식으로 처리)
           name: response.name,
           calories: response.calories || 0,
@@ -1058,12 +1057,12 @@ const MealAddScreen = ({navigation, route}: any) => {
           protein: response.protein || 0,
           fat: response.fat || 0,
           weight: response.weight || response.servingSize || 100,
-        };
+        });
       }
 
-      if (foodData) {
-        // 상태 업데이트를 즉시 처리 (UI 블로킹 최소화)
-        setFoods(prev => [...prev, foodData!]);
+      if (detectedFoods.length > 0) {
+        // 모든 감지된 음식을 상태에 추가
+        setFoods(prev => [...prev, ...detectedFoods]);
         // Alert 제거 - UI 블로킹 방지, 음식이 추가된 것을 화면에서 확인 가능
       } else {
         // 에러는 나중에 표시
