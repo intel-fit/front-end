@@ -428,7 +428,9 @@ export const fetchMonthlyProgress = async (
     })) as DailyProgressWeekItem[];
 
     if (__DEV__) {
-      console.log(`[월별 진행률] ${yearMonth}: ${data.length}일 데이터 로드 완료`);
+      console.log(
+        `[월별 진행률] ${yearMonth}: ${data.length}일 데이터 로드 완료`
+      );
     }
     return data;
   } catch (error: any) {
@@ -766,34 +768,39 @@ export const fetchSavedWorkouts = async (
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
       const errorData = error.response?.data;
-      
-      console.error("[WORKOUT][SAVED] 조회 에러:", {
-        message: error.message,
-        status: status,
-        data: errorData,
-      });
-      
+
       // 500 서버 내부 오류는 빈 배열 반환 (앱 크래시 방지)
       if (status === 500) {
-        console.warn("[WORKOUT][SAVED] 서버 내부 오류 (500), 빈 배열 반환");
+        console.error("[WORKOUT][SAVED] 조회 에러:", {
+          message: error.message,
+          status: status,
+          data: errorData,
+        });
         return [];
       }
-      
+
       // 404는 데이터 없음으로 처리 (정상)
       if (status === 404) {
         console.log("[WORKOUT][SAVED] 데이터 없음 (404), 빈 배열 반환");
         return [];
       }
-      
+
       // 400도 데이터 없음으로 처리할 수 있음
       if (status === 400) {
         console.log("[WORKOUT][SAVED] 잘못된 요청 (400), 빈 배열 반환");
         return [];
       }
+
+      // 기타 에러는 상세 로그 출력
+      console.error("[WORKOUT][SAVED] 조회 에러:", {
+        message: error.message,
+        status: status,
+        data: errorData,
+      });
     } else {
       console.error("[WORKOUT][SAVED] 조회 예외:", error);
     }
-    
+
     // 기타 에러는 빈 배열 반환 (앱 안정성)
     return [];
   }

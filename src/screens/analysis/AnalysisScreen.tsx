@@ -934,11 +934,104 @@ const AnalysisScreen = ({ navigation }: any) => {
       // 먼저 빈 배열로 초기화하여 이전 데이터가 표시되지 않도록 함
       setWorkoutHistory([]);
 
-      // userId는 문자열일 수 있으므로 숫자로 변환 시도, 실패하면 그대로 사용
-      let userIdNum: number | string = userId;
-      if (typeof userId === "string") {
+      // userId 가져오기 - handleExerciseSave와 동일한 패턴
+      let userIdNum: number | null = null;
+
+      // state의 userId를 숫자로 변환 시도
+      if (userId && typeof userId === "string" && userId.trim() !== "") {
         const parsed = parseInt(userId, 10);
-        userIdNum = isNaN(parsed) ? userId : parsed;
+        if (!isNaN(parsed)) {
+          userIdNum = parsed;
+          console.log(
+            "[ANALYSIS][DEBUG] state userId를 숫자로 변환:",
+            userIdNum
+          );
+        }
+      } else if (userId && typeof userId === "number") {
+        userIdNum = userId;
+        console.log("[ANALYSIS][DEBUG] state userId가 이미 숫자:", userIdNum);
+      }
+
+      // 숫자 변환 실패 시 AsyncStorage에서 가져오기
+      if (!userIdNum) {
+        const userIdStr = await AsyncStorage.getItem("userId");
+        console.log(
+          "[ANALYSIS][DEBUG] AsyncStorage에서 가져온 userId:",
+          userIdStr
+        );
+        if (userIdStr && userIdStr.trim() !== "") {
+          const parsed = parseInt(userIdStr, 10);
+          if (!isNaN(parsed)) {
+            userIdNum = parsed;
+            console.log(
+              "[ANALYSIS][DEBUG] AsyncStorage userId를 숫자로 변환:",
+              userIdNum
+            );
+          }
+        }
+      }
+
+      // 숫자 변환 실패 시 JWT에서 userPk 가져오기
+      if (!userIdNum) {
+        try {
+          const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+          if (token) {
+            const base64Url = token.split(".")[1];
+            const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+            const jsonPayload = decodeURIComponent(
+              atob(base64)
+                .split("")
+                .map(
+                  (c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)
+                )
+                .join("")
+            );
+            const payload = JSON.parse(jsonPayload);
+            console.log("[ANALYSIS][DEBUG] JWT payload:", payload);
+
+            // userPk를 우선 확인 (숫자 ID), 그 다음 userId, 마지막으로 sub
+            if (payload.userPk) {
+              const parsed =
+                typeof payload.userPk === "number"
+                  ? payload.userPk
+                  : parseInt(payload.userPk, 10);
+              if (!isNaN(parsed)) {
+                userIdNum = parsed;
+                console.log(
+                  "[ANALYSIS][DEBUG] JWT에서 userPk 추출:",
+                  userIdNum
+                );
+              }
+            } else if (payload.userId) {
+              const parsed =
+                typeof payload.userId === "number"
+                  ? payload.userId
+                  : parseInt(payload.userId, 10);
+              if (!isNaN(parsed)) {
+                userIdNum = parsed;
+                console.log(
+                  "[ANALYSIS][DEBUG] JWT에서 userId 추출:",
+                  userIdNum
+                );
+              }
+            } else if (payload.sub) {
+              const parsed = parseInt(payload.sub, 10);
+              if (!isNaN(parsed)) {
+                userIdNum = parsed;
+                console.log("[ANALYSIS][DEBUG] JWT에서 sub 추출:", userIdNum);
+              }
+            }
+          }
+        } catch (e) {
+          console.error("[ANALYSIS][DEBUG] JWT 디코딩 실패:", e);
+        }
+      }
+
+      if (!userIdNum) {
+        console.warn("[ANALYSIS][DEBUG] userId를 찾을 수 없음, 빈 배열 반환");
+        setLoading(false);
+        setWorkoutHistory([]);
+        return;
       }
 
       const allWorkouts: WorkoutSession[] = [];

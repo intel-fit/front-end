@@ -955,9 +955,81 @@ const ExerciseScreen = ({ navigation }: any) => {
   }, [userId]);
 
   const loadSavedWorkouts = React.useCallback(async () => {
-    if (!userId || !selectedDate) return;
-    const userIdNum = parseInt(userId, 10);
-    if (isNaN(userIdNum)) return;
+    if (!selectedDate) return;
+
+    // userId 가져오기 - handleExerciseSave와 동일한 패턴
+    let finalUserId: number | null = null;
+
+    // state의 userId를 숫자로 변환 시도
+    if (userId && userId.trim() !== "") {
+      const parsed = parseInt(userId, 10);
+      if (!isNaN(parsed)) {
+        finalUserId = parsed;
+        console.log("[EXERCISE][SAVED][DEBUG] state userId를 숫자로 변환:", finalUserId);
+      }
+    }
+
+    // 숫자 변환 실패 시 AsyncStorage에서 가져오기
+    if (!finalUserId) {
+      const userIdStr = await AsyncStorage.getItem("userId");
+      console.log("[EXERCISE][SAVED][DEBUG] AsyncStorage에서 가져온 userId:", userIdStr);
+      if (userIdStr && userIdStr.trim() !== "") {
+        const parsed = parseInt(userIdStr, 10);
+        if (!isNaN(parsed)) {
+          finalUserId = parsed;
+          console.log("[EXERCISE][SAVED][DEBUG] AsyncStorage userId를 숫자로 변환:", finalUserId);
+        }
+      }
+    }
+
+    // 숫자 변환 실패 시 JWT에서 userPk 가져오기
+    if (!finalUserId) {
+      try {
+        const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+        if (token) {
+          const base64Url = token.split(".")[1];
+          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split("")
+              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+              .join("")
+          );
+          const payload = JSON.parse(jsonPayload);
+          console.log("[EXERCISE][SAVED][DEBUG] JWT payload:", payload);
+          
+          // userPk를 우선 확인 (숫자 ID), 그 다음 userId, 마지막으로 sub
+          if (payload.userPk) {
+            const parsed = typeof payload.userPk === 'number' ? payload.userPk : parseInt(payload.userPk, 10);
+            if (!isNaN(parsed)) {
+              finalUserId = parsed;
+              console.log("[EXERCISE][SAVED][DEBUG] JWT에서 userPk 추출:", finalUserId);
+            }
+          } else if (payload.userId) {
+            const parsed = typeof payload.userId === 'number' ? payload.userId : parseInt(payload.userId, 10);
+            if (!isNaN(parsed)) {
+              finalUserId = parsed;
+              console.log("[EXERCISE][SAVED][DEBUG] JWT에서 userId 추출:", finalUserId);
+            }
+          } else if (payload.sub) {
+            const parsed = parseInt(payload.sub, 10);
+            if (!isNaN(parsed)) {
+              finalUserId = parsed;
+              console.log("[EXERCISE][SAVED][DEBUG] JWT에서 sub 추출:", finalUserId);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[EXERCISE][SAVED][DEBUG] JWT 디코딩 실패:", e);
+      }
+    }
+
+    if (!finalUserId) {
+      console.warn("[EXERCISE][SAVED][DEBUG] userId를 찾을 수 없음");
+      return;
+    }
+
+    const userIdNum = finalUserId;
 
     // 날짜를 yyyy-MM-dd 형식으로 변환
     const dateStr = `${selectedDate.getFullYear()}-${String(

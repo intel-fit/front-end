@@ -24,6 +24,7 @@ import {
 } from "../../utils/exerciseApi";
 import { getLatestInBody } from "../../utils/inbodyApi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ACCESS_TOKEN_KEY } from "../../services/apiConfig";
 import type { DailyProgressWeekItem, HomeResponse } from "../../types";
 
 const HomeScreen = ({ navigation }: any) => {
@@ -230,18 +231,69 @@ const HomeScreen = ({ navigation }: any) => {
   // 오늘의 총 운동 시간 조회 (백엔드 API 사용)
   const loadTodayWorkoutTime = async () => {
     try {
+      // userId 가져오기 - handleExerciseSave와 동일한 패턴
+      let finalUserId: number | null = null;
+
+      // AsyncStorage에서 userId 가져오기
       const userIdStr = await AsyncStorage.getItem("userId");
-      if (!userIdStr) {
+      if (userIdStr && userIdStr.trim() !== "") {
+        const parsed = parseInt(userIdStr, 10);
+        if (!isNaN(parsed)) {
+          finalUserId = parsed;
+          console.log("[HOME][DEBUG] AsyncStorage userId를 숫자로 변환:", finalUserId);
+        }
+      }
+
+      // 숫자 변환 실패 시 JWT에서 userPk 가져오기
+      if (!finalUserId) {
+        try {
+          const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+          if (token) {
+            const base64Url = token.split(".")[1];
+            const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+            const jsonPayload = decodeURIComponent(
+              atob(base64)
+                .split("")
+                .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+                .join("")
+            );
+            const payload = JSON.parse(jsonPayload);
+            console.log("[HOME][DEBUG] JWT payload:", payload);
+            
+            // userPk를 우선 확인 (숫자 ID), 그 다음 userId, 마지막으로 sub
+            if (payload.userPk) {
+              const parsed = typeof payload.userPk === 'number' ? payload.userPk : parseInt(payload.userPk, 10);
+              if (!isNaN(parsed)) {
+                finalUserId = parsed;
+                console.log("[HOME][DEBUG] JWT에서 userPk 추출:", finalUserId);
+              }
+            } else if (payload.userId) {
+              const parsed = typeof payload.userId === 'number' ? payload.userId : parseInt(payload.userId, 10);
+              if (!isNaN(parsed)) {
+                finalUserId = parsed;
+                console.log("[HOME][DEBUG] JWT에서 userId 추출:", finalUserId);
+              }
+            } else if (payload.sub) {
+              const parsed = parseInt(payload.sub, 10);
+              if (!isNaN(parsed)) {
+                finalUserId = parsed;
+                console.log("[HOME][DEBUG] JWT에서 sub 추출:", finalUserId);
+              }
+            }
+          }
+        } catch (e) {
+          console.error("[HOME][DEBUG] JWT 디코딩 실패:", e);
+        }
+      }
+
+      if (!finalUserId) {
+        console.warn("[HOME][DEBUG] userId를 찾을 수 없음, 0으로 설정");
         setTodayWorkoutSeconds(0);
         setTodayExerciseCount(0);
         return;
       }
-      const userId = parseInt(userIdStr, 10);
-      if (isNaN(userId)) {
-        setTodayWorkoutSeconds(0);
-        setTodayExerciseCount(0);
-        return;
-      }
+
+      const userId = finalUserId;
 
       // 1) 오늘의 운동 시간은 백엔드 API에서 그대로 사용
       const timeResponse = await getTodayWorkoutTime(userId);
