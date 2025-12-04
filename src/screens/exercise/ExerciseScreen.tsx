@@ -39,7 +39,7 @@ import { getExerciseGoalSummary } from "../../utils/exerciseGoalApi";
 import { eventBus } from "../../utils/eventBus";
 import { useDate } from "../../contexts/DateContext";
 import type { DailyProgressWeekItem } from "../../types";
-import { API_BASE_URL } from "../../services/apiConfig";
+import { API_BASE_URL, ACCESS_TOKEN_KEY } from "../../services/apiConfig";
 import { useFocusEffect, useRoute } from "@react-navigation/native";
 interface Activity {
   id: number;
@@ -873,7 +873,9 @@ const ExerciseScreen = ({ navigation }: any) => {
     (async () => {
       try {
         const storedUserId = await AsyncStorage.getItem("userId");
+        console.log("[EXERCISE][DEBUG] AsyncStorage에서 가져온 userId:", storedUserId);
         setUserId(storedUserId);
+        console.log("[EXERCISE][DEBUG] state에 설정된 userId:", storedUserId);
       } finally {
         setUserIdLoaded(true);
       }
@@ -953,9 +955,81 @@ const ExerciseScreen = ({ navigation }: any) => {
   }, [userId]);
 
   const loadSavedWorkouts = React.useCallback(async () => {
-    if (!userId || !selectedDate) return;
-    const userIdNum = parseInt(userId, 10);
-    if (isNaN(userIdNum)) return;
+    if (!selectedDate) return;
+
+    // userId 가져오기 - handleExerciseSave와 동일한 패턴
+    let finalUserId: number | null = null;
+
+    // state의 userId를 숫자로 변환 시도
+    if (userId && userId.trim() !== "") {
+      const parsed = parseInt(userId, 10);
+      if (!isNaN(parsed)) {
+        finalUserId = parsed;
+        console.log("[EXERCISE][SAVED][DEBUG] state userId를 숫자로 변환:", finalUserId);
+      }
+    }
+
+    // 숫자 변환 실패 시 AsyncStorage에서 가져오기
+    if (!finalUserId) {
+      const userIdStr = await AsyncStorage.getItem("userId");
+      console.log("[EXERCISE][SAVED][DEBUG] AsyncStorage에서 가져온 userId:", userIdStr);
+      if (userIdStr && userIdStr.trim() !== "") {
+        const parsed = parseInt(userIdStr, 10);
+        if (!isNaN(parsed)) {
+          finalUserId = parsed;
+          console.log("[EXERCISE][SAVED][DEBUG] AsyncStorage userId를 숫자로 변환:", finalUserId);
+        }
+      }
+    }
+
+    // 숫자 변환 실패 시 JWT에서 userPk 가져오기
+    if (!finalUserId) {
+      try {
+        const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+        if (token) {
+          const base64Url = token.split(".")[1];
+          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split("")
+              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+              .join("")
+          );
+          const payload = JSON.parse(jsonPayload);
+          console.log("[EXERCISE][SAVED][DEBUG] JWT payload:", payload);
+          
+          // userPk를 우선 확인 (숫자 ID), 그 다음 userId, 마지막으로 sub
+          if (payload.userPk) {
+            const parsed = typeof payload.userPk === 'number' ? payload.userPk : parseInt(payload.userPk, 10);
+            if (!isNaN(parsed)) {
+              finalUserId = parsed;
+              console.log("[EXERCISE][SAVED][DEBUG] JWT에서 userPk 추출:", finalUserId);
+            }
+          } else if (payload.userId) {
+            const parsed = typeof payload.userId === 'number' ? payload.userId : parseInt(payload.userId, 10);
+            if (!isNaN(parsed)) {
+              finalUserId = parsed;
+              console.log("[EXERCISE][SAVED][DEBUG] JWT에서 userId 추출:", finalUserId);
+            }
+          } else if (payload.sub) {
+            const parsed = parseInt(payload.sub, 10);
+            if (!isNaN(parsed)) {
+              finalUserId = parsed;
+              console.log("[EXERCISE][SAVED][DEBUG] JWT에서 sub 추출:", finalUserId);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[EXERCISE][SAVED][DEBUG] JWT 디코딩 실패:", e);
+      }
+    }
+
+    if (!finalUserId) {
+      console.warn("[EXERCISE][SAVED][DEBUG] userId를 찾을 수 없음");
+      return;
+    }
+
+    const userIdNum = finalUserId;
 
     // 날짜를 yyyy-MM-dd 형식으로 변환
     const dateStr = `${selectedDate.getFullYear()}-${String(
@@ -1267,21 +1341,81 @@ const ExerciseScreen = ({ navigation }: any) => {
       return;
     }
 
-    if (!userId) {
-      setIsSavingCompletionTitle(false); // early return 시 상태 복원
-      Alert.alert(
-        "사용자 정보 없음",
-        "사용자 정보를 불러오지 못했어요. 다시 시도해주세요."
-      );
-      return;
-    }
-
     if (isSavingCompletionTitle) {
       return;
     }
 
-    const userIdNum = parseInt(userId, 10);
-    if (isNaN(userIdNum)) {
+    // userId 가져오기 - handleExerciseSave와 동일한 패턴
+    let finalUserId: number | null = null;
+
+    // state의 userId를 숫자로 변환 시도
+    if (userId && userId.trim() !== "") {
+      const parsed = parseInt(userId, 10);
+      if (!isNaN(parsed)) {
+        finalUserId = parsed;
+        console.log("[COMPLETION][DEBUG] state userId를 숫자로 변환:", finalUserId);
+      }
+    }
+
+    // 숫자 변환 실패 시 AsyncStorage에서 가져오기
+    if (!finalUserId) {
+      const userIdStr = await AsyncStorage.getItem("userId");
+      console.log("[COMPLETION][DEBUG] AsyncStorage에서 가져온 userId:", userIdStr);
+      if (userIdStr && userIdStr.trim() !== "") {
+        const parsed = parseInt(userIdStr, 10);
+        if (!isNaN(parsed)) {
+          finalUserId = parsed;
+          console.log("[COMPLETION][DEBUG] AsyncStorage userId를 숫자로 변환:", finalUserId);
+        }
+      }
+    }
+
+    // 숫자 변환 실패 시 JWT에서 userPk 가져오기
+    if (!finalUserId) {
+      try {
+        const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+        if (token) {
+          const base64Url = token.split(".")[1];
+          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split("")
+              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+              .join("")
+          );
+          const payload = JSON.parse(jsonPayload);
+          console.log("[COMPLETION][DEBUG] JWT payload:", payload);
+          
+          // userPk를 우선 확인 (숫자 ID), 그 다음 userId, 마지막으로 sub
+          if (payload.userPk) {
+            const parsed = typeof payload.userPk === 'number' ? payload.userPk : parseInt(payload.userPk, 10);
+            if (!isNaN(parsed)) {
+              finalUserId = parsed;
+              console.log("[COMPLETION][DEBUG] JWT에서 userPk 추출:", finalUserId);
+            }
+          } else if (payload.userId) {
+            const parsed = typeof payload.userId === 'number' ? payload.userId : parseInt(payload.userId, 10);
+            if (!isNaN(parsed)) {
+              finalUserId = parsed;
+              console.log("[COMPLETION][DEBUG] JWT에서 userId 추출:", finalUserId);
+            }
+          } else if (payload.sub) {
+            const parsed = parseInt(payload.sub, 10);
+            if (!isNaN(parsed)) {
+              finalUserId = parsed;
+              console.log("[COMPLETION][DEBUG] JWT에서 sub 추출:", finalUserId);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[COMPLETION][DEBUG] JWT 디코딩 실패:", e);
+      }
+    }
+
+    console.log("[COMPLETION][DEBUG] 최종 사용할 userId:", finalUserId, "타입:", typeof finalUserId);
+
+    // userId가 없으면 에러 처리
+    if (!finalUserId) {
       setIsSavingCompletionTitle(false); // early return 시 상태 복원
       Alert.alert(
         "사용자 정보 오류",
@@ -1289,6 +1423,8 @@ const ExerciseScreen = ({ navigation }: any) => {
       );
       return;
     }
+
+    const userIdNum = finalUserId;
 
     try {
       setIsSavingCompletionTitle(true);
@@ -2372,9 +2508,122 @@ const ExerciseScreen = ({ navigation }: any) => {
         ? trimmedComment
         : undefined;
 
-    // userId 가져오기
-    const userIdStr = await AsyncStorage.getItem("userId");
-    const userId = userIdStr ? parseInt(userIdStr, 10) : 1; // 기본값 1
+    // userId 가져오기 - 다른 화면과 동일한 패턴
+    let finalUserId: number | null = null;
+
+    // state의 userId를 숫자로 변환 시도
+    if (userId && userId.trim() !== "") {
+      const parsed = parseInt(userId, 10);
+      if (!isNaN(parsed)) {
+        finalUserId = parsed;
+        console.log("[WORKOUT][DEBUG] state userId를 숫자로 변환:", finalUserId);
+      }
+    }
+
+    // 숫자 변환 실패 시 AsyncStorage에서 가져오기
+    if (!finalUserId) {
+      const userIdStr = await AsyncStorage.getItem("userId");
+      console.log("[WORKOUT][DEBUG] AsyncStorage에서 가져온 userId:", userIdStr);
+      if (userIdStr && userIdStr.trim() !== "") {
+        const parsed = parseInt(userIdStr, 10);
+        if (!isNaN(parsed)) {
+          finalUserId = parsed;
+          console.log("[WORKOUT][DEBUG] AsyncStorage userId를 숫자로 변환:", finalUserId);
+        }
+      }
+    }
+
+    // 숫자 변환 실패 시 JWT에서 userPk 가져오기
+    if (!finalUserId) {
+      try {
+        const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+        if (token) {
+          const base64Url = token.split(".")[1];
+          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split("")
+              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+              .join("")
+          );
+          const payload = JSON.parse(jsonPayload);
+          console.log("[WORKOUT][DEBUG] JWT payload:", payload);
+          
+          // userPk를 우선 확인 (숫자 ID), 그 다음 userId, 마지막으로 sub
+          let userIdFromJWT: number | null = null;
+          
+          // userPk가 있으면 우선 사용 (숫자)
+          if (payload.userPk) {
+            const parsed = typeof payload.userPk === 'number' ? payload.userPk : parseInt(payload.userPk, 10);
+            if (!isNaN(parsed)) {
+              userIdFromJWT = parsed;
+              console.log("[WORKOUT][DEBUG] JWT에서 userPk 추출:", userIdFromJWT);
+            }
+          }
+          
+          // userPk가 없거나 숫자가 아니면 userId 확인
+          if (!userIdFromJWT && payload.userId) {
+            const parsed = typeof payload.userId === 'number' ? payload.userId : parseInt(payload.userId, 10);
+            if (!isNaN(parsed)) {
+              userIdFromJWT = parsed;
+              console.log("[WORKOUT][DEBUG] JWT에서 userId 추출:", userIdFromJWT);
+            }
+          }
+          
+          // userPk와 userId가 모두 없거나 숫자가 아니면 sub 확인
+          if (!userIdFromJWT && payload.sub) {
+            const parsed = parseInt(payload.sub, 10);
+            if (!isNaN(parsed)) {
+              userIdFromJWT = parsed;
+              console.log("[WORKOUT][DEBUG] JWT에서 sub 추출:", userIdFromJWT);
+            }
+          }
+          
+          if (userIdFromJWT) {
+            finalUserId = userIdFromJWT;
+            console.log("[WORKOUT][DEBUG] JWT에서 최종 userId 설정:", finalUserId);
+          } else {
+            console.warn("[WORKOUT][DEBUG] JWT payload에서 숫자 userId를 찾을 수 없음:", payload);
+          }
+        }
+      } catch (e) {
+        console.error("[WORKOUT][DEBUG] JWT 디코딩 실패:", e);
+      }
+    }
+
+    console.log("[WORKOUT][DEBUG] 최종 사용할 userId:", finalUserId, "타입:", typeof finalUserId);
+
+    // userId가 없으면 에러 처리
+    if (!finalUserId) {
+      const storedUserId = await AsyncStorage.getItem("userId");
+      const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+      let jwtPayloadInfo = "없음";
+      
+      if (token) {
+        try {
+          const base64Url = token.split(".")[1];
+          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split("")
+              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+              .join("")
+          );
+          const payload = JSON.parse(jsonPayload);
+          jwtPayloadInfo = JSON.stringify(payload);
+        } catch (e) {
+          jwtPayloadInfo = `디코딩 실패: ${e}`;
+        }
+      }
+      
+      console.error("[WORKOUT][DEBUG] userId가 없습니다!", {
+        stateUserId: userId,
+        asyncStorageUserId: storedUserId,
+        jwtPayload: jwtPayloadInfo,
+      });
+      Alert.alert("오류", "사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
+      return;
+    }
 
     // 선택된 날짜로 workoutDate 생성 (시간은 현재 시간 사용)
     const activeDate = selectedDate || new Date();
@@ -2391,7 +2640,7 @@ const ExerciseScreen = ({ navigation }: any) => {
       exerciseName,
       category: meta?.category || "기타",
       workoutDate,
-      userId, // AsyncStorage에서 가져온 실제 userId 사용
+      userId: finalUserId, // 숫자 또는 문자열 userId 사용
       exerciseId: meta?.externalId,
       sets: sets.map((s: any, idx: number) => ({
         setNumber: idx + 1,
@@ -3260,41 +3509,41 @@ const ExerciseScreen = ({ navigation }: any) => {
 
         return (
           <>
-            {showAddOptions && (
+      {showAddOptions && (
               <TouchableWithoutFeedback
                 onPress={() => setShowAddOptions(false)}
               >
-                <View style={styles.fabBackdrop} />
-              </TouchableWithoutFeedback>
-            )}
-            <View style={styles.fabWrapper}>
-              {showAddOptions && (
-                <View style={styles.fabOptions}>
-                  <TouchableOpacity
-                    style={styles.fabOptionButton}
-                    onPress={handleStretchOptionSelect}
-                  >
-                    <Text style={styles.fabOptionText}>스트레칭</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.fabOptionButton}
-                    onPress={handleWorkoutOptionSelect}
-                  >
-                    <Text style={styles.fabOptionText}>운동 추가</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-              <TouchableOpacity
-                style={styles.fabButton}
-                onPress={() => setShowAddOptions((prev) => !prev)}
-              >
-                <Icon
-                  name={showAddOptions ? "close" : "add"}
-                  size={28}
-                  color={colors.black}
-                />
-              </TouchableOpacity>
-            </View>
+          <View style={styles.fabBackdrop} />
+        </TouchableWithoutFeedback>
+      )}
+      <View style={styles.fabWrapper}>
+        {showAddOptions && (
+          <View style={styles.fabOptions}>
+            <TouchableOpacity
+              style={styles.fabOptionButton}
+              onPress={handleStretchOptionSelect}
+            >
+              <Text style={styles.fabOptionText}>스트레칭</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.fabOptionButton}
+              onPress={handleWorkoutOptionSelect}
+            >
+              <Text style={styles.fabOptionText}>운동 추가</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        <TouchableOpacity
+          style={styles.fabButton}
+          onPress={() => setShowAddOptions((prev) => !prev)}
+        >
+          <Icon
+            name={showAddOptions ? "close" : "add"}
+            size={28}
+            color={colors.black}
+          />
+        </TouchableOpacity>
+      </View>
           </>
         );
       })()}
@@ -3772,14 +4021,14 @@ const ExerciseScreen = ({ navigation }: any) => {
                   (!showCompletionModal || isSavingCompletionTitle || completedExercises.length === 0) && styles.hidden
                 ]}
               >
-                  <Text style={styles.completedExercisesDate}>
-                    {new Date().getFullYear()}.
-                    {String(new Date().getMonth() + 1).padStart(2, "0")}.
-                    {String(new Date().getDate()).padStart(2, "0")}
-                  </Text>
-                  <View style={styles.completedExercisesList}>
-                    {/* completedExercises를 직접 표시 - 이미 저장된 내역은 제외 */}
-                    {(() => {
+                <Text style={styles.completedExercisesDate}>
+                  {new Date().getFullYear()}.
+                  {String(new Date().getMonth() + 1).padStart(2, "0")}.
+                  {String(new Date().getDate()).padStart(2, "0")}
+                </Text>
+                <View style={styles.completedExercisesList}>
+                  {/* completedExercises를 직접 표시 - 이미 저장된 내역은 제외 */}
+                  {(() => {
                     // savedWorkouts + pendingSavedRefs 를 기준으로 이미 저장된 내역 제외
                     const savedSessionIds = new Set<string>();
                     savedWorkouts.forEach((group) => {
@@ -3933,8 +4182,8 @@ const ExerciseScreen = ({ navigation }: any) => {
                       );
                     });
                   })()}
-                  </View>
                 </View>
+              </View>
 
               {/* 확인 버튼 */}
               <TouchableOpacity
