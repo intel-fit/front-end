@@ -1,74 +1,68 @@
-import React, {useState, useRef, useEffect, useCallback} from 'react';
+import React, {useState, useRef, useCallback} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Dimensions,
   ScrollView,
-  Animated,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {colors} from '../../theme/colors';
-import {Ionicons} from '@expo/vector-icons';
 
 const {width: SCREEN_WIDTH, height: SCREEN_HEIGHT} = Dimensions.get('window');
 
 interface OnboardingPage {
+  id: number;
   title: string;
-  description: string;
-  icon: string;
-  gradient: string[];
+  subtitle?: string;
+  isFirstPage?: boolean;
+  isLastPage?: boolean;
+  screenImage?: any;
 }
+
+// 이미지 경로
+const onboardingScreen1 = require('../../assets/images/onboarding_screen_1.png');
+const onboardingScreen2 = require('../../assets/images/onboarding_screen_2.png');
+const onboardingScreen3 = require('../../assets/images/onboarding_screen_3.png');
+const onboardingScreen4 = require('../../assets/images/onboarding_screen_4.png');
+const onboardingScreen5 = require('../../assets/images/onboarding_screen_5.png');
 
 const ONBOARDING_PAGES: OnboardingPage[] = [
   {
-    title: '당신의 건강 여정을 함께할 INTELFIT',
-    description:
-      '인바디 기반 AI 개인 코칭 서비스, INTELFIT에 오신 걸 환영합니다 👋\n\n나만의 건강 데이터를 기반으로 한 진짜 맞춤형 피드백을 시작해보세요!',
-    icon: '👋',
-    gradient: ['#6C5CE7', '#00B894'],
+    id: 0,
+    title: '내 손 안의 AI 피티쌤',
+    subtitle: 'INTELFIT',
+    isFirstPage: true,
+    screenImage: onboardingScreen1,
   },
   {
-    title: '나의 몸을 기록하고 분석하다',
-    description:
-      '인바디, 식단, 운동 기록을 한 곳에서 관리하세요.\n\nAI가 당신의 변화를 숫자로 분석하고 시각화합니다.',
-    icon: '📊',
-    gradient: ['#00B894', '#6C5CE7'],
+    id: 1,
+    title: '나에게 최적화된\n식단과 운동 루틴을 만나세요.',
+    screenImage: onboardingScreen2,
   },
   {
-    title: 'AI가 제안하는 나만의 루틴',
-    description:
-      'AI가 인바디 데이터와 목표를 분석해\n\n당신에게 꼭 맞는 7일 식단·운동 루틴을 제안합니다.',
-    icon: '🎯',
-    gradient: ['#6C5CE7', '#FDCB6E'],
+    id: 2,
+    title: '나를 완벽하게 알고있는\nAI 코치와 대화해보세요.',
+    screenImage: onboardingScreen3,
   },
   {
-    title: '언제든 물어보세요, 당신의 AI 코치가 있습니다',
-    description:
-      '운동, 식단, 인바디까지\n\n무엇이든 물어보세요!\n\nAI 코치가 실시간으로 피드백을 제공합니다.',
-    icon: '💬',
-    gradient: ['#FDCB6E', '#6C5CE7'],
+    id: 3,
+    title: '인바디부터 운동, 식단까지\n간편하게 기록하세요.',
+    screenImage: onboardingScreen4,
   },
   {
-    title: '당신의 변화를 함께합니다',
-    description:
-      '오늘의 작은 기록이 내일의 큰 변화를 만듭니다.\n\n지금 INTELFIT과 함께 당신의 건강 여정을 시작하세요!',
-    icon: '✨',
-    gradient: ['#00B894', '#6C5CE7'],
+    id: 4,
+    title: '건강점수와 그래프로\n나를 정확하게 분석하세요.',
+    isLastPage: true,
+    screenImage: onboardingScreen5,
   },
 ];
 
 const OnboardingScreen = ({navigation}: any) => {
   const [currentPage, setCurrentPage] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
-  const pageAnimations = useRef(
-    ONBOARDING_PAGES.map(() => ({
-      fade: new Animated.Value(0),
-      slide: new Animated.Value(30),
-    }))
-  ).current;
-  const autoSlideTimer = useRef<NodeJS.Timeout | null>(null);
 
   const handleComplete = async () => {
     await AsyncStorage.setItem('onboarding_completed', 'true');
@@ -88,47 +82,6 @@ const OnboardingScreen = ({navigation}: any) => {
     }
   }, [currentPage, navigation]);
 
-  useEffect(() => {
-    // 페이지 진입 애니메이션
-    Animated.parallel([
-      Animated.timing(pageAnimations[currentPage].fade, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(pageAnimations[currentPage].slide, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    // 자동 슬라이드 (5초)
-    const startAutoSlide = () => {
-      if (autoSlideTimer.current) {
-        clearInterval(autoSlideTimer.current);
-      }
-
-      autoSlideTimer.current = setInterval(() => {
-        if (currentPage < ONBOARDING_PAGES.length - 1) {
-          handleNext();
-        } else {
-          if (autoSlideTimer.current) {
-            clearInterval(autoSlideTimer.current);
-          }
-        }
-      }, 5000);
-    };
-
-    startAutoSlide();
-
-    return () => {
-      if (autoSlideTimer.current) {
-        clearInterval(autoSlideTimer.current);
-      }
-    };
-  }, [currentPage, handleNext]);
-
   const handleSkip = async () => {
     await AsyncStorage.setItem('onboarding_completed', 'true');
     navigation.replace('Login');
@@ -143,38 +96,49 @@ const OnboardingScreen = ({navigation}: any) => {
   };
 
   const renderPage = (page: OnboardingPage, index: number) => {
-    const anim = pageAnimations[index];
-
     return (
       <View key={index} style={styles.page}>
-        <View style={styles.content}>
-          {/* 아이콘 영역 */}
-          <Animated.View
-            style={[
-              styles.iconContainer,
-              {
-                opacity: anim.fade,
-                transform: [{translateY: anim.slide}],
-              },
-            ]}>
-            <View style={styles.iconCircle}>
-              <Text style={styles.iconEmoji}>{page.icon}</Text>
-            </View>
-          </Animated.View>
-
-          {/* 텍스트 영역 */}
-          <Animated.View
-            style={[
-              styles.textContainer,
-              {
-                opacity: anim.fade,
-                transform: [{translateY: anim.slide}],
-              },
-            ]}>
-            <Text style={styles.title}>{page.title}</Text>
-            <Text style={styles.description}>{page.description}</Text>
-          </Animated.View>
-        </View>
+        {page.isFirstPage ? (
+          <View style={styles.header}>
+            <Text style={styles.brandName}>INTELFIT</Text>
+            <Text style={styles.brandSubtitle}>{page.title}</Text>
+          </View>
+        ) : (
+          <View style={styles.titleContainer}>
+            {page.id === 1 ? (
+              <Text style={styles.pageTitle}>
+                나에게 최적화된{'\n'}
+                <Text style={styles.highlightText}>식단과 운동 루틴</Text>을 만나세요.
+              </Text>
+            ) : page.id === 2 ? (
+              <Text style={styles.pageTitle}>
+                나를 완벽하게 알고있는{'\n'}
+                <Text style={styles.highlightText}>AI 코치</Text>와 대화해보세요.
+              </Text>
+            ) : page.id === 3 ? (
+              <Text style={styles.pageTitle}>
+                인바디부터 운동, 식단까지{'\n'}
+                <Text style={styles.highlightText}>간편하게 기록하세요.</Text>
+              </Text>
+            ) : page.id === 4 ? (
+              <Text style={styles.pageTitle}>
+                <Text style={styles.highlightText}>건강점수와 그래프로</Text>{'\n'}
+                나를 정확하게 분석하세요.
+              </Text>
+            ) : (
+              <Text style={styles.pageTitle}>{page.title}</Text>
+            )}
+          </View>
+        )}
+        {page.screenImage && (
+          <View style={styles.imageContainer}>
+            <Image
+              source={page.screenImage}
+              style={styles.onboardingImage}
+              resizeMode="contain"
+            />
+          </View>
+        )}
       </View>
     );
   };
@@ -198,31 +162,15 @@ const OnboardingScreen = ({navigation}: any) => {
         {ONBOARDING_PAGES.map((page, index) => renderPage(page, index))}
       </ScrollView>
 
-      {/* 인디케이터 */}
-      <View style={styles.indicatorContainer}>
-        {ONBOARDING_PAGES.map((_, index) => (
-          <View
-            key={index}
-            style={[
-              styles.indicator,
-              index === currentPage && styles.indicatorActive,
-            ]}
-          />
-        ))}
-      </View>
-
       {/* 버튼 영역 */}
       <View style={styles.buttonContainer}>
-        {currentPage < ONBOARDING_PAGES.length - 1 ? (
-          <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-            <Text style={styles.nextButtonText}>다음</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.black} />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.startButton} onPress={handleComplete}>
-            <Text style={styles.startButtonText}>시작하기</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={styles.confirmButton}
+          onPress={currentPage < ONBOARDING_PAGES.length - 1 ? handleNext : handleComplete}>
+          <Text style={styles.confirmButtonText}>
+            {currentPage < ONBOARDING_PAGES.length - 1 ? '확인' : '시작하기'}
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -231,7 +179,7 @@ const OnboardingScreen = ({navigation}: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#252525',
   },
   skipButton: {
     position: 'absolute',
@@ -241,9 +189,10 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   skipText: {
-    color: '#e3ff7c',
-    fontSize: 16,
-    fontWeight: '600',
+    color: '#464646',
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: 'Inter',
   },
   scrollView: {
     flex: 1,
@@ -251,94 +200,77 @@ const styles = StyleSheet.create({
   page: {
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT,
-    justifyContent: 'center',
+    paddingTop: 100,
     alignItems: 'center',
-    paddingHorizontal: 30,
+    justifyContent: 'flex-start',
   },
-  content: {
+  header: {
+    alignItems: 'flex-start',
+    width: '100%',
+    paddingHorizontal: 20,
+    paddingLeft: 40,
+    marginBottom: 30,
+  },
+  brandName: {
+    fontSize: 24,
+    fontWeight: '700',
+    fontStyle: 'italic',
+    color: '#e3ff7c',
+    fontFamily: 'Inter',
+    marginBottom: 8,
+  },
+  brandSubtitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#ffffff',
+    fontFamily: 'Inter',
+  },
+  imageContainer: {
+    width: SCREEN_WIDTH,
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    width: '100%',
+    paddingHorizontal: 5,
+    marginTop: 10,
   },
-  iconContainer: {
-    marginBottom: 40,
+  onboardingImage: {
+    width: SCREEN_WIDTH - 10,
+    height: '100%',
+    maxHeight: SCREEN_HEIGHT * 0.8,
   },
-  iconCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: colors.cardBackground,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#e3ff7c',
+  titleContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 30,
   },
-  iconEmoji: {
-    fontSize: 60,
-  },
-  textContainer: {
-    alignItems: 'center',
-  },
-  title: {
+  pageTitle: {
     fontSize: 24,
-    fontWeight: '800',
-    color: colors.text,
+    fontWeight: '700',
+    color: '#ffffff',
     textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 32,
+    fontFamily: 'Inter',
+    lineHeight: 30,
   },
-  description: {
-    fontSize: 16,
-    color: colors.textLight,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  indicatorContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 20,
-  },
-  indicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.gray,
-  },
-  indicatorActive: {
-    width: 24,
-    backgroundColor: '#e3ff7c',
+  highlightText: {
+    color: '#e3ff7c',
   },
   buttonContainer: {
-    paddingHorizontal: 30,
+    paddingHorizontal: 20,
     paddingBottom: 50,
   },
-  nextButton: {
-    flexDirection: 'row',
+  confirmButton: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    paddingVertical: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#e3ff7c',
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 8,
+    borderWidth: 1,
+    borderColor: '#ffffff',
   },
-  nextButtonText: {
-    color: colors.black,
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  startButton: {
-    backgroundColor: '#e3ff7c',
-    paddingVertical: 18,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  startButtonText: {
-    color: colors.black,
-    fontSize: 18,
+  confirmButtonText: {
+    color: '#000000',
+    fontSize: 20,
     fontWeight: '700',
+    fontFamily: 'Inter',
   },
 });
 
