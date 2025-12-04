@@ -14,7 +14,26 @@
     },
     "android": {
       "package": "com.intelfit.mobile",
-      "usesCleartextTraffic": true
-    }
+      "versionCode": 1,
+      "compileSdkVersion": 34,
+      "targetSdkVersion": 34,
+      "minSdkVersion": 21,
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/images/icon.png",
+        "backgroundColor": "#6C5CE7"
+      }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "e2d68caa-2c28-42d1-9faf-6a52d4016dda"
+      }
+    },
+    "owner": "intelfit"
   }
 }
