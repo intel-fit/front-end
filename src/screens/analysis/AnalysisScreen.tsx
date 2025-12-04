@@ -43,7 +43,7 @@ import {
   requestAI,
 } from "../../services/apiConfig";
 import MacroDonut from "../../components/charts/MacroDonut";
-import { authAPI, healthScoreAPI } from "../../services";
+import { authAPI, healthScoreAPI, ScoreTrendItem } from "../../services";
 import { getLatestInBody, InBodyPayload } from "../../utils/inbodyApi";
 import { eventBus } from "../../utils/eventBus";
 import { getMembershipType } from "../../utils/membership-utils";
@@ -67,11 +67,6 @@ interface MacroRatio {
   protein?: number | null;
   carbs?: number | null;
   fat?: number | null;
-}
-
-interface ScoreTrendItem {
-  date: string;
-  score: number;
 }
 
 const ACTIVITY_STORAGE_BASE_KEY = "user_activities_v1";
@@ -1823,13 +1818,26 @@ const AnalysisScreen = ({ navigation }: any) => {
     try {
       setHealthScoreLoading(true);
 
+      console.log("📊 [HEALTH_SCORE] 건강점수 로드 시작");
       const dailyTrend = await healthScoreAPI.getDailyTrend();
 
+      console.log("📊 [HEALTH_SCORE] 일일 트렌드 데이터:", {
+        length: dailyTrend.length,
+        sample: dailyTrend.slice(0, 2),
+        latest:
+          dailyTrend.length > 0 ? dailyTrend[dailyTrend.length - 1] : null,
+      });
+
       if (dailyTrend.length > 0) {
-        const latestScore = dailyTrend[dailyTrend.length - 1].score;
+        const latestScore = Math.round(
+          dailyTrend[dailyTrend.length - 1].total || 0
+        );
         setHealthScore(latestScore);
         setHealthScoreTrend(dailyTrend);
+
+        console.log("✅ [HEALTH_SCORE] 건강점수 설정 완료:", latestScore);
       } else {
+        console.log("⚠️ [HEALTH_SCORE] 건강점수 데이터 없음");
         setHealthScore(0);
         setHealthScoreTrend([]);
       }
