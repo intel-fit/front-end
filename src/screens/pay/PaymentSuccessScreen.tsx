@@ -5,23 +5,80 @@ import { Ionicons as Icon } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRoute } from "@react-navigation/native";
+import { paymentAPI } from "../../services";
 
 const PaymentSuccessScreen = () => {
   const navigation = useNavigation();
+  const route = useRoute<any>();
 
   useEffect(() => {
-    // ✅ 결제 성공 시 회원 등급 업데이트
-    updateMembershipToPremium();
+    // URL에서 파라미터 받기
+    const sessionId = route.params?.sessionId; // Stripe
+    const orderId = route.params?.orderId; // 카카오페이
+
+    if (sessionId) {
+      // Stripe 결제 완료
+      confirmStripePaymentAndUpgrade(sessionId);
+    } else if (orderId) {
+      // 카카오페이 결제 완료
+      confirmKakaoPaymentAndUpgrade(orderId);
+    } else {
+      // 테스트용으로 들어온 경우
+      updateMembershipToPremium();
+    }
   }, []);
 
+  const confirmStripePaymentAndUpgrade = async (sessionId: string) => {
+    try {
+      console.log("✅ [Stripe 결제 완료] session_id:", sessionId);
+
+      await paymentAPI.confirmStripePayment(sessionId);
+      await AsyncStorage.setItem("membershipType", "PREMIUM");
+
+      console.log("✅ 프리미엄 회원으로 업그레이드 완료 (Stripe)");
+    } catch (error) {
+      console.error("Stripe 결제 확인 실패:", error);
+      alert("결제 확인에 실패했습니다. 고객센터로 문의해주세요.");
+    }
+  };
+
+  const confirmKakaoPaymentAndUpgrade = async (orderId: string) => {
+    try {
+      console.log("✅ [카카오페이 결제 완료] orderId:", orderId);
+
+      await paymentAPI.confirmKakaoPayment(orderId);
+      await AsyncStorage.setItem("membershipType", "PREMIUM");
+
+      console.log("✅ 프리미엄 회원으로 업그레이드 완료 (카카오페이)");
+    } catch (error) {
+      console.error("카카오페이 결제 확인 실패:", error);
+      alert("결제 확인에 실패했습니다. 고객센터로 문의해주세요.");
+    }
+  };
+
+  const confirmPaymentAndUpgrade = async (sessionId: string) => {
+    try {
+      console.log("✅ [결제 완료] session_id:", sessionId);
+
+      // 1. 백엔드에 결제 완료 확인 (DB 업데이트)
+      await paymentAPI.confirmStripePayment(sessionId);
+
+      // 2. 로컬에서도 프리미엄으로 변경
+      await AsyncStorage.setItem("membershipType", "PREMIUM");
+
+      console.log("✅ 프리미엄 회원으로 업그레이드 완료");
+    } catch (error) {
+      console.error("결제 확인 실패:", error);
+      alert("결제 확인에 실패했습니다. 고객센터로 문의해주세요.");
+    }
+  };
+
+  // 기존 updateMembershipToPremium 함수는 테스트용으로 유지
   const updateMembershipToPremium = async () => {
     try {
-      // TODO: API로 회원 등급 업데이트 요청
-      // await paymentAPI.verifyPayment(paymentId);
-
-      // ✅ 임시: 로컬에서 프리미엄으로 변경
-      await AsyncStorage.setItem("testMembershipType", "PREMIUM");
-      console.log("✅ 프리미엄 회원으로 업그레이드 완료");
+      await AsyncStorage.setItem("membershipType", "PREMIUM");
+      console.log("✅ 프리미엄 회원으로 업그레이드 완료 (테스트)");
     } catch (error) {
       console.error("회원 등급 업데이트 실패:", error);
     }
