@@ -1,3 +1,4 @@
+// src/components/modals/PremiumModal.tsx
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -6,9 +7,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Linking,
+  Alert,
 } from "react-native";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { paymentAPI } from "../../services";
 
 interface PremiumModalProps {
   isOpen: boolean;
@@ -17,6 +21,7 @@ interface PremiumModalProps {
 }
 
 type PlanType = "annual" | "monthly" | null;
+type PaymentMethod = "stripe" | "kakaopay" | null;
 
 const PremiumModal: React.FC<PremiumModalProps> = ({
   isOpen,
@@ -24,23 +29,74 @@ const PremiumModal: React.FC<PremiumModalProps> = ({
   onContinue,
 }) => {
   const [selectedPlan, setSelectedPlan] = useState<PlanType>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] =
+    useState<PaymentMethod>(null);
 
   useEffect(() => {
     if (isOpen) {
       console.log("[PremiumModal] 모달 열림");
       // 모달이 열릴 때마다 선택 초기화
       setSelectedPlan(null);
+      setSelectedPaymentMethod(null);
     }
   }, [isOpen]);
 
-  const handleContinue = () => {
-    if (!selectedPlan) return; // 플랜이 선택되지 않았으면 실행 안 함
-    
-    if (onContinue) {
-      onContinue();
+  const handleContinue = async () => {
+    if (!selectedPlan || !selectedPaymentMethod) {
+      Alert.alert("알림", "플랜과 결제 수단을 선택해주세요.");
+      return;
     }
-    // 나중에 결제 API 연결
-    console.log("선택된 플랜:", selectedPlan);
+
+    try {
+      console.log("💳 [결제] 시작:", { selectedPlan, selectedPaymentMethod });
+
+      const planCode =
+        selectedPlan === "annual" ? "PREMIUM_ANNUAL" : "PREMIUM_MONTHLY";
+
+      if (selectedPaymentMethod === "stripe") {
+        // ✅ Stripe 결제
+        const { sessionId, url } = await paymentAPI.createStripeCheckoutSession(
+          planCode
+        );
+        console.log("✅ [Stripe] 세션 생성 완료:", { sessionId, url });
+
+        const canOpen = await Linking.canOpenURL(url);
+        if (canOpen) {
+          await Linking.openURL(url);
+          onClose();
+        } else {
+          throw new Error("결제 페이지를 열 수 없습니다.");
+        }
+      } else if (selectedPaymentMethod === "kakaopay") {
+        // ✅ 카카오페이 결제 (실제 구현!)
+        const { success, tid, redirectUrl, orderId } =
+          await paymentAPI.createKakaoPayReady(planCode);
+
+        if (!success) {
+          throw new Error("카카오페이 결제 준비에 실패했습니다.");
+        }
+
+        console.log("✅ [카카오페이] 결제 준비 완료:", {
+          tid,
+          orderId,
+          redirectUrl,
+        });
+
+        const canOpen = await Linking.canOpenURL(redirectUrl);
+        if (canOpen) {
+          await Linking.openURL(redirectUrl);
+          onClose();
+        } else {
+          throw new Error("카카오페이 결제 페이지를 열 수 없습니다.");
+        }
+      }
+    } catch (error: any) {
+      console.error("❌ [결제] 실패:", error);
+      Alert.alert(
+        "결제 실패",
+        error.message || "결제를 시작할 수 없습니다. 다시 시도해주세요."
+      );
+    }
   };
 
   const features = [
@@ -61,6 +117,8 @@ const PremiumModal: React.FC<PremiumModalProps> = ({
       description: "건강점수, 운동, 식단",
     },
   ];
+
+  const canContinue = selectedPlan && selectedPaymentMethod;
 
   return (
     <Modal
@@ -124,6 +182,8 @@ const PremiumModal: React.FC<PremiumModalProps> = ({
 
             {/* 가격 옵션 */}
             <View style={styles.plansContainer}>
+              <Text style={styles.sectionTitle}>플랜 선택</Text>
+
               {/* 연간 플랜 */}
               <TouchableOpacity
                 style={[
@@ -133,7 +193,6 @@ const PremiumModal: React.FC<PremiumModalProps> = ({
                 onPress={() => setSelectedPlan("annual")}
                 activeOpacity={0.7}
               >
-                {/* 16% 할인 배지는 항상 표시 */}
                 <View style={styles.discountBadge}>
                   <Text style={styles.discountText}>16% 할인</Text>
                 </View>
@@ -162,25 +221,81 @@ const PremiumModal: React.FC<PremiumModalProps> = ({
               </TouchableOpacity>
             </View>
 
+            {/* 결제 수단 선택 */}
+            <View style={styles.paymentMethodContainer}>
+              <Text style={styles.sectionTitle}>결제 수단</Text>
+
+              {/* Stripe (카드 결제) */}
+              <TouchableOpacity
+                style={[
+                  styles.paymentMethodCard,
+                  selectedPaymentMethod === "stripe" &&
+                    styles.paymentMethodCardSelected,
+                ]}
+                onPress={() => setSelectedPaymentMethod("stripe")}
+                activeOpacity={0.7}
+              >
+                <View style={styles.paymentMethodContent}>
+                  <View style={styles.paymentMethodIcon}>
+                    <Icon name="card-outline" size={24} color="#ffffff" />
+                  </View>
+                  <View style={styles.paymentMethodText}>
+                    <Text style={styles.paymentMethodTitle}>카드 결제</Text>
+                    <Text style={styles.paymentMethodSubtitle}>Stripe</Text>
+                  </View>
+                </View>
+                {selectedPaymentMethod === "stripe" && (
+                  <Icon name="checkmark-circle" size={24} color="#e3ff7c" />
+                )}
+              </TouchableOpacity>
+
+              {/* 카카오페이 */}
+              <TouchableOpacity
+                style={[
+                  styles.paymentMethodCard,
+                  selectedPaymentMethod === "kakaopay" &&
+                    styles.paymentMethodCardSelected,
+                ]}
+                onPress={() => setSelectedPaymentMethod("kakaopay")}
+                activeOpacity={0.7}
+              >
+                <View style={styles.paymentMethodContent}>
+                  <View
+                    style={[
+                      styles.paymentMethodIcon,
+                      { backgroundColor: "#FEE500" },
+                    ]}
+                  >
+                    <Text style={styles.kakaoIcon}>💳</Text>
+                  </View>
+                  <View style={styles.paymentMethodText}>
+                    <Text style={styles.paymentMethodTitle}>카카오페이</Text>
+                    <Text style={styles.paymentMethodSubtitle}>간편결제</Text>
+                  </View>
+                </View>
+                {selectedPaymentMethod === "kakaopay" && (
+                  <Icon name="checkmark-circle" size={24} color="#e3ff7c" />
+                )}
+              </TouchableOpacity>
+            </View>
+
             {/* 계속하기 버튼 */}
             <TouchableOpacity
               style={[
                 styles.continueButton,
-                selectedPlan === "annual" && styles.continueButtonSelected,
-                selectedPlan === "monthly" && styles.continueButtonMonthly,
+                canContinue && styles.continueButtonActive,
               ]}
               onPress={handleContinue}
               activeOpacity={0.8}
+              disabled={!canContinue}
             >
               <Text
                 style={[
                   styles.continueButtonText,
-                  selectedPlan === "annual" &&
-                    styles.continueButtonTextSelected,
-                  selectedPlan === "monthly" && styles.continueButtonTextMonthly,
+                  canContinue && styles.continueButtonTextActive,
                 ]}
               >
-                계속하기
+                {canContinue ? "결제하기" : "플랜과 결제수단을 선택하세요"}
               </Text>
             </TouchableOpacity>
           </ScrollView>
@@ -208,10 +323,7 @@ const styles = StyleSheet.create({
     minHeight: 400,
     position: "relative",
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
+    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.4,
     shadowRadius: 24,
     elevation: 12,
@@ -251,10 +363,7 @@ const styles = StyleSheet.create({
   },
   premiumContainer: {
     shadowColor: "#e3ff7c",
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
+    shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 1,
     shadowRadius: 12,
     elevation: 8,
@@ -307,10 +416,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 1,
     shadowColor: "#e3ff7c",
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
+    shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 2,
@@ -333,9 +439,15 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     letterSpacing: 0.1,
   },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#ffffff",
+    marginBottom: 12,
+    letterSpacing: 0.3,
+  },
   plansContainer: {
     marginBottom: 28,
-    gap: 14,
   },
   planCard: {
     backgroundColor: "#464646",
@@ -346,11 +458,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 2,
     borderColor: "transparent",
+    marginBottom: 12,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 6,
     elevation: 3,
@@ -369,10 +479,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 5,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 5,
     elevation: 4,
@@ -412,68 +519,87 @@ const styles = StyleSheet.create({
     color: "#d9d9d9",
     letterSpacing: 0.1,
   },
+  paymentMethodContainer: {
+    marginBottom: 28,
+  },
+  paymentMethodCard: {
+    backgroundColor: "#464646",
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "transparent",
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  paymentMethodCardSelected: {
+    backgroundColor: "#4a4a4a",
+    borderColor: "#e3ff7c",
+  },
+  paymentMethodContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  paymentMethodIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#5a5a5a",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  kakaoIcon: {
+    fontSize: 24,
+  },
+  paymentMethodText: {
+    gap: 4,
+  },
+  paymentMethodTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#ffffff",
+    letterSpacing: 0.2,
+  },
+  paymentMethodSubtitle: {
+    fontSize: 13,
+    fontWeight: "400",
+    color: "#d9d9d9",
+    letterSpacing: 0.1,
+  },
   continueButton: {
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: "#e3ff7c",
+    borderColor: "#666",
     paddingVertical: 18,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "transparent",
-    shadowColor: "#e3ff7c",
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
   },
-  continueButtonSelected: {
+  continueButtonActive: {
     backgroundColor: "#e3ff7c",
     borderColor: "#e3ff7c",
     shadowColor: "#e3ff7c",
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
+    shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4,
     shadowRadius: 10,
     elevation: 5,
-  },
-  continueButtonMonthly: {
-    backgroundColor: "#e3ff7c",
-    borderColor: "#e3ff7c",
-    borderWidth: 2,
-    shadowColor: "#e3ff7c",
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  continueButtonDisabled: {
-    borderColor: "#e3ff7c",
-    opacity: 1,
   },
   continueButtonText: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#ffffff",
+    color: "#999",
     letterSpacing: 0.3,
   },
-  continueButtonTextSelected: {
+  continueButtonTextActive: {
     color: "#000000",
-  },
-  continueButtonTextMonthly: {
-    color: "#000000",
-  },
-  continueButtonTextDisabled: {
-    color: "#ffffff",
   },
 });
 
 export default PremiumModal;
-

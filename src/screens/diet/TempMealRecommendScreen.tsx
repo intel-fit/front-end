@@ -369,7 +369,7 @@ const TempMealRecommendScreen: React.FC = () => {
             onPress: () =>
               navigation.navigate("Main", {
                 screen: "MyPage",
-                params: { openPlanModal: true },
+                params: { openPremiumModal: true },
               } as any),
           },
         ]
@@ -446,7 +446,7 @@ const TempMealRecommendScreen: React.FC = () => {
                   onPress={() =>
                     navigation.navigate("Main", {
                       screen: "MyPage",
-                      params: { openPlanModal: true },
+                      params: { openPremiumModal: true },
                     } as any)
                   }
                   activeOpacity={0.9}

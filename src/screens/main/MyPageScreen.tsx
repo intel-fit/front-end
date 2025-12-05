@@ -48,14 +48,12 @@ const MyPageScreen = ({ navigation }: any) => {
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
 
   //  1. 외부에서 넘어온 파라미터 감지 (내 플랜 모달 열기)
-  useEffect(() => {
-    if (route.params?.openPlanModal) {
-      console.log("🔓 마이페이지 진입: 내 플랜 모달 자동 오픈");
-      // 모달 열기
-      setIsMyPlanModalOpen(true);
 
-      // 파라미터 초기화 (다음에 마이페이지 들어올 때 또 열리는 것 방지)
-      navigation.setParams({ openPlanModal: undefined });
+  useEffect(() => {
+    if (route.params?.openPremiumModal) {
+      console.log("🔓 마이페이지 진입: 프리미엄 모달 자동 오픈");
+      setIsPremiumModalOpen(true);
+      navigation.setParams({ openPremiumModal: undefined });
     }
   }, [route.params]);
 
@@ -398,23 +396,6 @@ const MyPageScreen = ({ navigation }: any) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🌟 추천 내역</Text>
           <View style={styles.sectionLinks}>
-            <TouchableOpacity
-              style={styles.linkItem}
-              onPress={() => navigation.navigate("TempMealRecommend")}
-            >
-              <View style={styles.linkItemWithBadge}>
-                <Text style={styles.linkText}>1일 임시 식단 추천</Text>
-                <View style={styles.newBadge}>
-                  <Text style={styles.newBadgeText}>NEW</Text>
-                </View>
-              </View>
-              <Icon
-                name="chevron-forward"
-                size={18}
-                color={NEW_COLORS.text_secondary}
-              />
-            </TouchableOpacity>
-
             <View style={styles.subSeparator} />
 
             <TouchableOpacity

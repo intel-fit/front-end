@@ -27,7 +27,18 @@
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/images/icon.png",
         "backgroundColor": "#6C5CE7"
-      }
+      },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "intelfit"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "extra": {
       "eas": {

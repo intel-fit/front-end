@@ -38,5 +38,5 @@ export type MainTabParamList = {
   Stats: undefined;
   Chatbot: undefined;
   Analysis: undefined;
-  MyPage: { openPlanModal?: boolean } | undefined;
+  MyPage: { openPremiumModal?: boolean } | undefined;
 };
