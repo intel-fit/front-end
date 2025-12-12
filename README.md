@@ -1,109 +1,347 @@
 # Intelfit
 
-인바디 기반 ai 펄스널 트레이너 
+인바디 기반 AI 개인 트레이너 모바일 애플리케이션
+
+## 📱 프로젝트 소개
+
+Intelfit은 인바디 데이터를 기반으로 한 AI 개인 트레이너 서비스입니다. 사용자의 체성분 분석 결과를 바탕으로 맞춤형 식단과 운동 루틴을 추천하며, 실시간 챗봇 상담과 건강 통계 분석 기능을 제공합니다.
 
 ## 🚀 빠른 시작
 
 ### 사전 요구사항
 
-- Node.js 16.x 이상
-- npm 또는 yarn
-- Expo CLI (`npm install -g expo-cli`)
+- **Node.js**: 16.x 이상
+- **npm** 또는 **yarn**
+- **Expo CLI**: 전역 설치 권장 (`npm install -g expo-cli`)
+- **Expo Go 앱**: 실제 디바이스 테스트용
+  - [iOS App Store](https://apps.apple.com/app/expo-go/id982107779)
+  - [Google Play Store](https://play.google.com/store/apps/details?id=host.exp.exponent)
 
-### 설치 및 실행
+### 설치
 
 ```bash
+# 저장소 클론
+git clone <repository-url>
+cd front-end
+
 # 의존성 설치
 npm install
+```
 
-# 개발 서버 실행
+### 개발 서버 실행
+
+```bash
+# 기본 모드 (같은 Wi-Fi 네트워크 필요)
 npm start
 
-# iOS 시뮬레이터에서 실행
-npm run ios
+# Tunnel 모드 (다른 네트워크에서도 연결 가능, QR 코드 연결 문제 해결)
+npm run start:tunnel
 
-# Android 에뮬레이터에서 실행
-npm run android
+# LAN 모드 (같은 Wi-Fi 네트워크에서 명시적으로 LAN 사용)
+npm run start:lan
 
-# 웹 브라우저에서 실행
-npm run web
+# 플랫폼별 실행
+npm run ios      # iOS 시뮬레이터
+npm run android  # Android 에뮬레이터
+npm run web      # 웹 브라우저
 ```
 
 ### 📱 Expo Go로 실행하기 (실제 디바이스)
 
 1. **Expo Go 앱 설치**
-   - [iOS App Store](https://apps.apple.com/app/expo-go/id982107779)
-   - [Google Play Store](https://play.google.com/store/apps/details?id=host.exp.exponent)
+   - iOS: App Store에서 "Expo Go" 검색 및 설치
+   - Android: Play Store에서 "Expo Go" 검색 및 설치
 
-2. **개발 서버 실행 및 QR 코드 스캔**
+2. **QR 코드 스캔**
    ```bash
-   npm start
+   npm run start:tunnel
    ```
-   - iOS: 카메라 앱으로 QR 코드 스캔 → Expo Go로 열기
-   - Android: Expo Go 앱에서 "Scan QR code" 버튼으로 스캔
+   - **iOS**: 카메라 앱으로 QR 코드 스캔 → Expo Go로 자동 열기
+   - **Android**: Expo Go 앱에서 "Scan QR code" 버튼으로 스캔
 
-3. **네트워크 모드**
-   ```bash
-   # 일반 실행 (같은 Wi-Fi 네트워크 필요)
-   npm start
-   
-   # Tunnel 모드 (다른 네트워크에서도 연결 가능, 느릴 수 있음)
-   npm start -- --tunnel
-   
-   # LAN 모드
-   npm start -- --lan
-   ```
+3. **네트워크 연결 문제 해결**
+   - QR 코드가 스캔되지 않거나 연결이 안 될 때는 **Tunnel 모드**를 사용하세요
+   - Tunnel 모드는 다른 네트워크에서도 연결 가능하며, 방화벽 문제도 해결됩니다
+   - Tunnel 모드는 일반 모드보다 느릴 수 있지만 연결은 안정적입니다
 
 ## 📦 기술 스택
 
-- **프레임워크**: React Native + Expo SDK 54
-- **웹 지원**: React Native Web
+### 핵심 프레임워크
+- **React Native**: ^0.81.5
+- **Expo SDK**: ~54.0.29
+- **React**: 19.1.0
+- **TypeScript**: ^5.7.0
+
+### 주요 라이브러리
 - **네비게이션**: React Navigation v6
-- **언어**: TypeScript
+  - `@react-navigation/native`: ^6.1.18
+  - `@react-navigation/native-stack`: ^6.11.0
+  - `@react-navigation/bottom-tabs`: ^6.6.1
 - **상태 관리**: React Hooks
-- **로컬 저장소**: AsyncStorage
+- **로컬 저장소**: AsyncStorage 2.2.0
+- **HTTP 클라이언트**: Axios ^1.13.1
+- **차트**: react-native-chart-kit ^6.12.0
+- **아이콘**: @expo/vector-icons, react-native-vector-icons
+
+### Expo 모듈
+- `expo-blur`: ~15.0.8
+- `expo-image-picker`: ~17.0.10
+- `expo-image-manipulator`: ~14.0.8
+- `expo-linear-gradient`: ~15.0.8
+- `expo-linking`: ~8.0.10
+- `expo-status-bar`: ~3.0.9
+
+### 플랫폼 지원
+- ✅ **iOS** - 시뮬레이터 및 실제 디바이스
+- ✅ **Android** - 에뮬레이터 및 실제 디바이스
+- ✅ **Web** - React Native Web 지원
 
 ## 📁 프로젝트 구조
 
 ```
-src/
-├── navigation/        # 네비게이션 설정
-├── screens/          # 화면 컴포넌트
-│   ├── auth/        # 인증 화면
-│   ├── main/        # 메인 탭 화면
-│   ├── diet/        # 식단 관련
-│   ├── exercise/    # 운동 관련
-│   ├── analysis/    # 분석/통계
-│   ├── inbody/      # 인바디
-│   └── chatbot/     # 챗봇
-├── components/       # 재사용 컴포넌트
-│   ├── modals/      # 모달 컴포넌트
-│   └── common/      # 공통 컴포넌트
-├── services/         # API 서비스
-│   ├── apiConfig.ts # 공통 설정 및 request 함수
-│   ├── authAPI.ts   # 인증 관련 API
-│   └── index.ts     # 모든 API export (권장)
-├── constants/        # 상수 정의
-├── types/           # TypeScript 타입 정의
-└── theme/           # 테마 설정
+front-end/
+├── src/
+│   ├── assets/              # 이미지, 폰트 등 정적 리소스
+│   │   └── images/         # 앱 아이콘, 온보딩 이미지 등
+│   ├── components/          # 재사용 가능한 컴포넌트
+│   │   ├── charts/         # 차트 컴포넌트 (MacroDonut 등)
+│   │   ├── common/         # 공통 컴포넌트
+│   │   │   ├── InBodyCalendarModal.tsx
+│   │   │   ├── InbodyDateNavigator.tsx
+│   │   │   └── InBodyManualForm.tsx
+│   │   ├── modals/         # 모달 컴포넌트
+│   │   │   ├── AIAnalysisModal.tsx
+│   │   │   ├── BadgeListModal.tsx
+│   │   │   ├── ChatbotSettingsModal.tsx
+│   │   │   ├── ExerciseModal.tsx
+│   │   │   ├── FoodAddOptionsModal.tsx
+│   │   │   ├── MealRecommendModal.tsx
+│   │   │   ├── ProfileEditModal.tsx
+│   │   │   └── ... (기타 모달들)
+│   │   └── ExerciseSetItem.tsx
+│   ├── constants/          # 상수 정의
+│   │   ├── routes.ts       # 라우트 상수
+│   │   └── theme.ts        # 테마 상수
+│   ├── contexts/           # React Context
+│   │   └── DateContext.tsx # 날짜 컨텍스트
+│   ├── navigation/         # 네비게이션 설정
+│   │   ├── AppNavigator.tsx # 메인 네비게이터
+│   │   └── types.ts        # 네비게이션 타입 정의
+│   ├── screens/            # 화면 컴포넌트
+│   │   ├── analysis/       # 분석/통계 화면
+│   │   │   ├── AnalysisScreen.tsx
+│   │   │   ├── CalendarScreen.tsx
+│   │   │   ├── GoalScreen.tsx
+│   │   │   └── HealthScoreTrendScreen.tsx
+│   │   ├── auth/           # 인증 화면
+│   │   │   ├── OnboardingScreen.tsx
+│   │   │   ├── LoginScreen.tsx
+│   │   │   ├── SignupScreen.tsx
+│   │   │   ├── FindIdScreen.tsx
+│   │   │   ├── ResetPasswordScreen.tsx
+│   │   │   └── SplashScreen.tsx
+│   │   ├── chatbot/        # 챗봇 화면
+│   │   │   └── ChatbotScreen.tsx
+│   │   ├── diet/           # 식단 관련 화면
+│   │   │   ├── DietScreen.tsx
+│   │   │   ├── MealAddScreen.tsx
+│   │   │   ├── FoodSearchScreen.tsx
+│   │   │   ├── MealDetailScreen.tsx
+│   │   │   ├── MealRecommendScreen.tsx
+│   │   │   └── ... (기타 식단 화면들)
+│   │   ├── exercise/       # 운동 관련 화면
+│   │   │   ├── ExerciseScreen.tsx
+│   │   │   ├── ExerciseDetailScreen.tsx
+│   │   │   ├── RoutineRecommendScreen.tsx
+│   │   │   └── ... (기타 운동 화면들)
+│   │   ├── inbody/         # 인바디 화면
+│   │   │   ├── InBodyScreen.tsx
+│   │   │   └── InBodyManualScreen.tsx
+│   │   ├── main/           # 메인 탭 화면
+│   │   │   ├── HomeScreen.tsx
+│   │   │   ├── StatsScreen.tsx
+│   │   │   └── MyPageScreen.tsx
+│   │   └── pay/            # 결제 관련 화면
+│   │       ├── PaymentSuccessScreen.tsx
+│   │       ├── PaymentFailScreen.tsx
+│   │       └── PaymentCancelScreen.tsx
+│   ├── services/           # API 서비스
+│   │   ├── apiConfig.ts    # 공통 API 설정 및 request 함수
+│   │   ├── api.ts          # 기본 API 함수
+│   │   ├── authAPI.ts      # 인증 관련 API
+│   │   ├── chatAPI.ts      # 챗봇 API
+│   │   ├── healthScoreAPI.ts
+│   │   ├── homeAPI.ts
+│   │   ├── mealAPI.ts      # 식단 API
+│   │   ├── paymentAPI.ts   # 결제 API
+│   │   ├── recommendedExerciseAPI.ts
+│   │   ├── recommendedMealAPI.ts
+│   │   ├── userPreferencesAPI.ts
+│   │   └── index.ts        # 모든 API export
+│   ├── theme/              # 테마 설정
+│   │   ├── colors.ts       # 색상 정의
+│   │   └── styles.ts       # 공통 스타일
+│   ├── types/              # TypeScript 타입 정의
+│   │   └── index.ts
+│   └── utils/              # 유틸리티 함수
+│       ├── eventBus.ts
+│       ├── exerciseApi.ts
+│       ├── exerciseGoalApi.ts
+│       ├── inbodyApi.ts
+│       ├── membership-utils.ts
+│       └── ... (기타 유틸리티들)
+├── App.tsx                 # 앱 진입점
+├── app.json                # Expo 설정
+├── package.json            # 프로젝트 의존성
+├── tsconfig.json           # TypeScript 설정
+└── metro.config.js         # Metro 번들러 설정
 ```
-
-## 🌐 플랫폼 지원
-
-- ✅ **iOS** - iOS 시뮬레이터 및 실제 디바이스
-- ✅ **Android** - Android 에뮬레이터 및 실제 디바이스
-- ✅ **Web** - 웹 브라우저 (Chrome, Safari, Firefox 등)
 
 ## 🎯 주요 기능
 
-- ✅ 사용자 인증 (로그인, 회원가입, 아이디/비밀번호 찾기) - **웹 지원**
-- ✅ 홈 화면 및 마이페이지
-- ✅ 식단 관리 (추가, 검색, 추천, 내역)
-- ✅ 운동 관리 (기록, 루틴 추천, 내역)
-- ✅ 인바디 정보 입력 및 분석
-- ✅ 챗봇 상담
-- ✅ 통계 분석 및 그래프
+### 인증 및 온보딩
+- ✅ 온보딩 화면 (5단계)
+- ✅ 로그인/회원가입
+- ✅ 아이디 찾기
+- ✅ 비밀번호 재설정
 
-## 📖 문서
+### 홈 및 통계
+- ✅ 홈 대시보드
+- ✅ 건강 통계 및 그래프
+- ✅ 마이페이지 (프로필, 설정, 구독 관리)
 
-- [개발 가이드](./DEVELOPMENT.md) - 상세한 개발 가이드 및 프로젝트 구조
+### 식단 관리
+- ✅ 식단 기록 (추가, 수정, 삭제)
+- ✅ 음식 검색 및 직접 입력
+- ✅ AI 식단 추천
+- ✅ 식단 추천 내역
+- ✅ 영양소 목표 설정
+
+### 운동 관리
+- ✅ 운동 기록 (세트, 무게, 횟수)
+- ✅ 운동 상세 정보
+- ✅ AI 운동 루틴 추천
+- ✅ 운동 목표 설정
+
+### 인바디 분석
+- ✅ 인바디 데이터 입력 (사진 또는 수동)
+- ✅ 인바디 캘린더
+- ✅ 체성분 분석 및 추이
+
+### 챗봇 상담
+- ✅ AI 챗봇 상담
+- ✅ 챗봇 설정
+
+### 분석 및 통계
+- ✅ 건강 점수 추이
+- ✅ 캘린더 뷰
+- ✅ 목표 설정 및 달성도
+
+### 결제
+- ✅ 결제 성공/실패/취소 화면
+- ✅ 웹 결제 연동
+
+## 🔧 개발 가이드
+
+### 코드 스타일
+- TypeScript 사용
+- 함수형 컴포넌트 및 Hooks 사용
+- 컴포넌트는 PascalCase, 파일은 PascalCase.tsx
+- 유틸리티 함수는 camelCase
+
+### API 사용
+```typescript
+// services/index.ts에서 import
+import { request } from '@/services';
+
+// 또는 개별 API 함수 사용
+import { login, signup } from '@/services/authAPI';
+```
+
+### 네비게이션
+```typescript
+// 라우트 상수 사용
+import { ROUTES } from '@/constants/routes';
+
+navigation.navigate(ROUTES.DIET);
+```
+
+### 환경 변수
+- API 기본 URL은 `services/apiConfig.ts`에서 설정
+- 현재 기본 URL: `https://intelfits.com`
+
+## 🐛 트러블슈팅
+
+### QR 코드가 스캔되지 않을 때
+1. **Tunnel 모드 사용**
+   ```bash
+   npm run start:tunnel
+   ```
+2. **네트워크 확인**
+   - 컴퓨터와 휴대폰이 같은 Wi-Fi에 연결되어 있는지 확인
+   - 방화벽이 포트 8081을 차단하지 않는지 확인
+3. **수동 연결**
+   - Expo Go 앱에서 "Enter URL manually" 선택
+   - 터미널에 표시된 URL 입력
+
+### 패키지 버전 경고
+```bash
+# Expo CLI로 호환성 확인
+npx expo-doctor
+
+# 패키지 업데이트
+npm install
+```
+
+### Metro 번들러 오류
+```bash
+# 캐시 클리어
+npx expo start --clear
+
+# 또는
+npm start -- --reset-cache
+```
+
+### iOS 시뮬레이터 실행 오류
+```bash
+# Xcode Command Line Tools 확인
+xcode-select --install
+
+# CocoaPods 업데이트 (필요시)
+cd ios && pod install && cd ..
+```
+
+## 📝 스크립트 명령어
+
+```bash
+npm start              # 기본 개발 서버 실행
+npm run start:tunnel   # Tunnel 모드로 실행 (QR 코드 연결 문제 해결)
+npm run start:lan      # LAN 모드로 실행
+npm run ios            # iOS 시뮬레이터 실행
+npm run android        # Android 에뮬레이터 실행
+npm run web            # 웹 브라우저 실행
+```
+
+## 🔐 권한 설정
+
+### Android (app.json)
+- `INTERNET`: 네트워크 접근
+- `CAMERA`: 카메라 접근 (인바디 사진 촬영)
+- `READ_MEDIA_IMAGES`: 이미지 읽기
+- `READ_EXTERNAL_STORAGE`: 외부 저장소 읽기
+
+### iOS
+- 카메라 권한은 런타임에 요청됩니다.
+
+## 📄 라이선스
+
+이 프로젝트는 비공개 프로젝트입니다.
+
+## 👥 기여
+
+프로젝트 기여 가이드는 별도로 제공됩니다.
+
+---
+
+**개발 환경**: macOS, Windows, Linux  
+**최소 지원 버전**: iOS 13+, Android 5.0+ (API 21+)
