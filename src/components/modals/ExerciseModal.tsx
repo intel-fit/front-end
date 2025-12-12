@@ -134,6 +134,92 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   const [showInstructionsSection, setShowInstructionsSection] =
     useState<boolean>(false);
 
+  // Step 번호를 순서대로 정렬하는 헬퍼 함수
+  const processInstructionText = useCallback((text: string) => {
+    if (!text) return [];
+    
+    const stepLines: Array<{ stepNum: number; line: string; match: RegExpMatchArray }> = [];
+    const numberedLines: Array<{ stepNum: number; line: string; match: RegExpMatchArray }> = [];
+    const otherLines: Array<{ line: string; index: number }> = [];
+    
+    // 먼저 줄바꿈으로 분리
+    const lines = text.split('\n').filter(line => line.trim());
+    
+    lines.forEach((line, lineIndex) => {
+      // 한 줄에 여러 Step이 쉼표로 구분되어 있을 수 있음
+      // "Step: 1 ..., Step:2 ..., Step:3 ..." 형식 처리
+      
+      // Step: 또는 ,Step: 패턴으로 분리
+      const stepParts = line.split(/(?:^|,\s*)Step:/i).filter(part => part.trim());
+      const foundSteps: Array<{ stepNum: number; description: string }> = [];
+      
+      stepParts.forEach((part) => {
+        // Step: 다음에 오는 숫자와 설명 추출
+        const stepMatch = part.match(/^\s*(\d+)\s*(.+)$/);
+        if (stepMatch) {
+          const stepNum = parseInt(stepMatch[1], 10);
+          let description = stepMatch[2].trim();
+          // 끝의 쉼표, 점, 공백 제거
+          description = description.replace(/[,\.\s]+$/, '').trim();
+          
+          if (description) {
+            foundSteps.push({ stepNum, description });
+          }
+        }
+      });
+      
+      // Step: 패턴으로 분리되지 않은 경우, 정규식으로 다시 시도
+      if (foundSteps.length === 0) {
+        const stepRegex = /Step:\s*(\d+)\s*([^,]+?)(?=,\s*Step:|$)/gi;
+        let match;
+        
+        while ((match = stepRegex.exec(line)) !== null) {
+          const stepNum = parseInt(match[1], 10);
+          let description = match[2].trim();
+          description = description.replace(/[,\.\s]+$/, '').trim();
+          
+          if (description) {
+            foundSteps.push({ stepNum, description });
+          }
+        }
+      }
+      
+      if (foundSteps.length > 0) {
+        // Step들을 추가
+        foundSteps.forEach(({ stepNum, description }) => {
+          stepLines.push({
+            stepNum,
+            line: `Step: ${stepNum} ${description}`,
+            match: [`Step: ${stepNum} ${description}`, stepNum.toString(), description] as any,
+          });
+        });
+      } else {
+        // Step이 없는 경우, 번호 형식 (1., 2. 등) 확인
+        const numberedMatch = line.match(/^(\d+)\.\s*(.+)$/);
+        if (numberedMatch) {
+          numberedLines.push({
+            stepNum: parseInt(numberedMatch[1], 10),
+            line,
+            match: numberedMatch,
+          });
+        } else {
+          otherLines.push({ line, index: lineIndex });
+        }
+      }
+    });
+    
+    // Step 번호 순서대로 정렬
+    stepLines.sort((a, b) => a.stepNum - b.stepNum);
+    numberedLines.sort((a, b) => a.stepNum - b.stepNum);
+    
+    // 정렬된 결과 반환
+    return {
+      stepLines,
+      numberedLines,
+      otherLines,
+    };
+  }, []);
+
   const getSequenceStoreKey = useCallback((exercise?: any) => {
     if (!exercise) return null;
     return (
@@ -1331,13 +1417,16 @@ const getExerciseDisplayName = React.useCallback(
       console.log(`[EXERCISE_MODAL] 운동 ${idx + 1}:`, ex.name, "세트:", ex.sets?.length, "완료:", ex.allSetsCompleted);
     });
     
-    // 모든 운동 저장이 완료된 후 완료 모달 표시
-    if (onWorkoutComplete) {
-      onWorkoutComplete(exercisesForModal);
-    }
-    
     setShowInstructions(false);
     stopWorkoutTimer(true);
+    
+    // 모든 운동 저장이 완료된 후 완료 모달 표시
+    // 렌더링 중 상태 업데이트 방지를 위해 다음 렌더링 사이클로 지연
+    if (onWorkoutComplete) {
+      setTimeout(() => {
+        onWorkoutComplete(exercisesForModal);
+      }, 0);
+    }
   };
 
   const exerciseListData =
@@ -1886,63 +1975,71 @@ const getExerciseDisplayName = React.useCallback(
                     <Text style={styles.instructionText}>불러오는 중...</Text>
                   ) : (
                     <View style={styles.instructionList}>
-                      {instructionText ? (
-                            instructionText
-                              .split("\n")
-                              .filter((line) => line.trim())
-                              .map((line, index) => {
-                                const stepMatch =
-                                  line.match(/^Step:\s*(\d+)\s*(.+)$/i);
-                                const numberedMatch =
-                                  line.match(/^(\d+)\.\s*(.+)$/);
-                          
-                          if (stepMatch) {
-                            return (
-                                    <View
-                                      key={index}
-                                      style={styles.instructionItem}
-                                    >
-                                      <Text style={styles.instructionNumber}>
-                                        Step: {stepMatch[1]}
-                                      </Text>
-                                <View style={styles.instructionContent}>
-                                        <Text style={styles.instructionText}>
-                                          {stepMatch[2]}
-                                        </Text>
-                                </View>
-                              </View>
-                            );
-                          } else if (numberedMatch) {
-                            return (
-                                    <View
-                                      key={index}
-                                      style={styles.instructionItem}
-                                    >
-                                      <Text style={styles.instructionNumber}>
-                                        {numberedMatch[1]}.
-                                      </Text>
-                                <View style={styles.instructionContent}>
-                                        <Text style={styles.instructionText}>
-                                          {numberedMatch[2]}
-                                        </Text>
-                                </View>
-                              </View>
-                            );
-                          }
-                          return (
-                                  <View
-                                    key={index}
-                                    style={styles.instructionItem}
-                                  >
+                      {instructionText ? (() => {
+                        const processed = processInstructionText(instructionText);
+                        const items: JSX.Element[] = [];
+                        let keyIndex = 0;
+                        
+                        // Step 번호 순서대로 표시
+                        processed.stepLines.forEach((item) => {
+                          items.push(
+                            <View
+                              key={`step-${keyIndex++}`}
+                              style={styles.instructionItem}
+                            >
+                              <Text style={styles.instructionNumber}>
+                                Step: {item.match[1]}
+                              </Text>
                               <View style={styles.instructionContent}>
-                                      <Text style={styles.instructionText}>
-                                        {line}
-                                      </Text>
+                                <Text style={styles.instructionText}>
+                                  {item.match[2]}
+                                </Text>
                               </View>
                             </View>
                           );
-                        })
-                      ) : (
+                        });
+                        
+                        // 번호 형식 순서대로 표시
+                        processed.numberedLines.forEach((item) => {
+                          items.push(
+                            <View
+                              key={`numbered-${keyIndex++}`}
+                              style={styles.instructionItem}
+                            >
+                              <Text style={styles.instructionNumber}>
+                                {item.match[1]}.
+                              </Text>
+                              <View style={styles.instructionContent}>
+                                <Text style={styles.instructionText}>
+                                  {item.match[2]}
+                                </Text>
+                              </View>
+                            </View>
+                          );
+                        });
+                        
+                        // 나머지 줄 표시
+                        processed.otherLines.forEach((item) => {
+                          items.push(
+                            <View
+                              key={`other-${keyIndex++}`}
+                              style={styles.instructionItem}
+                            >
+                              <View style={styles.instructionContent}>
+                                <Text style={styles.instructionText}>
+                                  {item.line}
+                                </Text>
+                              </View>
+                            </View>
+                          );
+                        });
+                        
+                        return items.length > 0 ? items : (
+                          <Text style={styles.instructionText}>
+                            설명이 없습니다.
+                          </Text>
+                        );
+                      })() : (
                             <Text style={styles.instructionText}>
                               설명이 없습니다.
                             </Text>
@@ -2463,41 +2560,59 @@ const getExerciseDisplayName = React.useCallback(
                     <Text style={styles.instructionText}>불러오는 중...</Text>
                   ) : (
                     <View style={styles.instructionList}>
-                      {instructionText ? (
-                        instructionText.split('\n').filter(line => line.trim()).map((line, index) => {
-                          // Step:1, Step:2 형식 또는 1., 2. 형식 확인
-                          const stepMatch = line.match(/^Step:\s*(\d+)\s*(.+)$/i);
-                          const numberedMatch = line.match(/^(\d+)\.\s*(.+)$/);
-                          
-                          if (stepMatch) {
-                            return (
-                              <View key={index} style={styles.instructionItem}>
-                                <Text style={styles.instructionNumber}>Step: {stepMatch[1]}</Text>
-                                <View style={styles.instructionContent}>
-                                  <Text style={styles.instructionText}>{stepMatch[2]}</Text>
-                                </View>
-                              </View>
-                            );
-                          } else if (numberedMatch) {
-                            return (
-                              <View key={index} style={styles.instructionItem}>
-                                <Text style={styles.instructionNumber}>{numberedMatch[1]}.</Text>
-                                <View style={styles.instructionContent}>
-                                  <Text style={styles.instructionText}>{numberedMatch[2]}</Text>
-                                </View>
-                              </View>
-                            );
-                          }
-                          // 번호 없이 내용만 있는 경우
-                          return (
-                            <View key={index} style={styles.instructionItem}>
+                      {instructionText ? (() => {
+                        const processed = processInstructionText(instructionText);
+                        const items: JSX.Element[] = [];
+                        let keyIndex = 0;
+                        
+                        // Step 번호 순서대로 표시
+                        processed.stepLines.forEach((item) => {
+                          items.push(
+                            <View
+                              key={`step-${keyIndex++}`}
+                              style={styles.instructionItem}
+                            >
+                              <Text style={styles.instructionNumber}>Step: {item.match[1]}</Text>
                               <View style={styles.instructionContent}>
-                                <Text style={styles.instructionText}>{line}</Text>
+                                <Text style={styles.instructionText}>{item.match[2]}</Text>
                               </View>
                             </View>
                           );
-                        })
-                      ) : (
+                        });
+                        
+                        // 번호 형식 순서대로 표시
+                        processed.numberedLines.forEach((item) => {
+                          items.push(
+                            <View
+                              key={`numbered-${keyIndex++}`}
+                              style={styles.instructionItem}
+                            >
+                              <Text style={styles.instructionNumber}>{item.match[1]}.</Text>
+                              <View style={styles.instructionContent}>
+                                <Text style={styles.instructionText}>{item.match[2]}</Text>
+                              </View>
+                            </View>
+                          );
+                        });
+                        
+                        // 나머지 줄 표시
+                        processed.otherLines.forEach((item) => {
+                          items.push(
+                            <View
+                              key={`other-${keyIndex++}`}
+                              style={styles.instructionItem}
+                            >
+                              <View style={styles.instructionContent}>
+                                <Text style={styles.instructionText}>{item.line}</Text>
+                              </View>
+                            </View>
+                          );
+                        });
+                        
+                        return items.length > 0 ? items : (
+                          <Text style={styles.instructionText}>설명이 없습니다.</Text>
+                        );
+                      })() : (
                         <Text style={styles.instructionText}>설명이 없습니다.</Text>
                       )}
                     </View>

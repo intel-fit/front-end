@@ -26,6 +26,7 @@ import { getLatestInBody } from "../../utils/inbodyApi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ACCESS_TOKEN_KEY } from "../../services/apiConfig";
 import type { DailyProgressWeekItem, HomeResponse } from "../../types";
+import { eventBus } from "../../utils/eventBus";
 
 const HomeScreen = ({ navigation }: any) => {
   const { selectedDate, setSelectedDate } = useDate();
@@ -336,22 +337,51 @@ const HomeScreen = ({ navigation }: any) => {
       }
 
       // 오늘 완료한 고유한 운동 종목 수 계산
-      const uniqueExerciseNames = new Set<string>();
+      // ExerciseScreen의 중복 제거 로직과 동일하게 적용
+      // 같은 날짜, 같은 saveTitle, 같은 운동명을 가진 활동은 하나만 카운트
+      const seenKeys = new Set<string>();
+      
+      // 모든 그룹의 모든 세션의 모든 레코드를 순회하면서 고유한 운동만 추출
       savedWorkouts.forEach((group) => {
-        group.sessions?.forEach((session) => {
-          session.records?.forEach((record) => {
-            if (record.exerciseName) {
-              uniqueExerciseNames.add(record.exerciseName);
+        if (!group || !Array.isArray(group.sessions)) return;
+        
+        const normalizedTitle = (group.title || "").trim().toLowerCase();
+        
+        group.sessions.forEach((session) => {
+          if (!session || !Array.isArray(session.records)) return;
+          
+          // records를 exerciseName별로 그룹화 (ExerciseScreen의 로직과 동일)
+          const exerciseMap = new Map<string, typeof session.records>();
+          session.records.forEach((record) => {
+            if (record?.exerciseName && record.exerciseName.trim() !== "") {
+              const exerciseName = record.exerciseName.trim();
+              if (!exerciseMap.has(exerciseName)) {
+                exerciseMap.set(exerciseName, []);
+              }
+              exerciseMap.get(exerciseName)!.push(record);
+            }
+          });
+          
+          // 각 운동별로 중복 제거 키 생성 (ExerciseScreen과 동일한 로직)
+          exerciseMap.forEach((records, exerciseName) => {
+            // ExerciseScreen의 중복 제거 키: `${activity.date}__${normalizedSaveTitle}__${activity.name.trim()}`
+            const dedupeKey = `${dateString}__${normalizedTitle}__${exerciseName}`;
+            
+            // 이미 본 운동이면 스킵 (중복 제거)
+            if (!seenKeys.has(dedupeKey)) {
+              seenKeys.add(dedupeKey);
             }
           });
         });
       });
 
-      const exerciseCount = uniqueExerciseNames.size;
-      console.log("[HOME][운동종목수] 오늘 완료한 운동 종목 수:", {
+      const exerciseCount = seenKeys.size;
+      console.log("[HOME][운동종목수] 오늘 완료한 운동 종목 수 (ExerciseScreen 로직 적용):", {
         date: dateString,
         exerciseCount,
-        exerciseNames: Array.from(uniqueExerciseNames),
+        exerciseKeys: Array.from(seenKeys),
+        savedWorkoutsCount: savedWorkouts.length,
+        sessionsCount: savedWorkouts.reduce((sum, group) => sum + (group.sessions?.length || 0), 0),
       });
       setTodayExerciseCount(exerciseCount);
     } catch (e: any) {
@@ -516,6 +546,19 @@ const HomeScreen = ({ navigation }: any) => {
 
     return unsubscribe;
   }, [navigation]);
+
+  // 운동 삭제 이벤트 리스너
+  useEffect(() => {
+    const unsubscribe = eventBus.on("workoutSessionDeleted", () => {
+      console.log("[HOME] 운동 삭제 이벤트 수신, 운동 시간/개수 새로고침");
+      // 삭제 후 운동 시간과 개수 다시 조회
+      loadTodayWorkoutTime();
+    });
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, []);
 
   const handleCalendarClick = () => {
     navigation.navigate("Calendar");
