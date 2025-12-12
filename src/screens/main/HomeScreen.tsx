@@ -337,31 +337,49 @@ const HomeScreen = ({ navigation }: any) => {
       }
 
       // 오늘 완료한 고유한 운동 종목 수 계산
-      // 같은 운동이 여러 세션/그룹에 있어도 한 번만 카운트
-      const uniqueExerciseNames = new Set<string>();
+      // ExerciseScreen의 중복 제거 로직과 동일하게 적용
+      // 같은 날짜, 같은 saveTitle, 같은 운동명을 가진 활동은 하나만 카운트
+      const seenKeys = new Set<string>();
       
-      // 모든 그룹의 모든 세션의 모든 레코드를 순회하면서 고유한 운동 이름만 추출
+      // 모든 그룹의 모든 세션의 모든 레코드를 순회하면서 고유한 운동만 추출
       savedWorkouts.forEach((group) => {
         if (!group || !Array.isArray(group.sessions)) return;
+        
+        const normalizedTitle = (group.title || "").trim().toLowerCase();
         
         group.sessions.forEach((session) => {
           if (!session || !Array.isArray(session.records)) return;
           
+          // records를 exerciseName별로 그룹화 (ExerciseScreen의 로직과 동일)
+          const exerciseMap = new Map<string, typeof session.records>();
           session.records.forEach((record) => {
             if (record?.exerciseName && record.exerciseName.trim() !== "") {
-              // 운동 이름을 정규화하여 추가 (공백 제거, 대소문자 통일)
-              const normalizedName = record.exerciseName.trim();
-              uniqueExerciseNames.add(normalizedName);
+              const exerciseName = record.exerciseName.trim();
+              if (!exerciseMap.has(exerciseName)) {
+                exerciseMap.set(exerciseName, []);
+              }
+              exerciseMap.get(exerciseName)!.push(record);
+            }
+          });
+          
+          // 각 운동별로 중복 제거 키 생성 (ExerciseScreen과 동일한 로직)
+          exerciseMap.forEach((records, exerciseName) => {
+            // ExerciseScreen의 중복 제거 키: `${activity.date}__${normalizedSaveTitle}__${activity.name.trim()}`
+            const dedupeKey = `${dateString}__${normalizedTitle}__${exerciseName}`;
+            
+            // 이미 본 운동이면 스킵 (중복 제거)
+            if (!seenKeys.has(dedupeKey)) {
+              seenKeys.add(dedupeKey);
             }
           });
         });
       });
 
-      const exerciseCount = uniqueExerciseNames.size;
-      console.log("[HOME][운동종목수] 오늘 완료한 운동 종목 수:", {
+      const exerciseCount = seenKeys.size;
+      console.log("[HOME][운동종목수] 오늘 완료한 운동 종목 수 (ExerciseScreen 로직 적용):", {
         date: dateString,
         exerciseCount,
-        exerciseNames: Array.from(uniqueExerciseNames),
+        exerciseKeys: Array.from(seenKeys),
         savedWorkoutsCount: savedWorkouts.length,
         sessionsCount: savedWorkouts.reduce((sum, group) => sum + (group.sessions?.length || 0), 0),
       });
