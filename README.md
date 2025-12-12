@@ -1,6 +1,6 @@
 # Intelfit
 
-인바디 기반 AI 개인 트레이너 모바일 애플리케이션
+AI 퍼스널 트레이너 
 
 ## 📱 프로젝트 소개
 
@@ -94,7 +94,6 @@ npm run web      # 웹 브라우저
 ### 플랫폼 지원
 - ✅ **iOS** - 시뮬레이터 및 실제 디바이스
 - ✅ **Android** - 에뮬레이터 및 실제 디바이스
-- ✅ **Web** - React Native Web 지원
 
 ## 📁 프로젝트 구조
 
@@ -241,107 +240,3 @@ front-end/
 - ✅ 결제 성공/실패/취소 화면
 - ✅ 웹 결제 연동
 
-## 🔧 개발 가이드
-
-### 코드 스타일
-- TypeScript 사용
-- 함수형 컴포넌트 및 Hooks 사용
-- 컴포넌트는 PascalCase, 파일은 PascalCase.tsx
-- 유틸리티 함수는 camelCase
-
-### API 사용
-```typescript
-// services/index.ts에서 import
-import { request } from '@/services';
-
-// 또는 개별 API 함수 사용
-import { login, signup } from '@/services/authAPI';
-```
-
-### 네비게이션
-```typescript
-// 라우트 상수 사용
-import { ROUTES } from '@/constants/routes';
-
-navigation.navigate(ROUTES.DIET);
-```
-
-### 환경 변수
-- API 기본 URL은 `services/apiConfig.ts`에서 설정
-- 현재 기본 URL: `https://intelfits.com`
-
-## 🐛 트러블슈팅
-
-### QR 코드가 스캔되지 않을 때
-1. **Tunnel 모드 사용**
-   ```bash
-   npm run start:tunnel
-   ```
-2. **네트워크 확인**
-   - 컴퓨터와 휴대폰이 같은 Wi-Fi에 연결되어 있는지 확인
-   - 방화벽이 포트 8081을 차단하지 않는지 확인
-3. **수동 연결**
-   - Expo Go 앱에서 "Enter URL manually" 선택
-   - 터미널에 표시된 URL 입력
-
-### 패키지 버전 경고
-```bash
-# Expo CLI로 호환성 확인
-npx expo-doctor
-
-# 패키지 업데이트
-npm install
-```
-
-### Metro 번들러 오류
-```bash
-# 캐시 클리어
-npx expo start --clear
-
-# 또는
-npm start -- --reset-cache
-```
-
-### iOS 시뮬레이터 실행 오류
-```bash
-# Xcode Command Line Tools 확인
-xcode-select --install
-
-# CocoaPods 업데이트 (필요시)
-cd ios && pod install && cd ..
-```
-
-## 📝 스크립트 명령어
-
-```bash
-npm start              # 기본 개발 서버 실행
-npm run start:tunnel   # Tunnel 모드로 실행 (QR 코드 연결 문제 해결)
-npm run start:lan      # LAN 모드로 실행
-npm run ios            # iOS 시뮬레이터 실행
-npm run android        # Android 에뮬레이터 실행
-npm run web            # 웹 브라우저 실행
-```
-
-## 🔐 권한 설정
-
-### Android (app.json)
-- `INTERNET`: 네트워크 접근
-- `CAMERA`: 카메라 접근 (인바디 사진 촬영)
-- `READ_MEDIA_IMAGES`: 이미지 읽기
-- `READ_EXTERNAL_STORAGE`: 외부 저장소 읽기
-
-### iOS
-- 카메라 권한은 런타임에 요청됩니다.
-
-## 📄 라이선스
-
-이 프로젝트는 비공개 프로젝트입니다.
-
-## 👥 기여
-
-프로젝트 기여 가이드는 별도로 제공됩니다.
-
----
-
-**개발 환경**: macOS, Windows, Linux  
-**최소 지원 버전**: iOS 13+, Android 5.0+ (API 21+)

@@ -708,4 +708,61 @@ export const authAPI = {
       method: "DELETE",
     });
   },
+
+  /**
+   * 카카오 로그인 (OAuth 인증 코드로 로그인)
+   * @param code 카카오 OAuth 인증 코드
+   * @returns 로그인 결과 및 토큰
+   */
+  kakaoLogin: async (
+    code: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+    accessToken?: string;
+    refreshToken?: string;
+    tokenType?: string;
+    expiresIn?: number;
+    membershipType?: "FREE" | "PREMIUM";
+  }> => {
+    try {
+      const response = await request<{
+        success: boolean;
+        message: string;
+        accessToken?: string;
+        refreshToken?: string;
+        tokenType?: string;
+        expiresIn?: number;
+        membershipType?: "FREE" | "PREMIUM";
+      }>("/api/auth/kakao/login", {
+        method: "POST",
+        body: JSON.stringify({ code }),
+      });
+
+      if (response.accessToken) {
+        await AsyncStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken);
+
+        const payload = decodeJWT(response.accessToken);
+        if (payload && payload.userPk) {
+          await AsyncStorage.setItem("userId", String(payload.userPk));
+          console.log("[AUTH] 카카오 로그인 - userId 저장 완료:", payload.userPk);
+        }
+      }
+
+      if (response.refreshToken) {
+        await AsyncStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken);
+      }
+
+      if (response.membershipType) {
+        await AsyncStorage.setItem("membershipType", response.membershipType);
+      } else {
+        await AsyncStorage.setItem("membershipType", "FREE");
+      }
+
+      return response;
+    } catch (error: any) {
+      console.error("[AUTH] 카카오 로그인 실패:", error);
+      throw error;
+    }
+  },
 };
