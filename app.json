@@ -37,13 +37,24 @@
             }
           ],
           "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "kakaob46c5ece88946636902899138451ac5e",
+              "host": "oauth"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
         }
       ]
     },
     "extra": {
       "eas": {
         "projectId": "e2d68caa-2c28-42d1-9faf-6a52d4016dda"
-      }
+      },
+      "kakaoAppKey": "b46c5ece88946636902899138451ac5e"
     },
     "owner": "intelfit"
   }
