@@ -124,6 +124,10 @@ const MyPageScreen = ({ navigation }: any) => {
               }
 
               setCurrentMembershipType(result.newType);
+              
+              // AsyncStorage에 멤버십 타입 업데이트 (다른 화면에서도 반영되도록)
+              await AsyncStorage.setItem("membershipType", result.newType);
+              console.log("✅ AsyncStorage에 멤버십 타입 업데이트:", result.newType);
 
               Alert.alert(
                 "전환 완료 ✅",

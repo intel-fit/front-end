@@ -18,6 +18,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../../theme/colors";
 import InBodyPhotoModal from "../../components/modals/InBodyPhotoModal";
 import PremiumModal from "../../components/modals/PremiumModal";
@@ -265,6 +266,9 @@ const AnalysisScreen = ({ navigation }: any) => {
     []
   );
   const [healthScoreLoading, setHealthScoreLoading] = useState(true);
+
+  // 프리미엄 여부 state
+  const [isPremium, setIsPremium] = useState<boolean>(false);
 
   const displayName = useMemo(
     () => (userName ? `${userName}님` : "회원님"),
@@ -1853,6 +1857,39 @@ const AnalysisScreen = ({ navigation }: any) => {
     loadExerciseWeeklyGraph,
   ]);
 
+  // 프리미엄 여부 체크 함수
+  const checkPremium = useCallback(async () => {
+    try {
+      // API에서 직접 프로필을 조회하여 최신 상태 확인
+      const profile = await authAPI.getProfile();
+      const membershipType = profile?.membershipType?.toUpperCase();
+      const isPremiumUser = membershipType === "PREMIUM";
+      
+      setIsPremium(isPremiumUser);
+      
+      // AsyncStorage도 업데이트하여 다른 화면에서도 반영되도록
+      if (membershipType) {
+        await AsyncStorage.setItem("membershipType", membershipType);
+      }
+      
+      console.log("[ANALYSIS] 프리미엄 상태 체크:", isPremiumUser, "membershipType:", membershipType);
+    } catch (error) {
+      console.error("[ANALYSIS] 프리미엄 체크 실패:", error);
+      // API 호출 실패 시 getMembershipType으로 폴백
+      try {
+        const membershipType = await getMembershipType();
+        setIsPremium(membershipType === "PREMIUM");
+      } catch (fallbackError) {
+        setIsPremium(false);
+      }
+    }
+  }, []);
+
+  // 초기 프리미엄 여부 체크
+  useEffect(() => {
+    checkPremium();
+  }, [checkPremium]);
+
   const loadHealthScore = useCallback(async () => {
     try {
       setHealthScoreLoading(true);
@@ -1902,6 +1939,9 @@ const AnalysisScreen = ({ navigation }: any) => {
   // 화면 포커스 시 운동 기록 새로고침
   useFocusEffect(
     useCallback(() => {
+      // 프리미엄 상태 다시 체크 (마이페이지에서 변경했을 수 있음)
+      checkPremium();
+      
       // 다른 데이터는 순차적으로 로드
       loadWorkoutHistory();
       console.log("[ANALYSIS] useFocusEffect에서 loadMealComparison 호출");
@@ -1914,6 +1954,7 @@ const AnalysisScreen = ({ navigation }: any) => {
 
       loadHealthScore();
     }, [
+      checkPremium,
       loadWorkoutHistory,
       loadMealComparison,
       loadLatestInBodyDate,
@@ -2199,7 +2240,31 @@ const AnalysisScreen = ({ navigation }: any) => {
         </View>
 
         {/* 운동 분석 섹션 */}
-        <View style={styles.exerciseSection}>
+        <View style={[styles.exerciseSection, !isPremium && { maxHeight: 280 }]}>
+          {!isPremium && (
+            <View style={styles.premiumOverlay}>
+              <LinearGradient
+                colors={["rgba(0, 0, 0, 0.3)", "rgba(0, 0, 0, 0.7)", "rgba(0, 0, 0, 0.9)"]}
+                style={styles.premiumOverlayGradient}
+              >
+                <View style={styles.premiumOverlayContent}>
+                  <View style={styles.premiumBadgeContainer}>
+                    <LinearGradient
+                      colors={["#e3ff7c", "#fff9c4", "#ffffff"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.premiumBadgeGradient}
+                    >
+                      <Text style={styles.premiumBadgeText}>premium</Text>
+                    </LinearGradient>
+                  </View>
+                  <Text style={styles.premiumOverlayDescription}>
+                    주간 운동 변화와 1RM 추이를 확인할 수 있어요
+                  </Text>
+                </View>
+              </LinearGradient>
+            </View>
+          )}
           <Text style={styles.sectionTitle}>운동 분석</Text>
           <Text style={styles.exerciseSummary}>
             {`${displayName}의 최근 운동 중량 변화와 1RM을 확인해보세요.`}
@@ -2215,6 +2280,7 @@ const AnalysisScreen = ({ navigation }: any) => {
                   <TextInput
                     style={styles.weeksInput}
                     value={exerciseWeeks}
+                    editable={isPremium}
                     onChangeText={(text) => {
                       // 숫자만 입력 허용
                       const numericValue = text.replace(/[^0-9]/g, "");
@@ -2277,6 +2343,7 @@ const AnalysisScreen = ({ navigation }: any) => {
                 <TextInput
                   style={styles.weeksInput}
                   value={exerciseWeeks}
+                  editable={isPremium}
                   onChangeText={(text) => {
                     // 숫자만 입력 허용
                     const numericValue = text.replace(/[^0-9]/g, "");
@@ -2315,8 +2382,9 @@ const AnalysisScreen = ({ navigation }: any) => {
             </View>
           ) : (
             <ScrollView
-              style={styles.exerciseList}
+              style={[styles.exerciseList, !isPremium && { maxHeight: 216, overflow: "hidden" }]}
               showsVerticalScrollIndicator={false}
+              scrollEnabled={isPremium}
             >
               {exercises.map((exercise, index) => (
                 <View
@@ -2405,7 +2473,31 @@ const AnalysisScreen = ({ navigation }: any) => {
         </View>
 
         {/* 식단 분석 섹션 */}
-        <View style={styles.dietSection}>
+        <View style={[styles.dietSection, !isPremium && { maxHeight: 280 }]}>
+          {!isPremium && (
+            <View style={styles.premiumOverlay}>
+              <LinearGradient
+                colors={["rgba(0, 0, 0, 0.3)", "rgba(0, 0, 0, 0.7)", "rgba(0, 0, 0, 0.9)"]}
+                style={styles.premiumOverlayGradient}
+              >
+                <View style={styles.premiumOverlayContent}>
+                  <View style={styles.premiumBadgeContainer}>
+                    <LinearGradient
+                      colors={["#e3ff7c", "#fff9c4", "#ffffff"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.premiumBadgeGradient}
+                    >
+                      <Text style={styles.premiumBadgeText}>premium</Text>
+                    </LinearGradient>
+                  </View>
+                  <Text style={styles.premiumOverlayDescription}>
+                    섭취 패턴과 영양 균형을 분석해드려요
+                  </Text>
+                </View>
+              </LinearGradient>
+            </View>
+          )}
           <Text style={styles.sectionTitle}>식단 분석</Text>
 
           {/* 식단 주간 그래프 */}
@@ -2930,6 +3022,8 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     paddingHorizontal: 20,
     marginBottom: 15,
+    position: "relative",
+    overflow: "hidden",
   },
   exerciseSummary: {
     fontSize: 12.8,
@@ -2942,7 +3036,7 @@ const styles = StyleSheet.create({
     fontWeight: "400",
   },
   exerciseList: {
-    maxHeight: 216,
+    // 기본 스타일 (유료일 때는 제한 없음)
   },
   loadingContainer: {
     paddingVertical: 40,
@@ -3047,6 +3141,8 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     paddingHorizontal: 20,
     marginBottom: 20,
+    position: "relative",
+    overflow: "hidden",
   },
   dietSummary: {
     fontSize: 12.8,
@@ -3197,6 +3293,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#1e1e1e",
     borderRadius: 12,
     padding: 16,
+    marginTop: 4,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: "#333333",
@@ -3334,6 +3431,67 @@ const styles = StyleSheet.create({
   caloriePeriod: {
     fontSize: 11,
     color: "#777777",
+  },
+  premiumOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 10,
+    pointerEvents: "none",
+  },
+  premiumOverlayGradient: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 12,
+  },
+  premiumOverlayContent: {
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 12,
+  },
+  premiumOverlayDescription: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#dddddd",
+    textAlign: "center",
+    paddingHorizontal: 20,
+    lineHeight: 22,
+    marginTop: 5,
+    textShadowColor: "rgba(0, 0, 0, 0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  premiumBadgeContainer: {
+    overflow: "hidden",
+    borderRadius: 4,
+  },
+  premiumBadgeGradient: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  premiumBadgeText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#000000",
+    letterSpacing: 1,
+  },
+  graphPremiumOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 10,
+    pointerEvents: "none",
+  },
+  graphPremiumOverlayGradient: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 8,
   },
 });
 
