@@ -38,10 +38,10 @@ const getUserId = async (): Promise<string> => {
 };
 
 export const healthScoreAPI = {
-  // ✅ 일일 점수
+  // 일일 점수
   getDailyTrend: async (): Promise<ScoreTrendItem[]> => {
     try {
-      const userId = await getUserId(); // ⭐ 실제 userId 사용
+      const userId = await getUserId();
       console.log("📊 [DAILY] 사용자 ID:", userId);
 
       const response = await requestAI<{ daily_scores: ScoreTrendItem[] }>(
@@ -52,16 +52,21 @@ export const healthScoreAPI = {
       console.log("📊 [DAILY] 전체 응답:", JSON.stringify(response, null, 2));
       return Array.isArray(response.daily_scores) ? response.daily_scores : [];
     } catch (error: any) {
-      if (error.status === 404) return [];
+      // 404 에러는 조용히 처리 (데이터 없음)
+      if (error.status === 404) {
+        console.log("ℹ️ [DAILY] 데이터 없음");
+        return [];
+      }
+      // 다른 에러만 로깅
       console.error("[HEALTH_SCORE] 일일 점수 로드 실패:", error.message);
       throw error;
     }
   },
 
-  // ✅ 주간 점수
+  // 주간 점수
   getWeeklyTrend: async (): Promise<ScoreTrendItem[]> => {
     try {
-      const userId = await getUserId(); // ⭐ 실제 userId 사용
+      const userId = await getUserId();
       console.log("📊 [WEEKLY] 사용자 ID:", userId);
 
       const response = await requestAI<{ weekly_scores: WeeklyScoreItem[] }>(
@@ -71,7 +76,6 @@ export const healthScoreAPI = {
 
       console.log("📊 [WEEKLY] 전체 응답:", JSON.stringify(response, null, 2));
 
-      // 데이터 변환: week_start → date, total_avg → total
       const transformedData: ScoreTrendItem[] = Array.isArray(
         response.weekly_scores
       )
@@ -87,7 +91,12 @@ export const healthScoreAPI = {
       console.log("✅ [WEEKLY] 변환된 데이터:", transformedData);
       return transformedData;
     } catch (error: any) {
-      if (error.status === 404) return [];
+      // 404 에러는 조용히 처리 (데이터 없음)
+      if (error.status === 404) {
+        console.log("ℹ️ [WEEKLY] 데이터 없음");
+        return [];
+      }
+      // 다른 에러만 로깅
       console.error("[HEALTH_SCORE] 주간 점수 로드 실패:", error.message);
       throw error;
     }
@@ -96,7 +105,7 @@ export const healthScoreAPI = {
   // ✅ 월간 점수
   getMonthlyTrend: async (): Promise<ScoreTrendItem[]> => {
     try {
-      const userId = await getUserId(); // ⭐ 실제 userId 사용
+      const userId = await getUserId();
       console.log("📊 [MONTHLY] 사용자 ID:", userId);
 
       const response = await requestAI<{ monthly_scores: MonthlyScoreItem[] }>(
@@ -106,7 +115,6 @@ export const healthScoreAPI = {
 
       console.log("📊 [MONTHLY] 전체 응답:", JSON.stringify(response, null, 2));
 
-      // 데이터 변환: month → date, total_avg → total
       const transformedData: ScoreTrendItem[] = Array.isArray(
         response.monthly_scores
       )
@@ -122,7 +130,12 @@ export const healthScoreAPI = {
       console.log("✅ [MONTHLY] 변환된 데이터:", transformedData);
       return transformedData;
     } catch (error: any) {
-      if (error.status === 404) return [];
+      // 404 에러는 조용히 처리 (데이터 없음)
+      if (error.status === 404) {
+        console.log("ℹ️ [MONTHLY] 데이터 없음");
+        return [];
+      }
+      // 다른 에러만 로깅
       console.error("[HEALTH_SCORE] 월간 점수 로드 실패:", error.message);
       throw error;
     }

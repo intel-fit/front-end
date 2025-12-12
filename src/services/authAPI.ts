@@ -357,7 +357,6 @@ export const authAPI = {
     name: string;
     email: string;
     birthDate: string;
-    phoneNumber: string;
     height: number;
     weight: number;
     weightGoal: number;
@@ -380,7 +379,6 @@ export const authAPI = {
       name: string;
       email: string;
       birthDate: string;
-      phoneNumber: string;
       height: number;
       weight: number;
       weightGoal: number;
@@ -406,7 +404,6 @@ export const authAPI = {
    */
   updateProfile: async (profileData: {
     name?: string;
-    phoneNumber?: string;
     height?: number;
     weight?: number;
     gender?: "M" | "F";
@@ -422,7 +419,6 @@ export const authAPI = {
       name: string;
       email: string;
       birthDate: string;
-      phoneNumber: string;
       height: number;
       weight: number;
       gender: "M" | "F";

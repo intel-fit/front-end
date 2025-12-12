@@ -46,22 +46,23 @@ export const request = async <T = any>(
     console.log("요청 옵션:", { method: options.method || "GET", headers });
 
     // POST/PUT 요청인 경우 본문도 로깅
-    if (
-      options.body &&
-      (options.method === "POST" ||
-        options.method === "PUT" ||
-        options.method === "PATCH")
-    ) {
-      try {
-        const bodyData =
-          typeof options.body === "string"
-            ? JSON.parse(options.body)
-            : options.body;
-        console.log("요청 본문:", JSON.stringify(bodyData, null, 2));
-      } catch (e) {
-        console.log("요청 본문 (원본):", options.body);
-      }
-    }
+  if (
+    options.body &&
+    (options.method === "POST" ||
+      options.method === "PUT" ||
+      options.method === "PATCH" ||
+      options.method === "DELETE") 
+  ) {
+  try {
+    const bodyData =
+      typeof options.body === "string"
+        ? JSON.parse(options.body)
+        : options.body;
+    console.log("요청 본문:", JSON.stringify(bodyData, null, 2));
+  } catch (e) {
+    console.log("요청 본문 (원본):", options.body);
+  }
+}
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
@@ -228,13 +229,6 @@ export const requestAI = async <T = any>(
 
     // 에러 응답 처리
     if (!response.ok) {
-      if (response.status === 400) {
-        console.error("AI 서버 400 에러:", {
-          status: response.status,
-          data: JSON.stringify(data, null, 2),
-        });
-      }
-
       const errorMessage =
         data.message ||
         data.error ||
@@ -243,6 +237,22 @@ export const requestAI = async <T = any>(
       const error: any = new Error(errorMessage);
       error.status = response.status;
       error.data = data;
+      error.statusText = response.statusText;
+
+      // 404는 조용히 throw (에러 로그 안 찍음)
+      if (response.status === 404) {
+        throw error;
+      }
+
+      // 400 에러는 상세 로깅
+      if (response.status === 400) {
+        console.error("AI 서버 400 에러:", {
+          status: response.status,
+          data: JSON.stringify(data, null, 2),
+        });
+      }
+
+      //  다른 에러만 로깅
       console.error("AI 서버 에러:", {
         status: response.status,
         statusText: response.statusText,
@@ -277,11 +287,14 @@ export const requestAI = async <T = any>(
       throw networkError;
     }
 
-    console.error("AI 서버 에러:", {
-      message: error.message,
-      status: error.status,
-      data: error.data,
-    });
+    //  404는 이미 위에서 처리했으므로 여기서 다시 로깅 안함
+    if (error.status !== 404) {
+      console.error("AI 서버 에러:", {
+        message: error.message,
+        status: error.status,
+        data: error.data,
+      });
+    }
 
     if (error instanceof Error) {
       throw error;

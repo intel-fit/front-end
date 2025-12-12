@@ -594,7 +594,7 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
                   colors={["#e3ff7c", "#a8e063"]}
                   style={styles.welcomeIcon}
                 >
-                  <Text style={styles.welcomeEmoji}>🎁</Text>
+                  <Text style={styles.welcomeEmoji}>💪</Text>
                 </LinearGradient>
               </View>
 
