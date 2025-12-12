@@ -81,7 +81,7 @@ const HealthScoreTrendScreen = ({ navigation }: any) => {
           trendData.length > 0
             ? trendData.map((item) => {
                 const value = Number(item.total);
-                return isNaN(value) ? 0 : value; // ⭐ NaN 방지
+                return isNaN(value) ? 0 : value; 
               })
             : [0],
         color: (opacity = 1) => `rgba(227, 255, 124, ${opacity})`,
@@ -179,14 +179,14 @@ const HealthScoreTrendScreen = ({ navigation }: any) => {
             <ActivityIndicator size="large" color="#E3FF7C" />
             <Text style={styles.loadingText}>불러오는 중...</Text>
           </View>
-        ) : trendData.length === 0 ? (
+         ) : trendData.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Icon name="analytics-outline" size={64} color="#666" />
             <Text style={styles.emptyText}>
-              아직 건강점수 데이터가 없습니다
+              식단과 운동기록이 없어 건강점수를 찾을 수 없습니다
             </Text>
             <Text style={styles.emptySubText}>
-              꾸준히 기록하면 점수가 생성됩니다
+              식단과 운동을 기록하면 점수가 생성됩니다
             </Text>
           </View>
         ) : (

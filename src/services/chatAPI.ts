@@ -134,21 +134,19 @@ export const chatAPI = {
 
       throw new Error(error.message || "채팅 중 오류가 발생했습니다.");
     }
-  }, // ← ✅ 쉼표 추가!
-
+  },
   /**
    * 챗봇 히스토리 조회
    * @param limit - 조회할 대화 개수 (선택사항)
    */
   getChatHistory: async (limit?: number): Promise<ChatHistoryItem[]> => {
     try {
-      const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY); // ← ✅ ACCESS_TOKEN_KEY 사용
+      const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
 
       if (!token) {
         throw new Error("로그인이 필요합니다.");
       }
 
-      // ✅ limit이 있으면 쿼리 파라미터 추가
       const url = limit
         ? `${API_BASE_URL}/api/ai/coach/chat/history?limit=${limit}`
         : `${API_BASE_URL}/api/ai/coach/chat/history`;
@@ -159,7 +157,7 @@ export const chatAPI = {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`, // ← ✅ Authorization 대문자 A
+          Authorization: `Bearer ${token}`,
         },
       });
 

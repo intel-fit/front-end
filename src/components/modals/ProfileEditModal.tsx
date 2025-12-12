@@ -42,7 +42,6 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
   // 편집 가능한 필드들
   const [profileData, setProfileData] = useState({
     name: "",
-    phoneNumber: "",
     height: "",
     weight: "",
     weightGoal: "",
@@ -66,7 +65,6 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
     if (initialProfileData && isOpen) {
       setProfileData({
         name: initialProfileData.name || "",
-        phoneNumber: initialProfileData.phoneNumber || "",
         height: String(initialProfileData.height || ""),
         weight: String(initialProfileData.weight || ""),
         weightGoal: String(initialProfileData.weightGoal || ""),
@@ -112,7 +110,6 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
       // API로 전송할 데이터 준비
       const updateData = {
         name: profileData.name,
-        phoneNumber: profileData.phoneNumber,
         height: Number(profileData.height),
         weight: Number(profileData.weight),
         weightGoal: Number(profileData.weightGoal),
@@ -321,49 +318,7 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                   </Text>
                 </View>
 
-                {/* 전화번호 */}
-                {editingField === "phoneNumber" ? (
-                  <View style={[styles.infoItem, styles.editingItem]}>
-                    <Text style={styles.infoLabel}>전화번호</Text>
-                    <View style={styles.editControls}>
-                      <TextInput
-                        style={styles.editInput}
-                        value={tempValue}
-                        onChangeText={setTempValue}
-                        placeholder="01012345678"
-                        placeholderTextColor={NEW_COLORS.placeholder}
-                        keyboardType="phone-pad"
-                      />
-                      <TouchableOpacity
-                        onPress={handleSave}
-                        style={styles.saveEditBtn}
-                      >
-                        <Icon
-                          name="checkmark"
-                          size={18}
-                          color={NEW_COLORS.text}
-                        />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.infoItem}
-                    onPress={() => handleFieldClick("phoneNumber")}
-                  >
-                    <Text style={styles.infoLabel}>전화번호</Text>
-                    <View style={styles.infoValueWithArrow}>
-                      <Text style={styles.infoValue}>
-                        {profileData.phoneNumber}
-                      </Text>
-                      <Icon
-                        name="chevron-forward"
-                        size={16}
-                        color={NEW_COLORS.text_secondary}
-                      />
-                    </View>
-                  </TouchableOpacity>
-                )}
+               
 
                 {/* 성별 */}
                 {editingField === "gender" ? (
