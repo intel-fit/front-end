@@ -691,169 +691,149 @@ const AnalysisScreen = ({ navigation }: any) => {
     return result;
   }, [completedWorkoutHistory, resolveExerciseIdentifier, makeExerciseKey]);
 
+  // 운동 이미지 캐시 (운동 ID 또는 이름으로 매핑)
+  // 운동 이미지 캐시 (운동 이름으로 매핑)
   const [exerciseImages, setExerciseImages] = useState<Record<string, string>>(
     {}
   );
-  const [exerciseImagesByName, setExerciseImagesByName] = useState<
-    Record<string, string>
-  >({});
-  const fetchedImageIdsRef = useRef<Set<string>>(new Set());
-  const fetchedNameRef = useRef<Set<string>>(new Set());
-  const failedImageIdsRef = useRef<Set<string>>(new Set());
-  const [failedImageLookupTick, setFailedImageLookupTick] = useState(0);
+  const loadingImagesRef = useRef<Set<string>>(new Set());
 
+  // 운동 이미지 로드 (새로운 간단한 로직)
   useEffect(() => {
-    const missingIds = exercises
-      .map((ex) => ({
-        id: ex.exerciseId,
-        name: ex.name,
-        fallbackUrl: ex.imageUrl,
-      }))
-      .filter((item) => {
-        if (!item.id) return false;
-        if (exerciseImages[item.id]) return false;
-        if (failedImageIdsRef.current.has(item.id)) return false;
-        if (fetchedImageIdsRef.current.has(item.id)) return false;
-        return true;
-      });
+    if (exercises.length === 0) return;
 
-    if (missingIds.length === 0) return;
+    const loadExerciseImages = async () => {
+      for (const exercise of exercises) {
+        // 이미 이미지가 있거나 로딩 중이면 스킵
+        const nameKey = exercise.name?.toLowerCase() || "";
+        if (!nameKey) continue;
+        if (exercise.imageUrl) {
+          // 이미 imageUrl이 있으면 캐시에 저장
+          setExerciseImages((prev) => ({
+            ...prev,
+            [nameKey]: exercise.imageUrl,
+          }));
+          continue;
+        }
+        if (exerciseImages[nameKey]) continue;
+        if (loadingImagesRef.current.has(nameKey)) continue;
 
-    let cancelled = false;
+        loadingImagesRef.current.add(nameKey);
 
-    const trackFailure = (id?: string) => {
-      if (!id) return;
-      if (failedImageIdsRef.current.has(id)) return;
-      failedImageIdsRef.current.add(id);
-      setFailedImageLookupTick((tick) => tick + 1);
-    };
-
-    const loadImages = async () => {
-      for (const { id } of missingIds) {
-        if (!id) continue;
-        fetchedImageIdsRef.current.add(id);
         try {
-          const detail = await fetchExerciseDetail(id);
-          const url =
-            detail?.imageUrl ||
-            detail?.image ||
-            detail?.imgUrl ||
-            detail?.photoUrl;
-          if (url && !cancelled) {
-            setExerciseImages((prev) => ({
-              ...prev,
-              [id]: url,
-            }));
-          } else if (!cancelled) {
-            trackFailure(id);
+          // 1. exerciseId가 있으면 상세 조회
+          if (exercise.exerciseId) {
+            try {
+              const detail = await fetchExerciseDetail(exercise.exerciseId);
+              const imageUrl =
+                detail?.imageUrl ||
+                detail?.image ||
+                detail?.imgUrl ||
+                detail?.photoUrl ||
+                detail?.gifUrl;
+
+              if (imageUrl) {
+                setExerciseImages((prev) => ({
+                  ...prev,
+                  [nameKey]: imageUrl,
+                }));
+                if (__DEV__) {
+                  console.log("[ANALYSIS] 운동 이미지 로드 성공 (ID):", {
+                    name: exercise.name,
+                    exerciseId: exercise.exerciseId,
+                    imageUrl,
+                  });
+                }
+                loadingImagesRef.current.delete(nameKey);
+                continue;
+              }
+            } catch (error) {
+              if (__DEV__) {
+                console.warn("[ANALYSIS] 운동 상세 조회 실패:", {
+                  exerciseId: exercise.exerciseId,
+                  error,
+                });
+              }
+            }
           }
+
+          // 2. 이름으로 검색
+          const searchKeywords = generateSearchKeywords(exercise.name);
+          const keywordList = searchKeywords.length > 0 ? searchKeywords : [exercise.name];
+
+          for (const keyword of keywordList) {
+            try {
+              const response = await fetchExercises({
+                keyword,
+                size: 10,
+                page: 0,
+              });
+
+              if (!response?.content || response.content.length === 0) {
+                continue;
+              }
+
+              // 모든 결과에서 이미지 찾기
+              for (const item of response.content) {
+                // API 응답의 모든 가능한 이미지 필드 확인
+                const imageUrl =
+                  item?.imageUrl ||
+                  item?.image ||
+                  item?.imgUrl ||
+                  item?.photoUrl ||
+                  item?.gifUrl ||
+                  item?.gif ||
+                  item?.mediaUrl ||
+                  item?.media;
+
+                if (imageUrl && typeof imageUrl === "string" && imageUrl.trim() !== "") {
+                  setExerciseImages((prev) => ({
+                    ...prev,
+                    [nameKey]: imageUrl,
+                  }));
+                  if (__DEV__) {
+                    console.log("[ANALYSIS] 운동 이미지 찾음 (검색):", {
+                      name: exercise.name,
+                      keyword,
+                      imageUrl,
+                      foundIn: Object.keys(item).filter((k) =>
+                        k.toLowerCase().includes("image") ||
+                        k.toLowerCase().includes("img") ||
+                        k.toLowerCase().includes("photo") ||
+                        k.toLowerCase().includes("gif") ||
+                        k.toLowerCase().includes("media")
+                      ),
+                    });
+                  }
+                  loadingImagesRef.current.delete(nameKey);
+                  return; // 이미지 찾으면 종료
+                }
+              }
+            } catch (error) {
+              if (__DEV__) {
+                console.warn("[ANALYSIS] 운동 검색 실패:", {
+                  keyword,
+                  error,
+                });
+              }
+            }
+          }
+
+          loadingImagesRef.current.delete(nameKey);
         } catch (error) {
           if (__DEV__) {
-            console.warn("[ANALYSIS] 운동 이미지 불러오기 실패:", {
-              id,
-              message: (error as Error)?.message,
+            console.warn("[ANALYSIS] 운동 이미지 로드 실패:", {
+              name: exercise.name,
+              error,
             });
           }
-          if (!cancelled) {
-            trackFailure(id);
-          }
+          loadingImagesRef.current.delete(nameKey);
         }
       }
     };
 
-    loadImages();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [exercises, exerciseImages]);
-
-  useEffect(() => {
-    const missingByName = exercises
-      .filter(
-        (ex) =>
-          ex.name &&
-          !ex.imageUrl &&
-          !exerciseImagesByName[ex.name.toLowerCase()] &&
-          !fetchedNameRef.current.has(ex.name.toLowerCase()) &&
-          (!ex.exerciseId ||
-            failedImageIdsRef.current.has(String(ex.exerciseId)))
-      )
-      .map((ex) => ({
-        rawName: ex.name as string,
-        keywords: generateSearchKeywords(ex.name),
-      }));
-
-    if (missingByName.length === 0) return;
-
-    let cancelled = false;
-
-    const loadByName = async () => {
-      for (const { rawName, keywords } of missingByName) {
-        const baseKey = rawName.toLowerCase();
-        fetchedNameRef.current.add(baseKey);
-        const keywordList =
-          keywords && keywords.length > 0 ? keywords : [rawName];
-        let resolved = false;
-
-        for (const keyword of keywordList) {
-          const keywordKey = keyword.toLowerCase();
-          try {
-            const response = await fetchExercises({
-              keyword,
-              size: 1,
-              page: 0,
-            });
-            const first = response?.content?.[0];
-            const url =
-              first?.imageUrl ||
-              first?.image ||
-              first?.imgUrl ||
-              first?.photoUrl;
-            if (url && !cancelled) {
-              setExerciseImagesByName((prev) => {
-                const next = { ...prev };
-                next[baseKey] = url;
-                keywordList.forEach((kw) => {
-                  const kwKey = kw.toLowerCase();
-                  next[kwKey] = url;
-                });
-                return next;
-              });
-              resolved = true;
-              break;
-            }
-          } catch (error) {
-            if (__DEV__) {
-              console.warn("[ANALYSIS] 운동 이미지 검색 실패:", {
-                name: rawName,
-                keyword,
-                message: (error as Error)?.message,
-              });
-            }
-          }
-        }
-
-        if (!resolved && __DEV__) {
-          console.warn("[ANALYSIS] 운동 이미지 검색 실패 - 모든 키워드 시도", {
-            name: rawName,
-            keywords: keywordList,
-          });
-        }
-      }
-    };
-
-    loadByName();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    exercises,
-    exerciseImagesByName,
-    failedImageLookupTick,
-    generateSearchKeywords,
-  ]);
+    loadExerciseImages();
+  }, [exercises, exerciseImages, generateSearchKeywords]);
 
   // 운동 기록 조회
   const loadLocalCompletions = useCallback(async () => {
@@ -2396,17 +2376,13 @@ const AnalysisScreen = ({ navigation }: any) => {
                 >
                   <View style={styles.exerciseIcon}>
                     {(() => {
-                      const idKey = exercise.exerciseId
-                        ? String(exercise.exerciseId)
-                        : undefined;
                       const nameKey = exercise.name
                         ? exercise.name.toLowerCase()
                         : undefined;
 
                       const displayUrl =
                         exercise.imageUrl ||
-                        (idKey ? exerciseImages[idKey] : undefined) ||
-                        (nameKey ? exerciseImagesByName[nameKey] : undefined);
+                        (nameKey ? exerciseImages[nameKey] : undefined);
                       if (displayUrl) {
                         return (
                           <Image
