@@ -1623,7 +1623,14 @@ const AnalysisScreen = ({ navigation }: any) => {
       }
 
       // API 응답 데이터를 배열로 변환
-      const weeklyData = Array.isArray(response) ? response : response?.data || response?.weekly_summary || [];
+      const weeklyData = Array.isArray(response) 
+        ? response 
+        : response?.data || response?.weekly_summary || [];
+      
+      if (__DEV__) {
+        console.log("[ANALYSIS] 식단 주간 그래프 파싱된 데이터:", weeklyData);
+      }
+      
       setNutritionGraphData(weeklyData);
     } catch (error: any) {
       console.error("[ANALYSIS] 식단 주간 그래프 로드 실패:", {
@@ -1685,7 +1692,14 @@ const AnalysisScreen = ({ navigation }: any) => {
       }
 
       // API 응답 데이터를 배열로 변환
-      const weeklyData = Array.isArray(response) ? response : response?.data || response?.weekly_summary || [];
+      const weeklyData = Array.isArray(response) 
+        ? response 
+        : response?.data || response?.weekly_summary || [];
+      
+      if (__DEV__) {
+        console.log("[ANALYSIS] 운동 주간 그래프 파싱된 데이터:", weeklyData);
+      }
+      
       setExerciseGraphData(weeklyData);
     } catch (error: any) {
       console.error("[ANALYSIS] 운동 주간 그래프 로드 실패:", {
@@ -2220,68 +2234,138 @@ const AnalysisScreen = ({ navigation }: any) => {
           </Text>
 
           {/* 운동 주간 그래프 */}
-          <View style={styles.weeklyGraphContainer}>
-            <Text style={styles.graphTitle}>주간 운동 분석</Text>
-            {exerciseGraphLoading ? (
-              <View style={styles.weeklyGraphPlaceholder}>
-                <ActivityIndicator size="small" color="#d6ff4b" />
-                <Text style={styles.graphPlaceholderText}>
-                  그래프를 불러오는 중...
-                </Text>
-              </View>
-            ) : exerciseGraphData.length > 0 ? (
-              <View style={styles.chartContainer}>
+          {exerciseGraphLoading ? (
+            <View style={styles.weeklyGraphPlaceholder}>
+              <ActivityIndicator size="small" color="#d6ff4b" />
+              <Text style={styles.graphPlaceholderText}>
+                그래프를 불러오는 중...
+              </Text>
+            </View>
+          ) : exerciseGraphData.length > 0 ? (
+            <>
+              {/* 주간 평균 운동 시간 */}
+              <View style={styles.weeklyGraphCard}>
+                <Text style={styles.weeklyGraphCardTitle}>주간 평균 운동 시간(분)</Text>
                 <LineChart
                   data={{
-                    labels: exerciseGraphData.map((item, index) => {
-                      // 주차 라벨 생성 (예: "1주", "2주", ...)
-                      return `${index + 1}주`;
+                    labels: exerciseGraphData.map((item: any, index: number) => {
+                      // 2주마다 또는 첫 번째, 마지막만 표시
+                      if (exerciseGraphData.length <= 4) {
+                        if (item.week_start && item.week_end) {
+                          return `${item.week_start.slice(5).replace(/-/g, ".")}~${item.week_end.slice(5).replace(/-/g, ".")}`;
+                        }
+                        return "";
+                      }
+                      // 데이터가 많으면 간격을 두고 표시
+                      const step = Math.ceil(exerciseGraphData.length / 4);
+                      if (index % step === 0 || index === exerciseGraphData.length - 1) {
+                        if (item.week_start && item.week_end) {
+                          return `${item.week_start.slice(5).replace(/-/g, ".")}~${item.week_end.slice(5).replace(/-/g, ".")}`;
+                        }
+                        return "";
+                      }
+                      return "";
                     }),
                     datasets: [
                       {
-                        data: exerciseGraphData.map((item) => {
-                          // 운동 관련 데이터 추출 (예: 운동 시간, 횟수 등)
-                          // API 응답 구조에 따라 필드명 조정 필요
-                          return Number(item.exercise_time || item.duration || item.total || item.value || 0);
+                        data: exerciseGraphData.map((item: any) => {
+                          return Number(item.exercise_avg?.duration_min ?? 0);
                         }),
-                        color: (opacity = 1) => `rgba(227, 255, 124, ${opacity})`,
-                        strokeWidth: 3,
+                        color: (opacity = 1) => `rgba(200, 255, 61, ${opacity})`,
+                        strokeWidth: 2,
                       },
                     ],
                   }}
-                  width={Math.min(Dimensions.get("window").width - 80, 320)}
-                  height={220}
+                  width={Dimensions.get("window").width - 100}
+                  height={160}
                   chartConfig={{
-                    backgroundColor: "#1a1a1a",
-                    backgroundGradientFrom: "#1a1a1a",
-                    backgroundGradientTo: "#1a1a1a",
+                    backgroundGradientFrom: "#111111",
+                    backgroundGradientTo: "#111111",
                     decimalPlaces: 0,
-                    color: (opacity = 1) => `rgba(227, 255, 124, ${opacity})`,
-                    labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-                    style: {
-                      borderRadius: 16,
-                    },
+                    color: (opacity = 1) => `rgba(200, 255, 61, ${opacity})`,
+                    labelColor: (opacity = 1) => `rgba(220, 220, 220, ${opacity})`,
                     propsForDots: {
-                      r: "6",
+                      r: "4",
                       strokeWidth: "2",
-                      stroke: "#e3ff7c",
+                      stroke: "#111111",
+                    },
+                    propsForLabels: {
+                      fontSize: 9,
                     },
                   }}
                   bezier
+                  fromZero
                   style={{
-                    marginVertical: 8,
-                    borderRadius: 16,
+                    borderRadius: 12,
                   }}
                 />
               </View>
-            ) : (
-              <View style={styles.weeklyGraphPlaceholder}>
-                <Text style={styles.graphPlaceholderText}>
-                  데이터가 없습니다.
-                </Text>
+
+              {/* 주간 평균 운동 강도 */}
+              <View style={styles.weeklyGraphCard}>
+                <Text style={styles.weeklyGraphCardTitle}>주간 평균 운동 강도</Text>
+                <LineChart
+                  data={{
+                    labels: exerciseGraphData.map((item: any, index: number) => {
+                      // 2주마다 또는 첫 번째, 마지막만 표시
+                      if (exerciseGraphData.length <= 4) {
+                        if (item.week_start && item.week_end) {
+                          return `${item.week_start.slice(5).replace(/-/g, ".")}~${item.week_end.slice(5).replace(/-/g, ".")}`;
+                        }
+                        return "";
+                      }
+                      // 데이터가 많으면 간격을 두고 표시
+                      const step = Math.ceil(exerciseGraphData.length / 4);
+                      if (index % step === 0 || index === exerciseGraphData.length - 1) {
+                        if (item.week_start && item.week_end) {
+                          return `${item.week_start.slice(5).replace(/-/g, ".")}~${item.week_end.slice(5).replace(/-/g, ".")}`;
+                        }
+                        return "";
+                      }
+                      return "";
+                    }),
+                    datasets: [
+                      {
+                        data: exerciseGraphData.map((item: any) => {
+                          return Number(item.exercise_avg?.avg_intensity ?? 0);
+                        }),
+                        color: (opacity = 1) => `rgba(200, 255, 61, ${opacity})`,
+                        strokeWidth: 2,
+                      },
+                    ],
+                  }}
+                  width={Dimensions.get("window").width - 100}
+                  height={160}
+                  chartConfig={{
+                    backgroundGradientFrom: "#111111",
+                    backgroundGradientTo: "#111111",
+                    decimalPlaces: 0,
+                    color: (opacity = 1) => `rgba(200, 255, 61, ${opacity})`,
+                    labelColor: (opacity = 1) => `rgba(220, 220, 220, ${opacity})`,
+                    propsForDots: {
+                      r: "4",
+                      strokeWidth: "2",
+                      stroke: "#111111",
+                    },
+                    propsForLabels: {
+                      fontSize: 9,
+                    },
+                  }}
+                  bezier
+                  fromZero
+                  style={{
+                    borderRadius: 12,
+                  }}
+                />
               </View>
-            )}
-          </View>
+            </>
+          ) : (
+            <View style={styles.weeklyGraphPlaceholder}>
+              <Text style={styles.graphPlaceholderText}>
+                표시할 주간 데이터가 없어요.
+              </Text>
+            </View>
+          )}
 
           {loading ? (
             <View style={styles.loadingContainer}>
@@ -2412,68 +2496,138 @@ const AnalysisScreen = ({ navigation }: any) => {
           <Text style={styles.sectionTitle}>식단 분석</Text>
 
           {/* 식단 주간 그래프 */}
-          <View style={styles.weeklyGraphContainer}>
-            <Text style={styles.graphTitle}>주간 식단 분석</Text>
-            {nutritionGraphLoading ? (
-              <View style={styles.weeklyGraphPlaceholder}>
-                <ActivityIndicator size="small" color="#d6ff4b" />
-                <Text style={styles.graphPlaceholderText}>
-                  그래프를 불러오는 중...
-                </Text>
-              </View>
-            ) : nutritionGraphData.length > 0 ? (
-              <View style={styles.chartContainer}>
+          {nutritionGraphLoading ? (
+            <View style={styles.weeklyGraphPlaceholder}>
+              <ActivityIndicator size="small" color="#d6ff4b" />
+              <Text style={styles.graphPlaceholderText}>
+                그래프를 불러오는 중...
+              </Text>
+            </View>
+          ) : nutritionGraphData.length > 0 ? (
+            <>
+              {/* 주간 평균 칼로리 */}
+              <View style={styles.weeklyGraphCard}>
+                <Text style={styles.weeklyGraphCardTitle}>주간 평균 칼로리(kcal)</Text>
                 <LineChart
                   data={{
-                    labels: nutritionGraphData.map((item, index) => {
-                      // 주차 라벨 생성 (예: "1주", "2주", ...)
-                      return `${index + 1}주`;
+                    labels: nutritionGraphData.map((item: any, index: number) => {
+                      // 2주마다 또는 첫 번째, 마지막만 표시
+                      if (nutritionGraphData.length <= 4) {
+                        if (item.week_start && item.week_end) {
+                          return `${item.week_start.slice(5).replace(/-/g, ".")}~${item.week_end.slice(5).replace(/-/g, ".")}`;
+                        }
+                        return "";
+                      }
+                      // 데이터가 많으면 간격을 두고 표시
+                      const step = Math.ceil(nutritionGraphData.length / 4);
+                      if (index % step === 0 || index === nutritionGraphData.length - 1) {
+                        if (item.week_start && item.week_end) {
+                          return `${item.week_start.slice(5).replace(/-/g, ".")}~${item.week_end.slice(5).replace(/-/g, ".")}`;
+                        }
+                        return "";
+                      }
+                      return "";
                     }),
                     datasets: [
                       {
-                        data: nutritionGraphData.map((item) => {
-                          // 식단 관련 데이터 추출 (예: 칼로리, 탄수화물 등)
-                          // API 응답 구조에 따라 필드명 조정 필요
-                          return Number(item.calories || item.total || item.value || 0);
+                        data: nutritionGraphData.map((item: any) => {
+                          return Number(item.nutrition_avg?.kcal ?? 0);
                         }),
-                        color: (opacity = 1) => `rgba(227, 255, 124, ${opacity})`,
-                        strokeWidth: 3,
+                        color: (opacity = 1) => `rgba(200, 255, 61, ${opacity})`,
+                        strokeWidth: 2,
                       },
                     ],
                   }}
-                  width={Math.min(Dimensions.get("window").width - 80, 320)}
-                  height={220}
+                  width={Dimensions.get("window").width - 100}
+                  height={160}
                   chartConfig={{
-                    backgroundColor: "#1a1a1a",
-                    backgroundGradientFrom: "#1a1a1a",
-                    backgroundGradientTo: "#1a1a1a",
+                    backgroundGradientFrom: "#111111",
+                    backgroundGradientTo: "#111111",
                     decimalPlaces: 0,
-                    color: (opacity = 1) => `rgba(227, 255, 124, ${opacity})`,
-                    labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-                    style: {
-                      borderRadius: 16,
-                    },
+                    color: (opacity = 1) => `rgba(200, 255, 61, ${opacity})`,
+                    labelColor: (opacity = 1) => `rgba(220, 220, 220, ${opacity})`,
                     propsForDots: {
-                      r: "6",
+                      r: "4",
                       strokeWidth: "2",
-                      stroke: "#e3ff7c",
+                      stroke: "#111111",
+                    },
+                    propsForLabels: {
+                      fontSize: 9,
                     },
                   }}
                   bezier
+                  fromZero
                   style={{
-                    marginVertical: 8,
-                    borderRadius: 16,
+                    borderRadius: 12,
                   }}
                 />
               </View>
-            ) : (
-              <View style={styles.weeklyGraphPlaceholder}>
-                <Text style={styles.graphPlaceholderText}>
-                  데이터가 없습니다.
-                </Text>
+
+              {/* 주간 평균 단백질 */}
+              <View style={styles.weeklyGraphCard}>
+                <Text style={styles.weeklyGraphCardTitle}>주간 평균 단백질(g)</Text>
+                <LineChart
+                  data={{
+                    labels: nutritionGraphData.map((item: any, index: number) => {
+                      // 2주마다 또는 첫 번째, 마지막만 표시
+                      if (nutritionGraphData.length <= 4) {
+                        if (item.week_start && item.week_end) {
+                          return `${item.week_start.slice(5).replace(/-/g, ".")}~${item.week_end.slice(5).replace(/-/g, ".")}`;
+                        }
+                        return "";
+                      }
+                      // 데이터가 많으면 간격을 두고 표시
+                      const step = Math.ceil(nutritionGraphData.length / 4);
+                      if (index % step === 0 || index === nutritionGraphData.length - 1) {
+                        if (item.week_start && item.week_end) {
+                          return `${item.week_start.slice(5).replace(/-/g, ".")}~${item.week_end.slice(5).replace(/-/g, ".")}`;
+                        }
+                        return "";
+                      }
+                      return "";
+                    }),
+                    datasets: [
+                      {
+                        data: nutritionGraphData.map((item: any) => {
+                          return Number(item.nutrition_avg?.protein ?? 0);
+                        }),
+                        color: (opacity = 1) => `rgba(200, 255, 61, ${opacity})`,
+                        strokeWidth: 2,
+                      },
+                    ],
+                  }}
+                  width={Dimensions.get("window").width - 100}
+                  height={160}
+                  chartConfig={{
+                    backgroundGradientFrom: "#111111",
+                    backgroundGradientTo: "#111111",
+                    decimalPlaces: 0,
+                    color: (opacity = 1) => `rgba(200, 255, 61, ${opacity})`,
+                    labelColor: (opacity = 1) => `rgba(220, 220, 220, ${opacity})`,
+                    propsForDots: {
+                      r: "4",
+                      strokeWidth: "2",
+                      stroke: "#111111",
+                    },
+                    propsForLabels: {
+                      fontSize: 9,
+                    },
+                  }}
+                  bezier
+                  fromZero
+                  style={{
+                    borderRadius: 12,
+                  }}
+                />
               </View>
-            )}
-          </View>
+            </>
+          ) : (
+            <View style={styles.weeklyGraphPlaceholder}>
+              <Text style={styles.graphPlaceholderText}>
+                표시할 주간 데이터가 없어요.
+              </Text>
+            </View>
+          )}
 
           {mealLoading ? (
             <View style={styles.mealLoadingContainer}>
@@ -3168,6 +3322,18 @@ const styles = StyleSheet.create({
     color: "#888888",
     marginTop: 4,
   },
+  weeklyGraphCard: {
+    backgroundColor: "#1A1A1A",
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 10,
+  },
+  weeklyGraphCardTitle: {
+    color: "#EDEDED",
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 6,
+  },
   weeklyGraphContainer: {
     backgroundColor: "#1e1e1e",
     borderRadius: 12,
@@ -3256,6 +3422,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingHorizontal: 20,
     overflow: "hidden",
+    paddingBottom: 10,
   },
   weeklyGraphPlaceholder: {
     width: "100%",
