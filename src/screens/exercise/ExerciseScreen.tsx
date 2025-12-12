@@ -331,11 +331,12 @@ const ExerciseScreen = ({ navigation }: any) => {
       const resolvedTitle =
         activityTitle || groupInfoFromSaved?.title || "운동 기록";
 
-      // saveTitle을 가진 활동들은 saveTitle 기준으로 그룹화 (우선순위 높음)
+      // saveTitle을 가진 활동들은 saveTitle 기준으로 그룹화 (최우선순위)
       // 같은 saveTitle을 가진 운동들은 하나의 그룹으로 묶임
+      // saveTitle이 있으면 무조건 saveTitle로 그룹화 (groupKey 무시)
       const bucketKey =
-        (activity.groupKey ? `group:${activity.groupKey}` : null) ||
         (normalizedActivityTitle ? `title:${normalizedActivityTitle}` : null) ||
+        (activity.groupKey ? `group:${activity.groupKey}` : null) ||
         (hasServerGroup && groupInfoFromSaved?.key
           ? `saved:${groupInfoFromSaved.key}`
           : null) ||
@@ -1180,10 +1181,30 @@ const ExerciseScreen = ({ navigation }: any) => {
           });
         });
 
+        // 서버에서 가져온 그룹의 제목들 수집 (어떤 제목들이 서버에 있는지 확인)
+        const serverTitles = new Set<string>();
+        mergedGroups.forEach((group) => {
+          const normalizedTitle = (group.title || "").trim().toLowerCase();
+          if (normalizedTitle) {
+            serverTitles.add(normalizedTitle);
+          }
+        });
+
+        // 기존 allActivities에서 이미 존재하는 활동의 키 수집 (중복 방지용)
+        const existingActivityKeys = new Set<string>();
+        prev.forEach((activity) => {
+          if (activity.date === currentDateStr && activity.sessionId && activity.name) {
+            const key = `${activity.sessionId}__${activity.name}`;
+            existingActivityKeys.add(key);
+          }
+        });
+
         // 기존 allActivities에서:
-        // 1. 현재 날짜의 saveTitle이 있는 활동은 모두 제거 (서버 데이터로 대체)
-        // 2. 현재 날짜의 sessionId가 서버에 있는 활동은 제거 (서버 데이터로 대체)
-        // 3. 다른 날짜의 활동은 유지
+        // 1. 다른 날짜의 활동은 유지
+        // 2. 현재 날짜의 saveTitle이 있고 sessionId가 있는 활동 중:
+        //    - 서버에 같은 제목이 있으면 유지 (같은 제목으로 저장된 운동)
+        //    - 서버에 같은 제목이 없으면 제거 (다른 제목으로 새로 저장되었으므로)
+        // 3. 현재 날짜의 sessionId가 서버에 있지만 기존에 saveTitle이 없는 활동은 제거 (서버 데이터로 대체)
         // 4. 현재 날짜의 saveTitle이 없고 sessionId도 서버에 없는 활동은 유지 (아직 저장되지 않은 활동)
         const filteredPrev = prev.filter((activity) => {
           // 다른 날짜의 활동은 유지
@@ -1191,8 +1212,14 @@ const ExerciseScreen = ({ navigation }: any) => {
             return true;
           }
           
-          // saveTitle이 있으면 서버 데이터로 대체되므로 제거
-          if (activity.saveTitle) {
+          // saveTitle이 있고 sessionId가 있는 경우
+          if (activity.saveTitle && activity.sessionId) {
+            const normalizedActivityTitle = activity.saveTitle.trim().toLowerCase();
+            // 서버에 같은 제목이 있으면 유지 (같은 제목으로 저장된 운동)
+            if (serverTitles.has(normalizedActivityTitle)) {
+              return true;
+            }
+            // 서버에 같은 제목이 없으면 제거 (다른 제목으로 새로 저장되었으므로)
             return false;
           }
           
@@ -1213,15 +1240,85 @@ const ExerciseScreen = ({ navigation }: any) => {
           return true;
         });
         
-        // 서버 데이터 추가
-        const result = [...filteredPrev, ...newActivities];
+        // 서버 데이터에서 이미 존재하는 활동은 제외 (중복 방지)
+        const newServerActivities = newActivities.filter((activity) => {
+          if (!activity.sessionId || !activity.name) return true;
+          const key = `${activity.sessionId}__${activity.name}`;
+          // 이미 filteredPrev에 존재하는 활동은 제외
+          return !existingActivityKeys.has(key);
+        });
+        
+        // 서버 데이터 추가 (중복 제거된 것만)
+        let result = [...filteredPrev, ...newServerActivities];
+        
+        // 같은 날짜, 같은 saveTitle, 같은 운동명을 가진 활동들을 하나로 합치기
+        // 단, 저장된 운동(saveTitle이 있고 sessionId가 있는)은 합치지 않음 (서버 데이터로만 업데이트)
+        const mergedMap = new Map<string, Activity>();
+        
+        result.forEach((activity) => {
+          if (!activity.name || !activity.date) {
+            // 이름이나 날짜가 없으면 그대로 추가
+            const key = `single_${Date.now()}_${Math.random()}`;
+            mergedMap.set(key, activity);
+            return;
+          }
+          
+          // 저장된 운동(saveTitle + sessionId)은 합치지 않고 그대로 유지
+          if (activity.saveTitle && activity.sessionId) {
+            // 저장된 운동은 고유 키로 추가 (합치지 않음)
+            const savedKey = `${activity.date}__${activity.saveTitle}__${activity.sessionId}__${activity.name}`;
+            mergedMap.set(savedKey, activity);
+            return;
+          }
+          
+          // 저장되지 않은 운동만 합치기
+          const mergeKey = `${activity.date}__${activity.saveTitle || ""}__${activity.name}`;
+          
+          const existing = mergedMap.get(mergeKey);
+          if (existing) {
+            // 저장된 운동이면 합치지 않음
+            if (existing.saveTitle && existing.sessionId) {
+              mergedMap.set(mergeKey, activity); // 새 것으로 교체
+              return;
+            }
+            
+            // 기존 활동과 합치기: 세트 수 합치기 (저장되지 않은 운동만)
+            const existingSets = existing.sets || [];
+            const newSets = activity.sets || [];
+            
+            // 세트를 합치고 정렬
+            const mergedSets = [...existingSets, ...newSets].sort((a, b) => {
+              const orderA = a.order || 0;
+              const orderB = b.order || 0;
+              return orderA - orderB;
+            });
+            
+            // details 업데이트: buildDetailsFromSets 사용하여 "20kg 15회 3세트" 형식으로 표시
+            const mergedDetails = buildDetailsFromSets(mergedSets);
+            
+            mergedMap.set(mergeKey, {
+              ...existing,
+              sets: mergedSets,
+              details: mergedDetails,
+              // 가장 최근 시간 사용
+              time: activity.time || existing.time,
+            });
+          } else {
+            mergedMap.set(mergeKey, activity);
+          }
+        });
+        
+        // Map을 배열로 변환
+        result = Array.from(mergedMap.values());
         
         console.log("[EXERCISE][SAVED] 저장된 운동 기록 재구성:", {
           prevCount: prev.length,
           filteredPrevCount: filteredPrev.length,
           newCount: newActivities.length,
+          newServerActivitiesCount: newServerActivities.length,
           resultCount: result.length,
           removedCount: prev.length - filteredPrev.length,
+          duplicateRemoved: filteredPrev.length + newServerActivities.length - result.length,
           activities: newActivities.map((a) => ({
             name: a.name,
             sessionId: a.sessionId,
@@ -2570,6 +2667,15 @@ const ExerciseScreen = ({ navigation }: any) => {
 
   //클릭 시 찾아놓은 이미지를 합쳐서 모달에 전달
   const handleExerciseClick = (exercise: Activity) => {
+    // 저장된 운동(saveTitle이 있는)은 클릭해도 모달을 열지 않음 (완료 상태로 유지)
+    if (exercise.saveTitle && exercise.saveTitle.trim() !== "") {
+      console.log("[EXERCISE] 저장된 운동은 클릭 불가:", {
+        name: exercise.name,
+        saveTitle: exercise.saveTitle,
+      });
+      return;
+    }
+    
     const isCompleted = isActivityFullyCompleted(exercise);
     setModalMode("edit");
     setExerciseSequence(workoutActivities);
@@ -3647,6 +3753,8 @@ const ExerciseScreen = ({ navigation }: any) => {
                                 showCompletedVisuals &&
                                   styles.logDetailsCompleted,
                               ]}
+                              numberOfLines={1}
+                              ellipsizeMode="tail"
                             >
                               {detailText}
                             </Text>
