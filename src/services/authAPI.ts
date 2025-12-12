@@ -717,23 +717,23 @@ export const authAPI = {
   kakaoLogin: async (
     code: string
   ): Promise<{
-    success: boolean;
-    message: string;
-    accessToken?: string;
-    refreshToken?: string;
-    tokenType?: string;
-    expiresIn?: number;
-    membershipType?: "FREE" | "PREMIUM";
+    accessToken: string;
+    refreshToken: string;
+    userId: number;
+    nickname: string;
+    profileImageUrl: string;
+    newUser: boolean;
+    onboarded: boolean;
   }> => {
     try {
       const response = await request<{
-        success: boolean;
-        message: string;
-        accessToken?: string;
-        refreshToken?: string;
-        tokenType?: string;
-        expiresIn?: number;
-        membershipType?: "FREE" | "PREMIUM";
+        accessToken: string;
+        refreshToken: string;
+        userId: number;
+        nickname: string;
+        profileImageUrl: string;
+        newUser: boolean;
+        onboarded: boolean;
       }>("/api/auth/kakao/login", {
         method: "POST",
         body: JSON.stringify({ code }),
@@ -742,10 +742,16 @@ export const authAPI = {
       if (response.accessToken) {
         await AsyncStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken);
 
+        // userId 저장
+        if (response.userId) {
+          await AsyncStorage.setItem("userId", String(response.userId));
+          console.log("[AUTH] 카카오 로그인 - userId 저장 완료:", response.userId);
+        }
+
+        // JWT에서도 userId 추출 시도
         const payload = decodeJWT(response.accessToken);
-        if (payload && payload.userPk) {
+        if (payload && payload.userPk && !response.userId) {
           await AsyncStorage.setItem("userId", String(payload.userPk));
-          console.log("[AUTH] 카카오 로그인 - userId 저장 완료:", payload.userPk);
         }
       }
 
@@ -753,15 +759,82 @@ export const authAPI = {
         await AsyncStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken);
       }
 
-      if (response.membershipType) {
-        await AsyncStorage.setItem("membershipType", response.membershipType);
-      } else {
-        await AsyncStorage.setItem("membershipType", "FREE");
-      }
+      // membershipType은 기본값으로 설정 (백엔드 응답에 없음)
+      await AsyncStorage.setItem("membershipType", "FREE");
 
       return response;
     } catch (error: any) {
       console.error("[AUTH] 카카오 로그인 실패:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * 카카오 로그인 URL 가져오기
+   * @returns 카카오 로그인 URL
+   */
+  getKakaoLoginUrl: async (): Promise<{ url: string }> => {
+    return request<{ url: string }>("/api/auth/kakao/login-url", {
+      method: "GET",
+    });
+  },
+
+  /**
+   * 카카오 로그아웃
+   */
+  kakaoLogout: async (): Promise<{ message: string }> => {
+    try {
+      const response = await request<{ message: string }>("/api/auth/kakao/logout", {
+        method: "POST",
+      });
+      return response;
+    } catch (error: any) {
+      console.error("[AUTH] 카카오 로그아웃 실패:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * 카카오 연결 해제
+   */
+  kakaoUnlink: async (): Promise<{ message: string }> => {
+    try {
+      const response = await request<{ message: string }>("/api/auth/kakao/unlink", {
+        method: "DELETE",
+      });
+      return response;
+    } catch (error: any) {
+      console.error("[AUTH] 카카오 연결 해제 실패:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * 카카오 로그인 후 온보딩 데이터 제출
+   * @param onboardingData 온보딩 정보
+   * @returns 성공 여부
+   */
+  submitKakaoOnboarding: async (onboardingData: {
+    gender: "M" | "F";
+    height: number;
+    weight: number;
+    weightGoal: number;
+    healthGoal: string;
+    workoutDaysPerWeek: string;
+    experienceLevel?: string;
+    fitnessConcerns?: string;
+  }): Promise<{ success: boolean; message: string }> => {
+    try {
+      const response = await request<{ success: boolean; message: string }>(
+        "/api/auth/kakao/onboarding",
+        {
+          method: "POST",
+          body: JSON.stringify(onboardingData),
+        }
+      );
+      return response;
+    } catch (error: any) {
+      console.error("[AUTH] 카카오 온보딩 데이터 제출 실패:", error);
       throw error;
     }
   },
