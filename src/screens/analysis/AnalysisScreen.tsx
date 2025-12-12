@@ -1793,28 +1793,15 @@ const AnalysisScreen = ({ navigation }: any) => {
     setLatestInBodyDate(null);
   }, [userId, userIdLoaded]);
 
-  // userId가 로드된 후 그래프 로드 (숫자가 입력된 경우에만)
+  // userId가 로드된 후 그래프 로드 (항상 로드)
   useEffect(() => {
     if (userIdLoaded && userId) {
-      // 숫자가 입력되어 있을 때만 그래프 로드
-      if (nutritionWeeks && nutritionWeeks.trim() !== "") {
-        const nutritionWeeksNum = parseInt(nutritionWeeks, 10);
-        if (nutritionWeeksNum >= 1 && nutritionWeeksNum <= 52) {
-          loadNutritionWeeklyGraph(nutritionWeeksNum);
-        }
-      }
-      if (exerciseWeeks && exerciseWeeks.trim() !== "") {
-        const exerciseWeeksNum = parseInt(exerciseWeeks, 10);
-        if (exerciseWeeksNum >= 1 && exerciseWeeksNum <= 52) {
-          loadExerciseWeeklyGraph(exerciseWeeksNum);
-        }
-      }
+      loadNutritionWeeklyGraph(4);
+      loadExerciseWeeklyGraph(4);
     }
   }, [
     userIdLoaded,
     userId,
-    nutritionWeeks,
-    exerciseWeeks,
     loadNutritionWeeklyGraph,
     loadExerciseWeeklyGraph,
   ]);
@@ -2233,133 +2220,68 @@ const AnalysisScreen = ({ navigation }: any) => {
           </Text>
 
           {/* 운동 주간 그래프 */}
-          {exerciseWeeks && exerciseWeeks.trim() !== "" ? (
-            <View style={styles.weeklyGraphContainer}>
-              <View style={styles.graphHeader}>
-                <Text style={styles.graphTitle}>주간 운동 분석</Text>
-                <View style={styles.weeksInputContainer}>
-                  <Text style={styles.weeksLabel}>주:</Text>
-                  <TextInput
-                    style={styles.weeksInput}
-                    value={exerciseWeeks}
-                    editable={isPremium}
-                    onChangeText={(text) => {
-                      // 숫자만 입력 허용
-                      const numericValue = text.replace(/[^0-9]/g, "");
-                      if (
-                        numericValue === "" ||
-                        (parseInt(numericValue, 10) >= 1 &&
-                          parseInt(numericValue, 10) <= 52)
-                      ) {
-                        setExerciseWeeks(numericValue);
-                        if (numericValue && userIdLoaded && userId) {
-                          const weeks = parseInt(numericValue, 10) || 3;
-                          loadExerciseWeeklyGraph(weeks);
-                        } else if (!numericValue) {
-                          // 입력이 비어있으면 그래프 데이터 초기화
-                          setExerciseGraphData([]);
-                        }
-                      }
-                    }}
-                    keyboardType="numeric"
-                    placeholder="숫자를 입력해보세요"
-                    placeholderTextColor="#666666"
-                    maxLength={2}
-                  />
-                </View>
+          <View style={styles.weeklyGraphContainer}>
+            <Text style={styles.graphTitle}>주간 운동 분석</Text>
+            {exerciseGraphLoading ? (
+              <View style={styles.weeklyGraphPlaceholder}>
+                <ActivityIndicator size="small" color="#d6ff4b" />
+                <Text style={styles.graphPlaceholderText}>
+                  그래프를 불러오는 중...
+                </Text>
               </View>
-              {exerciseGraphLoading ? (
-                <View style={styles.weeklyGraphPlaceholder}>
-                  <ActivityIndicator size="small" color="#d6ff4b" />
-                  <Text style={styles.graphPlaceholderText}>
-                    그래프를 불러오는 중...
-                  </Text>
-                </View>
-              ) : exerciseGraphData.length > 0 ? (
-                <View style={styles.chartContainer}>
-                  <LineChart
-                    data={{
-                      labels: exerciseGraphData.map((item, index) => {
-                        // 주차 라벨 생성 (예: "1주", "2주", ...)
-                        return `${index + 1}주`;
-                      }),
-                      datasets: [
-                        {
-                          data: exerciseGraphData.map((item) => {
-                            // 운동 관련 데이터 추출 (예: 운동 시간, 횟수 등)
-                            // API 응답 구조에 따라 필드명 조정 필요
-                            return Number(item.exercise_time || item.duration || item.total || item.value || 0);
-                          }),
-                          color: (opacity = 1) => `rgba(227, 255, 124, ${opacity})`,
-                          strokeWidth: 3,
-                        },
-                      ],
-                    }}
-                    width={Dimensions.get("window").width - 80}
-                    height={220}
-                    chartConfig={{
-                      backgroundColor: "#1a1a1a",
-                      backgroundGradientFrom: "#1a1a1a",
-                      backgroundGradientTo: "#1a1a1a",
-                      decimalPlaces: 0,
-                      color: (opacity = 1) => `rgba(227, 255, 124, ${opacity})`,
-                      labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-                      style: {
-                        borderRadius: 16,
+            ) : exerciseGraphData.length > 0 ? (
+              <View style={styles.chartContainer}>
+                <LineChart
+                  data={{
+                    labels: exerciseGraphData.map((item, index) => {
+                      // 주차 라벨 생성 (예: "1주", "2주", ...)
+                      return `${index + 1}주`;
+                    }),
+                    datasets: [
+                      {
+                        data: exerciseGraphData.map((item) => {
+                          // 운동 관련 데이터 추출 (예: 운동 시간, 횟수 등)
+                          // API 응답 구조에 따라 필드명 조정 필요
+                          return Number(item.exercise_time || item.duration || item.total || item.value || 0);
+                        }),
+                        color: (opacity = 1) => `rgba(227, 255, 124, ${opacity})`,
+                        strokeWidth: 3,
                       },
-                      propsForDots: {
-                        r: "6",
-                        strokeWidth: "2",
-                        stroke: "#e3ff7c",
-                      },
-                    }}
-                    bezier
-                    style={{
-                      marginVertical: 8,
-                      borderRadius: 16,
-                    }}
-                  />
-                </View>
-              ) : (
-                <View style={styles.weeklyGraphPlaceholder}>
-                  <Text style={styles.graphPlaceholderText}>
-                    데이터가 없습니다.
-                  </Text>
-                </View>
-              )}
-            </View>
-          ) : (
-            <View style={styles.weeksInputOnlyContainer}>
-              <Text style={styles.weeksInputLabel}>주간 운동 분석</Text>
-              <View style={styles.weeksInputRow}>
-                <Text style={styles.weeksLabel}>주:</Text>
-                <TextInput
-                  style={styles.weeksInput}
-                  value={exerciseWeeks}
-                  editable={isPremium}
-                  onChangeText={(text) => {
-                    // 숫자만 입력 허용
-                    const numericValue = text.replace(/[^0-9]/g, "");
-                    if (
-                      numericValue === "" ||
-                      (parseInt(numericValue, 10) >= 1 &&
-                        parseInt(numericValue, 10) <= 52)
-                    ) {
-                      setExerciseWeeks(numericValue);
-                      if (numericValue && userIdLoaded && userId) {
-                        const weeks = parseInt(numericValue, 10) || 3;
-                        loadExerciseWeeklyGraph(weeks);
-                      }
-                    }
+                    ],
                   }}
-                  keyboardType="numeric"
-                  placeholder="숫자를 입력해보세요"
-                  placeholderTextColor="#666666"
-                  maxLength={2}
+                  width={Math.min(Dimensions.get("window").width - 80, 320)}
+                  height={220}
+                  chartConfig={{
+                    backgroundColor: "#1a1a1a",
+                    backgroundGradientFrom: "#1a1a1a",
+                    backgroundGradientTo: "#1a1a1a",
+                    decimalPlaces: 0,
+                    color: (opacity = 1) => `rgba(227, 255, 124, ${opacity})`,
+                    labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+                    style: {
+                      borderRadius: 16,
+                    },
+                    propsForDots: {
+                      r: "6",
+                      strokeWidth: "2",
+                      stroke: "#e3ff7c",
+                    },
+                  }}
+                  bezier
+                  style={{
+                    marginVertical: 8,
+                    borderRadius: 16,
+                  }}
                 />
               </View>
-            </View>
-          )}
+            ) : (
+              <View style={styles.weeklyGraphPlaceholder}>
+                <Text style={styles.graphPlaceholderText}>
+                  데이터가 없습니다.
+                </Text>
+              </View>
+            )}
+          </View>
 
           {loading ? (
             <View style={styles.loadingContainer}>
@@ -2490,131 +2412,68 @@ const AnalysisScreen = ({ navigation }: any) => {
           <Text style={styles.sectionTitle}>식단 분석</Text>
 
           {/* 식단 주간 그래프 */}
-          {nutritionWeeks && nutritionWeeks.trim() !== "" ? (
-            <View style={styles.weeklyGraphContainer}>
-              <View style={styles.graphHeader}>
-                <Text style={styles.graphTitle}>주간 식단 분석</Text>
-                <View style={styles.weeksInputContainer}>
-                  <Text style={styles.weeksLabel}>주:</Text>
-                  <TextInput
-                    style={styles.weeksInput}
-                    value={nutritionWeeks}
-                    onChangeText={(text) => {
-                      // 숫자만 입력 허용
-                      const numericValue = text.replace(/[^0-9]/g, "");
-                      if (
-                        numericValue === "" ||
-                        (parseInt(numericValue, 10) >= 1 &&
-                          parseInt(numericValue, 10) <= 52)
-                      ) {
-                        setNutritionWeeks(numericValue);
-                        if (numericValue && userIdLoaded && userId) {
-                          const weeks = parseInt(numericValue, 10) || 3;
-                          loadNutritionWeeklyGraph(weeks);
-                        } else if (!numericValue) {
-                          // 입력이 비어있으면 그래프 URL 초기화
-                          setNutritionGraphUrl(null);
-                        }
-                      }
-                    }}
-                    keyboardType="numeric"
-                    placeholder="숫자를 입력해보세요"
-                    placeholderTextColor="#666666"
-                    maxLength={2}
-                  />
-                </View>
+          <View style={styles.weeklyGraphContainer}>
+            <Text style={styles.graphTitle}>주간 식단 분석</Text>
+            {nutritionGraphLoading ? (
+              <View style={styles.weeklyGraphPlaceholder}>
+                <ActivityIndicator size="small" color="#d6ff4b" />
+                <Text style={styles.graphPlaceholderText}>
+                  그래프를 불러오는 중...
+                </Text>
               </View>
-              {nutritionGraphLoading ? (
-                <View style={styles.weeklyGraphPlaceholder}>
-                  <ActivityIndicator size="small" color="#d6ff4b" />
-                  <Text style={styles.graphPlaceholderText}>
-                    그래프를 불러오는 중...
-                  </Text>
-                </View>
-              ) : nutritionGraphData.length > 0 ? (
-                <View style={styles.chartContainer}>
-                  <LineChart
-                    data={{
-                      labels: nutritionGraphData.map((item, index) => {
-                        // 주차 라벨 생성 (예: "1주", "2주", ...)
-                        return `${index + 1}주`;
-                      }),
-                      datasets: [
-                        {
-                          data: nutritionGraphData.map((item) => {
-                            // 식단 관련 데이터 추출 (예: 칼로리, 탄수화물 등)
-                            // API 응답 구조에 따라 필드명 조정 필요
-                            return Number(item.calories || item.total || item.value || 0);
-                          }),
-                          color: (opacity = 1) => `rgba(227, 255, 124, ${opacity})`,
-                          strokeWidth: 3,
-                        },
-                      ],
-                    }}
-                    width={Dimensions.get("window").width - 80}
-                    height={220}
-                    chartConfig={{
-                      backgroundColor: "#1a1a1a",
-                      backgroundGradientFrom: "#1a1a1a",
-                      backgroundGradientTo: "#1a1a1a",
-                      decimalPlaces: 0,
-                      color: (opacity = 1) => `rgba(227, 255, 124, ${opacity})`,
-                      labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-                      style: {
-                        borderRadius: 16,
+            ) : nutritionGraphData.length > 0 ? (
+              <View style={styles.chartContainer}>
+                <LineChart
+                  data={{
+                    labels: nutritionGraphData.map((item, index) => {
+                      // 주차 라벨 생성 (예: "1주", "2주", ...)
+                      return `${index + 1}주`;
+                    }),
+                    datasets: [
+                      {
+                        data: nutritionGraphData.map((item) => {
+                          // 식단 관련 데이터 추출 (예: 칼로리, 탄수화물 등)
+                          // API 응답 구조에 따라 필드명 조정 필요
+                          return Number(item.calories || item.total || item.value || 0);
+                        }),
+                        color: (opacity = 1) => `rgba(227, 255, 124, ${opacity})`,
+                        strokeWidth: 3,
                       },
-                      propsForDots: {
-                        r: "6",
-                        strokeWidth: "2",
-                        stroke: "#e3ff7c",
-                      },
-                    }}
-                    bezier
-                    style={{
-                      marginVertical: 8,
-                      borderRadius: 16,
-                    }}
-                  />
-                </View>
-              ) : (
-                <View style={styles.weeklyGraphPlaceholder}>
-                  <Text style={styles.graphPlaceholderText}>
-                    데이터가 없습니다.
-                  </Text>
-                </View>
-              )}
-            </View>
-          ) : (
-            <View style={styles.weeksInputOnlyContainer}>
-              <Text style={styles.weeksInputLabel}>주간 식단 분석</Text>
-              <View style={styles.weeksInputRow}>
-                <Text style={styles.weeksLabel}>주:</Text>
-                <TextInput
-                  style={styles.weeksInput}
-                  value={nutritionWeeks}
-                  onChangeText={(text) => {
-                    // 숫자만 입력 허용
-                    const numericValue = text.replace(/[^0-9]/g, "");
-                    if (
-                      numericValue === "" ||
-                      (parseInt(numericValue, 10) >= 1 &&
-                        parseInt(numericValue, 10) <= 52)
-                    ) {
-                      setNutritionWeeks(numericValue);
-                      if (numericValue && userIdLoaded && userId) {
-                        const weeks = parseInt(numericValue, 10) || 3;
-                        loadNutritionWeeklyGraph(weeks);
-                      }
-                    }
+                    ],
                   }}
-                  keyboardType="numeric"
-                  placeholder="숫자를 입력해보세요"
-                  placeholderTextColor="#666666"
-                  maxLength={2}
+                  width={Math.min(Dimensions.get("window").width - 80, 320)}
+                  height={220}
+                  chartConfig={{
+                    backgroundColor: "#1a1a1a",
+                    backgroundGradientFrom: "#1a1a1a",
+                    backgroundGradientTo: "#1a1a1a",
+                    decimalPlaces: 0,
+                    color: (opacity = 1) => `rgba(227, 255, 124, ${opacity})`,
+                    labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+                    style: {
+                      borderRadius: 16,
+                    },
+                    propsForDots: {
+                      r: "6",
+                      strokeWidth: "2",
+                      stroke: "#e3ff7c",
+                    },
+                  }}
+                  bezier
+                  style={{
+                    marginVertical: 8,
+                    borderRadius: 16,
+                  }}
                 />
               </View>
-            </View>
-          )}
+            ) : (
+              <View style={styles.weeklyGraphPlaceholder}>
+                <Text style={styles.graphPlaceholderText}>
+                  데이터가 없습니다.
+                </Text>
+              </View>
+            )}
+          </View>
 
           {mealLoading ? (
             <View style={styles.mealLoadingContainer}>
@@ -3395,7 +3254,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginTop: 8,
-    paddingHorizontal: 10,
+    paddingHorizontal: 20,
+    overflow: "hidden",
   },
   weeklyGraphPlaceholder: {
     width: "100%",
