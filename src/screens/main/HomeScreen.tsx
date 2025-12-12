@@ -26,6 +26,7 @@ import { getLatestInBody } from "../../utils/inbodyApi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ACCESS_TOKEN_KEY } from "../../services/apiConfig";
 import type { DailyProgressWeekItem, HomeResponse } from "../../types";
+import { eventBus } from "../../utils/eventBus";
 
 const HomeScreen = ({ navigation }: any) => {
   const { selectedDate, setSelectedDate } = useDate();
@@ -516,6 +517,19 @@ const HomeScreen = ({ navigation }: any) => {
 
     return unsubscribe;
   }, [navigation]);
+
+  // 운동 삭제 이벤트 리스너
+  useEffect(() => {
+    const unsubscribe = eventBus.on("workoutSessionDeleted", () => {
+      console.log("[HOME] 운동 삭제 이벤트 수신, 운동 시간/개수 새로고침");
+      // 삭제 후 운동 시간과 개수 다시 조회
+      loadTodayWorkoutTime();
+    });
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, []);
 
   const handleCalendarClick = () => {
     navigation.navigate("Calendar");
