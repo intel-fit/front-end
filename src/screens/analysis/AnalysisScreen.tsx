@@ -45,6 +45,8 @@ import {
 } from "../../services/apiConfig";
 import MacroDonut from "../../components/charts/MacroDonut";
 import { authAPI, healthScoreAPI, ScoreTrendItem } from "../../services";
+import { LineChart } from "react-native-chart-kit";
+import { Dimensions } from "react-native";
 import { getLatestInBody, InBodyPayload } from "../../utils/inbodyApi";
 import { eventBus } from "../../utils/eventBus";
 import { getMembershipType } from "../../utils/membership-utils";
@@ -250,14 +252,14 @@ const AnalysisScreen = ({ navigation }: any) => {
   >({});
 
   // 식단 그래프 state
-  const [nutritionGraphUrl, setNutritionGraphUrl] = useState<string | null>(
-    null
-  );
+  // 식단 그래프 state (새로운 API 사용)
+  const [nutritionGraphData, setNutritionGraphData] = useState<any[]>([]);
   const [nutritionGraphLoading, setNutritionGraphLoading] = useState(false);
   const [nutritionWeeks, setNutritionWeeks] = useState<string>("");
 
-  // 운동 그래프 state
-  const [exerciseGraphUrl, setExerciseGraphUrl] = useState<string | null>(null);
+  // 운동 그래프 state (새로운 API 사용)
+  const [exerciseGraphData, setExerciseGraphData] = useState<any[]>([]);
+  const [exerciseGraphLoading, setExerciseGraphLoading] = useState(false);
   const [exerciseWeeks, setExerciseWeeks] = useState<string>("");
 
   // 건강점수 state
@@ -1572,10 +1574,12 @@ const AnalysisScreen = ({ navigation }: any) => {
     }
   }, []);
 
-  // 식단 주간 그래프 로드 (초고속 렌더링)
+  // 식단 주간 그래프 로드 (새로운 API 사용)
   const loadNutritionWeeklyGraph = useCallback(async (weeks: number = 4) => {
     try {
-      // 1) aiUserId 구하기
+      setNutritionGraphLoading(true);
+      
+      // aiUserId 구하기
       let aiUserId: string | null = null;
       const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
       if (token) {
@@ -1603,51 +1607,41 @@ const AnalysisScreen = ({ navigation }: any) => {
           aiUserId = storedUserId;
         } else {
           console.warn("[ANALYSIS] 식단 그래프: aiUserId를 찾을 수 없음");
+          setNutritionGraphLoading(false);
           return;
         }
       }
 
-      // 2) 캐시 확인 (초고속 로딩)
-      const cacheKey = `nutrition_graph_${aiUserId}_${weeks}`;
-      const cachedUrl = await AsyncStorage.getItem(cacheKey);
-      if (cachedUrl) {
-        const cached = JSON.parse(cachedUrl);
-        const cacheTime = cached.timestamp || 0;
-        const now = Date.now();
-        // 캐시 유효기간: 1시간
-        if (now - cacheTime < 60 * 60 * 1000 && cached.url) {
-          // 캐시된 URL 즉시 사용 (로딩 상태 없이)
-          setNutritionGraphUrl(cached.url);
-          return;
-        }
+      // 새로운 API 호출: /analytics/weekly/{user_id}
+      const response = await requestAI<any>(
+        `/analytics/weekly/${aiUserId}`,
+        { method: "GET" }
+      );
+
+      if (__DEV__) {
+        console.log("[ANALYSIS] 식단 주간 그래프 API 응답:", response);
       }
 
-      // 3) API URL 생성 (image/png 반환) - 즉시 설정하여 빠른 렌더링
-      const url = `${AI_API_BASE_URL}/analytics/custom/weekly-graph/nutrition/${aiUserId}?weeks=${weeks}&_ts=${Date.now()}`;
-
-      // URL 즉시 설정 (로딩 상태 없이 바로 표시 시작)
-      setNutritionGraphUrl(url);
-
-      // 캐시 저장 (백그라운드)
-      AsyncStorage.setItem(
-        cacheKey,
-        JSON.stringify({
-          url: url,
-          timestamp: Date.now(),
-        })
-      ).catch(() => {}); // 캐시 실패는 무시
+      // API 응답 데이터를 배열로 변환
+      const weeklyData = Array.isArray(response) ? response : response?.data || response?.weekly_summary || [];
+      setNutritionGraphData(weeklyData);
     } catch (error: any) {
       console.error("[ANALYSIS] 식단 주간 그래프 로드 실패:", {
         message: error?.message,
         status: error?.response?.status,
       });
+      setNutritionGraphData([]);
+    } finally {
+      setNutritionGraphLoading(false);
     }
   }, []);
 
-  // 운동 주간 그래프 로드 (초고속 렌더링)
+  // 운동 주간 그래프 로드 (새로운 API 사용)
   const loadExerciseWeeklyGraph = useCallback(async (weeks: number = 4) => {
     try {
-      // 1) aiUserId 구하기
+      setExerciseGraphLoading(true);
+      
+      // aiUserId 구하기
       let aiUserId: string | null = null;
       const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
       if (token) {
@@ -1675,44 +1669,32 @@ const AnalysisScreen = ({ navigation }: any) => {
           aiUserId = storedUserId;
         } else {
           console.warn("[ANALYSIS] 운동 그래프: aiUserId를 찾을 수 없음");
+          setExerciseGraphLoading(false);
           return;
         }
       }
 
-      // 2) 캐시 확인 (초고속 로딩)
-      const cacheKey = `exercise_graph_${aiUserId}_${weeks}`;
-      const cachedUrl = await AsyncStorage.getItem(cacheKey);
-      if (cachedUrl) {
-        const cached = JSON.parse(cachedUrl);
-        const cacheTime = cached.timestamp || 0;
-        const now = Date.now();
-        // 캐시 유효기간: 1시간
-        if (now - cacheTime < 60 * 60 * 1000 && cached.url) {
-          // 캐시된 URL 즉시 사용 (로딩 상태 없이)
-          setExerciseGraphUrl(cached.url);
-          return;
-        }
+      // 새로운 API 호출: /analytics/weekly/{user_id}
+      const response = await requestAI<any>(
+        `/analytics/weekly/${aiUserId}`,
+        { method: "GET" }
+      );
+
+      if (__DEV__) {
+        console.log("[ANALYSIS] 운동 주간 그래프 API 응답:", response);
       }
 
-      // 3) API URL 생성 (image/png 반환) - 즉시 설정하여 빠른 렌더링
-      const url = `${AI_API_BASE_URL}/analytics/custom/weekly-graph/exercise/${aiUserId}?weeks=${weeks}&_ts=${Date.now()}`;
-
-      // URL 즉시 설정 (로딩 상태 없이 바로 표시 시작)
-      setExerciseGraphUrl(url);
-
-      // 캐시 저장 (백그라운드)
-      AsyncStorage.setItem(
-        cacheKey,
-        JSON.stringify({
-          url: url,
-          timestamp: Date.now(),
-        })
-      ).catch(() => {}); // 캐시 실패는 무시
+      // API 응답 데이터를 배열로 변환
+      const weeklyData = Array.isArray(response) ? response : response?.data || response?.weekly_summary || [];
+      setExerciseGraphData(weeklyData);
     } catch (error: any) {
       console.error("[ANALYSIS] 운동 주간 그래프 로드 실패:", {
         message: error?.message,
         status: error?.response?.status,
       });
+      setExerciseGraphData([]);
+    } finally {
+      setExerciseGraphLoading(false);
     }
   }, []);
 
@@ -2274,8 +2256,8 @@ const AnalysisScreen = ({ navigation }: any) => {
                           const weeks = parseInt(numericValue, 10) || 3;
                           loadExerciseWeeklyGraph(weeks);
                         } else if (!numericValue) {
-                          // 입력이 비어있으면 그래프 URL 초기화
-                          setExerciseGraphUrl(null);
+                          // 입력이 비어있으면 그래프 데이터 초기화
+                          setExerciseGraphData([]);
                         }
                       }
                     }}
@@ -2286,31 +2268,62 @@ const AnalysisScreen = ({ navigation }: any) => {
                   />
                 </View>
               </View>
-              {exerciseGraphUrl ? (
-                <View style={styles.graphImageWrapper}>
-                  <Image
-                    key={`exercise-graph-${exerciseGraphUrl}`}
-                    source={{ uri: exerciseGraphUrl }}
-                    style={styles.weeklyGraphImage}
-                    resizeMode="contain"
-                    accessibilityLabel="운동 주간 분석 그래프"
-                    cache="force-cache"
-                    onError={(e) => {
-                      console.error(
-                        "[ANALYSIS] 운동 그래프 이미지 로드 실패:",
+              {exerciseGraphLoading ? (
+                <View style={styles.weeklyGraphPlaceholder}>
+                  <ActivityIndicator size="small" color="#d6ff4b" />
+                  <Text style={styles.graphPlaceholderText}>
+                    그래프를 불러오는 중...
+                  </Text>
+                </View>
+              ) : exerciseGraphData.length > 0 ? (
+                <View style={styles.chartContainer}>
+                  <LineChart
+                    data={{
+                      labels: exerciseGraphData.map((item, index) => {
+                        // 주차 라벨 생성 (예: "1주", "2주", ...)
+                        return `${index + 1}주`;
+                      }),
+                      datasets: [
                         {
-                          error: e.nativeEvent.error,
-                          url: exerciseGraphUrl,
-                        }
-                      );
+                          data: exerciseGraphData.map((item) => {
+                            // 운동 관련 데이터 추출 (예: 운동 시간, 횟수 등)
+                            // API 응답 구조에 따라 필드명 조정 필요
+                            return Number(item.exercise_time || item.duration || item.total || item.value || 0);
+                          }),
+                          color: (opacity = 1) => `rgba(227, 255, 124, ${opacity})`,
+                          strokeWidth: 3,
+                        },
+                      ],
+                    }}
+                    width={Dimensions.get("window").width - 80}
+                    height={220}
+                    chartConfig={{
+                      backgroundColor: "#1a1a1a",
+                      backgroundGradientFrom: "#1a1a1a",
+                      backgroundGradientTo: "#1a1a1a",
+                      decimalPlaces: 0,
+                      color: (opacity = 1) => `rgba(227, 255, 124, ${opacity})`,
+                      labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+                      style: {
+                        borderRadius: 16,
+                      },
+                      propsForDots: {
+                        r: "6",
+                        strokeWidth: "2",
+                        stroke: "#e3ff7c",
+                      },
+                    }}
+                    bezier
+                    style={{
+                      marginVertical: 8,
+                      borderRadius: 16,
                     }}
                   />
                 </View>
               ) : (
                 <View style={styles.weeklyGraphPlaceholder}>
-                  <ActivityIndicator size="small" color="#d6ff4b" />
                   <Text style={styles.graphPlaceholderText}>
-                    그래프를 불러오는 중...
+                    데이터가 없습니다.
                   </Text>
                 </View>
               )}
@@ -2511,31 +2524,62 @@ const AnalysisScreen = ({ navigation }: any) => {
                   />
                 </View>
               </View>
-              {nutritionGraphUrl ? (
-                <View style={styles.graphImageWrapper}>
-                  <Image
-                    key={`nutrition-graph-${nutritionGraphUrl}`}
-                    source={{ uri: nutritionGraphUrl }}
-                    style={styles.weeklyGraphImage}
-                    resizeMode="contain"
-                    accessibilityLabel="식단 주간 분석 그래프"
-                    cache="force-cache"
-                    onError={(e) => {
-                      console.error(
-                        "[ANALYSIS] 식단 그래프 이미지 로드 실패:",
+              {nutritionGraphLoading ? (
+                <View style={styles.weeklyGraphPlaceholder}>
+                  <ActivityIndicator size="small" color="#d6ff4b" />
+                  <Text style={styles.graphPlaceholderText}>
+                    그래프를 불러오는 중...
+                  </Text>
+                </View>
+              ) : nutritionGraphData.length > 0 ? (
+                <View style={styles.chartContainer}>
+                  <LineChart
+                    data={{
+                      labels: nutritionGraphData.map((item, index) => {
+                        // 주차 라벨 생성 (예: "1주", "2주", ...)
+                        return `${index + 1}주`;
+                      }),
+                      datasets: [
                         {
-                          error: e.nativeEvent.error,
-                          url: nutritionGraphUrl,
-                        }
-                      );
+                          data: nutritionGraphData.map((item) => {
+                            // 식단 관련 데이터 추출 (예: 칼로리, 탄수화물 등)
+                            // API 응답 구조에 따라 필드명 조정 필요
+                            return Number(item.calories || item.total || item.value || 0);
+                          }),
+                          color: (opacity = 1) => `rgba(227, 255, 124, ${opacity})`,
+                          strokeWidth: 3,
+                        },
+                      ],
+                    }}
+                    width={Dimensions.get("window").width - 80}
+                    height={220}
+                    chartConfig={{
+                      backgroundColor: "#1a1a1a",
+                      backgroundGradientFrom: "#1a1a1a",
+                      backgroundGradientTo: "#1a1a1a",
+                      decimalPlaces: 0,
+                      color: (opacity = 1) => `rgba(227, 255, 124, ${opacity})`,
+                      labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+                      style: {
+                        borderRadius: 16,
+                      },
+                      propsForDots: {
+                        r: "6",
+                        strokeWidth: "2",
+                        stroke: "#e3ff7c",
+                      },
+                    }}
+                    bezier
+                    style={{
+                      marginVertical: 8,
+                      borderRadius: 16,
                     }}
                   />
                 </View>
               ) : (
                 <View style={styles.weeklyGraphPlaceholder}>
-                  <ActivityIndicator size="small" color="#d6ff4b" />
                   <Text style={styles.graphPlaceholderText}>
-                    그래프를 불러오는 중...
+                    데이터가 없습니다.
                   </Text>
                 </View>
               )}
@@ -3345,6 +3389,13 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 320,
     borderRadius: 8,
+  },
+  chartContainer: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+    paddingHorizontal: 10,
   },
   weeklyGraphPlaceholder: {
     width: "100%",
