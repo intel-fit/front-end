@@ -523,6 +523,7 @@ const ExerciseScreen = ({ navigation }: any) => {
   >([]);
   const [completionSummaryTitle, setCompletionSummaryTitle] = useState("");
   const [todayTotalWorkoutSeconds, setTodayTotalWorkoutSeconds] = useState(0);
+  const [workoutStartTime, setWorkoutStartTime] = useState<number | null>(null); // 운동 시작 시점 (초 단위)
   const [isSavingCompletionTitle, setIsSavingCompletionTitle] = useState(false);
   const [expandedSavedTitle, setExpandedSavedTitle] = useState<string | null>(
     null
@@ -965,14 +966,89 @@ const ExerciseScreen = ({ navigation }: any) => {
 
   // 오늘의 총 운동 시간 조회
   const loadTodayWorkoutTime = React.useCallback(async () => {
-    if (!userId) return;
+    console.log("[EXERCISE][TIME] loadTodayWorkoutTime 호출됨", { userId });
+    
+    let finalUserId: number | null = null;
+    
+    // 1. state의 userId를 숫자로 변환 시도
+    if (userId) {
+      const parsed = parseInt(userId, 10);
+      if (!isNaN(parsed)) {
+        finalUserId = parsed;
+        console.log("[EXERCISE][TIME] state userId를 숫자로 변환:", finalUserId);
+      }
+    }
+    
+    // 2. 숫자 변환 실패 시 AsyncStorage에서 가져오기
+    if (!finalUserId) {
+      const userIdStr = await AsyncStorage.getItem("userId");
+      console.log("[EXERCISE][TIME] AsyncStorage에서 가져온 userId:", userIdStr);
+      if (userIdStr && userIdStr.trim() !== "") {
+        const parsed = parseInt(userIdStr, 10);
+        if (!isNaN(parsed)) {
+          finalUserId = parsed;
+          console.log("[EXERCISE][TIME] AsyncStorage userId를 숫자로 변환:", finalUserId);
+        }
+      }
+    }
+    
+    // 3. 숫자 변환 실패 시 JWT에서 userPk 가져오기
+    if (!finalUserId) {
+      try {
+        const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+        if (token) {
+          const base64Url = token.split(".")[1];
+          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split("")
+              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+              .join("")
+          );
+          const payload = JSON.parse(jsonPayload);
+          console.log("[EXERCISE][TIME] JWT payload:", payload);
+          
+          // userPk를 우선 확인 (숫자 ID), 그 다음 userId, 마지막으로 sub
+          if (payload.userPk) {
+            const parsed = typeof payload.userPk === 'number' ? payload.userPk : parseInt(payload.userPk, 10);
+            if (!isNaN(parsed)) {
+              finalUserId = parsed;
+              console.log("[EXERCISE][TIME] JWT에서 userPk 추출:", finalUserId);
+            }
+          } else if (payload.userId) {
+            const parsed = typeof payload.userId === 'number' ? payload.userId : parseInt(payload.userId, 10);
+            if (!isNaN(parsed)) {
+              finalUserId = parsed;
+              console.log("[EXERCISE][TIME] JWT에서 userId 추출:", finalUserId);
+            }
+          } else if (payload.sub) {
+            const parsed = parseInt(payload.sub, 10);
+            if (!isNaN(parsed)) {
+              finalUserId = parsed;
+              console.log("[EXERCISE][TIME] JWT에서 sub 추출:", finalUserId);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[EXERCISE][TIME] JWT 디코딩 실패:", e);
+      }
+    }
+    
+    if (!finalUserId) {
+      console.log("[EXERCISE][TIME] userId를 찾을 수 없음, 함수 종료");
+      return;
+    }
+    
     try {
-      const userIdNum = parseInt(userId, 10);
-      if (isNaN(userIdNum)) return;
-      const response = await getTodayWorkoutTime(userIdNum);
+      console.log("[EXERCISE][TIME] getTodayWorkoutTime 호출 시작:", finalUserId);
+      const response = await getTodayWorkoutTime(finalUserId);
+      console.log("[EXERCISE][TIME] getTodayWorkoutTime 응답 받음:", {
+        totalSeconds: response.totalSeconds,
+        response,
+      });
       setTodayTotalWorkoutSeconds(response.totalSeconds || 0);
     } catch (e) {
-      console.error("오늘 운동 시간 조회 실패:", e);
+      console.error("[EXERCISE][TIME] 오늘 운동 시간 조회 실패:", e);
       setTodayTotalWorkoutSeconds(0);
     }
   }, [userId]);
@@ -1782,8 +1858,26 @@ const ExerciseScreen = ({ navigation }: any) => {
       });
 
       // 운동 시간 계산 (초 단위)
-      // todayTotalWorkoutSeconds는 오늘의 총 운동 시간이므로 현재 세션의 시간으로 사용
-      const workoutSeconds = todayTotalWorkoutSeconds || 0;
+      // 현재 세션의 운동 시간 = 저장 시점의 누적 시간 - 운동 시작 시점의 누적 시간
+      let workoutSeconds = 0;
+      if (workoutStartTime !== null) {
+        workoutSeconds = Math.max(0, todayTotalWorkoutSeconds - workoutStartTime);
+      } else {
+        // 운동 시작 시점이 기록되지 않은 경우, 현재 누적 시간 사용 (하위 호환성)
+        workoutSeconds = todayTotalWorkoutSeconds || 0;
+      }
+      
+      // 최소 10초 보장 (운동을 했다면 최소한의 시간은 있어야 함)
+      if (workoutSeconds === 0 && completedExercises.length > 0) {
+        workoutSeconds = 10;
+      }
+      
+      console.log("[WORKOUT][SAVE] 운동 시간 계산:", {
+        workoutStartTime,
+        todayTotalWorkoutSeconds,
+        calculatedSeconds: workoutSeconds,
+        completedExercisesCount: completedExercises.length,
+      });
 
       // API 스펙 검증: intensity와 feedback 배열 길이는 운동 개수와 일치해야 함
       if (intensityList.length !== completedExercises.length) {
@@ -1882,6 +1976,7 @@ const ExerciseScreen = ({ navigation }: any) => {
       // 확인 버튼을 누르자마자 완료된 운동 목록을 먼저 초기화하여 완료 페이지가 보이지 않도록 함
       setCompletedExercises([]);
       setCompletionSummaryTitle(""); // 제목 초기화
+      setWorkoutStartTime(null); // 운동 시작 시간 리셋
       // 그 다음 모달 닫기 (완료 페이지가 이미 숨겨진 상태에서 모달이 닫힘)
       setShowCompletionModal(false);
       
@@ -2074,110 +2169,81 @@ const ExerciseScreen = ({ navigation }: any) => {
   // 서버 목록 섹션 제거됨
 
   const getProgressPercentage = React.useMemo(() => {
-    if (!goalData || !Array.isArray(weeklyProgress) || weeklyProgress.length === 0) {
+    if (!goalData) {
       if (__DEV__) {
-        console.log("[PROGRESS] goalData 또는 weeklyProgress 없음, 0% 반환", {
-          hasGoalData: !!goalData,
-          weeklyLength: weeklyProgress?.length || 0,
+        console.log("[PROGRESS] goalData 없음, 0% 반환");
+      }
+      return 0;
+    }
+
+    // 오늘 날짜 확인
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+    // 저장된 운동만 필터링 (saveTitle이 있고 오늘 날짜인 활동만)
+    const savedActivitiesToday = allActivities.filter(
+      (activity) =>
+        activity.date === todayStr &&
+        activity.saveTitle &&
+        activity.saveTitle.trim() !== "" &&
+        !isStretchActivity(activity)
+    );
+
+    // 저장된 운동이 없으면 0% 반환
+    if (savedActivitiesToday.length === 0) {
+      if (__DEV__) {
+        console.log("[PROGRESS] 저장된 운동 없음, 0% 반환", {
+          allActivitiesCount: allActivities.length,
+          todayStr,
         });
       }
       return 0;
     }
 
-    const now = new Date();
-    const todayEnd = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      23,
-      59,
-      59,
-      999
-    );
+    // 저장된 운동의 시간 사용 (todayTotalWorkoutSeconds는 저장된 운동만 반환해야 함)
+    const savedWorkoutSeconds = todayTotalWorkoutSeconds || 0;
 
-    // 이번 주의 월요일 0시 계산 (백엔드 주간 기준과 맞추기)
-    const thisWeekStart = new Date(todayEnd);
-    thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay() + 1);
-    thisWeekStart.setHours(0, 0, 0, 0);
-
-    // 주 목표 횟수 (예: "주 5회" → 5)
+    // 주 목표 횟수 파싱 (예: "주 7회" → 7)
     const frequencyValue = goalData.weeklyFrequency
       ? parseInt(goalData.weeklyFrequency.replace(/[^0-9]/g, ""), 10)
       : NaN;
     const countTarget = Math.max(
       1,
-      Number.isNaN(frequencyValue) || frequencyValue <= 0 ? 1 : frequencyValue
+      Number.isNaN(frequencyValue) || frequencyValue <= 0 ? 7 : frequencyValue
     );
 
-    // 하루가 기여할 수 있는 최대 비율 (예: 주 5회 → 하루 최대 20%)
-    const maxDailyShare = 100 / countTarget;
+    // 시간 목표 파싱 (예: "30분 이상" → 1800초)
+    const durationMatch = goalData.durationPerSession?.match(/(\d+)\s*분/);
+    const targetMinutes = durationMatch ? parseInt(durationMatch[1], 10) : 30;
+    const targetSeconds = targetMinutes * 60; // 초 단위로 변환
 
-    let accumulated = 0;
+    // 저장된 운동의 시간 비율 계산 (0 ~ 1)
+    // 하루 최대 목표 시간까지만 계산 (예: 30분 = 1800초)
+    const todayWorkoutRatio = Math.min(1.0, savedWorkoutSeconds / targetSeconds);
 
-      weeklyProgress.forEach((item) => {
-        if (!item || !item.date) return;
+    // 주간 운동진행률 = (저장된 운동의 시간 비율) / 주 7회 * 100
+    const progress = (todayWorkoutRatio / countTarget) * 100;
 
-        // exerciseRate가 100이거나, 운동 기록이 있는 경우 (exerciseRate > 0 또는 totalCalorie > 0) 완료로 간주
-        const hasExercise =
-          item.exerciseRate === 100 ||
-          (item.exerciseRate && item.exerciseRate > 0) ||
-          (item.totalCalorie && item.totalCalorie > 0);
-
-        if (!hasExercise) return;
-        try {
-          const itemDate = new Date(item.date);
-          if (isNaN(itemDate.getTime())) return;
-
-          const itemDateOnly = new Date(
-            itemDate.getFullYear(),
-            itemDate.getMonth(),
-            itemDate.getDate()
-          );
-          const weekStartOnly = new Date(
-            thisWeekStart.getFullYear(),
-            thisWeekStart.getMonth(),
-            thisWeekStart.getDate()
-          );
-          const todayEndOnly = new Date(
-            todayEnd.getFullYear(),
-            todayEnd.getMonth(),
-            todayEnd.getDate()
-          );
-
-        // 이번 주 범위 내 데이터만 사용
-        if (itemDateOnly < weekStartOnly || itemDateOnly > todayEndOnly) {
-          return;
-        }
-
-        // exerciseRate(0~100)를 일일 달성률로 사용
-        const rawRate =
-          typeof item.exerciseRate === "number" ? item.exerciseRate : 0;
-        const clampedRate = Math.min(100, Math.max(0, rawRate));
-        const dailyRatio = clampedRate / 100; // 0~1
-
-        // 하루 기여도 = (100 / 주 횟수) * (해당 날 달성률)
-        const dailyContribution = maxDailyShare * dailyRatio;
-        accumulated += dailyContribution;
-      } catch {
-          // 날짜 파싱 에러 무시
-        }
-      });
-
-    const finalProgress = Math.min(100, Math.max(0, Math.round(accumulated)));
+    const finalProgress = Math.min(100, Math.max(0, Math.round(progress)));
 
     if (__DEV__) {
-      console.log("[PROGRESS] 주간 진행률 계산:", {
-        weeklyLength: weeklyProgress.length,
+      console.log("[PROGRESS] 주간 진행률 계산 (저장된 운동만):", {
               weeklyFrequency: goalData.weeklyFrequency,
         countTarget,
-        maxDailyShare,
-        accumulated,
+        durationPerSession: goalData.durationPerSession,
+        targetMinutes,
+        targetSeconds,
+        savedActivitiesCount: savedActivitiesToday.length,
+        savedWorkoutSeconds,
+        todayTotalWorkoutSeconds,
+        todayWorkoutRatio,
+        progress,
         finalProgress,
       });
     }
 
     return finalProgress;
-  }, [goalData, weeklyProgress]);
+  }, [goalData, todayTotalWorkoutSeconds, allActivities]);
 
   const loadStretchExercises = React.useCallback(async () => {
     setStretchLoading(true);
@@ -2208,6 +2274,8 @@ const ExerciseScreen = ({ navigation }: any) => {
   };
 
   const openExerciseEntry = () => {
+    // 운동 추가 시 시작 시간 기록 (새로운 세션 시작)
+    setWorkoutStartTime(todayTotalWorkoutSeconds);
     resetStretchFlowState();
     setIntroStage("intro");
     setIsIntroVisible(false);
@@ -2237,6 +2305,9 @@ const ExerciseScreen = ({ navigation }: any) => {
       handleWorkoutStartPress();
       return;
     }
+
+    // 운동 시작 시점의 누적 시간 기록 (현재 세션 시간 계산을 위해)
+    setWorkoutStartTime(todayTotalWorkoutSeconds);
 
     // 아직 완료하지 않은 첫 번째 운동을 찾음
     const nextActivity =
@@ -3877,9 +3948,10 @@ const ExerciseScreen = ({ navigation }: any) => {
           setCompletionSummaryTitle("오늘의 운동");
           setShowCompletionModal(true);
 
-          // 운동 완료 후 주간 진행률을 다시 가져와서 게이지 업데이트
+          // 운동 완료 후 오늘 운동 시간 업데이트 (게이지 업데이트를 위해 필수)
           setTimeout(async () => {
             try {
+              await loadTodayWorkoutTime(); // ✅ 오늘 운동 시간 업데이트
               await loadWeeklyCalories();
             } catch (error) {
               console.error(
