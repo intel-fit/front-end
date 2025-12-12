@@ -337,12 +337,21 @@ const HomeScreen = ({ navigation }: any) => {
       }
 
       // 오늘 완료한 고유한 운동 종목 수 계산
+      // 같은 운동이 여러 세션/그룹에 있어도 한 번만 카운트
       const uniqueExerciseNames = new Set<string>();
+      
+      // 모든 그룹의 모든 세션의 모든 레코드를 순회하면서 고유한 운동 이름만 추출
       savedWorkouts.forEach((group) => {
-        group.sessions?.forEach((session) => {
-          session.records?.forEach((record) => {
-            if (record.exerciseName) {
-              uniqueExerciseNames.add(record.exerciseName);
+        if (!group || !Array.isArray(group.sessions)) return;
+        
+        group.sessions.forEach((session) => {
+          if (!session || !Array.isArray(session.records)) return;
+          
+          session.records.forEach((record) => {
+            if (record?.exerciseName && record.exerciseName.trim() !== "") {
+              // 운동 이름을 정규화하여 추가 (공백 제거, 대소문자 통일)
+              const normalizedName = record.exerciseName.trim();
+              uniqueExerciseNames.add(normalizedName);
             }
           });
         });
@@ -353,6 +362,8 @@ const HomeScreen = ({ navigation }: any) => {
         date: dateString,
         exerciseCount,
         exerciseNames: Array.from(uniqueExerciseNames),
+        savedWorkoutsCount: savedWorkouts.length,
+        sessionsCount: savedWorkouts.reduce((sum, group) => sum + (group.sessions?.length || 0), 0),
       });
       setTodayExerciseCount(exerciseCount);
     } catch (e: any) {

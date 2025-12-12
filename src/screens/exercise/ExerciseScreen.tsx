@@ -1251,65 +1251,33 @@ const ExerciseScreen = ({ navigation }: any) => {
         // 서버 데이터 추가 (중복 제거된 것만)
         let result = [...filteredPrev, ...newServerActivities];
         
-        // 같은 날짜, 같은 saveTitle, 같은 운동명을 가진 활동들을 하나로 합치기
-        // 단, 저장된 운동(saveTitle이 있고 sessionId가 있는)은 합치지 않음 (서버 데이터로만 업데이트)
-        const mergedMap = new Map<string, Activity>();
+        // 중복 제거: 같은 날짜, 같은 saveTitle, 같은 운동명을 가진 활동은 하나만 유지
+        // 합치지 않고 첫 번째 것만 유지 (중복 제거)
+        const seenKeys = new Set<string>();
+        const deduplicatedResult: Activity[] = [];
         
         result.forEach((activity) => {
           if (!activity.name || !activity.date) {
             // 이름이나 날짜가 없으면 그대로 추가
-            const key = `single_${Date.now()}_${Math.random()}`;
-            mergedMap.set(key, activity);
+            deduplicatedResult.push(activity);
             return;
           }
           
-          // 저장된 운동(saveTitle + sessionId)은 합치지 않고 그대로 유지
-          if (activity.saveTitle && activity.sessionId) {
-            // 저장된 운동은 고유 키로 추가 (합치지 않음)
-            const savedKey = `${activity.date}__${activity.saveTitle}__${activity.sessionId}__${activity.name}`;
-            mergedMap.set(savedKey, activity);
+          // 같은 날짜, 같은 saveTitle, 같은 운동명을 가진 활동은 중복으로 간주
+          const normalizedSaveTitle = (activity.saveTitle || "").trim().toLowerCase();
+          const dedupeKey = `${activity.date}__${normalizedSaveTitle}__${activity.name.trim()}`;
+          
+          // 이미 본 운동이면 스킵 (중복 제거)
+          if (seenKeys.has(dedupeKey)) {
             return;
           }
           
-          // 저장되지 않은 운동만 합치기
-          const mergeKey = `${activity.date}__${activity.saveTitle || ""}__${activity.name}`;
-          
-          const existing = mergedMap.get(mergeKey);
-          if (existing) {
-            // 저장된 운동이면 합치지 않음
-            if (existing.saveTitle && existing.sessionId) {
-              mergedMap.set(mergeKey, activity); // 새 것으로 교체
-              return;
-            }
-            
-            // 기존 활동과 합치기: 세트 수 합치기 (저장되지 않은 운동만)
-            const existingSets = existing.sets || [];
-            const newSets = activity.sets || [];
-            
-            // 세트를 합치고 정렬
-            const mergedSets = [...existingSets, ...newSets].sort((a, b) => {
-              const orderA = a.order || 0;
-              const orderB = b.order || 0;
-              return orderA - orderB;
-            });
-            
-            // details 업데이트: buildDetailsFromSets 사용하여 "20kg 15회 3세트" 형식으로 표시
-            const mergedDetails = buildDetailsFromSets(mergedSets);
-            
-            mergedMap.set(mergeKey, {
-              ...existing,
-              sets: mergedSets,
-              details: mergedDetails,
-              // 가장 최근 시간 사용
-              time: activity.time || existing.time,
-            });
-          } else {
-            mergedMap.set(mergeKey, activity);
-          }
+          // 처음 본 운동이면 추가
+          seenKeys.add(dedupeKey);
+          deduplicatedResult.push(activity);
         });
         
-        // Map을 배열로 변환
-        result = Array.from(mergedMap.values());
+        result = deduplicatedResult;
         
         console.log("[EXERCISE][SAVED] 저장된 운동 기록 재구성:", {
           prevCount: prev.length,
@@ -2260,18 +2228,23 @@ const ExerciseScreen = ({ navigation }: any) => {
   };
 
   const handleStartWorkoutSequence = () => {
-    if (workoutActivities.length === 0) {
+    // 저장된 운동(saveTitle이 있는)은 제외하고 진행 가능한 운동만 필터링
+    const availableActivities = workoutActivities.filter(
+      (activity) => !activity.saveTitle || activity.saveTitle.trim() === ""
+    );
+
+    if (availableActivities.length === 0) {
       handleWorkoutStartPress();
       return;
     }
 
     // 아직 완료하지 않은 첫 번째 운동을 찾음
     const nextActivity =
-      workoutActivities.find(
+      availableActivities.find(
         (activity) => !isActivityFullyCompleted(activity)
-      ) || workoutActivities[0];
+      ) || availableActivities[0];
 
-    const nextIndex = workoutActivities.findIndex(
+    const nextIndex = availableActivities.findIndex(
       (activity) => activity.id === nextActivity.id
     );
 
@@ -2291,7 +2264,8 @@ const ExerciseScreen = ({ navigation }: any) => {
       imageUrl: resolvedImageUrl || undefined,
     };
 
-    setExerciseSequence(workoutActivities);
+    // 저장된 운동을 제외한 운동 목록만 시퀀스에 설정
+    setExerciseSequence(availableActivities);
     setExerciseSequenceIndex(nextIndex);
     setModalMode("edit");
     setSelectedExercise(activityWithImage);
@@ -2678,8 +2652,14 @@ const ExerciseScreen = ({ navigation }: any) => {
     
     const isCompleted = isActivityFullyCompleted(exercise);
     setModalMode("edit");
-    setExerciseSequence(workoutActivities);
-    const index = workoutActivities.findIndex(
+    
+    // 저장된 운동(saveTitle이 있는)은 제외하고 진행 가능한 운동만 필터링
+    const availableActivities = workoutActivities.filter(
+      (activity) => !activity.saveTitle || activity.saveTitle.trim() === ""
+    );
+    
+    setExerciseSequence(availableActivities);
+    const index = availableActivities.findIndex(
       (item) => item.id === exercise.id
     );
     setExerciseSequenceIndex(index);
