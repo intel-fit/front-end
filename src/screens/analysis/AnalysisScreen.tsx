@@ -503,6 +503,9 @@ const AnalysisScreen = ({ navigation }: any) => {
         (session as any)?.exercise?.id,
         (session as any)?.exercise?.code,
         (session as any)?.exerciseCode,
+        // 추가: 더 많은 필드 확인
+        (session as any)?.exerciseId,
+        (session as any)?.exerciseExternalId,
       ];
       for (const candidate of candidates) {
         if (candidate === undefined || candidate === null) continue;
@@ -1043,6 +1046,33 @@ const AnalysisScreen = ({ navigation }: any) => {
         "개 그룹"
       );
 
+      // 디버깅: 백엔드 응답 구조 확인
+      if (__DEV__ && savedGroups.length > 0) {
+        const firstGroup = savedGroups[0];
+        const firstSession = firstGroup?.sessions?.[0];
+        const firstRecord = firstSession?.records?.[0];
+        console.log("[ANALYSIS] 저장된 운동 응답 구조 확인:", {
+          groupsCount: savedGroups.length,
+          firstGroup: firstGroup ? {
+            title: firstGroup.title,
+            sessionsCount: firstGroup.sessions?.length || 0,
+            firstSession: firstSession ? {
+              sessionId: firstSession.sessionId,
+              exerciseId: firstSession.exerciseId,
+              externalId: firstSession.externalId,
+              recordsCount: firstSession.records?.length || 0,
+              firstRecord: firstRecord ? {
+                exerciseName: firstRecord.exerciseName,
+                exerciseId: firstRecord.exerciseId,
+                externalId: firstRecord.externalId,
+                exerciseCode: firstRecord.exerciseCode,
+                allKeys: Object.keys(firstRecord),
+              } : null,
+            } : null,
+          } : null,
+        });
+      }
+
       // SavedWorkoutGroup[]을 WorkoutSession[]로 변환
       // 같은 sessionId와 exerciseName을 가진 레코드들을 하나의 WorkoutSession으로 합침
       savedGroups.forEach((group) => {
@@ -1064,6 +1094,15 @@ const AnalysisScreen = ({ navigation }: any) => {
           // 각 운동별로 WorkoutSession 생성
           exerciseMap.forEach((records, exerciseName) => {
             const firstRecord = records[0];
+            // exerciseId 추출: 레코드 > 세션 순서로 확인
+            const extractedExerciseId = 
+              firstRecord.exerciseId || 
+              firstRecord.externalId || 
+              firstRecord.exerciseCode ||
+              session.exerciseId || 
+              session.externalId || 
+              undefined;
+            
             allWorkouts.push({
               sessionId: session.sessionId,
               exerciseName: exerciseName,
@@ -1079,7 +1118,7 @@ const AnalysisScreen = ({ navigation }: any) => {
                   isCompleted: true,
                 })),
               userId: userIdNum,
-              exerciseId: undefined,
+              exerciseId: extractedExerciseId,
               // @ts-ignore - 저장된 운동은 완료된 것으로 표시
               isCompleted: true,
               // @ts-ignore
