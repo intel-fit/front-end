@@ -236,6 +236,227 @@ const loadingStyles = StyleSheet.create({
   },
 });
 
+// ✅ 끼니 선택 모달
+const MealsSelectionModal = ({
+  visible,
+  currentMeals,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  currentMeals: number;
+  onSelect: (meals: number) => void;
+  onClose: () => void;
+}) => {
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity
+        style={mealsModalStyles.overlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <View style={mealsModalStyles.container}>
+          <TouchableOpacity activeOpacity={1}>
+            <LinearGradient
+              colors={["rgba(26,26,46,0.98)", "rgba(22,33,62,0.98)"]}
+              style={mealsModalStyles.content}
+            >
+              {/* 헤더 */}
+              <View style={mealsModalStyles.header}>
+                <Icon name="restaurant" size={28} color="#e3ff7c" />
+                <Text style={mealsModalStyles.title}>끼니 수 선택</Text>
+              </View>
+
+              <Text style={mealsModalStyles.subtitle}>
+                하루에 몇 끼를 드시나요?
+              </Text>
+
+              {/* 끼니 선택 버튼들 */}
+              <View style={mealsModalStyles.optionsContainer}>
+                {[1, 2, 3].map((num) => (
+                  <TouchableOpacity
+                    key={num}
+                    style={mealsModalStyles.optionButton}
+                    onPress={() => {
+                      onSelect(num);
+                      onClose();
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <LinearGradient
+                      colors={
+                        currentMeals === num
+                          ? ["#e3ff7c", "#a8e063"]
+                          : ["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]
+                      }
+                      style={mealsModalStyles.optionGradient}
+                    >
+                      <View style={mealsModalStyles.optionContent}>
+                        <View style={mealsModalStyles.optionIconContainer}>
+                          {currentMeals === num ? (
+                            <Icon
+                              name="checkmark-circle"
+                              size={32}
+                              color="#111827"
+                            />
+                          ) : (
+                            <Icon
+                              name="ellipse-outline"
+                              size={32}
+                              color="#ffffff"
+                            />
+                          )}
+                        </View>
+                        <View style={mealsModalStyles.optionTextContainer}>
+                          <Text
+                            style={[
+                              mealsModalStyles.optionNumber,
+                              currentMeals === num &&
+                                mealsModalStyles.optionNumberActive,
+                            ]}
+                          >
+                            {num}끼
+                          </Text>
+                          <Text
+                            style={[
+                              mealsModalStyles.optionDesc,
+                              currentMeals === num &&
+                                mealsModalStyles.optionDescActive,
+                            ]}
+                          >
+                            {num === 1
+                              ? "하루 1끼"
+                              : num === 2
+                              ? "아침 + 점심 또는 점심 + 저녁"
+                              : "아침 + 점심 + 저녁"}
+                          </Text>
+                        </View>
+                      </View>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* 닫기 버튼 */}
+              <TouchableOpacity
+                style={mealsModalStyles.closeButton}
+                onPress={onClose}
+                activeOpacity={0.8}
+              >
+                <Text style={mealsModalStyles.closeButtonText}>취소</Text>
+              </TouchableOpacity>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+};
+
+const mealsModalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  container: {
+    width: "85%",
+    maxWidth: 400,
+  },
+  content: {
+    borderRadius: 24,
+    padding: 28,
+    borderWidth: 1,
+    borderColor: "rgba(227,255,124,0.2)",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    marginBottom: 12,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#ffffff",
+    letterSpacing: 0.5,
+  },
+  subtitle: {
+    fontSize: 15,
+    color: "#9ca3af",
+    textAlign: "center",
+    marginBottom: 28,
+    letterSpacing: 0.3,
+  },
+  optionsContainer: {
+    gap: 12,
+    marginBottom: 24,
+  },
+  optionButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  optionGradient: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  optionContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 18,
+    gap: 16,
+  },
+  optionIconContainer: {
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  optionTextContainer: {
+    flex: 1,
+  },
+  optionNumber: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#ffffff",
+    marginBottom: 4,
+    letterSpacing: 0.3,
+  },
+  optionNumberActive: {
+    color: "#111827",
+  },
+  optionDesc: {
+    fontSize: 13,
+    color: "#9ca3af",
+    letterSpacing: 0.2,
+  },
+  optionDescActive: {
+    color: "rgba(17,24,39,0.7)",
+  },
+  closeButton: {
+    paddingVertical: 14,
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  closeButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#9ca3af",
+    letterSpacing: 0.3,
+  },
+});
+
 const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
   console.log(`🔄 ${dayIndex}일차 변환 시작`);
 
@@ -327,7 +548,7 @@ const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
           carbs: Math.round(f.carbs),
           protein: Math.round(f.protein),
           fat: Math.round(f.fat),
-          liked: false, // ✅ 추가
+          liked: false,
         })) || [],
       calories: Math.round(breakfast?.totalCalories || 0),
       carbs: Math.round(breakfast?.totalCarbs || 0),
@@ -342,7 +563,7 @@ const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
           carbs: Math.round(f.carbs),
           protein: Math.round(f.protein),
           fat: Math.round(f.fat),
-          liked: false, // ✅ 추가
+          liked: false,
         })) || [],
       calories: Math.round(lunch?.totalCalories || 0),
       carbs: Math.round(lunch?.totalCarbs || 0),
@@ -357,7 +578,7 @@ const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
           carbs: Math.round(f.carbs),
           protein: Math.round(f.protein),
           fat: Math.round(f.fat),
-          liked: false, // ✅ 추가
+          liked: false,
         })) || [],
       calories: Math.round(dinner?.totalCalories || 0),
       carbs: Math.round(dinner?.totalCarbs || 0),
@@ -370,7 +591,7 @@ const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
 const MealRecommendScreen = () => {
   const navigation = useNavigation();
   const [screen, setScreen] = useState<
-    "welcome" | "excludedIngredients" | "meals" 
+    "welcome" | "excludedIngredients" | "meals"
   >("welcome");
 
   const [weeklyMeals, setWeeklyMeals] = useState<any[]>([]);
@@ -380,6 +601,10 @@ const MealRecommendScreen = () => {
   const [loading, setLoading] = useState(false);
   const [savedMeals, setSavedMeals] = useState<any[]>([]);
   const [currentPlanId, setCurrentPlanId] = useState<number | null>(null);
+
+  // ✅ 끼니 수 관련 state
+  const [mealsPerDay, setMealsPerDay] = useState(3);
+  const [showMealsModal, setShowMealsModal] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -499,8 +724,9 @@ const MealRecommendScreen = () => {
 
     try {
       console.log("🍽️ 임시 식단 생성 시작");
+      console.log(`📊 끼니 수: ${mealsPerDay}끼`);
 
-      const tempMeals = await recommendedMealAPI.getWeeklyMealPlan();
+      const tempMeals = await recommendedMealAPI.getWeeklyMealPlan(mealsPerDay);
 
       console.log("=== 📦 API 응답 원본 ===");
       console.log("응답 배열 길이:", tempMeals.length);
@@ -573,17 +799,17 @@ const MealRecommendScreen = () => {
 
     try {
       console.log("🍽️ 1일 식단 생성 시작");
+      console.log(`📊 끼니 수: ${mealsPerDay}끼`);
 
-      const tempMeals = await recommendedMealAPI.getWeeklyMealPlan();
+      const tempMeals = await recommendedMealAPI.getDailyMealPlan(mealsPerDay);
 
       if (!tempMeals || tempMeals.length === 0) {
         throw new Error("식단 생성에 실패했습니다.");
       }
 
-      const singleDay = [tempMeals[0]];
       console.log("✅ 1일 식단 생성 완료");
 
-      const weekData = singleDay.map((tempDay, index) =>
+      const weekData = tempMeals.map((tempDay, index) =>
         transformTempMealToUI(tempDay, index + 1)
       );
 
@@ -962,6 +1188,17 @@ const MealRecommendScreen = () => {
             onCancel={handleCancelLoading}
           />
 
+          {/* ✅ 끼니 선택 모달 */}
+          <MealsSelectionModal
+            visible={showMealsModal}
+            currentMeals={mealsPerDay}
+            onSelect={(num) => {
+              setMealsPerDay(num);
+              console.log(`✅ 끼니 수 변경: ${num}끼`);
+            }}
+            onClose={() => setShowMealsModal(false)}
+          />
+
           <View style={styles.header}>
             <TouchableOpacity
               onPress={() => navigation.goBack()}
@@ -1066,6 +1303,28 @@ const MealRecommendScreen = () => {
                     금지 식재료 관리
                     {excludedIngredients.length > 0 &&
                       ` (${excludedIngredients.length})`}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              {/* ✅ 4. 끼니 수정하기 */}
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => setShowMealsModal(true)}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
+                  style={styles.secondaryButtonGradient}
+                >
+                  <Icon
+                    name="restaurant-outline"
+                    size={20}
+                    color="#ffffff"
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={styles.secondaryButtonText}>
+                    끼니 수정하기 ({mealsPerDay}끼)
                   </Text>
                 </LinearGradient>
               </TouchableOpacity>
@@ -2627,7 +2886,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(227,255,124,0.2)",
     borderRadius: 14,
   },
-  // ✅ 좋아요 기능을 위한 새 스타일
   mealTagContent: {
     flexDirection: "row",
     alignItems: "center",
