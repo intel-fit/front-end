@@ -23,6 +23,8 @@ import MealRecommendModal from "../../components/modals/MealRecommendModal";
 import DeleteAccountModal from "../../components/modals/DeleteAccountModal";
 import PremiumModal from "../../components/modals/PremiumModal";
 import { useRoute } from "@react-navigation/native";
+import { useFocusEffect } from "@react-navigation/native";
+import { getProfile } from "@react-native-seoul/kakao-login";
 
 const MyPageScreen = ({ navigation }: any) => {
   const route = useRoute<any>();
@@ -47,8 +49,7 @@ const MyPageScreen = ({ navigation }: any) => {
     useState(false);
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
 
-  //  1. 외부에서 넘어온 파라미터 감지 (내 플랜 모달 열기)
-
+  // 1. 외부에서 넘어온 파라미터 감지 (내 플랜 모달 열기)
   useEffect(() => {
     if (route.params?.openPremiumModal) {
       console.log("🔓 마이페이지 진입: 프리미엄 모달 자동 오픈");
@@ -57,11 +58,14 @@ const MyPageScreen = ({ navigation }: any) => {
     }
   }, [route.params]);
 
-  //  2. 초기 데이터 로드
-  useEffect(() => {
-    fetchProfile();
-    loadMembershipType();
-  }, []);
+  // 2. 초기 데이터 로드
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log("🔄 마이페이지 포커스 - 데이터 새로고침");
+      fetchProfile();
+      loadMembershipType();
+    }, [])
+  );
 
   const fetchProfile = async () => {
     try {
@@ -76,7 +80,7 @@ const MyPageScreen = ({ navigation }: any) => {
     }
   };
 
-  //  멤버십 타입 로드
+  // 멤버십 타입 로드
   const loadMembershipType = async () => {
     try {
       const membershipType = await AsyncStorage.getItem("membershipType");
@@ -88,7 +92,7 @@ const MyPageScreen = ({ navigation }: any) => {
     }
   };
 
-  //  테스트용 멤버십 전환 함수
+  // 테스트용 멤버십 전환 함수
   const handleToggleMembership = async () => {
     const newType = currentMembershipType === "FREE" ? "PREMIUM" : "FREE";
 
@@ -124,10 +128,13 @@ const MyPageScreen = ({ navigation }: any) => {
               }
 
               setCurrentMembershipType(result.newType);
-              
+
               // AsyncStorage에 멤버십 타입 업데이트 (다른 화면에서도 반영되도록)
               await AsyncStorage.setItem("membershipType", result.newType);
-              console.log("✅ AsyncStorage에 멤버십 타입 업데이트:", result.newType);
+              console.log(
+                "✅ AsyncStorage에 멤버십 타입 업데이트:",
+                result.newType
+              );
 
               Alert.alert(
                 "전환 완료 ✅",
@@ -157,17 +164,28 @@ const MyPageScreen = ({ navigation }: any) => {
     );
   };
 
-  const handleLogout = () => {
+  // ✅ 로그아웃 실행 함수 (즉시 실행용)
+  const executeLogout = async () => {
+    try {
+      await authAPI.logout();
+      navigation.replace("Login");
+    } catch (e) {
+      console.error(e);
+      navigation.replace("Login"); // 에러나도 일단 화면 이동
+    }
+  };
+
+  // 버튼 클릭 시 확인창 띄우는 로그아웃 핸들러
+  const handleLogoutPress = () => {
     Alert.alert("로그아웃", "정말로 로그아웃하시겠습니까?", [
       { text: "취소", style: "cancel" },
-      {
-        text: "확인",
-        onPress: async () => {
-          await authAPI.logout();
-          navigation.replace("Login");
-        },
-      },
+      { text: "확인", onPress: executeLogout },
     ]);
+  };
+
+  // 단순 호출용 핸들러 (사용 안 함, handleLogoutPress 사용 권장)
+  const handleLogout = () => {
+    executeLogout();
   };
 
   const handleDeleteAccount = () => {
@@ -242,7 +260,7 @@ const MyPageScreen = ({ navigation }: any) => {
                 <Text style={styles.userTitle}>
                   {getMembershipTypeText(currentMembershipType)}
                 </Text>
-                {/*  현재 멤버십 상태 표시 */}
+                {/* 현재 멤버십 상태 표시 */}
                 <View
                   style={[
                     styles.membershipStatusBadge,
@@ -280,7 +298,7 @@ const MyPageScreen = ({ navigation }: any) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🧪 개발 테스트 (개발 전용)</Text>
           <View style={styles.sectionLinks}>
-            {/*  멤버십 전환 버튼 */}
+            {/* 멤버십 전환 버튼 */}
             <TouchableOpacity
               style={styles.linkItem}
               onPress={handleToggleMembership}
@@ -370,7 +388,7 @@ const MyPageScreen = ({ navigation }: any) => {
               style={styles.linkItem}
               onPress={() => setIsPremiumModalOpen(true)}
             >
-              <Text style={styles.linkText}>내 플랜 보기</Text>
+              <Text style={styles.linkText}>구독 하기</Text>
               <Icon
                 name="chevron-forward"
                 size={18}
@@ -384,7 +402,7 @@ const MyPageScreen = ({ navigation }: any) => {
               style={styles.linkItem}
               onPress={() => setIsPaymentMethodModalOpen(true)}
             >
-              <Text style={styles.linkText}>결제 수단 관리</Text>
+              <Text style={styles.linkText}>내 플랜 보기</Text>
               <Icon
                 name="chevron-forward"
                 size={18}
@@ -436,7 +454,11 @@ const MyPageScreen = ({ navigation }: any) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>⚙️ 계정 관리</Text>
           <View style={styles.sectionLinks}>
-            <TouchableOpacity style={styles.linkItem} onPress={handleLogout}>
+            {/* ✅ 버튼에 확인창 있는 로그아웃 연결 */}
+            <TouchableOpacity
+              style={styles.linkItem}
+              onPress={handleLogoutPress}
+            >
               <Text style={[styles.linkText, styles.logoutText]}>로그아웃</Text>
               <Icon
                 name="log-out-outline"
@@ -463,19 +485,27 @@ const MyPageScreen = ({ navigation }: any) => {
       </ScrollView>
 
       {/* 모달들 */}
+
+      {/* ✅ 1. 구독 정보 모달 (로그아웃 기능 연결됨) */}
+      <PaymentMethodModal
+        isOpen={isPaymentMethodModalOpen}
+        onClose={() => setIsPaymentMethodModalOpen(false)}
+        onCancelSuccess={executeLogout}
+      />
+
       <AIAnalysisModal
         isOpen={isAIAnalysisModalOpen}
         onClose={() => setIsAIAnalysisModalOpen(false)}
       />
+
       <MyPlanModal
         isOpen={isMyPlanModalOpen}
         onClose={() => setIsMyPlanModalOpen(false)}
         navigation={navigation}
       />
-      <PaymentMethodModal
-        isOpen={isPaymentMethodModalOpen}
-        onClose={() => setIsPaymentMethodModalOpen(false)}
-      />
+
+      {/* ⚠️ 중복되었던 PaymentMethodModal 제거됨 */}
+
       <ProfileEditModal
         isOpen={isProfileEditModalOpen}
         onClose={() => setIsProfileEditModalOpen(false)}

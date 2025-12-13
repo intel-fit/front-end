@@ -7,21 +7,34 @@ const formatDateToString = (date: Date): string => {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
+
 /**
  * 식단 추천 API (임시 식단 기반)
  */
 export const recommendedMealAPI = {
   /**
    * ✅ 1) 임시 식단 생성 + 조회 (7일치)
+   * @param mealsPerDay - 하루 끼니 수 (1~3, 기본값 3)
    */
-  getWeeklyMealPlan: async () => {
-    try {
-      console.log("🍽️ 임시 식단 생성 시작");
+  getWeeklyMealPlan: async (mealsPerDay: number = 3) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 180000); // 3분
 
-      // Step 1: 임시 식단 생성
+    try {
+      console.log("🍽️ 임시 식단 생성 시작 (7일치)");
+      console.log(`📊 끼니 수: ${mealsPerDay}끼`);
+      console.log("⏱️ 타임아웃: 3분");
+
+      // Step 1: 임시 식단 생성 (끼니 수 포함)
       const createResponse = await request<{ tempBundleId: string }>(
         "/api/temp-meals/weekly",
-        { method: "POST" }
+        {
+          method: "POST",
+          body: JSON.stringify({ mealsPerDay }),
+          signal: controller.signal,
+        }
       );
 
       console.log("✅ 임시 식단 생성 완료:", createResponse);
@@ -29,13 +42,76 @@ export const recommendedMealAPI = {
       // Step 2: 임시 식단 조회
       const response = await request<Array<TempDayMeal>>(
         "/api/temp-meals/weekly",
-        { method: "GET" }
+        {
+          method: "GET",
+          signal: controller.signal,
+        }
       );
 
+      clearTimeout(timeoutId);
       console.log("✅ 임시 식단 조회 완료:", response.length, "일");
       return response;
     } catch (error: any) {
+      clearTimeout(timeoutId);
+
+      if (error.name === "AbortError") {
+        console.error("⏱️ 타임아웃 발생 (3분 초과)");
+        throw new Error(
+          "식단 생성 시간이 초과되었습니다.\n잠시 후 다시 시도해주세요."
+        );
+      }
+
       console.error("❌ 임시 식단 생성/조회 실패:", error);
+      throw new Error(error.message || "식단 생성에 실패했습니다.");
+    }
+  },
+
+  getDailyMealPlan: async (mealsPerDay: number = 3) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 120000); // 2분
+
+    try {
+      console.log("🍽️ 임시 식단 생성 시작 (1일치)");
+      console.log(`📊 끼니 수: ${mealsPerDay}끼`);
+      console.log("⏱️ 타임아웃: 2분");
+
+      // Step 1: 1일치 임시 식단 생성 (daily 엔드포인트 사용)
+      const createResponse = await request<{
+        message?: string;
+        tempBundleId?: string;
+      }>("/api/temp-meals/daily", {
+        method: "POST",
+        body: JSON.stringify({ mealsPerDay }),
+        signal: controller.signal,
+      });
+
+      console.log("✅ 1일 임시 식단 생성 완료:", createResponse);
+
+      // ✅ Step 2: 임시 식단 조회
+      const response = await request<Array<TempDayMeal>>(
+        "/api/temp-meals/weekly", // ✅ daily가 아니라 weekly!
+        {
+          method: "GET",
+          signal: controller.signal,
+        }
+      );
+
+      clearTimeout(timeoutId);
+      console.log("✅ 임시 식단 조회 완료:", response.length, "일");
+      return response;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+
+      if (error.name === "AbortError") {
+        console.error("⏱️ 타임아웃 발생 (2분 초과)");
+        throw new Error(
+          "식단 생성 시간이 초과되었습니다.\n잠시 후 다시 시도해주세요."
+        );
+      }
+
+      console.error("❌ 1일 식단 생성/조회 실패:", error);
       throw new Error(error.message || "식단 생성에 실패했습니다.");
     }
   },
@@ -130,7 +206,7 @@ export const recommendedMealAPI = {
         // BREAKFAST, LUNCH, DINNER가 없고 SNACK만 있는 경우 변환
         if (!breakfast && !lunch && !dinner) {
           const snacks = meals.filter((m: any) => m.mealType === "SNACK");
-          
+
           if (snacks.length >= 1) {
             flattenedMeals.push({
               ...snacks[0],
@@ -315,7 +391,7 @@ export interface TempDayMeal {
   dayIndex: number;
   meals: Array<{
     id: number;
-    mealType: "BREAKFAST" | "LUNCH" | "DINNER";
+    mealType: "BREAKFAST" | "LUNCH" | "DINNER" | "SNACK";
     totalCalories: number;
     totalCarbs: number;
     totalProtein: number;
@@ -346,7 +422,7 @@ export interface Food {
 
 export interface Meal {
   id: number;
-  mealType: "BREAKFAST" | "LUNCH" | "DINNER";
+  mealType: "BREAKFAST" | "LUNCH" | "DINNER" | "SNACK";
   mealTypeName: string;
   totalCalories: number;
   totalCarbs: number;

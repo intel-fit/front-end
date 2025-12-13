@@ -15,6 +15,7 @@ import LoginScreen from "../screens/auth/LoginScreen";
 import SignupScreen from "../screens/auth/SignupScreen";
 import FindIdScreen from "../screens/auth/FindIdScreen";
 import ResetPasswordScreen from "../screens/auth/ResetPasswordScreen";
+import KakaoOnboardingScreen from "../screens/auth/KakaoOnboardingScreen";
 
 // Main Screens
 import HomeScreen from "../screens/main/HomeScreen";
@@ -165,6 +166,7 @@ export default function AppNavigator() {
             name={ROUTES.RESET_PASSWORD}
             component={ResetPasswordScreen}
           />
+          <Stack.Screen name="KakaoOnboarding" component={KakaoOnboardingScreen} />
           {/* Main Tabs */}
           <Stack.Screen name={ROUTES.MAIN} component={MainTabs} />
           {/* Payment Stack*/}

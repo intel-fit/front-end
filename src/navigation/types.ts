@@ -5,6 +5,7 @@ export type RootStackParamList = {
   Signup: undefined;
   FindId: undefined;
   ResetPassword: undefined;
+  KakaoOnboarding: undefined;
   Main: undefined;
   Chatbot: undefined;
   Diet: undefined;
@@ -28,7 +29,7 @@ export type RootStackParamList = {
   InBodyManual: undefined;
   HealthScoreTrend: undefined;
   // Payment
-  PaymentSuccess: undefined;
+  PaymentSuccess: { sessionId?: string; orderId?: string };
   PaymentFail: undefined;
   PaymentCancel: undefined;
 };

@@ -19,6 +19,7 @@ import {authAPI} from '../../services';
 import {ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY} from '../../services/apiConfig';
 
 // @react-native-seoul/kakao-login (네이티브 빌드에서만 작동)
+// Expo Go에서는 WebBrowser.openAuthSessionAsync 사용
 let KakaoLogin: any = null;
 try {
   KakaoLogin = require('@react-native-seoul/kakao-login');
@@ -125,9 +126,17 @@ const LoginScreen = ({navigation}: any) => {
           const membershipType = (parsed.queryParams?.membershipType as string | undefined) || 'FREE';
           await AsyncStorage.setItem('membershipType', membershipType);
 
-          console.log('✅ [카카오 로그인] 토큰 저장 완료, 메인 화면으로 이동');
-          // 메인 화면으로 이동
-          navigation.replace('Main');
+          // 온보딩 여부 확인
+          const isOnboarded = parsed.queryParams?.isOnboarded;
+          const onboarded = parsed.queryParams?.onboarded;
+          const shouldOnboard = isOnboarded === 'false' || onboarded === 'false';
+          
+          console.log('✅ [카카오 로그인] 토큰 저장 완료');
+          if (shouldOnboard) {
+            navigation.replace('KakaoOnboarding');
+          } else {
+            navigation.replace('Main');
+          }
         } catch (error: any) {
           console.error('❌ [카카오 로그인] 토큰 저장 실패:', error);
           Alert.alert('로그인 실패', error.message || '토큰 저장 중 오류가 발생했습니다.');
@@ -181,9 +190,10 @@ const LoginScreen = ({navigation}: any) => {
           await AsyncStorage.setItem('membershipType', 'FREE');
         }
 
-        // 온보딩 여부 확인
-        if (data.onboarded === false) {
-          navigation.replace('Onboarding');
+        // 온보딩 여부 확인 (isOnboarded 또는 onboarded 값 확인)
+        const isOnboarded = data.isOnboarded !== undefined ? data.isOnboarded : data.onboarded;
+        if (isOnboarded === false) {
+          navigation.replace('KakaoOnboarding');
         } else {
           navigation.replace('Main');
         }
@@ -320,9 +330,10 @@ const LoginScreen = ({navigation}: any) => {
             await AsyncStorage.setItem('membershipType', 'FREE');
           }
 
-          // 온보딩 여부 확인
-          if (data.onboarded === false) {
-            navigation.replace('Onboarding');
+          // 온보딩 여부 확인 (isOnboarded 또는 onboarded 값 확인)
+          const isOnboarded = data.isOnboarded !== undefined ? data.isOnboarded : data.onboarded;
+          if (isOnboarded === false) {
+            navigation.replace('KakaoOnboarding');
           } else {
             navigation.replace('Main');
           }
