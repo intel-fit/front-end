@@ -838,4 +838,35 @@ export const authAPI = {
       throw error;
     }
   },
+
+  /**
+   * 온보딩 데이터 제출 (신체정보 수기입력)
+   * @param onboardingData 온보딩 정보
+   * @returns 성공 여부
+   */
+  submitOnboarding: async (onboardingData: {
+    gender: "M" | "F";
+    height: number;
+    weight: number;
+    birthDate: string;
+    weightGoal: number;
+    healthGoal: string;
+    workoutDaysPerWeek: string;
+    experienceLevel?: string;
+    fitnessConcerns?: string;
+  }): Promise<{ success: boolean; message: string }> => {
+    try {
+      const response = await request<{ success: boolean; message: string }>(
+        "/api/users/onboarding",
+        {
+          method: "POST",
+          body: JSON.stringify(onboardingData),
+        }
+      );
+      return response;
+    } catch (error: any) {
+      console.error("[AUTH] 온보딩 데이터 제출 실패:", error);
+      throw error;
+    }
+  },
 };
