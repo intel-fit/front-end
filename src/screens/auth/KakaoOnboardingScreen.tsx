@@ -103,7 +103,7 @@ const KakaoOnboardingScreen = ({navigation}: any) => {
       const heightNum = Number(formData.height);
       if (heightNum < 100 || heightNum > 250) {
         newErrors.height = '키는 100cm 이상 250cm 이하여야 합니다';
-      }
+    }
     }
 
     if (!formData.weight.trim()) {
@@ -121,7 +121,7 @@ const KakaoOnboardingScreen = ({navigation}: any) => {
       const weightGoalNum = Number(formData.weightGoal);
       if (weightGoalNum < 30 || weightGoalNum > 200) {
         newErrors.weightGoal = '목표 체중은 30kg 이상 200kg 이하여야 합니다';
-      }
+    }
     }
 
     if (!formData.healthGoal) {
@@ -163,7 +163,7 @@ const KakaoOnboardingScreen = ({navigation}: any) => {
       };
 
       const response = await authAPI.submitOnboarding(onboardingData);
-      
+
       setLoading(false);
       
       // 200 응답 (온보딩 완료) → Alert 없이 바로 홈으로 이동
@@ -196,7 +196,7 @@ const KakaoOnboardingScreen = ({navigation}: any) => {
   };
 
   return (
-    <KeyboardAvoidingView
+      <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -410,41 +410,41 @@ const KakaoOnboardingScreen = ({navigation}: any) => {
                   <View style={{width: 50}} />
                 </View>
                 <View style={styles.genderOptionContainer}>
-                  <TouchableOpacity
-                    style={[
+              <TouchableOpacity
+                style={[
                       styles.genderOption,
                       formData.gender === 'M' && styles.genderOptionSelected,
-                    ]}
+                ]}
                     onPress={() => {
                       handleChange('gender', 'M');
                       setGenderModalVisible(false);
                     }}>
-                    <Text
-                      style={[
+                <Text
+                  style={[
                         styles.genderOptionText,
                         formData.gender === 'M' && styles.genderOptionTextSelected,
-                      ]}>
-                      남성
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
+                  ]}>
+                  남성
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
                       styles.genderOption,
                       formData.gender === 'F' && styles.genderOptionSelected,
-                    ]}
+                ]}
                     onPress={() => {
                       handleChange('gender', 'F');
                       setGenderModalVisible(false);
                     }}>
-                    <Text
-                      style={[
+                <Text
+                  style={[
                         styles.genderOptionText,
                         formData.gender === 'F' && styles.genderOptionTextSelected,
-                      ]}>
-                      여성
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                  ]}>
+                  여성
+                </Text>
+              </TouchableOpacity>
+            </View>
               </TouchableOpacity>
             </TouchableOpacity>
           </Modal>
@@ -452,10 +452,10 @@ const KakaoOnboardingScreen = ({navigation}: any) => {
           {/* 키, 체중 */}
           <View style={styles.inputRow}>
             <View style={[styles.inputGroup, styles.inputHalf]}>
-              <TextInput
-                style={styles.input}
+            <TextInput
+              style={styles.input}
                 placeholder="키 (cm)"
-                value={formData.height}
+              value={formData.height}
                 onChangeText={text => handleChange('height', text)}
                 keyboardType="number-pad"
                 placeholderTextColor="rgba(255, 255, 255, 0.7)"
@@ -463,13 +463,13 @@ const KakaoOnboardingScreen = ({navigation}: any) => {
               {errors.height && (
                 <Text style={styles.errorMessage}>{errors.height}</Text>
               )}
-            </View>
+          </View>
 
             <View style={[styles.inputGroup, styles.inputHalf]}>
-              <TextInput
-                style={styles.input}
+            <TextInput
+              style={styles.input}
                 placeholder="체중 (kg)"
-                value={formData.weight}
+              value={formData.weight}
                 onChangeText={text => handleChange('weight', text)}
                 keyboardType="number-pad"
                 placeholderTextColor="rgba(255, 255, 255, 0.7)"
@@ -501,8 +501,8 @@ const KakaoOnboardingScreen = ({navigation}: any) => {
               activeOpacity={0.8}
               style={styles.birthDateButtonContainer}
               onPress={() => setHealthGoalModalVisible(true)}>
-              <TextInput
-                style={styles.input}
+            <TextInput
+              style={styles.input}
                 value={
                   formData.healthGoal
                     ? healthGoalOptions.find(opt => opt.value === formData.healthGoal)?.label || ''
@@ -543,26 +543,26 @@ const KakaoOnboardingScreen = ({navigation}: any) => {
                 <View style={styles.modalOptionContainer}>
                   <View style={styles.optionGrid}>
                     {healthGoalOptions.map((option) => (
-                      <TouchableOpacity
+                <TouchableOpacity
                         key={option.value}
-                        style={[
-                          styles.optionButton,
+                  style={[
+                    styles.optionButton,
                           formData.healthGoal === option.value && styles.optionButtonSelected,
-                        ]}
+                  ]}
                         onPress={() => {
                           handleChange('healthGoal', option.value);
                           setHealthGoalModalVisible(false);
                         }}>
-                        <Text
-                          style={[
+                  <Text
+                    style={[
                             styles.optionButtonText,
                             formData.healthGoal === option.value && styles.optionButtonTextSelected,
-                          ]}>
+                    ]}>
                           {option.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
                 </View>
               </TouchableOpacity>
             </TouchableOpacity>
@@ -616,26 +616,26 @@ const KakaoOnboardingScreen = ({navigation}: any) => {
                 <View style={styles.modalOptionContainer}>
                   <View style={styles.optionGrid}>
                     {workoutDaysOptions.map((option) => (
-                      <TouchableOpacity
+                <TouchableOpacity
                         key={option.value}
-                        style={[
-                          styles.optionButton,
+                  style={[
+                    styles.optionButton,
                           formData.workoutDaysPerWeek === option.value && styles.optionButtonSelected,
-                        ]}
+                  ]}
                         onPress={() => {
                           handleChange('workoutDaysPerWeek', option.value);
                           setWorkoutDaysModalVisible(false);
                         }}>
-                        <Text
-                          style={[
+                  <Text
+                    style={[
                             styles.optionButtonText,
                             formData.workoutDaysPerWeek === option.value && styles.optionButtonTextSelected,
-                          ]}>
+                    ]}>
                           {option.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
                 </View>
               </TouchableOpacity>
             </TouchableOpacity>
@@ -686,27 +686,27 @@ const KakaoOnboardingScreen = ({navigation}: any) => {
                 <View style={styles.modalOptionContainer}>
                   <View style={styles.optionGrid}>
                     {experienceLevelOptions.map((option) => (
-                      <TouchableOpacity
+                <TouchableOpacity
                         key={option.value}
-                        style={[
-                          styles.optionButton,
+                  style={[
+                    styles.optionButton,
                           formData.experienceLevel === option.value && styles.optionButtonSelected,
-                        ]}
+                  ]}
                         onPress={() => {
                           handleChange('experienceLevel', option.value);
                           setExperienceLevelModalVisible(false);
                         }}>
-                        <Text
-                          style={[
+                  <Text
+                    style={[
                             styles.optionButtonText,
                             formData.experienceLevel === option.value && styles.optionButtonTextSelected,
-                          ]}>
+                    ]}>
                           {option.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
               </TouchableOpacity>
             </TouchableOpacity>
           </Modal>
@@ -722,20 +722,20 @@ const KakaoOnboardingScreen = ({navigation}: any) => {
               multiline
             />
           </View>
-        </View>
+          </View>
 
-        <TouchableOpacity
+          <TouchableOpacity
           style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
-          onPress={handleSubmit}
-          disabled={loading}>
+            onPress={handleSubmit}
+            disabled={loading}>
           {loading ? (
             <ActivityIndicator color="#000000" />
           ) : (
             <Text style={styles.submitBtnText}>완료</Text>
           )}
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
   );
 };
 

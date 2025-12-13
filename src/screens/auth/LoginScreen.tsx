@@ -139,7 +139,7 @@ const LoginScreen = ({navigation}: any) => {
           if (shouldOnboard || isNewUser) {
             navigation.replace('KakaoOnboarding');
           } else {
-            navigation.replace('Main');
+          navigation.replace('Main');
           }
         } catch (error: any) {
           console.error('❌ [카카오 로그인] 토큰 저장 실패:', error);
@@ -268,7 +268,7 @@ const LoginScreen = ({navigation}: any) => {
             if (shouldOnboard || isNewUser) {
               navigation.replace('KakaoOnboarding');
             } else {
-              navigation.replace('Main');
+            navigation.replace('Main');
             }
           } catch (error: any) {
             console.error('카카오 로그인 처리 실패:', error);
@@ -394,7 +394,7 @@ const LoginScreen = ({navigation}: any) => {
       try {
         // openAuthSessionAsync는 앱 내부 브라우저를 엽니다
         result = await WebBrowser.openAuthSessionAsync(
-          loginUrl,
+        loginUrl,
           deepLinkScheme
         );
       } catch (browserError: any) {
@@ -463,7 +463,7 @@ const LoginScreen = ({navigation}: any) => {
             if (shouldOnboard || isNewUser) {
               navigation.replace('KakaoOnboarding');
             } else {
-              navigation.replace('Main');
+            navigation.replace('Main');
             }
           } catch (error: any) {
             console.error('❌ [카카오 로그인] 토큰 저장 실패:', error);
