@@ -2118,14 +2118,6 @@ const AnalysisScreen = ({ navigation }: any) => {
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
       >
-        {/* 인사말 섹션 */}
-        <View style={styles.greetingSection}>
-          <Text style={styles.greetingMessage}>
-            <Text style={styles.greetingHighlight}>{displayName}</Text>
-            {` ${greetingSummary}`}
-          </Text>
-        </View>
-
         {/* 건강점수 섹션 */}
         <TouchableOpacity
           style={styles.healthScoreSection}

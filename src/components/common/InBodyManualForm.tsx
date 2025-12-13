@@ -628,7 +628,8 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
         onClose={() => setCalendarVisible(false)}
         onSelectDate={handleDateSelect}
         selectedDate={v.date ? new Date(v.date) : new Date()}
-        inBodyDates={[]}
+        inBodyDates={normalizedInBodyDates || []}
+        onlySelectableDates={false} // 수기 입력 모드에서는 모든 날짜 선택 가능
       />
     </>
   );
