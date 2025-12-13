@@ -206,7 +206,7 @@ const InBodyCalendarModal: React.FC<InBodyCalendarModalProps> = ({
               // 단, 이미 선택된 날짜는 항상 선택 가능 (현재 보고 있는 날짜)
               const isSelectable = onlySelectableDates 
                 ? (isInBodyDate || isSelected) // 기록이 있거나 이미 선택된 날짜는 선택 가능
-                : (inBodyDates.length === 0 || isInBodyDate);
+                : true; // 수기 입력 모드에서는 모든 날짜(과거, 현재, 미래) 선택 가능
               
               // 디버깅: 기록이 있는 날짜 확인
               if (__DEV__ && isInBodyDate && date.getDate() <= 3) {

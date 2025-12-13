@@ -1,4 +1,4 @@
-import { request, AI_API_BASE_URL, ACCESS_TOKEN_KEY } from './apiConfig';
+import { request, requestAI, AI_API_BASE_URL, ACCESS_TOKEN_KEY } from './apiConfig';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImageManipulator from 'expo-image-manipulator';
 import type { 
@@ -1482,6 +1482,146 @@ export const mealAPI = {
       }
       
       throw new Error('사진 업로드에 실패했습니다. 다시 시도해주세요.');
+    }
+  },
+
+  /**
+   * 음식 피드백 (좋아요)
+   * POST /food_feedback
+   */
+  submitFoodFeedback: async (foodFeedback: {
+    user_id: string;
+    food_id: number;
+    food_name: string;
+    feedback: "like";
+  }): Promise<string> => {
+    try {
+      const response = await requestAI<string>("/food_feedback", {
+        method: "POST",
+        body: JSON.stringify(foodFeedback),
+      });
+      return response;
+    } catch (error: any) {
+      console.error("[MEAL] 음식 피드백 제출 실패:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * 하루 총 섭취 칼로리 및 영양성분 조회
+   * GET /food/nutrition/summary?user_id={user_id}&date={date}
+   * 
+   * 사용자가 해당 날짜에 섭취한 총 칼로리 및 영양소 합계를 반환합니다.
+   * - Meal / MealItem 기록을 기반으로
+   * - daily_nutrition_summary 테이블에 저장된 값을 조회
+   * - 기록이 없으면 0으로 반환
+   */
+  getNutritionSummary: async (date: string): Promise<{
+    calories?: number;
+    carbs?: number;
+    protein?: number;
+    fat?: number;
+    [key: string]: any;
+  }> => {
+    const user_id = await getUserId();
+    
+    // 날짜 형식 검증
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new Error('날짜 형식이 올바르지 않습니다. yyyy-MM-dd 형식을 사용해주세요.');
+    }
+    
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const headers: HeadersInit = {
+      'accept': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const url = `${AI_API_BASE_URL}/food/nutrition/summary?user_id=${encodeURIComponent(user_id)}&date=${encodeURIComponent(date)}`;
+    console.log(`📡 영양성분 요약 조회 요청 (날짜: ${date}): ${url}`);
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers,
+      });
+      
+      if (!response.ok) {
+        // 404나 다른 에러인 경우 빈 객체 반환 (기록이 없으면 0으로 반환)
+        if (response.status === 404) {
+          console.log(`📊 영양성분 요약 없음 (날짜: ${date})`);
+          return {
+            calories: 0,
+            carbs: 0,
+            protein: 0,
+            fat: 0,
+          };
+        }
+        
+        const errorText = await response.text();
+        console.error(`❌ 영양성분 요약 조회 에러 응답:`, errorText);
+        
+        // 422 Validation Error 처리
+        if (response.status === 422) {
+          try {
+            const errorData = JSON.parse(errorText);
+            if (errorData.detail && Array.isArray(errorData.detail)) {
+              const errorMessages = errorData.detail.map((err: any) => {
+                const field = err.loc && Array.isArray(err.loc)
+                  ? err.loc.filter((loc: any) => typeof loc === 'string').join('.')
+                  : 'unknown';
+                return `${field}: ${err.msg || '검증 오류'}`;
+              });
+              throw new Error(errorMessages.join(', '));
+            } else if (errorData.detail && typeof errorData.detail === 'string') {
+              throw new Error(errorData.detail);
+            }
+          } catch (parseError) {
+            throw new Error('요청 파라미터가 올바르지 않습니다. user_id와 date를 확인해주세요.');
+          }
+        }
+        
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log(`✅ 영양성분 요약 조회 성공 (날짜: ${date}):`, data);
+      
+      // 응답 형식: { user_id, date, exists, total: { kcal, protein_g, carb_g, fat_g, ... } }
+      const total = data.total || {};
+      
+      return {
+        calories: total.kcal || 0,
+        carbs: total.carb_g || 0,
+        protein: total.protein_g || 0,
+        fat: total.fat_g || 0,
+        fiber: total.fiber_g || 0,
+        sugar: total.sugar_g || 0,
+        sodium: total.sodium_mg || 0,
+        exists: data.exists || false,
+        ...data, // 기타 필드도 포함
+      };
+    } catch (error: any) {
+      // 네트워크 에러나 기타 에러인 경우 빈 객체 반환
+      if (error.message?.includes('404') || error.message?.includes('찾을 수 없')) {
+        return {
+          calories: 0,
+          carbs: 0,
+          protein: 0,
+          fat: 0,
+        };
+      }
+      
+      console.error('영양성분 요약 조회 실패:', error);
+      // 에러가 발생해도 빈 객체 반환 (기록이 없으면 0으로 반환)
+      return {
+        calories: 0,
+        carbs: 0,
+        protein: 0,
+        fat: 0,
+      };
     }
   },
 };

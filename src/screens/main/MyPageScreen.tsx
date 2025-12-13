@@ -181,13 +181,50 @@ const MyPageScreen = ({ navigation }: any) => {
     ]);
   };
 
-  // 단순 호출용 핸들러 (사용 안 함, handleLogoutPress 사용 권장)
-  const handleLogout = () => {
-    executeLogout();
-  };
+  const handleDeleteAccount = async () => {
+    // 프로필 데이터에서 카카오 사용자 여부 확인
+    const isKakaoUser =
+      profileData &&
+      ((profileData as any).loginType === "KAKAO" ||
+        (profileData as any).provider === "KAKAO" ||
+        (profileData as any).kakaoId !== undefined);
 
-  const handleDeleteAccount = () => {
-    setIsDeleteAccountModalOpen(true);
+    if (isKakaoUser) {
+      // 카카오 사용자: unlink API 호출
+      try {
+        await authAPI.kakaoUnlink();
+
+        // 성공하면 카카오 사용자 → 탈퇴 완료
+        Alert.alert(
+          "탈퇴 완료",
+          "카카오 연결이 해제되었습니다. 그동안 이용해주셔서 감사합니다.",
+          [
+            {
+              text: "확인",
+              onPress: async () => {
+                // 로컬 데이터 삭제
+                await AsyncStorage.removeItem("access_token");
+                await AsyncStorage.removeItem("refresh_token");
+                await AsyncStorage.removeItem("userId");
+                await AsyncStorage.removeItem("userName");
+                await AsyncStorage.removeItem("membershipType");
+                await AsyncStorage.removeItem("chatbot_tokens");
+                navigation.replace("Login");
+              },
+            },
+          ]
+        );
+      } catch (error: any) {
+        console.error("카카오 unlink 실패:", error);
+        Alert.alert(
+          "오류",
+          error.message || "카카오 연결 해제에 실패했습니다."
+        );
+      }
+    } else {
+      // 일반 사용자: 회원탈퇴 모달 열기
+      setIsDeleteAccountModalOpen(true);
+    }
   };
 
   const getMembershipTypeText = (type: string) => {

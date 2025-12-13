@@ -21,6 +21,7 @@ import type { WeeklyCoachReport } from "../../services/homeAPI";
 import {
   getTodayWorkoutTime,
   fetchSavedWorkouts,
+  getWorkoutCalories,
 } from "../../utils/exerciseApi";
 import { getLatestInBody } from "../../utils/inbodyApi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -36,6 +37,7 @@ const HomeScreen = ({ navigation }: any) => {
   const [homeData, setHomeData] = useState<HomeResponse | null>(null);
   const [todayWorkoutSeconds, setTodayWorkoutSeconds] = useState(0);
   const [todayExerciseCount, setTodayExerciseCount] = useState(0);
+  const [todayCalories, setTodayCalories] = useState(0);
   const [inBodyData, setInBodyData] = useState<any>(null);
   const isLoadingRef = useRef(false);
 
@@ -71,18 +73,89 @@ const HomeScreen = ({ navigation }: any) => {
   // 주간 진행률 데이터 로드
   const loadWeeklyProgress = async () => {
     try {
+      console.log('🏠 [홈 화면] 주간 진행률 데이터 로드 시작');
       const data = await homeAPI.getWeeklyProgress();
+      console.log('🏠 [홈 화면] 주간 진행률 데이터 수신 완료:', data);
 
+      // 이번 주의 날짜 범위 계산 (일~토)
+      const today = new Date();
+      const getStartOfWeek = (d: Date) => {
+        const n = new Date(
+          d.getFullYear(),
+          d.getMonth(),
+          d.getDate()
+        );
+        const diff = n.getDay();
+        n.setDate(n.getDate() - diff);
+        return n;
+      };
+      const startOfWeek = getStartOfWeek(today);
+      
+      // 이번 주의 각 날짜에 대해 칼로리 데이터 가져오기
+      const weekDates = Array.from({ length: 7 }).map((_, i) => {
+        const d = new Date(
+          startOfWeek.getFullYear(),
+          startOfWeek.getMonth(),
+          startOfWeek.getDate() + i
+        );
+        return formatDateToString(d);
+      });
+
+      console.log('🏠 [홈 화면] 이번 주 날짜 (7일):', weekDates);
+
+      // 각 날짜에 대해 영양성분 요약 조회 (병렬 처리 - 7번 호출)
+      console.log('🏠 [홈 화면] 이번 주 칼로리 데이터 조회 시작 (7일 병렬 호출)');
+      const nutritionPromises = weekDates.map(async (date, index) => {
+        try {
+          console.log(`📡 [홈 화면] ${index + 1}/7 - ${date} 영양성분 조회 중...`);
+          const summary = await mealAPI.getNutritionSummary(date);
+          const calories = summary.calories || 0;
+          console.log(`✅ [홈 화면] ${index + 1}/7 - ${date} 칼로리: ${calories}kcal`);
+          return { date, calories };
+        } catch (error) {
+          console.error(`❌ [홈 화면] ${index + 1}/7 - ${date} 영양성분 조회 실패:`, error);
+          return { date, calories: 0 };
+        }
+      });
+
+      const nutritionResults = await Promise.all(nutritionPromises);
+      console.log('🏠 [홈 화면] 이번 주 칼로리 데이터 조회 완료 (7일):', nutritionResults);
+
+      // 기존 데이터와 병합 (칼로리 데이터 업데이트)
+      let updatedData: DailyProgressWeekItem[] = [];
+      
       if (Array.isArray(data) && data.length > 0) {
-        setWeeklyProgress(data);
+        // 기존 데이터를 기반으로 업데이트
+        updatedData = weekDates.map((date) => {
+          const existingItem = data.find((item) => item.date === date);
+          const nutritionItem = nutritionResults.find((item) => item.date === date);
+          
+          return {
+            date,
+            exerciseRate: existingItem?.exerciseRate ?? 0,
+            totalCalorie: nutritionItem?.calories ?? existingItem?.totalCalorie ?? 0,
+          };
+        });
       } else {
-        setWeeklyProgress([]);
+        // 기존 데이터가 없으면 영양성분 데이터만 사용
+        updatedData = weekDates.map((date) => {
+          const nutritionItem = nutritionResults.find((item) => item.date === date);
+          return {
+            date,
+            exerciseRate: 0,
+            totalCalorie: nutritionItem?.calories ?? 0,
+          };
+        });
       }
+
+      setWeeklyProgress(updatedData);
+      console.log('🏠 [홈 화면] 주간 진행률 상태 업데이트 완료:', updatedData.length, '개');
     } catch (e: any) {
-      console.error("주간 진행률 로드 실패:", e);
+      console.error("❌ [홈 화면] 주간 진행률 로드 실패:", e);
       setWeeklyProgress([]);
     }
   };
+
 
   // 특정 날짜의 진행률 데이터 가져오기
   const getDayProgress = (date: Date): DailyProgressWeekItem | undefined => {
@@ -291,6 +364,7 @@ const HomeScreen = ({ navigation }: any) => {
         console.warn("[HOME][DEBUG] userId를 찾을 수 없음, 0으로 설정");
         setTodayWorkoutSeconds(0);
         setTodayExerciseCount(0);
+        setTodayCalories(0);
         return;
       }
 
@@ -306,6 +380,17 @@ const HomeScreen = ({ navigation }: any) => {
       const today = new Date();
       const dateString = formatDateToString(today);
 
+      // 3) 오늘의 소모 칼로리 조회
+      try {
+        const caloriesResponse = await getWorkoutCalories(userId, dateString);
+        const totalCalories = Number(caloriesResponse?.totalCalories) || 0;
+        console.log("[HOME][소모칼로리] API 응답:", caloriesResponse);
+        setTodayCalories(totalCalories >= 0 ? totalCalories : 0);
+      } catch (caloriesError) {
+        console.error("[HOME][소모칼로리] 소모 칼로리 조회 실패:", caloriesError);
+        setTodayCalories(0);
+      }
+
       console.log("[HOME][운동시간] 날짜 확인:", {
         today: today.toISOString(),
         dateString,
@@ -320,6 +405,7 @@ const HomeScreen = ({ navigation }: any) => {
         console.error("[HOME][운동시간] 잘못된 날짜 형식:", dateString);
         setTodayWorkoutSeconds(0);
         setTodayExerciseCount(0);
+        setTodayCalories(0);
         return;
       }
       const savedWorkouts = await fetchSavedWorkouts(userId, dateString);
@@ -333,6 +419,7 @@ const HomeScreen = ({ navigation }: any) => {
           }
         );
         setTodayExerciseCount(0);
+        setTodayCalories(0);
         return;
       }
 
@@ -399,6 +486,7 @@ const HomeScreen = ({ navigation }: any) => {
       }
       setTodayWorkoutSeconds(0);
       setTodayExerciseCount(0);
+      setTodayCalories(0);
     }
   };
 
@@ -502,22 +590,23 @@ const HomeScreen = ({ navigation }: any) => {
   // 화면 포커스 시 데이터 로드
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
-      console.log("[HOME] 화면 포커스, 오늘 운동 데이터 새로고침 시작");
+      console.log("[HOME] 화면 포커스, 데이터 새로고침 시작 (이번 주 칼로리 포함)");
 
       if (isLoadingRef.current) {
+        console.log("[HOME] 이미 로딩 중이므로 스킵");
         return;
       }
 
       isLoadingRef.current = true;
       Promise.all([
-        loadWeeklyProgress(),
+        loadWeeklyProgress(), // 이번 주 칼로리 데이터 포함
         loadHomeData(),
         loadTodayWorkoutTime(),
         loadInBodyData(),
         loadProfileInfo(),
       ]).finally(() => {
         isLoadingRef.current = false;
-        console.log("[HOME] 화면 포커스, 오늘 운동 데이터 새로고침 완료");
+        console.log("[HOME] 화면 포커스, 데이터 새로고침 완료 (이번 주 칼로리 포함)");
       });
 
       // 코치 리포트가 있으면 새로운 랜덤 선택 (API 호출 없이)
@@ -799,7 +888,9 @@ const HomeScreen = ({ navigation }: any) => {
             <View style={styles.exerciseStatColumn}>
               <Text style={styles.exerciseStatLabel}>소모 칼로리</Text>
               <View style={styles.exerciseStatValueRow}>
-                <Text style={styles.exerciseStatValue}>-</Text>
+                <Text style={styles.exerciseStatValue}>
+                  {todayCalories.toLocaleString()}
+                </Text>
                 <Text style={styles.exerciseStatUnit}>kcal</Text>
               </View>
             </View>
@@ -816,57 +907,80 @@ const HomeScreen = ({ navigation }: any) => {
           </View>
         </View>
 
-        {/* 체중/골격근량/체지방량 카드 */}
-        <View style={styles.bodyStatsContainer}>
-          <View style={[styles.bodyStatCard]}>
-            <Text style={styles.bodyStatLabel}>체중</Text>
-            <Text style={styles.bodyStatValue}>
-              {inBodyData?.weight
-                ? `${inBodyData.weight.toFixed(1)}kg`
-                : inBodyData?.bodyComposition?.weight
-                ? `${parseFloat(
-                    String(inBodyData.bodyComposition.weight).replace(
-                      /[^\d.]/g,
-                      ""
-                    )
-                  ).toFixed(1)}kg`
-                : inBodyData?.muscleFatAnalysis?.weight
-                ? `${inBodyData.muscleFatAnalysis.weight.toFixed(1)}kg`
-                : "-"}
-            </Text>
-          </View>
+        {/* 체중/골격근량/체지방량 카드 - 인바디 기록이 있을 때만 표시 */}
+        {(() => {
+          // 인바디 기록이 있는지 확인 (체중, 골격근량, 체지방량 중 하나라도 값이 있으면 표시)
+          const hasWeight = 
+            inBodyData?.weight ||
+            inBodyData?.bodyComposition?.weight ||
+            inBodyData?.muscleFatAnalysis?.weight;
+          const hasSkeletalMuscleMass = 
+            inBodyData?.skeletalMuscleMass ||
+            inBodyData?.muscleFatAnalysis?.skeletalMuscleMass;
+          const hasBodyFatMass = 
+            inBodyData?.bodyFatMass ||
+            inBodyData?.muscleFatAnalysis?.bodyFatMass ||
+            inBodyData?.bodyComposition?.bodyFatMass;
+          
+          const hasInBodyData = hasWeight || hasSkeletalMuscleMass || hasBodyFatMass;
+          
+          if (!hasInBodyData) {
+            return null;
+          }
+          
+          return (
+            <View style={styles.bodyStatsContainer}>
+              <View style={[styles.bodyStatCard]}>
+                <Text style={styles.bodyStatLabel}>체중</Text>
+                <Text style={styles.bodyStatValue}>
+                  {inBodyData?.weight
+                    ? `${inBodyData.weight.toFixed(1)}kg`
+                    : inBodyData?.bodyComposition?.weight
+                    ? `${parseFloat(
+                        String(inBodyData.bodyComposition.weight).replace(
+                          /[^\d.]/g,
+                          ""
+                        )
+                      ).toFixed(1)}kg`
+                    : inBodyData?.muscleFatAnalysis?.weight
+                    ? `${inBodyData.muscleFatAnalysis.weight.toFixed(1)}kg`
+                    : "-"}
+                </Text>
+              </View>
 
-          <View style={[styles.bodyStatCard]}>
-            <Text style={styles.bodyStatLabel}>골격근량</Text>
-            <Text style={styles.bodyStatValue}>
-              {inBodyData?.skeletalMuscleMass
-                ? `${inBodyData.skeletalMuscleMass.toFixed(1)}kg`
-                : inBodyData?.muscleFatAnalysis?.skeletalMuscleMass
-                ? `${inBodyData.muscleFatAnalysis.skeletalMuscleMass.toFixed(
-                    1
-                  )}kg`
-                : "-"}
-            </Text>
-          </View>
+              <View style={[styles.bodyStatCard]}>
+                <Text style={styles.bodyStatLabel}>골격근량</Text>
+                <Text style={styles.bodyStatValue}>
+                  {inBodyData?.skeletalMuscleMass
+                    ? `${inBodyData.skeletalMuscleMass.toFixed(1)}kg`
+                    : inBodyData?.muscleFatAnalysis?.skeletalMuscleMass
+                    ? `${inBodyData.muscleFatAnalysis.skeletalMuscleMass.toFixed(
+                        1
+                      )}kg`
+                    : "-"}
+                </Text>
+              </View>
 
-          <View style={[styles.bodyStatCard, { marginRight: 0 }]}>
-            <Text style={styles.bodyStatLabel}>체지방량</Text>
-            <Text style={styles.bodyStatValue}>
-              {inBodyData?.bodyFatMass
-                ? `${inBodyData.bodyFatMass.toFixed(1)}kg`
-                : inBodyData?.muscleFatAnalysis?.bodyFatMass
-                ? `${inBodyData.muscleFatAnalysis.bodyFatMass.toFixed(1)}kg`
-                : inBodyData?.bodyComposition?.bodyFatMass
-                ? `${parseFloat(
-                    String(inBodyData.bodyComposition.bodyFatMass).replace(
-                      /[^\d.]/g,
-                      ""
-                    )
-                  ).toFixed(1)}kg`
-                : "-"}
-            </Text>
-          </View>
-        </View>
+              <View style={[styles.bodyStatCard, { marginRight: 0 }]}>
+                <Text style={styles.bodyStatLabel}>체지방량</Text>
+                <Text style={styles.bodyStatValue}>
+                  {inBodyData?.bodyFatMass
+                    ? `${inBodyData.bodyFatMass.toFixed(1)}kg`
+                    : inBodyData?.muscleFatAnalysis?.bodyFatMass
+                    ? `${inBodyData.muscleFatAnalysis.bodyFatMass.toFixed(1)}kg`
+                    : inBodyData?.bodyComposition?.bodyFatMass
+                    ? `${parseFloat(
+                        String(inBodyData.bodyComposition.bodyFatMass).replace(
+                          /[^\d.]/g,
+                          ""
+                        )
+                      ).toFixed(1)}kg`
+                    : "-"}
+                </Text>
+              </View>
+            </View>
+          );
+        })()}
 
         {/* 식단 추천 섹션 */}
         <View style={styles.dietRecommendationSection}>

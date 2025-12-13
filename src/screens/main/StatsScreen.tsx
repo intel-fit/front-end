@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback} from 'react';
+import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {
   View,
   Text,
@@ -9,14 +9,19 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {colors} from '../../theme/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {useFocusEffect} from '@react-navigation/native';
 import ExerciseScreen from '../exercise/ExerciseScreen';
 import DietScreen from '../diet/DietScreen';
+import {useDate} from '../../contexts/DateContext';
 
 const StatsScreen = ({navigation, route}: any) => {
   const [activeTab, setActiveTab] = useState(0);
   const [goalData, setGoalData] = useState<any>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [userIdLoaded, setUserIdLoaded] = useState(false);
+  const {setSelectedDate} = useDate();
+  const previousActiveTabRef = useRef<number | null>(null);
+  const lastFocusTimeRef = useRef<number>(0);
 
   const storageKey = React.useMemo(
     () => (userId ? `workoutGoals:${userId}` : 'workoutGoals'),
@@ -72,6 +77,36 @@ const StatsScreen = ({navigation, route}: any) => {
       navigation.setParams({activeTab: undefined});
     }
   }, [route?.params?.activeTab, navigation]);
+
+  // 화면 포커스 시: 다른 탭에서 돌아온 경우 날짜를 오늘로 설정
+  useFocusEffect(
+    useCallback(() => {
+      const now = Date.now();
+      const timeSinceLastFocus = now - lastFocusTimeRef.current;
+      const previousActiveTab = previousActiveTabRef.current;
+      
+      // activeTab이 변경되었으면 Stats 내부에서 탭 전환한 것으로 간주 (날짜 유지)
+      const isTabSwitch = previousActiveTab !== null && previousActiveTab !== activeTab;
+      
+      // activeTab이 변경되지 않았고, 마지막 포커스로부터 1초 이상 지났으면
+      // 다른 탭에서 돌아온 것으로 간주
+      const isFromOtherTab = !isTabSwitch && timeSinceLastFocus > 1000;
+
+      if (isFromOtherTab || previousActiveTab === null) {
+        // 다른 탭에서 돌아온 경우 또는 처음 Stats로 온 경우: 날짜를 오늘로 설정
+        const today = new Date();
+        setSelectedDate(today);
+        console.log('[Stats] 다른 탭에서 돌아옴 또는 처음 진입 - 날짜를 오늘로 설정');
+      } else {
+        // Stats 내부에서 탭 전환한 경우: 날짜 유지
+        console.log('[Stats] Stats 내부에서 탭 전환 - 날짜 유지');
+      }
+      
+      // 현재 activeTab을 이전 값으로 저장
+      previousActiveTabRef.current = activeTab;
+      lastFocusTimeRef.current = now;
+    }, [activeTab, setSelectedDate])
+  );
 
   const tabs = ['운동기록', '식단기록'];
 

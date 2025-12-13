@@ -745,7 +745,10 @@ export const authAPI = {
         // userId 저장
         if (response.userId) {
           await AsyncStorage.setItem("userId", String(response.userId));
-          console.log("[AUTH] 카카오 로그인 - userId 저장 완료:", response.userId);
+          console.log(
+            "[AUTH] 카카오 로그인 - userId 저장 완료:",
+            response.userId
+          );
         }
 
         // JWT에서도 userId 추출 시도
@@ -784,9 +787,12 @@ export const authAPI = {
    */
   kakaoLogout: async (): Promise<{ message: string }> => {
     try {
-      const response = await request<{ message: string }>("/api/auth/kakao/logout", {
-        method: "POST",
-      });
+      const response = await request<{ message: string }>(
+        "/api/auth/kakao/logout",
+        {
+          method: "POST",
+        }
+      );
       return response;
     } catch (error: any) {
       console.error("[AUTH] 카카오 로그아웃 실패:", error);
@@ -799,9 +805,12 @@ export const authAPI = {
    */
   kakaoUnlink: async (): Promise<{ message: string }> => {
     try {
-      const response = await request<{ message: string }>("/api/auth/kakao/unlink", {
-        method: "DELETE",
-      });
+      const response = await request<{ message: string }>(
+        "/api/auth/kakao/unlink",
+        {
+          method: "DELETE",
+        }
+      );
       return response;
     } catch (error: any) {
       console.error("[AUTH] 카카오 연결 해제 실패:", error);
@@ -845,15 +854,15 @@ export const authAPI = {
    * @returns 성공 여부
    */
   submitOnboarding: async (onboardingData: {
+    birthDate: string;
+    agreePrivacy: boolean;
+    agreeTerms: boolean;
     gender: "M" | "F";
     height: number;
     weight: number;
-    birthDate: string;
     weightGoal: number;
     healthGoal: string;
     workoutDaysPerWeek: string;
-    experienceLevel?: string;
-    fitnessConcerns?: string;
   }): Promise<{ success: boolean; message: string }> => {
     try {
       const response = await request<{ success: boolean; message: string }>(

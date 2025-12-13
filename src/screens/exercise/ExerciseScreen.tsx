@@ -40,6 +40,7 @@ import { eventBus } from "../../utils/eventBus";
 import { useDate } from "../../contexts/DateContext";
 import type { DailyProgressWeekItem } from "../../types";
 import { API_BASE_URL, ACCESS_TOKEN_KEY } from "../../services/apiConfig";
+import { mealAPI } from "../../services";
 import { useFocusEffect, useRoute } from "@react-navigation/native";
 interface Activity {
   id: number;
@@ -476,6 +477,8 @@ const ExerciseScreen = ({ navigation }: any) => {
   const [monthlyProgress, setMonthlyProgress] = useState<
     DailyProgressWeekItem[]
   >([]);
+  // 달력에 표시할 칼로리 데이터 (날짜별)
+  const [calendarCalories, setCalendarCalories] = useState<Record<string, number>>({});
   const [showMonthView, setShowMonthView] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isIntroVisible, setIsIntroVisible] = useState(false);
@@ -524,6 +527,8 @@ const ExerciseScreen = ({ navigation }: any) => {
   const [completionSummaryTitle, setCompletionSummaryTitle] = useState("");
   const [todayTotalWorkoutSeconds, setTodayTotalWorkoutSeconds] = useState(0);
   const [workoutStartTime, setWorkoutStartTime] = useState<number | null>(null); // 운동 시작 시점 (초 단위)
+  const [currentExerciseStartTime, setCurrentExerciseStartTime] = useState<number | null>(null); // 현재 운동의 시작 시간 (초 단위)
+  const [currentExerciseStartTimestamp, setCurrentExerciseStartTimestamp] = useState<number | null>(null); // 현재 운동의 시작 타임스탬프 (밀리초)
   const [isSavingCompletionTitle, setIsSavingCompletionTitle] = useState(false);
   const [expandedSavedTitle, setExpandedSavedTitle] = useState<string | null>(
     null
@@ -1200,6 +1205,12 @@ const ExerciseScreen = ({ navigation }: any) => {
             // 각 운동별로 Activity 생성
             exerciseMap.forEach((records, exerciseName) => {
               const activityKey = `${session.sessionId}__${exerciseName}`;
+              
+              // 이미 추가된 활동이면 스킵 (중복 방지)
+              if (serverActivityKeys.has(activityKey)) {
+                return;
+              }
+              
               serverActivityKeys.add(activityKey);
               
               const firstRecord = records[0];
@@ -1257,112 +1268,87 @@ const ExerciseScreen = ({ navigation }: any) => {
           });
         });
 
-        // 서버에서 가져온 그룹의 제목들 수집 (어떤 제목들이 서버에 있는지 확인)
-        const serverTitles = new Set<string>();
-        mergedGroups.forEach((group) => {
-          const normalizedTitle = (group.title || "").trim().toLowerCase();
-          if (normalizedTitle) {
-            serverTitles.add(normalizedTitle);
-          }
-        });
-
-        // 기존 allActivities에서 이미 존재하는 활동의 키 수집 (중복 방지용)
-        const existingActivityKeys = new Set<string>();
-        prev.forEach((activity) => {
-          if (activity.date === currentDateStr && activity.sessionId && activity.name) {
-            const key = `${activity.sessionId}__${activity.name}`;
-            existingActivityKeys.add(key);
+        // 서버에서 가져온 활동의 고유 키 생성 (날짜 + 제목 + 운동명) - 중복 체크용
+        const serverActivityDedupKeys = new Set<string>();
+        newActivities.forEach((activity) => {
+          if (activity.date && activity.saveTitle && activity.name) {
+            const normalizedTitle = (activity.saveTitle || "").trim().toLowerCase();
+            const key = `${activity.date}__${normalizedTitle}__${activity.name.trim()}`;
+            serverActivityDedupKeys.add(key);
           }
         });
 
         // 기존 allActivities에서:
         // 1. 다른 날짜의 활동은 유지
-        // 2. 현재 날짜의 saveTitle이 있고 sessionId가 있는 활동 중:
-        //    - 서버에 같은 제목이 있으면 유지 (같은 제목으로 저장된 운동)
-        //    - 서버에 같은 제목이 없으면 제거 (다른 제목으로 새로 저장되었으므로)
-        // 3. 현재 날짜의 sessionId가 서버에 있지만 기존에 saveTitle이 없는 활동은 제거 (서버 데이터로 대체)
-        // 4. 현재 날짜의 saveTitle이 없고 sessionId도 서버에 없는 활동은 유지 (아직 저장되지 않은 활동)
+        // 2. 현재 날짜의 sessionId가 있는 활동은 모두 제거 (서버 데이터로 대체)
+        // 3. 현재 날짜의 sessionId가 없는 활동은 서버 데이터와 중복되지 않으면 유지
         const filteredPrev = prev.filter((activity) => {
           // 다른 날짜의 활동은 유지
           if (activity.date !== currentDateStr) {
             return true;
           }
           
-          // saveTitle이 있고 sessionId가 있는 경우
-          if (activity.saveTitle && activity.sessionId) {
-            const normalizedActivityTitle = activity.saveTitle.trim().toLowerCase();
-            // 서버에 같은 제목이 있으면 유지 (같은 제목으로 저장된 운동)
-            if (serverTitles.has(normalizedActivityTitle)) {
-              return true;
-            }
-            // 서버에 같은 제목이 없으면 제거 (다른 제목으로 새로 저장되었으므로)
+          // sessionId가 있는 경우는 모두 제거 (서버 데이터로 대체)
+          if (activity.sessionId) {
             return false;
           }
           
-          // sessionId가 있고 서버에 있으면 제거 (서버 데이터로 대체)
-          if (activity.sessionId && serverSessionIds.has(activity.sessionId)) {
-            return false;
-          }
-          
-          // sessionId + exerciseName 조합이 서버에 있으면 제거
-          if (activity.sessionId && activity.name) {
-            const activityKey = `${activity.sessionId}__${activity.name}`;
-            if (serverActivityKeys.has(activityKey)) {
-              return false;
+          // sessionId가 없으면 서버 데이터와 중복 체크
+          // 같은 날짜, 같은 제목, 같은 운동명이 서버에 있으면 제거 (서버 데이터로 대체)
+          if (activity.date && activity.saveTitle && activity.name) {
+            const normalizedTitle = (activity.saveTitle || "").trim().toLowerCase();
+            const key = `${activity.date}__${normalizedTitle}__${activity.name.trim()}`;
+            if (serverActivityDedupKeys.has(key)) {
+              return false; // 서버 데이터와 중복이면 제거
             }
           }
           
-          // 나머지는 유지 (아직 저장되지 않은 활동)
+          // 서버 데이터와 중복되지 않으면 유지 (아직 저장되지 않은 새로운 활동)
           return true;
         });
         
-        // 서버 데이터에서 이미 존재하는 활동은 제외 (중복 방지)
-        const newServerActivities = newActivities.filter((activity) => {
-          if (!activity.sessionId || !activity.name) return true;
-          const key = `${activity.sessionId}__${activity.name}`;
-          // 이미 filteredPrev에 존재하는 활동은 제외
-          return !existingActivityKeys.has(key);
-        });
-        
-        // 서버 데이터 추가 (중복 제거된 것만)
-        let result = [...filteredPrev, ...newServerActivities];
-        
-        // 중복 제거: 같은 날짜, 같은 saveTitle, 같은 운동명을 가진 활동은 하나만 유지
-        // 합치지 않고 첫 번째 것만 유지 (중복 제거)
+        // 서버 데이터 추가 (중복 제거: 날짜 + 제목 + 운동명 기준)
         const seenKeys = new Set<string>();
-        const deduplicatedResult: Activity[] = [];
+        const result: Activity[] = [];
         
-        result.forEach((activity) => {
-          if (!activity.name || !activity.date) {
-            // 이름이나 날짜가 없으면 그대로 추가
-            deduplicatedResult.push(activity);
-            return;
+        // filteredPrev의 활동들을 먼저 추가하고 seenKeys에 등록
+        filteredPrev.forEach((activity) => {
+          if (activity.date && activity.saveTitle && activity.name) {
+            const normalizedTitle = (activity.saveTitle || "").trim().toLowerCase();
+            const key = `${activity.date}__${normalizedTitle}__${activity.name.trim()}`;
+            seenKeys.add(key);
           }
-          
-          // 같은 날짜, 같은 saveTitle, 같은 운동명을 가진 활동은 중복으로 간주
-          const normalizedSaveTitle = (activity.saveTitle || "").trim().toLowerCase();
-          const dedupeKey = `${activity.date}__${normalizedSaveTitle}__${activity.name.trim()}`;
-          
-          // 이미 본 운동이면 스킵 (중복 제거)
-          if (seenKeys.has(dedupeKey)) {
-            return;
-          }
-          
-          // 처음 본 운동이면 추가
-          seenKeys.add(dedupeKey);
-          deduplicatedResult.push(activity);
+          result.push(activity);
         });
         
-        result = deduplicatedResult;
+        // 서버에서 가져온 활동 추가 (중복 제거)
+        newActivities.forEach((activity) => {
+          if (!activity.date || !activity.saveTitle || !activity.name) {
+            // 필수 필드가 없으면 추가하지 않음
+            return;
+          }
+          
+          // 고유 키: 날짜 + 제목 + 운동명
+          const normalizedTitle = (activity.saveTitle || "").trim().toLowerCase();
+          const uniqueKey = `${activity.date}__${normalizedTitle}__${activity.name.trim()}`;
+          
+          // 이미 추가된 활동이면 스킵 (중복 제거)
+          if (seenKeys.has(uniqueKey)) {
+            return;
+          }
+          
+          // 처음 본 활동이면 추가
+          seenKeys.add(uniqueKey);
+          result.push(activity);
+        });
         
         console.log("[EXERCISE][SAVED] 저장된 운동 기록 재구성:", {
           prevCount: prev.length,
           filteredPrevCount: filteredPrev.length,
           newCount: newActivities.length,
-          newServerActivitiesCount: newServerActivities.length,
           resultCount: result.length,
           removedCount: prev.length - filteredPrev.length,
-          duplicateRemoved: filteredPrev.length + newServerActivities.length - result.length,
+          addedCount: result.length - filteredPrev.length,
           activities: newActivities.map((a) => ({
             name: a.name,
             sessionId: a.sessionId,
@@ -1905,7 +1891,6 @@ const ExerciseScreen = ({ navigation }: any) => {
         intensityLength: intensityList.length,
         feedbackList,
         feedbackLength: feedbackList.length,
-        seconds: workoutSeconds,
         // API 스펙 검증: 배열 길이가 운동 개수와 일치하는지 확인
         arraysMatchExerciseCount:
           intensityList.length === completedExercises.length &&
@@ -1916,8 +1901,7 @@ const ExerciseScreen = ({ navigation }: any) => {
         userIdNum,
         trimmedTitle,
         intensityList,
-        feedbackList,
-        workoutSeconds
+        feedbackList
       );
 
       console.log("[WORKOUT][SAVE] 운동 저장 성공:", {
@@ -2100,6 +2084,40 @@ const ExerciseScreen = ({ navigation }: any) => {
     );
   };
 
+  // 달력에 표시할 날짜들의 칼로리 데이터 로드
+  const loadCalendarCalories = async (dates: string[]) => {
+    try {
+      console.log('📅 [운동 화면] 달력 칼로리 데이터 로드 시작:', dates.length, '일');
+      
+      // 각 날짜에 대해 영양성분 요약 조회 (병렬 처리)
+      const nutritionPromises = dates.map(async (date, index) => {
+        try {
+          console.log(`📡 [운동 화면] ${index + 1}/${dates.length} - ${date} 영양성분 조회 중...`);
+          const summary = await mealAPI.getNutritionSummary(date);
+          const calories = summary.calories || 0;
+          console.log(`✅ [운동 화면] ${index + 1}/${dates.length} - ${date} 칼로리: ${calories}kcal`);
+          return { date, calories };
+        } catch (error) {
+          console.error(`❌ [운동 화면] ${index + 1}/${dates.length} - ${date} 영양성분 조회 실패:`, error);
+          return { date, calories: 0 };
+        }
+      });
+
+      const nutritionResults = await Promise.all(nutritionPromises);
+      console.log('📅 [운동 화면] 달력 칼로리 데이터 조회 완료:', nutritionResults.length, '일');
+
+      // 상태 업데이트
+      const caloriesMap: Record<string, number> = {};
+      nutritionResults.forEach(({ date, calories }) => {
+        caloriesMap[date] = calories;
+      });
+      
+      setCalendarCalories(prev => ({ ...prev, ...caloriesMap }));
+    } catch (error) {
+      console.error('❌ [운동 화면] 달력 칼로리 데이터 로드 실패:', error);
+    }
+  };
+
   // 월별 데이터 로드
   const loadMonthlyProgress = async (year: number, month: number) => {
     try {
@@ -2116,6 +2134,18 @@ const ExerciseScreen = ({ navigation }: any) => {
   React.useEffect(() => {
     if (showMonthView) {
       loadMonthlyProgress(monthBase.getFullYear(), monthBase.getMonth());
+      
+      // 해당 월의 모든 날짜에 대해 칼로리 데이터 로드
+      const year = monthBase.getFullYear();
+      const month = monthBase.getMonth();
+      const firstOfMonth = new Date(year, month, 1);
+      const nextMonth = new Date(year, month + 1, 1);
+      const daysInMonth = Math.round((nextMonth.getTime() - firstOfMonth.getTime()) / (1000 * 60 * 60 * 24));
+      const monthDates = Array.from({ length: daysInMonth }).map((_, i) => {
+        const d = new Date(year, month, i + 1);
+        return formatDateToString(d);
+      });
+      loadCalendarCalories(monthDates);
     }
   }, [monthBase, showMonthView]);
 
@@ -2125,9 +2155,39 @@ const ExerciseScreen = ({ navigation }: any) => {
     if (showMonthView) {
       // 달력을 펼칠 때 monthBase의 달 데이터 가져오기
       loadMonthlyProgress(monthBase.getFullYear(), monthBase.getMonth());
+      
+      // 해당 월의 모든 날짜에 대해 칼로리 데이터 로드
+      const year = monthBase.getFullYear();
+      const month = monthBase.getMonth();
+      const firstOfMonth = new Date(year, month, 1);
+      const nextMonth = new Date(year, month + 1, 1);
+      const daysInMonth = Math.round((nextMonth.getTime() - firstOfMonth.getTime()) / (1000 * 60 * 60 * 24));
+      const monthDates = Array.from({ length: daysInMonth }).map((_, i) => {
+        const d = new Date(year, month, i + 1);
+        return formatDateToString(d);
+      });
+      loadCalendarCalories(monthDates);
     } else {
       // 달력을 접을 때 선택된 날짜의 달 데이터 가져오기 (주간 달력 표시 시)
       loadMonthlyProgress(dateToFetch.getFullYear(), dateToFetch.getMonth());
+      
+      // 이번 주의 날짜 범위 계산 (일~토)
+      const getStartOfWeek = (d: Date) => {
+        const n = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const diff = n.getDay();
+        n.setDate(n.getDate() - diff);
+        return n;
+      };
+      const startOfWeek = getStartOfWeek(dateToFetch);
+      const weekDates = Array.from({ length: 7 }).map((_, i) => {
+        const d = new Date(
+          startOfWeek.getFullYear(),
+          startOfWeek.getMonth(),
+          startOfWeek.getDate() + i
+        );
+        return formatDateToString(d);
+      });
+      loadCalendarCalories(weekDates);
     }
   }, [showMonthView, selectedDate]);
 
@@ -2135,7 +2195,27 @@ const ExerciseScreen = ({ navigation }: any) => {
   React.useEffect(() => {
     const dateToFetch = selectedDate || new Date();
     loadMonthlyProgress(dateToFetch.getFullYear(), dateToFetch.getMonth());
-  }, [selectedDate]);
+    
+    // 주간 달력인 경우 이번 주 7일의 칼로리 데이터 로드
+    if (!showMonthView) {
+      const getStartOfWeek = (d: Date) => {
+        const n = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const diff = n.getDay();
+        n.setDate(n.getDate() - diff);
+        return n;
+      };
+      const startOfWeek = getStartOfWeek(dateToFetch);
+      const weekDates = Array.from({ length: 7 }).map((_, i) => {
+        const d = new Date(
+          startOfWeek.getFullYear(),
+          startOfWeek.getMonth(),
+          startOfWeek.getDate() + i
+        );
+        return formatDateToString(d);
+      });
+      loadCalendarCalories(weekDates);
+    }
+  }, [selectedDate, showMonthView]);
 
   // 화면 포커스 시 목표/진행 재로딩
   // 다른 페이지에 갔다 오거나 식단 기록을 갔다 왔을 때, 탭 바꾸기 등 모든 행동 시
@@ -2143,15 +2223,51 @@ const ExerciseScreen = ({ navigation }: any) => {
   useFocusEffect(
     React.useCallback(() => {
       if (!userIdLoaded) return;
-      // 화면 포커스 시 날짜와 달력 월을 오늘로 설정
-      const today = new Date();
-      setSelectedDate(today);
-      setMonthBase(new Date(today.getFullYear(), today.getMonth(), 1));
+      
+      // StatsScreen에서 날짜 처리를 하므로 여기서는 날짜를 변경하지 않음
+      // 단지 현재 선택된 날짜를 사용하여 데이터 로드
+      const dateToFetch = selectedDate || new Date();
+      setMonthBase(new Date(dateToFetch.getFullYear(), dateToFetch.getMonth(), 1));
+      
       loadGoalData();
       loadWeeklyCalories();
       // 해당 달의 월별 데이터 가져오기
-      loadMonthlyProgress(today.getFullYear(), today.getMonth());
-    }, [userIdLoaded, loadGoalData, loadWeeklyCalories, setSelectedDate])
+      loadMonthlyProgress(dateToFetch.getFullYear(), dateToFetch.getMonth());
+      
+      // 달력 칼로리 데이터 새로고침
+      const dateToUse = selectedDate || today;
+      if (showMonthView) {
+        // 월간 달력인 경우 해당 월의 모든 날짜
+        const year = dateToUse.getFullYear();
+        const month = dateToUse.getMonth();
+        const firstOfMonth = new Date(year, month, 1);
+        const nextMonth = new Date(year, month + 1, 1);
+        const daysInMonth = Math.round((nextMonth.getTime() - firstOfMonth.getTime()) / (1000 * 60 * 60 * 24));
+        const monthDates = Array.from({ length: daysInMonth }).map((_, i) => {
+          const d = new Date(year, month, i + 1);
+          return formatDateToString(d);
+        });
+        loadCalendarCalories(monthDates);
+      } else {
+        // 주간 달력인 경우 이번 주 7일
+        const getStartOfWeek = (d: Date) => {
+          const n = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+          const diff = n.getDay();
+          n.setDate(n.getDate() - diff);
+          return n;
+        };
+        const startOfWeek = getStartOfWeek(dateToUse);
+        const weekDates = Array.from({ length: 7 }).map((_, i) => {
+          const d = new Date(
+            startOfWeek.getFullYear(),
+            startOfWeek.getMonth(),
+            startOfWeek.getDate() + i
+          );
+          return formatDateToString(d);
+        });
+        loadCalendarCalories(weekDates);
+      }
+    }, [userIdLoaded, loadGoalData, loadWeeklyCalories, showMonthView, selectedDate])
   );
 
   // 완료 횟수 저장 helper
@@ -2276,6 +2392,10 @@ const ExerciseScreen = ({ navigation }: any) => {
   const openExerciseEntry = () => {
     // 운동 추가 시 시작 시간 기록 (새로운 세션 시작)
     setWorkoutStartTime(todayTotalWorkoutSeconds);
+    // 현재 운동의 시작 시간도 기록 (각 운동별 시간 추적)
+    setCurrentExerciseStartTime(todayTotalWorkoutSeconds);
+    // 실제 타임스탬프 기록 (실제 운동 시간 계산용)
+    setCurrentExerciseStartTimestamp(Date.now());
     resetStretchFlowState();
     setIntroStage("intro");
     setIsIntroVisible(false);
@@ -2308,6 +2428,10 @@ const ExerciseScreen = ({ navigation }: any) => {
 
     // 운동 시작 시점의 누적 시간 기록 (현재 세션 시간 계산을 위해)
     setWorkoutStartTime(todayTotalWorkoutSeconds);
+    // 현재 운동의 시작 시간도 기록 (각 운동별 시간 추적)
+    setCurrentExerciseStartTime(todayTotalWorkoutSeconds);
+    // 실제 타임스탬프 기록 (실제 운동 시간 계산용)
+    setCurrentExerciseStartTimestamp(Date.now());
 
     // 아직 완료하지 않은 첫 번째 운동을 찾음
     const nextActivity =
@@ -2955,6 +3079,56 @@ const ExerciseScreen = ({ navigation }: any) => {
     )}T${String(now.getHours()).padStart(2, "0")}:${String(
       now.getMinutes()
     ).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+    
+    // 각 운동에 소요된 시간 계산 (초 단위)
+    // 실제 타임스탬프를 사용하여 정확한 운동 시간 계산
+    let exerciseSeconds = 0;
+    
+    if (currentExerciseStartTimestamp !== null) {
+      // 실제 타임스탬프 기반으로 경과 시간 계산 (밀리초 → 초)
+      const elapsedMs = Date.now() - currentExerciseStartTimestamp;
+      exerciseSeconds = Math.max(1, Math.floor(elapsedMs / 1000)); // 최소 1초
+      console.log("[WORKOUT][TIME] 타임스탬프 기반 시간 계산:", {
+        exerciseName,
+        startTimestamp: currentExerciseStartTimestamp,
+        currentTimestamp: Date.now(),
+        elapsedMs,
+        exerciseSeconds,
+      });
+    } else if (currentExerciseStartTime !== null && todayTotalWorkoutSeconds !== null) {
+      // 타임스탬프가 없으면 기존 방식 사용 (하위 호환성)
+      const calculatedSeconds = Math.max(0, todayTotalWorkoutSeconds - currentExerciseStartTime);
+      if (calculatedSeconds > 0) {
+        exerciseSeconds = calculatedSeconds;
+      } else {
+        // 계산된 시간이 0이면 최소 10초 (운동을 했다면 최소한의 시간은 있어야 함)
+        exerciseSeconds = 10;
+      }
+      console.log("[WORKOUT][TIME] 누적 시간 기반 계산:", {
+        exerciseName,
+        currentExerciseStartTime,
+        todayTotalWorkoutSeconds,
+        calculatedSeconds,
+        exerciseSeconds,
+      });
+    } else {
+      // 둘 다 없으면 최소 10초 (운동을 했다면 최소한의 시간은 있어야 함)
+      exerciseSeconds = 10;
+      console.log("[WORKOUT][TIME] 시간 정보 없음, 기본값 사용:", {
+        exerciseName,
+        exerciseSeconds,
+      });
+    }
+    
+    console.log("[WORKOUT][TIME] 최종 운동 시간:", {
+      exerciseName,
+      exerciseSeconds,
+    });
+    
+    // 운동 저장 후 현재 운동 시작 시간을 현재 시간으로 업데이트 (다음 운동을 위해)
+    setCurrentExerciseStartTime(todayTotalWorkoutSeconds);
+    setCurrentExerciseStartTimestamp(Date.now()); // 다음 운동을 위해 타임스탬프도 업데이트
+    
     const sessionPayload = {
       exerciseName,
       category: meta?.category || "기타",
@@ -2966,6 +3140,7 @@ const ExerciseScreen = ({ navigation }: any) => {
         weight: Number(s.weight) || 0,
         reps: Number(s.reps) || 0,
       })),
+      seconds: exerciseSeconds, // 각 운동에 소요된 시간 (초 단위)
     };
     console.log("[WORKOUT][LOCAL_SAVE]", sessionPayload);
     console.log(
@@ -3037,6 +3212,15 @@ const ExerciseScreen = ({ navigation }: any) => {
 
           // 해당 달의 월별 데이터 전체 다시 가져오기
           loadMonthlyProgress(activeDate.getFullYear(), activeDate.getMonth());
+          
+          // 오늘 날짜인 경우 운동 시간 다시 조회 (서버에서 계산된 총 시간 반영)
+          if (isToday) {
+            try {
+              await loadTodayWorkoutTime();
+            } catch (timeError) {
+              console.error("[WORKOUT][TIME] 운동 시간 재조회 실패:", timeError);
+            }
+          }
         } catch (progressError) {
           console.error("진행률 조회 실패:", progressError);
         }
@@ -3143,110 +3327,19 @@ const ExerciseScreen = ({ navigation }: any) => {
         style: "destructive",
         onPress: async () => {
           try {
-            const target = allActivities.find((a) => a.id === workoutId);
-            const targetDate = target?.date;
-
+            // 서버 API 호출 (sessionId가 있으면)
             if (sessionId) {
-              const res = await deleteWorkoutSession(sessionId);
-              console.log("[WORKOUT][DELETE][OK]", res);
+              await deleteWorkoutSession(sessionId);
+              console.log("[WORKOUT][DELETE] 서버 삭제 완료:", sessionId);
             }
 
-            // 운동 삭제 후 해당 날짜의 진행률 다시 가져오기
-            if (targetDate) {
-              try {
-                const today = new Date();
-                const targetDateObj = new Date(targetDate);
-                const isToday =
-                  targetDateObj.getFullYear() === today.getFullYear() &&
-                  targetDateObj.getMonth() === today.getMonth() &&
-                  targetDateObj.getDate() === today.getDate();
-
-                let dateProgress: DailyProgressWeekItem;
-                if (isToday) {
-                  dateProgress = await fetchTodayProgress();
-                } else {
-                  dateProgress = await fetchDateProgress(targetDate);
-                }
-
-                // 주간 진행률 업데이트
-                setWeeklyProgress((prev) => {
-                  const index = prev.findIndex(
-                    (item) => item.date === targetDate
-                  );
-                  if (index >= 0) {
-                    const updated = [...prev];
-                    updated[index] = dateProgress;
-                    return updated;
-                  }
-                  return prev;
-                });
-
-                // 월별 진행률 업데이트
-                setMonthlyProgress((prev) => {
-                  const index = prev.findIndex(
-                    (item) => item.date === targetDate
-                  );
-                  if (index >= 0) {
-                    const updated = [...prev];
-                    updated[index] = dateProgress;
-                    return updated;
-                  }
-                  return prev;
-                });
-
-                // 해당 달의 월별 데이터 전체 다시 가져오기
-                loadMonthlyProgress(
-                  targetDateObj.getFullYear(),
-                  targetDateObj.getMonth()
-                );
-              } catch (progressError) {
-                console.error("진행률 조회 실패:", progressError);
-              }
-            }
-          } catch (e) {
-            console.error("[WORKOUT][DELETE][FAIL]", e);
-          } finally {
-            const target = allActivities.find((a) => a.id === workoutId);
-            const updatedActivities = allActivities.filter(
-              (activity) => activity.id !== workoutId
+            // UI에서 제거
+            setAllActivities((prev) => 
+              prev.filter((activity) => activity.id !== workoutId)
             );
-            setAllActivities(updatedActivities);
-
-            // 이번 주에 완료된 운동 개수 다시 계산
-            const today = new Date();
-            const thisWeekStart = new Date(today);
-            thisWeekStart.setDate(today.getDate() - today.getDay()); // 일요일로 설정
-            thisWeekStart.setHours(0, 0, 0, 0);
-
-            const thisWeekCompleted = updatedActivities.filter((activity) => {
-              const activityDate = new Date(activity.date);
-              activityDate.setHours(0, 0, 0, 0);
-              return (
-                isActivityFullyCompleted(activity) &&
-                activityDate >= thisWeekStart &&
-                activityDate <= today
-              );
-            }).length;
-
-            // 완료 횟수와 칼로리를 즉시 업데이트
-            setCompletedCountPersist(thisWeekCompleted);
-            // 주간 칼로리 다시 계산 (비동기이므로 await)
-            (async () => {
-              try {
-                await loadWeeklyCalories();
-              } catch (error) {
-                console.error(
-                  "[WORKOUT][DELETE] 주간 칼로리 재계산 실패:",
-                  error
-                );
-              }
-            })();
-
-            eventBus.emit("workoutSessionDeleted", {
-              sessionId,
-              exerciseName: target?.name,
-              workoutDate: target?.date,
-            });
+          } catch (e) {
+            console.error("[WORKOUT][DELETE] 삭제 실패:", e);
+            Alert.alert("오류", "운동 삭제 중 오류가 발생했습니다.");
           }
         },
       },
@@ -3488,7 +3581,9 @@ const ExerciseScreen = ({ navigation }: any) => {
                         </View>
                         {(() => {
                           const dayProgress = getDayProgress(d);
-                          const calories = dayProgress?.totalCalorie || 0;
+                          const dateStr = formatDateToString(d);
+                          // 달력 칼로리 데이터 우선 사용, 없으면 진행률 데이터 사용
+                          const calories = calendarCalories[dateStr] ?? dayProgress?.totalCalorie ?? 0;
                           const rate = dayProgress?.exerciseRate || 0;
                           return (
                             <>
@@ -3577,7 +3672,9 @@ const ExerciseScreen = ({ navigation }: any) => {
                       </View>
                       {(() => {
                         const dayProgress = getDayProgress(d);
-                        const calories = dayProgress?.totalCalorie || 0;
+                        const dateStr = formatDateToString(d);
+                        // 달력 칼로리 데이터 우선 사용, 없으면 진행률 데이터 사용
+                        const calories = calendarCalories[dateStr] ?? dayProgress?.totalCalorie ?? 0;
                         const rate = dayProgress?.exerciseRate || 0;
                         return (
                           <>
@@ -3635,11 +3732,6 @@ const ExerciseScreen = ({ navigation }: any) => {
           <View style={styles.sectionTitleRow}>
             <Text style={styles.sectionTitle}>운동 기록하기</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              {savedWorkouts.length > 0 && (
-                <TouchableOpacity onPress={handleDeleteAllSavedWorkoutsForSelectedDate}>
-                  <Text style={styles.todayWorkoutTimeText}>전체 삭제</Text>
-                </TouchableOpacity>
-              )}
             {hasIncompleteActivities && workoutActivities.length > 0 ? (
               <TouchableOpacity
                 style={styles.startWorkoutButton}

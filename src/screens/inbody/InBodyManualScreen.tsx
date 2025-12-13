@@ -457,50 +457,7 @@ const InBodyManualScreen = ({ navigation, route }: any) => {
         JSON.stringify(payload, null, 2)
       );
 
-      // 날짜 검증: 최신 기록보다 과거 날짜로 저장하려는 경우 안내
-      if (payload.measurementDate) {
-        try {
-          console.log("[INBODY] 날짜 검증 중:", payload.measurementDate);
-          const latestRecord = await getLatestInBody();
-          
-          if (latestRecord) {
-            const latestData = latestRecord?.success ? latestRecord.inBody : latestRecord;
-            const latestDate = latestData?.measurementDate || latestData?.date;
-            
-            if (latestDate) {
-              // 날짜 형식 정규화 (YYYY-MM-DD)
-              const normalizedLatestDate = normalizeDateForComparison(latestDate);
-              const normalizedPayloadDate = normalizeDateForComparison(payload.measurementDate);
-              
-              // 날짜 비교 (문자열 비교로 날짜 순서 확인)
-              if (normalizedPayloadDate < normalizedLatestDate) {
-                // 저장하려는 날짜가 최신 기록보다 과거인 경우
-                console.log("[INBODY] 과거 날짜 저장 시도:", {
-                  latestDate: normalizedLatestDate,
-                  payloadDate: normalizedPayloadDate,
-                });
-                
-                Alert.alert(
-                  "과거 날짜 저장 불가",
-                  `이미 ${latestDate}에 인바디 기록이 있습니다.\n\n과거 날짜로는 인바디를 등록할 수 없습니다.\n\n${payload.measurementDate} 이후의 날짜로 등록해주세요.`,
-                  [{ text: "확인" }]
-                );
-                setLoading(false);
-                return;
-              } else if (normalizedPayloadDate > normalizedLatestDate) {
-                // 미래 날짜는 저장 허용
-                console.log("[INBODY] 미래 날짜 저장 허용:", {
-                  latestDate: normalizedLatestDate,
-                  payloadDate: normalizedPayloadDate,
-                });
-              }
-            }
-          }
-        } catch (error: any) {
-          console.warn("[INBODY] 날짜 검증 중 에러:", error);
-          // 날짜 검증 실패 시에도 저장은 진행 (에러가 발생해도 저장은 허용)
-        }
-      }
+      // 날짜 검증 제거: 과거 날짜도 저장 가능하도록 변경
 
       // 같은 날짜에 기존 기록이 있는지 확인
       // 날짜 변경 시 이미 확인한 ID가 있으면 사용, 없으면 최신 기록으로 확인

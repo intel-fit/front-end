@@ -75,22 +75,24 @@ export const homeAPI = {
   // 응답: [{ date: "2025-11-11", exerciseRate: 0, totalCalorie: 0 }, ...]
   getWeeklyProgress: async (): Promise<DailyProgressWeekItem[]> => {
     try {
-      console.log('주간 진행률 API 호출: GET /api/daily-progress/week');
+      console.log('📡 [주간 진행률] API 호출: GET /api/daily-progress/week');
       const response = await request<DailyProgressWeekItem[]>(`/api/daily-progress/week`, {
         method: 'GET',
       });
       
       // 배열로 반환
       if (Array.isArray(response)) {
-        console.log('주간 진행률 데이터 수신:', response.length, '개');
+        console.log('✅ [주간 진행률] 데이터 수신:', response.length, '개');
+        // 전체 응답 데이터 로그 출력
+        console.log('📊 [주간 진행률] 전체 응답 데이터:', JSON.stringify(response, null, 2));
         return response;
       }
       
       // 예외 처리
-      console.warn('주간 진행률 응답이 배열이 아닙니다:', response);
+      console.warn('⚠️ [주간 진행률] 응답이 배열이 아닙니다:', response);
       return [];
     } catch (error: any) {
-      console.error('주간 진행률 API 호출 실패:', error);
+      console.error('❌ [주간 진행률] API 호출 실패:', error);
       throw error;
     }
   },
@@ -108,6 +110,10 @@ export const homeAPI = {
       // 배열로 반환
       if (Array.isArray(response)) {
         console.log('월별 진행률 데이터 수신:', response.length, '개');
+        // 응답 데이터 샘플 로그 출력
+        if (response.length > 0) {
+          console.log('월별 진행률 데이터 샘플 (첫 3개):', response.slice(0, 3));
+        }
         return response;
       }
       
