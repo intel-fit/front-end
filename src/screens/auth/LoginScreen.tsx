@@ -126,13 +126,17 @@ const LoginScreen = ({navigation}: any) => {
           const membershipType = (parsed.queryParams?.membershipType as string | undefined) || 'FREE';
           await AsyncStorage.setItem('membershipType', membershipType);
 
-          // 온보딩 여부 확인
+          // 온보딩 여부 확인 (isOnboarded 우선 확인)
           const isOnboarded = parsed.queryParams?.isOnboarded;
           const onboarded = parsed.queryParams?.onboarded;
           const shouldOnboard = isOnboarded === 'false' || onboarded === 'false';
           
+          // 신규 유저 확인 (온보딩이 완료된 경우에만)
+          const newUser = parsed.queryParams?.newUser;
+          const isNewUser = newUser === 'true';
+          
           console.log('✅ [카카오 로그인] 토큰 저장 완료');
-          if (shouldOnboard) {
+          if (shouldOnboard || isNewUser) {
             navigation.replace('KakaoOnboarding');
           } else {
             navigation.replace('Main');
@@ -190,9 +194,15 @@ const LoginScreen = ({navigation}: any) => {
           await AsyncStorage.setItem('membershipType', 'FREE');
         }
 
-        // 온보딩 여부 확인 (isOnboarded 또는 onboarded 값 확인)
+        // 온보딩 여부 확인 (isOnboarded 우선 확인)
+        // isOnboarded === false: 온보딩 미완료 → 카카오 온보딩
         const isOnboarded = data.isOnboarded !== undefined ? data.isOnboarded : data.onboarded;
-        if (isOnboarded === false) {
+        const shouldOnboard = isOnboarded === false;
+        
+        // 신규 유저 확인 (온보딩이 완료된 경우에만)
+        const isNewUser = data.newUser === true;
+        
+        if (shouldOnboard || isNewUser) {
           navigation.replace('KakaoOnboarding');
         } else {
           navigation.replace('Main');
@@ -248,8 +258,18 @@ const LoginScreen = ({navigation}: any) => {
               await AsyncStorage.setItem('membershipType', 'FREE');
             }
 
-            // 메인 화면으로 이동
-            navigation.replace('Main');
+            // 온보딩 여부 확인 (isOnboarded 우선 확인)
+            const isOnboarded = data.isOnboarded !== undefined ? data.isOnboarded : data.onboarded;
+            const shouldOnboard = isOnboarded === false;
+            
+            // 신규 유저 확인 (온보딩이 완료된 경우에만)
+            const isNewUser = data.newUser === true;
+            
+            if (shouldOnboard || isNewUser) {
+              navigation.replace('KakaoOnboarding');
+            } else {
+              navigation.replace('Main');
+            }
           } catch (error: any) {
             console.error('카카오 로그인 처리 실패:', error);
           } finally {
@@ -281,7 +301,7 @@ const LoginScreen = ({navigation}: any) => {
       }
 
       // ✅ 방법 1: @react-native-seoul/kakao-login 사용 (네이티브 빌드에서만 작동)
-      if (KakaoLogin && KakaoLogin.login) {
+      if (KakaoLogin && typeof KakaoLogin.login === 'function') {
         try {
           console.log('🔵 [카카오 로그인] 네이티브 모듈 사용');
           const token = await KakaoLogin.login();
@@ -293,6 +313,7 @@ const LoginScreen = ({navigation}: any) => {
           console.log('✅ [카카오 로그인] 프로필:', profile);
 
           // 백엔드 API 호출 (카카오 ID로 로그인/회원가입)
+          console.log('🔵 [카카오 로그인] 백엔드 API 호출 시작');
           const res = await fetch(
             'https://www.intelfits.com/api/auth/kakao/login',
             {
@@ -307,11 +328,17 @@ const LoginScreen = ({navigation}: any) => {
             }
           );
 
+          console.log('🔵 [카카오 로그인] 백엔드 응답 상태:', res.status);
           const data = await res.json();
-          console.log('🔵 [카카오 로그인] 백엔드 응답:', data);
+          console.log('🔵 [카카오 로그인] 백엔드 응답 데이터:', data);
 
           if (!res.ok) {
-            throw new Error(data.message || '카카오 로그인에 실패했습니다');
+            console.error('❌ [카카오 로그인] 백엔드 응답 실패:', {
+              status: res.status,
+              statusText: res.statusText,
+              data: data
+            });
+            throw new Error(data.message || `카카오 로그인에 실패했습니다 (${res.status})`);
           }
 
           // 토큰 저장
@@ -330,17 +357,24 @@ const LoginScreen = ({navigation}: any) => {
             await AsyncStorage.setItem('membershipType', 'FREE');
           }
 
-          // 온보딩 여부 확인 (isOnboarded 또는 onboarded 값 확인)
+          // 온보딩 여부 확인 (isOnboarded 우선 확인)
           const isOnboarded = data.isOnboarded !== undefined ? data.isOnboarded : data.onboarded;
-          if (isOnboarded === false) {
+          const shouldOnboard = isOnboarded === false;
+          
+          // 신규 유저 확인 (온보딩이 완료된 경우에만)
+          const isNewUser = data.newUser === true;
+          
+          if (shouldOnboard || isNewUser) {
             navigation.replace('KakaoOnboarding');
           } else {
             navigation.replace('Main');
           }
           return;
         } catch (nativeError: any) {
+          console.error('❌ [카카오 로그인] 네이티브 모듈 실패:', nativeError);
           console.log('⚠️ [카카오 로그인] 네이티브 모듈 실패, WebBrowser 방식으로 전환:', nativeError.message);
           // 네이티브 모듈 실패 시 WebBrowser 방식으로 폴백
+          setLoading(false); // 로딩 상태 해제
         }
       }
 
@@ -351,10 +385,35 @@ const LoginScreen = ({navigation}: any) => {
 
       console.log('🔵 [카카오 로그인] WebBrowser 방식 사용');
       console.log('🔵 [카카오 로그인] URL:', loginUrl);
-      const result = await WebBrowser.openAuthSessionAsync(
-        loginUrl,
-        'intelfit://auth/kakao'  // 딥링크 스킴
-      );
+      
+      // 딥링크 스킴 설정 (앱 내부 브라우저에서 열리도록)
+      const deepLinkScheme = 'intelfit://auth/kakao';
+      console.log('🔵 [카카오 로그인] 딥링크 스킴:', deepLinkScheme);
+      
+      let result;
+      try {
+        // openAuthSessionAsync는 앱 내부 브라우저를 엽니다
+        result = await WebBrowser.openAuthSessionAsync(
+          loginUrl,
+          deepLinkScheme
+        );
+      } catch (browserError: any) {
+        console.error('❌ [카카오 로그인] WebBrowser 에러:', browserError);
+        // WebBrowser 실패 시 openBrowserAsync로 폴백 (앱 내부 브라우저)
+        console.log('🔄 [카카오 로그인] openBrowserAsync로 폴백');
+        try {
+          await WebBrowser.openBrowserAsync(loginUrl);
+          // openBrowserAsync는 딥링크를 자동으로 처리하지 않으므로
+          // Linking 이벤트 리스너가 처리하도록 함
+          setLoading(false);
+          return;
+        } catch (fallbackError: any) {
+          console.error('❌ [카카오 로그인] openBrowserAsync도 실패:', fallbackError);
+          Alert.alert('오류', '카카오 로그인 페이지를 열 수 없습니다.');
+          setLoading(false);
+          return;
+        }
+      }
       
       console.log('🔵 [카카오 로그인] 결과:', result);
 
@@ -391,9 +450,21 @@ const LoginScreen = ({navigation}: any) => {
             const membershipType = (parsed.queryParams?.membershipType as string | undefined) || 'FREE';
             await AsyncStorage.setItem('membershipType', membershipType);
 
-            console.log('✅ [카카오 로그인] 토큰 저장 완료, 메인 화면으로 이동');
-            // 메인 화면으로 이동
-            navigation.replace('Main');
+            // 온보딩 여부 확인 (isOnboarded 우선 확인)
+            const isOnboarded = parsed.queryParams?.isOnboarded;
+            const onboarded = parsed.queryParams?.onboarded;
+            const shouldOnboard = isOnboarded === 'false' || onboarded === 'false';
+            
+            // 신규 유저 확인 (온보딩이 완료된 경우에만)
+            const newUser = parsed.queryParams?.newUser;
+            const isNewUser = newUser === 'true';
+
+            console.log('✅ [카카오 로그인] 토큰 저장 완료');
+            if (shouldOnboard || isNewUser) {
+              navigation.replace('KakaoOnboarding');
+            } else {
+              navigation.replace('Main');
+            }
           } catch (error: any) {
             console.error('❌ [카카오 로그인] 토큰 저장 실패:', error);
             Alert.alert('로그인 실패', error.message || '토큰 저장 중 오류가 발생했습니다.');
@@ -443,9 +514,10 @@ const LoginScreen = ({navigation}: any) => {
               await AsyncStorage.setItem('membershipType', 'FREE');
             }
 
-            // 온보딩 여부 확인
-            if (data.onboarded === false) {
-              navigation.replace('Onboarding');
+            // 신규 유저/기존 유저 확인 (newUser 값 우선 확인)
+            const isNewUser = data.newUser === true;
+            if (isNewUser) {
+              navigation.replace('KakaoOnboarding');
             } else {
               navigation.replace('Main');
             }
@@ -463,12 +535,15 @@ const LoginScreen = ({navigation}: any) => {
         }
       } else if (result.type === 'cancel') {
         console.log('⚠️ [카카오 로그인] 사용자가 취소함');
+        Alert.alert('알림', '카카오 로그인이 취소되었습니다.');
       } else {
         console.log('⚠️ [카카오 로그인] 예상치 못한 결과:', result);
+        Alert.alert('오류', '카카오 로그인에 실패했습니다. 다시 시도해주세요.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ [카카오 로그인] 에러:', error);
-      Alert.alert('오류', '카카오 로그인 페이지를 열 수 없습니다.');
+      const errorMessage = error.message || '카카오 로그인 페이지를 열 수 없습니다.';
+      Alert.alert('오류', errorMessage);
     } finally {
       setLoading(false);
     }

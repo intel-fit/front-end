@@ -17,6 +17,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import {useFocusEffect} from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import FoodAddOptionsModal from '../../components/modals/FoodAddOptionsModal';
 import FoodEditModal from '../../components/modals/FoodEditModal';
 import FoodDirectInputModal from '../../components/modals/FoodDirectInputModal';
@@ -35,6 +36,7 @@ interface Food {
   protein: number;
   fat: number;
   weight: number;
+  liked?: boolean; // 좋아요 상태
 }
 
 const MealAddScreen = ({navigation, route}: any) => {
@@ -114,6 +116,7 @@ const MealAddScreen = ({navigation, route}: any) => {
   const [nutritionGoal, setNutritionGoal] = useState<NutritionGoal | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [dailyMealsData, setDailyMealsData] = useState<DailyMealsResponse | null>(null);
+  const [likedFoods, setLikedFoods] = useState<Set<number>>(new Set()); // 좋아요한 음식 ID 집합
 
   // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
   const formatDateToString = (date: Date): string => {
@@ -816,6 +819,39 @@ const MealAddScreen = ({navigation, route}: any) => {
           await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
           console.log('✅ 식단 수정 완료 (삭제 후 추가)');
           
+          // 수정 모드: 하트 표시된(좋아요한) 음식들만 피드백 API 호출
+          const userId = await AsyncStorage.getItem('userId');
+          if (userId && likedFoods.size > 0) {
+            try {
+              // likedFoods에 있는 음식 ID들만 API 호출 (하트 표시된 것만)
+              const feedbackPromises = Array.from(likedFoods)
+                .filter(foodId => {
+                  const food = foods.find(f => f.id === foodId);
+                  return food && food.id > 0; // 유효한 음식만 필터링
+                })
+                .map(async (foodId) => {
+                  const food = foods.find(f => f.id === foodId);
+                  if (!food) return;
+                  
+                  // 하트 표시된 음식만 API 호출
+                  return mealAPI.submitFoodFeedback({
+                    user_id: userId,
+                    food_id: food.id,
+                    food_name: food.name,
+                    feedback: "like",
+                  });
+                });
+              
+              await Promise.all(feedbackPromises);
+              console.log('✅ 수정 모드 - 좋아요 피드백 전송 완료 (하트 표시된 음식만):', likedFoods.size, '개');
+            } catch (feedbackError: any) {
+              console.error('⚠️ 수정 모드 - 좋아요 피드백 전송 실패:', feedbackError);
+              // 피드백 실패해도 식단 저장은 계속 진행
+            }
+          } else {
+            console.log('ℹ️ 수정 모드 - 하트 표시된 음식이 없어 피드백 API를 호출하지 않습니다.');
+          }
+          
           // 저장 후 GET으로 최신 데이터 불러오기
           try {
             console.log('📥 저장 후 최신 식단 데이터 불러오기:', mealDate);
@@ -857,6 +893,39 @@ const MealAddScreen = ({navigation, route}: any) => {
       } else {
         // 추가 모드
         await mealAPI.addMeal(cleanMealRequestData as AddMealRequest);
+        
+        // 추가 모드: 하트 표시된(좋아요한) 음식들만 피드백 API 호출
+        const userId = await AsyncStorage.getItem('userId');
+        if (userId && likedFoods.size > 0) {
+          try {
+            // likedFoods에 있는 음식 ID들만 API 호출 (하트 표시된 것만)
+            const feedbackPromises = Array.from(likedFoods)
+              .filter(foodId => {
+                const food = foods.find(f => f.id === foodId);
+                return food && food.id > 0; // 유효한 음식만 필터링
+              })
+              .map(async (foodId) => {
+                const food = foods.find(f => f.id === foodId);
+                if (!food) return;
+                
+                // 하트 표시된 음식만 API 호출
+                return mealAPI.submitFoodFeedback({
+                  user_id: userId,
+                  food_id: food.id,
+                  food_name: food.name,
+                  feedback: "like",
+                });
+              });
+            
+            await Promise.all(feedbackPromises);
+            console.log('✅ 추가 모드 - 좋아요 피드백 전송 완료 (하트 표시된 음식만):', likedFoods.size, '개');
+          } catch (feedbackError: any) {
+            console.error('⚠️ 추가 모드 - 좋아요 피드백 전송 실패:', feedbackError);
+            // 피드백 실패해도 식단 저장은 계속 진행
+          }
+        } else {
+          console.log('ℹ️ 추가 모드 - 하트 표시된 음식이 없어 피드백 API를 호출하지 않습니다.');
+        }
         
         // 저장 후 GET으로 최신 데이터 불러오기
         try {
@@ -1145,6 +1214,12 @@ const MealAddScreen = ({navigation, route}: any) => {
   // 음식 삭제 핸들러
   const handleFoodDelete = (foodId: number) => {
     setFoods(prev => prev.filter(food => food.id !== foodId));
+    // 좋아요 상태도 함께 제거
+    setLikedFoods(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(foodId);
+      return newSet;
+    });
   };
 
   // 정수 포맷팅 (소수점 제거)
@@ -1256,7 +1331,31 @@ const MealAddScreen = ({navigation, route}: any) => {
               activeOpacity={0.7}>
               <View style={styles.foodItemContent}>
                 <View style={styles.foodItemHeader}>
-                  <Text style={styles.foodName} numberOfLines={2}>{food.name}</Text>
+                  <View style={styles.foodNameContainer}>
+                    <Text style={styles.foodName} numberOfLines={2}>{food.name}</Text>
+                    <TouchableOpacity
+                      style={styles.heartButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        const isLiked = likedFoods.has(food.id);
+                        if (isLiked) {
+                          setLikedFoods(prev => {
+                            const newSet = new Set(prev);
+                            newSet.delete(food.id);
+                            return newSet;
+                          });
+                        } else {
+                          setLikedFoods(prev => new Set(prev).add(food.id));
+                        }
+                      }}
+                      activeOpacity={0.7}>
+                      <Icon 
+                        name={likedFoods.has(food.id) ? "heart" : "heart-outline"} 
+                        size={20} 
+                        color={likedFoods.has(food.id) ? "#ff6b6b" : "#ffffff"} 
+                      />
+                    </TouchableOpacity>
+                  </View>
                   <View style={styles.foodCaloriesContainer}>
                     <Text style={styles.foodCalories}>{Math.round(food.calories)}kcal</Text>
                     <TouchableOpacity
@@ -1755,6 +1854,14 @@ const styles = StyleSheet.create({
   mealTypeGridTextActive: {
     color: '#000000',
   },
+  foodNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 0,
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+  },
   foodName: {
     fontSize: 15,
     fontWeight: '700',
@@ -1763,6 +1870,13 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
     lineHeight: 18,
+  },
+  heartButton: {
+    padding: 4,
+    marginLeft: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
   },
   foodCalories: {
     fontSize: 15,

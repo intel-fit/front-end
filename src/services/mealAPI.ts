@@ -1,4 +1,4 @@
-import { request, AI_API_BASE_URL, ACCESS_TOKEN_KEY } from './apiConfig';
+import { request, requestAI, AI_API_BASE_URL, ACCESS_TOKEN_KEY } from './apiConfig';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImageManipulator from 'expo-image-manipulator';
 import type { 
@@ -1482,6 +1482,28 @@ export const mealAPI = {
       }
       
       throw new Error('사진 업로드에 실패했습니다. 다시 시도해주세요.');
+    }
+  },
+
+  /**
+   * 음식 피드백 (좋아요)
+   * POST /food_feedback
+   */
+  submitFoodFeedback: async (foodFeedback: {
+    user_id: string;
+    food_id: number;
+    food_name: string;
+    feedback: "like";
+  }): Promise<string> => {
+    try {
+      const response = await requestAI<string>("/food_feedback", {
+        method: "POST",
+        body: JSON.stringify(foodFeedback),
+      });
+      return response;
+    } catch (error: any) {
+      console.error("[MEAL] 음식 피드백 제출 실패:", error);
+      throw error;
     }
   },
 };

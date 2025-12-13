@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -16,6 +16,8 @@ import {
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { authAPI } from "../../services";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from "../../services/apiConfig";
 
 interface DeleteAccountModalProps {
   isOpen: boolean;
@@ -35,6 +37,7 @@ const DeleteAccountModal: React.FC<DeleteAccountModalProps> = ({
   const [showPassword, setShowPassword] = useState(false);
 
   const validateInputs = () => {
+    // 일반 사용자는 비밀번호와 탈퇴 사유 필수
     if (!password.trim()) {
       Alert.alert("오류", "비밀번호를 입력해주세요.");
       return false;
@@ -49,6 +52,7 @@ const DeleteAccountModal: React.FC<DeleteAccountModalProps> = ({
   };
 
   const handleDeleteAccount = async () => {
+    // 입력 검증
     if (!validateInputs()) {
       return;
     }
@@ -68,6 +72,8 @@ const DeleteAccountModal: React.FC<DeleteAccountModalProps> = ({
           onPress: async () => {
             try {
               setLoading(true);
+
+              // 일반 사용자 회원 탈퇴
               const response = await authAPI.deleteAccount(password, reason);
 
               if (response.success) {

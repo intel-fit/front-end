@@ -326,7 +326,12 @@ const TempMealRecommendScreen: React.FC = () => {
       ) {
         setIsTokenDepleted(true);
       } else {
-        Alert.alert("오류", errorMessage || "식단 생성에 실패했습니다.");
+        // 500 에러인 경우 더 친절한 메시지
+        let finalErrorMessage = errorMessage || "식단 생성에 실패했습니다.";
+        if (error.status === 500) {
+          finalErrorMessage = "서버에 일시적인 문제가 발생했습니다.\n잠시 후 다시 시도해주세요.";
+        }
+        Alert.alert("오류", finalErrorMessage);
       }
     } finally {
       setLoading(false);
