@@ -18,8 +18,6 @@ import AIAnalysisModal from "../../components/modals/AIAnalysisModal";
 import MyPlanModal from "../../components/modals/MyPlanModal";
 import PaymentMethodModal from "../../components/modals/PaymentMethodModal";
 import ProfileEditModal from "../../components/modals/ProfileEditModal";
-import RoutineRecommendModal from "../../components/modals/RoutineRecommendModal";
-import MealRecommendModal from "../../components/modals/MealRecommendModal";
 import DeleteAccountModal from "../../components/modals/DeleteAccountModal";
 import PremiumModal from "../../components/modals/PremiumModal";
 import { useRoute } from "@react-navigation/native";
@@ -504,22 +502,13 @@ const MyPageScreen = ({ navigation }: any) => {
         navigation={navigation}
       />
 
-      {/* ⚠️ 중복되었던 PaymentMethodModal 제거됨 */}
-
       <ProfileEditModal
         isOpen={isProfileEditModalOpen}
         onClose={() => setIsProfileEditModalOpen(false)}
         profileData={profileData}
         onProfileUpdate={fetchProfile}
       />
-      <RoutineRecommendModal
-        isOpen={isRoutineRecommendModalOpen}
-        onClose={() => setIsRoutineRecommendModalOpen(false)}
-      />
-      <MealRecommendModal
-        isOpen={isMealRecommendModalOpen}
-        onClose={() => setIsMealRecommendModalOpen(false)}
-      />
+
       <DeleteAccountModal
         isOpen={isDeleteAccountModalOpen}
         onClose={() => setIsDeleteAccountModalOpen(false)}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -6,74 +6,238 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons as Icon } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { recommendedExerciseAPI } from "../../services/recommendedExerciseAPI";
+import { authAPI } from "../../services";
+type Exercise = {
+  exerciseId?: string;
+  name: string;
+  target?: string;
+  sets?: number;
+  reps?: number;
+  weight?: number;
+};
+
+type ExercisePlan = {
+  planId: string;
+  planName: string;
+  createdAt: string;
+  description?: string;
+  days: Exercise[][];
+  isServerPlan: boolean;
+};
 
 const RoutineRecommendScreen = ({ navigation }: any) => {
-  const [savedRoutines, setSavedRoutines] = useState<any[]>([]);
-  const [selectedRoutine, setSelectedRoutine] = useState<any>(null);
+  const [plans, setPlans] = useState<ExercisePlan[]>([]);
+  const [selectedPlan, setSelectedPlan] = useState<ExercisePlan | null>(null);
   const [selectedDay, setSelectedDay] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [selectedPlanIds, setSelectedPlanIds] = useState<string[]>([]);
 
-  const weekDays = [
-    "1일차",
-    "2일차",
-    "3일차",
-    "4일차",
-    "5일차",
-    "6일차",
-    "7일차",
-  ];
-
-  const loadRoutines = async () => {
+  const loadExercisePlans = async () => {
     try {
-      const stored = await AsyncStorage.getItem("savedRoutines");
-      if (stored) {
-        setSavedRoutines(JSON.parse(stored));
-      } else {
-        setSavedRoutines([]);
+      setLoading(true);
+
+      // ✅ 추천받은 운동 조회
+      const exercises = await recommendedExerciseAPI.getRecommendedExercises();
+
+      console.log("📥 추천받은 운동:", exercises);
+
+      if (!Array.isArray(exercises) || exercises.length === 0) {
+        setPlans([]);
+        return;
       }
-    } catch (error) {
-      console.log("Failed to load routines", error);
+
+      // ✅ 임시: 타겟별로 그룹화
+      const groupedByTarget = exercises.reduce((acc: any, exercise: any) => {
+        const target = exercise.target || "전신";
+        if (!acc[target]) {
+          acc[target] = [];
+        }
+        acc[target].push(exercise);
+        return acc;
+      }, {});
+
+      // ✅ 각 타겟별로 플랜 생성
+      const formattedPlans: ExercisePlan[] = Object.entries(
+        groupedByTarget
+      ).map(([target, exs]: [string, any], index) => ({
+        planId: `plan_${target}_${Date.now()}_${index}`,
+        planName: `AI 추천 운동 - ${target}`,
+        createdAt: new Date().toISOString(),
+        description: `${target} 집중 운동`,
+        days: [exs], // 1일치
+        isServerPlan: true,
+      }));
+
+      console.log("✅ 변환된 플랜:", formattedPlans.length);
+      setPlans(formattedPlans);
+    } catch (error: any) {
+      console.error("Failed to load exercise plans", error);
+      Alert.alert(
+        "오류",
+        error.message || "운동 추천 내역을 불러오는데 실패했습니다."
+      );
+      setPlans([]);
+    } finally {
+      setLoading(false);
     }
   };
 
   useFocusEffect(
     React.useCallback(() => {
-      loadRoutines();
+      loadExercisePlans();
+      setIsEditMode(false);
+      setSelectedPlanIds([]);
     }, [])
   );
 
-  const handleRoutineClick = (routine: any) => {
-    setSelectedRoutine(routine);
+  const handlePlanClick = (plan: ExercisePlan) => {
+    if (isEditMode) {
+      togglePlanSelection(plan.planId);
+      return;
+    }
+
+    setSelectedPlan(plan);
     setSelectedDay(0);
   };
 
   const handleBack = () => {
-    setSelectedRoutine(null);
+    setSelectedPlan(null);
     setSelectedDay(0);
   };
 
-  const handleDelete = async (routineId: number) => {
-    Alert.alert("삭제", "이 루틴을 삭제하시겠습니까?", [
-      { text: "취소", style: "cancel" },
-      {
-        text: "삭제",
-        style: "destructive",
-        onPress: async () => {
-          const updated = savedRoutines.filter((r) => r.id !== routineId);
-          await AsyncStorage.setItem("savedRoutines", JSON.stringify(updated));
-          setSavedRoutines(updated);
-          if (selectedRoutine && selectedRoutine.id === routineId) {
-            setSelectedRoutine(null);
-            setSelectedDay(0);
-          }
+  const handleDelete = async (plan: ExercisePlan) => {
+    Alert.alert(
+      "삭제",
+      `"${plan.planName}" 운동 플랜을 삭제하시겠습니까?\n(${plan.days.length}일치)`,
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "삭제",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setLoading(true);
+
+              // TODO: 백엔드 삭제 API 추가되면 여기서 호출
+              // await recommendedExerciseAPI.deleteExercisePlan(plan.planId);
+
+              setPlans((prev) => prev.filter((p) => p.planId !== plan.planId));
+
+              if (selectedPlan?.planId === plan.planId) {
+                setSelectedPlan(null);
+              }
+
+              Alert.alert("성공", "운동 플랜이 삭제되었습니다.");
+            } catch (error: any) {
+              console.error("삭제 실패:", error);
+              Alert.alert("오류", error.message || "삭제에 실패했습니다.");
+            } finally {
+              setLoading(false);
+            }
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
+
+  const togglePlanSelection = (planId: string) => {
+    setSelectedPlanIds((prev) =>
+      prev.includes(planId)
+        ? prev.filter((id) => id !== planId)
+        : [...prev, planId]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedPlanIds.length === plans.length) {
+      setSelectedPlanIds([]);
+    } else {
+      setSelectedPlanIds(plans.map((p) => p.planId));
+    }
+  };
+  const handleNewRecommendPress = async () => {
+    try {
+      setLoading(true);
+
+      // 사용자 프로필 조회
+      const profile = await authAPI.getProfile();
+
+      console.log("✅ 멤버십 타입:", profile.membershipType);
+
+      // 멤버십 타입에 따라 다른 화면으로 이동
+      if (profile.membershipType === "FREE") {
+        console.log("➡️ 무료 회원 - TempRoutineRecommendScreen으로 이동");
+        navigation.navigate("TempRoutineRecommendScreen");
+      } else {
+        console.log("➡️ 프리미엄 회원 - RoutineRecommendNew로 이동");
+        navigation.navigate("RoutineRecommendNew");
+      }
+    } catch (error: any) {
+      console.error("❌ 프로필 조회 실패:", error);
+      Alert.alert("오류", "사용자 정보를 불러오는데 실패했습니다.", [
+        {
+          text: "확인",
+          onPress: () => {
+            // 실패 시 기본적으로 무료 버전으로 이동
+            navigation.navigate("TempRoutineRecommendScreen");
+          },
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+  const handleBulkDelete = async () => {
+    if (selectedPlanIds.length === 0) {
+      Alert.alert("알림", "삭제할 운동 플랜을 선택해주세요.");
+      return;
+    }
+
+    Alert.alert(
+      "일괄 삭제",
+      `선택한 ${selectedPlanIds.length}개의 운동 플랜을 삭제하시겠습니까?`,
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "삭제",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setLoading(true);
+
+              // TODO: 백엔드 일괄 삭제 API 추가되면 여기서 호출
+
+              setPlans((prev) =>
+                prev.filter((p) => !selectedPlanIds.includes(p.planId))
+              );
+
+              setSelectedPlanIds([]);
+              setIsEditMode(false);
+
+              Alert.alert(
+                "성공",
+                `${selectedPlanIds.length}개의 운동 플랜이 삭제되었습니다.`
+              );
+            } catch (error: any) {
+              console.error("일괄 삭제 실패:", error);
+              Alert.alert("오류", error.message || "삭제에 실패했습니다.");
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const currentDayExercises = selectedPlan?.days?.[selectedDay] || [];
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -82,19 +246,39 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
           <Icon name="chevron-back" size={28} color="#ffffff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {selectedRoutine ? "루틴 상세보기" : "운동 추천 내역"}
+          {selectedPlan ? "운동 플랜 상세보기" : "운동 추천 내역"}
         </Text>
-        <View style={{ width: 28 }} />
+        {!selectedPlan && plans.length > 0 && (
+          <TouchableOpacity
+            onPress={() => {
+              if (isEditMode) {
+                setIsEditMode(false);
+                setSelectedPlanIds([]);
+              } else {
+                setIsEditMode(true);
+              }
+            }}
+          >
+            <Text style={styles.editBtn}>{isEditMode ? "완료" : "편집"}</Text>
+          </TouchableOpacity>
+        )}
+        {!plans.length && <View style={{ width: 28 }} />}
       </View>
 
+      {loading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#e3ff7c" />
+          <Text style={styles.loadingText}>불러오는 중...</Text>
+        </View>
+      )}
+
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {!selectedRoutine ? (
-          savedRoutines.length === 0 ? (
+        {!selectedPlan ? (
+          plans.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>저장된 운동 루틴이 없습니다.</Text>
-              <Text style={styles.emptySubtitle}>
-                운동 추천을 받고 루틴을 저장해보세요!
-              </Text>
+              <Icon name="fitness-outline" size={80} color="#666666" />
+              <Text style={styles.emptyText}>추천받은 운동이 없습니다.</Text>
+              <Text style={styles.emptySubtitle}>운동 추천을 받아보세요!</Text>
               <TouchableOpacity
                 style={styles.goToRecommendBtn}
                 onPress={() => navigation.navigate("RoutineRecommendNew")}
@@ -106,138 +290,250 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
             </View>
           ) : (
             <View style={styles.list}>
-              <TouchableOpacity
-                style={styles.newRecommendBtn}
-                onPress={() => navigation.navigate("RoutineRecommendNew")}
-              >
-                <Text style={styles.newRecommendBtnText}>새 운동 추천받기</Text>
-              </TouchableOpacity>
-              {savedRoutines.map((routine) => (
+              {isEditMode && (
+                <View style={styles.editToolbar}>
+                  <TouchableOpacity
+                    style={styles.selectAllBtn}
+                    onPress={toggleSelectAll}
+                  >
+                    <Icon
+                      name={
+                        selectedPlanIds.length === plans.length
+                          ? "checkbox"
+                          : "square-outline"
+                      }
+                      size={24}
+                      color="#e3ff7c"
+                    />
+                    <Text style={styles.selectAllText}>
+                      전체 선택 ({selectedPlanIds.length}/{plans.length})
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.bulkDeleteBtn,
+                      selectedPlanIds.length === 0 &&
+                        styles.bulkDeleteBtnDisabled,
+                    ]}
+                    onPress={handleBulkDelete}
+                    disabled={selectedPlanIds.length === 0}
+                  >
+                    <Icon name="trash" size={20} color="#ffffff" />
+                    <Text style={styles.bulkDeleteText}>삭제</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {!isEditMode && (
                 <TouchableOpacity
-                  key={routine.id}
-                  style={styles.card}
-                  onPress={() => handleRoutineClick(routine)}
+                  style={styles.newRecommendBtn}
+                  onPress={handleNewRecommendPress}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color="#111827" />
+                  ) : (
+                    <Text style={styles.newRecommendBtnText}>
+                      새 운동 추천받기
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              )}
+
+              {plans.map((plan) => (
+                <TouchableOpacity
+                  key={plan.planId}
+                  style={[
+                    styles.card,
+                    isEditMode &&
+                      selectedPlanIds.includes(plan.planId) &&
+                      styles.cardSelected,
+                  ]}
+                  onPress={() => handlePlanClick(plan)}
                   activeOpacity={0.98}
                 >
+                  {isEditMode && (
+                    <View style={styles.checkbox}>
+                      <Icon
+                        name={
+                          selectedPlanIds.includes(plan.planId)
+                            ? "checkbox"
+                            : "square-outline"
+                        }
+                        size={28}
+                        color="#e3ff7c"
+                      />
+                    </View>
+                  )}
+
                   <View style={styles.cardHeader}>
                     <View style={styles.dateContainer}>
-                      <Text style={styles.dateIcon}>📅</Text>
-                      <Text style={styles.date}>{routine.date}</Text>
+                      <Text style={styles.dateIcon}>
+                        {plan.isServerPlan ? "☁️" : "📱"}
+                      </Text>
+                      <View>
+                        <Text style={styles.planName}>{plan.planName}</Text>
+                        <Text style={styles.date}>
+                          {new Date(plan.createdAt).toLocaleDateString("ko-KR")}
+                        </Text>
+                      </View>
                     </View>
-                    <TouchableOpacity
-                      onPress={() => handleDelete(routine.id)}
-                      style={styles.deleteBtn}
-                      activeOpacity={0.9}
-                    >
-                      <Text style={styles.deleteBtnText}>🗑️</Text>
-                    </TouchableOpacity>
+                    {!isEditMode && (
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDelete(plan);
+                        }}
+                        style={styles.deleteBtn}
+                      >
+                        <Icon name="trash-outline" size={20} color="#ef4444" />
+                      </TouchableOpacity>
+                    )}
                   </View>
+
                   <View style={styles.cardBody}>
-                    {routine.level && (
-                      <View style={[styles.badge, styles.levelBadge]}>
-                        <Text style={styles.badgeText}>{routine.level}</Text>
-                      </View>
+                    {plan.description && (
+                      <Text style={styles.description} numberOfLines={2}>
+                        {plan.description}
+                      </Text>
                     )}
-                    {routine.targetParts && routine.targetParts.length > 0 && (
-                      <View style={[styles.badge, styles.targetBadge]}>
-                        <Text style={styles.targetBadgeText}>
-                          집중: {routine.targetParts.join(", ")}
+
+                    <View style={styles.summary}>
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>
+                          📅 {plan.days.length}일 운동
                         </Text>
                       </View>
-                    )}
-                    {routine.weakParts && routine.weakParts.length > 0 && (
-                      <View style={[styles.badge, styles.weakBadge]}>
-                        <Text style={styles.weakBadgeText}>
-                          주의: {routine.weakParts.join(", ")}
+                      <View style={[styles.badge, styles.exerciseCountBadge]}>
+                        <Text style={styles.exerciseCountBadgeText}>
+                          💪{" "}
+                          {plan.days.reduce((sum, day) => sum + day.length, 0)}
+                          개 운동
                         </Text>
                       </View>
-                    )}
+                      {plan.isServerPlan && (
+                        <View style={[styles.badge, styles.serverBadge]}>
+                          <Text style={styles.serverBadgeText}>☁️ 서버</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
-                  <View style={styles.cardFooter}>
-                    <Text style={styles.viewDetail}>자세히 보기 →</Text>
-                  </View>
+
+                  {!isEditMode && (
+                    <View style={styles.cardFooter}>
+                      <Text style={styles.viewDetail}>자세히 보기 →</Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
               ))}
             </View>
           )
         ) : (
           <View style={styles.detail}>
-            <TouchableOpacity
-              style={styles.backBtn}
-              onPress={handleBack}
-              activeOpacity={0.95}
-            >
+            <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
               <Text style={styles.backBtnText}>← 목록으로</Text>
             </TouchableOpacity>
 
             <View style={styles.detailInfo}>
-              <Text style={styles.detailDate}>{selectedRoutine.date}</Text>
-              <View style={styles.detailBadges}>
-                {selectedRoutine.level && (
-                  <View style={styles.detailBadge}>
-                    <Text style={styles.detailBadgeText}>
-                      {selectedRoutine.level}
-                    </Text>
+              <View style={styles.detailHeader}>
+                <View>
+                  <Text style={styles.detailPlanName}>
+                    {selectedPlan.planName}
+                  </Text>
+                  <Text style={styles.detailDate}>
+                    {new Date(selectedPlan.createdAt).toLocaleDateString(
+                      "ko-KR"
+                    )}
+                  </Text>
+                </View>
+                {selectedPlan.isServerPlan && (
+                  <View style={[styles.badge, styles.serverBadge]}>
+                    <Text style={styles.serverBadgeText}>☁️ 서버</Text>
                   </View>
                 )}
-                {selectedRoutine.targetParts &&
-                  selectedRoutine.targetParts.length > 0 && (
-                    <View style={styles.detailBadge}>
-                      <Text style={styles.detailBadgeText}>
-                        집중: {selectedRoutine.targetParts.join(", ")}
-                      </Text>
-                    </View>
-                  )}
               </View>
-            </View>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.dayTabsContainer}
-              contentContainerStyle={styles.dayTabs}
-            >
-              {weekDays.map((day, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.dayTab,
-                    selectedDay === index && styles.dayTabActive,
-                  ]}
-                  onPress={() => setSelectedDay(index)}
-                  activeOpacity={0.8}
-                >
-                  <Text
-                    style={[
-                      styles.dayTabText,
-                      selectedDay === index && styles.dayTabTextActive,
-                    ]}
-                  >
-                    {day}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <View style={styles.exerciseList}>
-              {selectedRoutine.routine?.[selectedDay]?.map(
-                (exercise: any, index: number) => (
-                  <View key={index} style={styles.exerciseItem}>
-                    <View style={styles.exerciseIcon}>
-                      <Text style={styles.exerciseIconText}>
-                        {exercise.icon || "💪"}
-                      </Text>
-                    </View>
-                    <View style={styles.exerciseInfo}>
-                      <Text style={styles.exerciseName}>{exercise.name}</Text>
-                      <Text style={styles.exerciseDetail}>
-                        {exercise.detail}
-                      </Text>
-                    </View>
-                  </View>
-                )
+              {selectedPlan.description && (
+                <Text style={styles.detailDescription}>
+                  {selectedPlan.description}
+                </Text>
               )}
             </View>
+
+            {/* ✅ days 길이만큼만 탭 표시 (1일~7일 동적) */}
+            {selectedPlan.days && selectedPlan.days.length > 0 && (
+              <>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.dayTabsContainer}
+                  contentContainerStyle={styles.dayTabs}
+                >
+                  {selectedPlan.days.map((_: any, index: number) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        styles.dayTab,
+                        selectedDay === index && styles.dayTabActive,
+                      ]}
+                      onPress={() => setSelectedDay(index)}
+                    >
+                      <Text
+                        style={[
+                          styles.dayTabText,
+                          selectedDay === index && styles.dayTabTextActive,
+                        ]}
+                      >
+                        {index + 1}일차
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+
+                <View style={styles.exerciseList}>
+                  {currentDayExercises.length === 0 ? (
+                    <View style={styles.emptyExercise}>
+                      <Text style={styles.emptyExerciseText}>
+                        {selectedDay + 1}일차에 운동이 없습니다
+                      </Text>
+                    </View>
+                  ) : (
+                    currentDayExercises.map(
+                      (exercise: Exercise, index: number) => (
+                        <View key={index} style={styles.exerciseItem}>
+                          <View style={styles.exerciseIcon}>
+                            <Text style={styles.exerciseIconText}>💪</Text>
+                          </View>
+                          <View style={styles.exerciseInfo}>
+                            <Text style={styles.exerciseName}>
+                              {exercise.name}
+                            </Text>
+                            {exercise.target && (
+                              <View style={styles.targetBadgeContainer}>
+                                <View style={styles.targetBadgeSmall}>
+                                  <Text style={styles.targetBadgeSmallText}>
+                                    {exercise.target}
+                                  </Text>
+                                </View>
+                              </View>
+                            )}
+                            {(exercise.sets ||
+                              exercise.reps ||
+                              exercise.weight) && (
+                              <Text style={styles.exerciseDetail}>
+                                {exercise.sets && `${exercise.sets}세트`}
+                                {exercise.reps && ` × ${exercise.reps}회`}
+                                {exercise.weight && ` × ${exercise.weight}kg`}
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                      )
+                    )
+                  )}
+                </View>
+              </>
+            )}
           </View>
         )}
       </ScrollView>
@@ -246,10 +542,7 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#1a1a1a",
-  },
+  container: { flex: 1, backgroundColor: "#1a1a1a" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -263,11 +556,28 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "700",
     color: "#ffffff",
-  },
-  content: {
     flex: 1,
-    padding: 20,
+    textAlign: "center",
   },
+  editBtn: { fontSize: 16, fontWeight: "600", color: "#e3ff7c" },
+  loadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 999,
+  },
+  loadingText: {
+    color: "#ffffff",
+    fontSize: 16,
+    marginTop: 12,
+    fontWeight: "600",
+  },
+  content: { flex: 1, padding: 20 },
   emptyState: {
     alignItems: "center",
     paddingVertical: 60,
@@ -277,6 +587,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#999999",
     textAlign: "center",
+    marginTop: 20,
     marginBottom: 10,
   },
   emptySubtitle: {
@@ -292,14 +603,30 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginTop: 16,
   },
-  goToRecommendBtnText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#111111",
+  goToRecommendBtnText: { fontSize: 15, fontWeight: "600", color: "#111111" },
+  list: { gap: 16 },
+  editToolbar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#222222",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
   },
-  list: {
-    gap: 16,
+  selectAllBtn: { flexDirection: "row", alignItems: "center", gap: 8 },
+  selectAllText: { fontSize: 14, fontWeight: "600", color: "#ffffff" },
+  bulkDeleteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#ef4444",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
   },
+  bulkDeleteBtnDisabled: { backgroundColor: "#666666", opacity: 0.5 },
+  bulkDeleteText: { fontSize: 14, fontWeight: "600", color: "#ffffff" },
   newRecommendBtn: {
     backgroundColor: "#e3ff7c",
     paddingVertical: 10,
@@ -308,11 +635,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     marginBottom: 8,
   },
-  newRecommendBtnText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#111111",
-  },
+  newRecommendBtnText: { fontSize: 14, fontWeight: "600", color: "#111111" },
   card: {
     backgroundColor: "#222222",
     borderRadius: 12,
@@ -320,6 +643,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "transparent",
   },
+  cardSelected: { borderColor: "#e3ff7c", backgroundColor: "#2a2a1a" },
+  checkbox: { position: "absolute", top: 12, left: 12, zIndex: 10 },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -329,68 +654,35 @@ const styles = StyleSheet.create({
   dateContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 12,
+    flex: 1,
   },
-  dateIcon: {
-    fontSize: 18,
-  },
-  date: {
+  dateIcon: { fontSize: 24 },
+  planName: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
     color: "#ffffff",
+    marginBottom: 2,
   },
-  deleteBtn: {
-    padding: 4,
-  },
-  deleteBtnText: {
-    fontSize: 18,
-  },
-  cardBody: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 12,
-  },
+  date: { fontSize: 13, fontWeight: "500", color: "#999999" },
+  deleteBtn: { padding: 4 },
+  cardBody: { marginBottom: 12, gap: 8 },
+  description: { fontSize: 14, color: "#cccccc", lineHeight: 20 },
+  summary: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   badge: {
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 12,
-  },
-  levelBadge: {
-    backgroundColor: "#e3ff7c",
-  },
-  targetBadge: {
     backgroundColor: "#4a90e2",
   },
-  weakBadge: {
-    backgroundColor: "#ff6b6b",
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#111111",
-  },
-  targetBadgeText: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#ffffff",
-  },
-  weakBadgeText: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#ffffff",
-  },
-  cardFooter: {
-    alignItems: "flex-end",
-  },
-  viewDetail: {
-    fontSize: 14,
-    color: "#e3ff7c",
-    fontWeight: "500",
-  },
-  detail: {
-    gap: 20,
-  },
+  exerciseCountBadge: { backgroundColor: "#e3ff7c" },
+  serverBadge: { backgroundColor: "#8b5cf6" },
+  badgeText: { fontSize: 12, fontWeight: "500", color: "#ffffff" },
+  exerciseCountBadgeText: { fontSize: 12, fontWeight: "500", color: "#111111" },
+  serverBadgeText: { fontSize: 12, fontWeight: "500", color: "#ffffff" },
+  cardFooter: { alignItems: "flex-end" },
+  viewDetail: { fontSize: 14, color: "#e3ff7c", fontWeight: "500" },
+  detail: { gap: 20 },
   backBtn: {
     backgroundColor: "#2a2a2a",
     paddingVertical: 10,
@@ -398,66 +690,46 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignSelf: "flex-start",
   },
-  backBtnText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#ffffff",
+  backBtnText: { fontSize: 14, fontWeight: "500", color: "#ffffff" },
+  detailInfo: { backgroundColor: "#222222", padding: 16, borderRadius: 12 },
+  detailHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 8,
   },
-  detailInfo: {
-    backgroundColor: "#222222",
-    padding: 16,
-    borderRadius: 12,
-  },
-  detailDate: {
-    fontSize: 18,
+  detailPlanName: {
+    fontSize: 20,
     fontWeight: "700",
     color: "#ffffff",
-    marginBottom: 12,
+    marginBottom: 4,
   },
-  detailBadges: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+  detailDate: { fontSize: 14, fontWeight: "500", color: "#999999" },
+  detailDescription: {
+    fontSize: 14,
+    color: "#cccccc",
+    lineHeight: 20,
+    marginTop: 8,
   },
-  detailBadge: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: "#e3ff7c",
-  },
-  detailBadgeText: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#111111",
-  },
-  dayTabsContainer: {
-    marginVertical: 8,
-  },
-  dayTabs: {
-    gap: 8,
-    paddingBottom: 8,
-  },
+  dayTabsContainer: { marginVertical: 8 },
+  dayTabs: { gap: 8, paddingBottom: 8 },
   dayTab: {
     paddingVertical: 8,
     paddingHorizontal: 16,
     backgroundColor: "#222222",
     borderRadius: 20,
   },
-  dayTabActive: {
-    backgroundColor: "#e3ff7c",
+  dayTabActive: { backgroundColor: "#e3ff7c" },
+  dayTabText: { fontSize: 13, fontWeight: "500", color: "#999999" },
+  dayTabTextActive: { color: "#111111", fontWeight: "600" },
+  exerciseList: { gap: 12 },
+  emptyExercise: {
+    backgroundColor: "#222222",
+    padding: 40,
+    borderRadius: 12,
+    alignItems: "center",
   },
-  dayTabText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#999999",
-  },
-  dayTabTextActive: {
-    color: "#111111",
-    fontWeight: "600",
-  },
-  exerciseList: {
-    gap: 12,
-  },
+  emptyExerciseText: { fontSize: 14, color: "#999999" },
   exerciseItem: {
     backgroundColor: "#2a2a2a",
     borderRadius: 12,
@@ -474,17 +746,28 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  exerciseIconText: {
-    fontSize: 32,
-  },
-  exerciseInfo: {
-    flex: 1,
-  },
+  exerciseIconText: { fontSize: 32 },
+  exerciseInfo: { flex: 1, gap: 6 },
   exerciseName: {
     fontSize: 16,
     fontWeight: "600",
     color: "#ffffff",
-    marginBottom: 5,
+  },
+  targetBadgeContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  targetBadgeSmall: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: "#4a90e2",
+  },
+  targetBadgeSmallText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#ffffff",
   },
   exerciseDetail: {
     fontSize: 14,

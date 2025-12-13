@@ -198,4 +198,31 @@ export const recommendedExerciseAPI = {
       throw error;
     }
   },
+
+  /**
+   * 6. 추천받은 운동 목록 조회
+   */
+  getRecommendedExercises: async (): Promise<any> => {
+    try {
+      console.log("📋 추천받은 운동 목록 조회");
+
+      const response = await request(
+        `/api/exercise-recommendations/recommended-exercises`,
+        {
+          method: "GET",
+        }
+      );
+
+      console.log("✅ 추천받은 운동 조회 성공:", response);
+      return response;
+    } catch (error: any) {
+      console.error("❌ 추천받은 운동 조회 실패:", error);
+
+      if (error.status === 401) {
+        throw new Error("로그인이 필요합니다.");
+      }
+
+      throw error;
+    }
+  },
 };

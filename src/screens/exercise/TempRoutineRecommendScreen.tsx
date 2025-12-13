@@ -589,15 +589,6 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
             showsVerticalScrollIndicator={false}
           >
             <Animated.View style={[styles.mainContent, { opacity: fadeAnim }]}>
-              <View style={styles.welcomeIconContainer}>
-                <LinearGradient
-                  colors={["#e3ff7c", "#a8e063"]}
-                  style={styles.welcomeIcon}
-                >
-                  <Text style={styles.welcomeEmoji}>💪</Text>
-                </LinearGradient>
-              </View>
-
               <Text style={styles.title}>오늘의 무료 루틴</Text>
               <Text style={styles.subtitle}>
                 매주 1회 제공되는 무료 AI 추천 루틴입니다.{"\n"}더 많은 추천은
