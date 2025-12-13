@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,14 @@ const InBodyPhotoModal: React.FC<InBodyPhotoModalProps> = ({
 }) => {
   const [selectedFile, setSelectedFile] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // 모달이 열릴 때마다 상태 초기화
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedFile(null);
+      setIsProcessing(false);
+    }
+  }, [isOpen]);
 
   const requestPermissions = async () => {
     const {status: cameraStatus} =

@@ -475,3 +475,161 @@ export const uploadInBodyImage = async (
     throw error;
   }
 };
+
+/**
+ * 인바디 AI 코멘트 조회
+ */
+export interface InBodyCommentRequest {
+  user_id: string;
+  period: string; // "2025-01-04 ~ 2025-07-04"
+  latest: {
+    date: string; // "2025-07-04"
+    weight: number;
+    body_fat_percentage: number;
+    skeletal_muscle_mass: number;
+  };
+  trend: {
+    weight: "UP" | "DOWN" | "SAME";
+    body_fat_percentage: "UP" | "DOWN" | "SAME";
+    skeletal_muscle_mass: "UP" | "DOWN" | "SAME";
+  };
+}
+
+export interface InBodyCommentResponse {
+  comment: string;
+}
+
+export const getInBodyComment = async (
+  request: InBodyCommentRequest
+): Promise<InBodyCommentResponse> => {
+  try {
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    
+    // GET 요청을 위한 쿼리 파라미터 구성
+    const params = new URLSearchParams({
+      user_id: request.user_id,
+      period: request.period,
+      date: request.latest.date,
+      weight: request.latest.weight.toString(),
+      body_fat_percentage: request.latest.body_fat_percentage.toString(),
+      skeletal_muscle_mass: request.latest.skeletal_muscle_mass.toString(),
+      weight_trend: request.trend.weight,
+      body_fat_percentage_trend: request.trend.body_fat_percentage,
+      skeletal_muscle_mass_trend: request.trend.skeletal_muscle_mass,
+    });
+    
+    const url = `${INBODY_API_URL}/comment/daily/weight?${params.toString()}`;
+
+    console.log("[INBODY][COMMENT] AI 코멘트 조회 요청:", {
+      url,
+      request,
+      hasToken: !!token,
+    });
+
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token || ""}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+    });
+
+    console.log("[INBODY][COMMENT] AI 코멘트 조회 응답:", {
+      status: response.status,
+      comment: response.data?.comment,
+    });
+
+    return response.data;
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      const errorData = error.response?.data;
+
+      console.error("[INBODY][COMMENT] API 에러:", {
+        message: error.message,
+        status,
+        statusText: error.response?.statusText,
+        data: errorData,
+        requestUrl: error.config?.url,
+        requestData: error.config?.data,
+      });
+
+      // 404나 400은 코멘트 없음으로 처리
+      if (status === 404 || status === 400) {
+        console.log("[INBODY][COMMENT] 코멘트 없음 (404/400)");
+        return { comment: "" };
+      }
+
+      // 500 에러는 서버 내부 오류이므로 빈 코멘트 반환 (사용자에게는 표시 안 함)
+      if (status === 500) {
+        console.warn("[INBODY][COMMENT] 서버 내부 오류 (500) - 코멘트 표시 안 함");
+        return { comment: "" };
+      }
+    } else {
+      console.error("[INBODY][COMMENT] 예상치 못한 에러:", error);
+    }
+    return { comment: "" };
+  }
+};
+
+/**
+ * 인바디 히스토리 조회
+ */
+export interface InBodyHistoryItem {
+  id: number;
+  measurementDate: string;
+  weight: number;
+  skeletalMuscleMass: number;
+  bodyFatMass: number;
+  bodyFatPercentage: number;
+  bmi: number;
+  score: number;
+}
+
+export const getInBodyHistory = async (): Promise<InBodyHistoryItem[]> => {
+  try {
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const url = `${INBODY_API_URL}/history`;
+
+    console.log("[INBODY][HISTORY] API 요청:", {
+      url,
+      hasToken: !!token,
+    });
+
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token || ""}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+    });
+
+    console.log("[INBODY][HISTORY] API 응답:", {
+      status: response.status,
+      dataCount: Array.isArray(response.data) ? response.data.length : 0,
+    });
+
+    return Array.isArray(response.data) ? response.data : [];
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      const errorData = error.response?.data;
+
+      console.error("[INBODY][HISTORY] API 에러:", {
+        message: error.message,
+        status,
+        statusText: error.response?.statusText,
+        data: errorData,
+      });
+
+      // 404나 400은 빈 배열 반환
+      if (status === 404 || status === 400) {
+        console.log("[INBODY][HISTORY] 데이터 없음 (404/400)");
+        return [];
+      }
+    } else {
+      console.error("[INBODY][HISTORY] 예상치 못한 에러:", error);
+    }
+    return [];
+  }
+};
