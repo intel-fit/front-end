@@ -450,6 +450,35 @@ const InBodyScreen = ({ navigation, route }: any) => {
     return date.replace(/\./g, "-");
   }, []);
 
+  // 사용 가능한 날짜 목록 로드 (모든 인바디 기록 날짜)
+  const loadAvailableDates = useCallback(async () => {
+    try {
+      const inBodyList = await getInBodyList();
+      const records = Array.isArray(inBodyList)
+        ? inBodyList
+        : inBodyList?.data || inBodyList?.inBodyList || [];
+
+      const dateSet = new Set<string>();
+      records.forEach((r: any) => {
+        const dateStr = r.measurementDate || r.date || r.measurement_date;
+        if (!dateStr) return;
+
+        // 날짜 형식 정규화 (YYYY-MM-DD 또는 YYYY.MM.DD → YYYY.MM.DD)
+        let normalizedDate = dateStr.replace(/\./g, "-").split("T")[0];
+        // YYYY-MM-DD를 YYYY.MM.DD로 변환 (캘린더에서 사용하는 형식)
+        normalizedDate = normalizedDate.replace(/-/g, ".");
+        dateSet.add(normalizedDate);
+      });
+
+      const sortedDates = Array.from(dateSet).sort();
+      console.log("[INBODY SCREEN] 사용 가능한 날짜 목록:", sortedDates);
+      setAvailableDates(sortedDates);
+    } catch (error) {
+      console.error("[INBODY SCREEN] 날짜 목록 로드 실패:", error);
+      setAvailableDates([]);
+    }
+  }, []);
+
   // 인바디 업데이트 이벤트 구독
   useEffect(() => {
     const unsubscribe = eventBus.on("inbodyUpdated", async (payload) => {
@@ -457,6 +486,9 @@ const InBodyScreen = ({ navigation, route }: any) => {
         "[INBODY SCREEN] 인바디 업데이트 이벤트 수신, 데이터 새로고침",
         payload
       );
+
+      // 날짜 목록도 새로고침
+      loadAvailableDates();
 
       try {
         setLoading(true);
@@ -559,7 +591,7 @@ const InBodyScreen = ({ navigation, route }: any) => {
       unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [normalizeDateForComparison]);
+  }, [normalizeDateForComparison, loadAvailableDates]);
 
   // API 데이터에서 값 추출 헬퍼 함수
   const extractValue = (value: string | number | undefined): string => {
@@ -823,6 +855,13 @@ const InBodyScreen = ({ navigation, route }: any) => {
       loadHistory();
     }
   }, [activeTab, loadHistory]);
+
+  // 화면 포커스 시 날짜 목록 새로고침
+  useFocusEffect(
+    useCallback(() => {
+      loadAvailableDates();
+    }, [loadAvailableDates])
+  );
 
   const segmentalMuscleItems = useMemo(() => {
     if (!inBodyData) {
