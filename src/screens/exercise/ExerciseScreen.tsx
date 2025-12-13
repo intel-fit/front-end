@@ -1265,13 +1265,13 @@ const ExerciseScreen = ({ navigation }: any) => {
           });
         });
 
-        // 서버에서 가져온 활동의 고유 키 생성 (날짜 + 제목 + 운동명)
-        const serverActivityKeys = new Set<string>();
+        // 서버에서 가져온 활동의 고유 키 생성 (날짜 + 제목 + 운동명) - 중복 체크용
+        const serverActivityDedupKeys = new Set<string>();
         newActivities.forEach((activity) => {
           if (activity.date && activity.saveTitle && activity.name) {
             const normalizedTitle = (activity.saveTitle || "").trim().toLowerCase();
             const key = `${activity.date}__${normalizedTitle}__${activity.name.trim()}`;
-            serverActivityKeys.add(key);
+            serverActivityDedupKeys.add(key);
           }
         });
 
@@ -1295,7 +1295,7 @@ const ExerciseScreen = ({ navigation }: any) => {
           if (activity.date && activity.saveTitle && activity.name) {
             const normalizedTitle = (activity.saveTitle || "").trim().toLowerCase();
             const key = `${activity.date}__${normalizedTitle}__${activity.name.trim()}`;
-            if (serverActivityKeys.has(key)) {
+            if (serverActivityDedupKeys.has(key)) {
               return false; // 서버 데이터와 중복이면 제거
             }
           }
