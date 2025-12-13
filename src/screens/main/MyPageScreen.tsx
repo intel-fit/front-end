@@ -23,6 +23,7 @@ import MealRecommendModal from "../../components/modals/MealRecommendModal";
 import DeleteAccountModal from "../../components/modals/DeleteAccountModal";
 import PremiumModal from "../../components/modals/PremiumModal";
 import { useRoute } from "@react-navigation/native";
+import { useFocusEffect } from "@react-navigation/native";
 
 const MyPageScreen = ({ navigation }: any) => {
   const route = useRoute<any>();
@@ -58,10 +59,13 @@ const MyPageScreen = ({ navigation }: any) => {
   }, [route.params]);
 
   //  2. 초기 데이터 로드
-  useEffect(() => {
-    fetchProfile();
-    loadMembershipType();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log("🔄 마이페이지 포커스 - 데이터 새로고침");
+      fetchProfile();
+      loadMembershipType();
+    }, [])
+  );
 
   const fetchProfile = async () => {
     try {

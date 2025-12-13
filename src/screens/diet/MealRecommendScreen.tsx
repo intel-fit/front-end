@@ -279,7 +279,6 @@ const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
     }
   }
 
-  // 하루 전체 영양소 계산
   const totalCalories =
     (breakfast?.totalCalories || 0) +
     (lunch?.totalCalories || 0) +
@@ -300,7 +299,6 @@ const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
     (lunch?.totalFat || 0) +
     (dinner?.totalFat || 0);
 
-  // 날짜 계산
   const planDate = new Date();
   planDate.setDate(planDate.getDate() + (dayIndex - 1));
 
@@ -329,6 +327,7 @@ const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
           carbs: Math.round(f.carbs),
           protein: Math.round(f.protein),
           fat: Math.round(f.fat),
+          liked: false, // ✅ 추가
         })) || [],
       calories: Math.round(breakfast?.totalCalories || 0),
       carbs: Math.round(breakfast?.totalCarbs || 0),
@@ -343,6 +342,7 @@ const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
           carbs: Math.round(f.carbs),
           protein: Math.round(f.protein),
           fat: Math.round(f.fat),
+          liked: false, // ✅ 추가
         })) || [],
       calories: Math.round(lunch?.totalCalories || 0),
       carbs: Math.round(lunch?.totalCarbs || 0),
@@ -357,6 +357,7 @@ const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
           carbs: Math.round(f.carbs),
           protein: Math.round(f.protein),
           fat: Math.round(f.fat),
+          liked: false, // ✅ 추가
         })) || [],
       calories: Math.round(dinner?.totalCalories || 0),
       carbs: Math.round(dinner?.totalCarbs || 0),
@@ -369,8 +370,9 @@ const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
 const MealRecommendScreen = () => {
   const navigation = useNavigation();
   const [screen, setScreen] = useState<
-    "welcome" | "excludedIngredients" | "meals"
+    "welcome" | "excludedIngredients" | "meals" 
   >("welcome");
+
   const [weeklyMeals, setWeeklyMeals] = useState<any[]>([]);
   const [currentDay, setCurrentDay] = useState(0);
   const [excludedIngredients, setExcludedIngredients] = useState<string[]>([]);
@@ -389,11 +391,9 @@ const MealRecommendScreen = () => {
     }).start();
   }, [screen]);
 
-  // ✅ 초기 데이터 로드
   useEffect(() => {
     const loadData = async () => {
       try {
-        // ✅ ==================== 여기에 테스트 코드 추가 시작 ====================
         console.log("========== GET 테스트 시작 ==========");
         try {
           const result = await userPreferencesAPI.getUserPreferences();
@@ -403,9 +403,7 @@ const MealRecommendScreen = () => {
           console.error("❌ GET 실패:", testError);
         }
         console.log("========== GET 테스트 완료 ==========");
-        // ✅ ==================== 테스트 코드 추가 끝 ====================
 
-        // ✅ 비선호 음식만 가져오기
         const dislikedFoods = await userPreferencesAPI.getDislikedFoods();
         setExcludedIngredients(dislikedFoods);
 
@@ -414,7 +412,6 @@ const MealRecommendScreen = () => {
         await loadSavedMeals();
       } catch (error) {
         console.error("데이터 로드 실패:", error);
-        // fallback: 로컬 스토리지
         try {
           const stored = await AsyncStorage.getItem("excludedIngredients");
           if (stored) {
@@ -428,19 +425,15 @@ const MealRecommendScreen = () => {
     loadData();
   }, []);
 
-  // ✅ 저장된 식단 불러오기
   const loadSavedMeals = async () => {
     try {
-      // 로컬 스토리지에서 가져오기
       const localStored = await AsyncStorage.getItem("savedMealPlans");
       const localMeals = localStored ? JSON.parse(localStored) : [];
 
-      // 서버에서 가져오기 (bundleId로 그룹화)
       const serverPlans = await recommendedMealAPI.getSavedMealPlans();
 
       console.log("📦 서버에서 받은 plans:", serverPlans.length);
 
-      // ✅ bundleId로 그룹화
       const bundleMap = new Map<string, any>();
 
       serverPlans.forEach((plan) => {
@@ -460,10 +453,8 @@ const MealRecommendScreen = () => {
         const bundle = bundleMap.get(plan.bundleId)!;
         bundle.mealCount++;
         bundle.totalCalories += plan.totalCalories;
-        // ✅ totalCarbs, totalProtein, totalFat 제거
       });
 
-      // ✅ 평균 계산
       const serverBundles = Array.from(bundleMap.values()).map((bundle) => ({
         ...bundle,
         totalCalories: Math.round(
@@ -474,7 +465,6 @@ const MealRecommendScreen = () => {
 
       console.log("✅ 그룹화된 서버 번들:", serverBundles.length);
 
-      // 로컬 + 서버 합치기
       const allMeals = [...localMeals, ...serverBundles];
 
       console.log("📋 저장된 식단:", {
@@ -503,7 +493,7 @@ const MealRecommendScreen = () => {
     ]);
   };
 
-  // ✅ 식단 추천 받기
+  // ✅ 7일 식단 추천 받기
   const handleGetRecommendation = async () => {
     setLoading(true);
 
@@ -512,19 +502,16 @@ const MealRecommendScreen = () => {
 
       const tempMeals = await recommendedMealAPI.getWeeklyMealPlan();
 
-      // ✅ 1단계: API 응답 전체 확인
       console.log("=== 📦 API 응답 원본 ===");
       console.log("응답 배열 길이:", tempMeals.length);
       console.log("전체 응답:", JSON.stringify(tempMeals, null, 2));
 
-      // ✅ 2단계: 각 날짜별 데이터 확인
       tempMeals.forEach((day, index) => {
         console.log(`\n=== ${index + 1}일차 상세 ===`);
         console.log("dayIndex:", day.dayIndex);
         console.log("meals 배열:", day.meals);
         console.log("meals 길이:", day.meals?.length || 0);
 
-        // 각 meal 확인
         day.meals?.forEach((meal, mealIdx) => {
           console.log(`  - ${meal.mealType}:`, {
             id: meal.id,
@@ -540,7 +527,6 @@ const MealRecommendScreen = () => {
 
       console.log(`✅ ${tempMeals.length}일치 임시 식단 생성 완료`);
 
-      // ✅ 3단계: 변환 전후 비교
       const weekData = tempMeals.map((tempDay, index) => {
         const transformed = transformTempMealToUI(tempDay, index + 1);
 
@@ -580,6 +566,41 @@ const MealRecommendScreen = () => {
       setLoading(false);
     }
   };
+
+  // ✅ 1일 식단 추천 받기
+  const handleGetSingleDayRecommendation = async () => {
+    setLoading(true);
+
+    try {
+      console.log("🍽️ 1일 식단 생성 시작");
+
+      const tempMeals = await recommendedMealAPI.getWeeklyMealPlan();
+
+      if (!tempMeals || tempMeals.length === 0) {
+        throw new Error("식단 생성에 실패했습니다.");
+      }
+
+      const singleDay = [tempMeals[0]];
+      console.log("✅ 1일 식단 생성 완료");
+
+      const weekData = singleDay.map((tempDay, index) =>
+        transformTempMealToUI(tempDay, index + 1)
+      );
+
+      setWeeklyMeals(weekData);
+      setCurrentPlanId(null);
+      setScreen("meals");
+      setCurrentDay(0);
+
+      Alert.alert("성공", "오늘의 맞춤 식단이 생성되었습니다! 🎉");
+    } catch (error: any) {
+      console.error("❌ 1일 식단 추천 실패:", error);
+      Alert.alert("오류", error.message || "식단을 불러오는데 실패했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAddExcludedIngredient = async () => {
     const trimmed = newIngredient.trim();
 
@@ -595,14 +616,12 @@ const MealRecommendScreen = () => {
     try {
       setLoading(true);
 
-      // ✅ 먼저 서버에 시도
       try {
         const result = await userPreferencesAPI.addDislikedFoods(
           excludedIngredients,
           [trimmed]
         );
 
-        // ✅ 서버 성공 시
         setExcludedIngredients(result.updatedList);
         await AsyncStorage.setItem(
           "excludedIngredients",
@@ -611,11 +630,10 @@ const MealRecommendScreen = () => {
 
         setNewIngredient("");
         console.log("✅ 비선호 음식 추가 완료 (서버):", result.updatedList);
-        return; // 성공하면 종료
+        return;
       } catch (serverError: any) {
         console.warn("⚠️ 서버 저장 실패, 로컬만 저장:", serverError.message);
 
-        // ✅ 500 에러면 로컬에만 저장 (임시 조치)
         if (
           serverError.message?.includes("서버 내부 오류") ||
           serverError.status === 500
@@ -636,7 +654,6 @@ const MealRecommendScreen = () => {
           return;
         }
 
-        // 다른 에러는 throw
         throw serverError;
       }
     } catch (error: any) {
@@ -647,7 +664,6 @@ const MealRecommendScreen = () => {
     }
   };
 
-  // ✅ 비선호 음식 삭제 (최적화)
   const handleRemoveExcludedIngredient = async (ingredient: string) => {
     Alert.alert("삭제", `"${ingredient}"를 삭제하시겠습니까?`, [
       { text: "취소", style: "cancel" },
@@ -658,16 +674,13 @@ const MealRecommendScreen = () => {
           try {
             setLoading(true);
 
-            // ✅ 현재 목록 기반으로 서버에서 삭제
             const result = await userPreferencesAPI.removeDislikedFood(
               excludedIngredients,
               ingredient
             );
 
-            // ✅ 서버 응답으로 상태 업데이트
             setExcludedIngredients(result.updatedList);
 
-            // ✅ 로컬 스토리지 백업
             await AsyncStorage.setItem(
               "excludedIngredients",
               JSON.stringify(result.updatedList)
@@ -685,7 +698,42 @@ const MealRecommendScreen = () => {
     ]);
   };
 
-  // ✅ 음식 삭제
+  // ✅ 좋아요 토글 함수
+  const handleToggleLike = (mealType: string, mealIndex: number) => {
+    setWeeklyMeals((prev) => {
+      const updated = [...prev];
+      const dayMeals = { ...updated[currentDay] };
+      const mealArray = [...dayMeals[mealType].meals];
+
+      mealArray[mealIndex] = {
+        ...mealArray[mealIndex],
+        liked: !mealArray[mealIndex].liked,
+      };
+
+      dayMeals[mealType] = {
+        ...dayMeals[mealType],
+        meals: mealArray,
+      };
+
+      updated[currentDay] = dayMeals;
+
+      console.log(
+        `${mealArray[mealIndex].liked ? "💚" : "🤍"} ${
+          mealArray[mealIndex].name
+        } 좋아요 ${mealArray[mealIndex].liked ? "활성화" : "비활성화"}`
+      );
+
+      // TODO: 나중에 API 연결
+      // if (mealArray[mealIndex].liked) {
+      //   await userPreferencesAPI.addLikedFood(mealArray[mealIndex].name);
+      // } else {
+      //   await userPreferencesAPI.removeLikedFood(mealArray[mealIndex].name);
+      // }
+
+      return updated;
+    });
+  };
+
   const handleDeleteMeal = (mealType: string, mealIndex: number) => {
     const currentMeal = weeklyMeals[currentDay];
     const mealData = currentMeal[mealType];
@@ -769,7 +817,6 @@ const MealRecommendScreen = () => {
     });
   };
 
-  // ✅ 로컬 저장
   const handleSaveMealPlanLocally = async () => {
     try {
       setLoading(true);
@@ -826,7 +873,6 @@ const MealRecommendScreen = () => {
     }
   };
 
-  // ✅ 식단 저장
   const handleSaveMealPlan = async () => {
     try {
       setLoading(true);
@@ -838,8 +884,6 @@ const MealRecommendScreen = () => {
         {
           text: "확인",
           onPress: () => {
-            // ❌ 제거: navigation.navigate("Diet");
-            // ✅ 현재 화면 유지, 필요시 목록 새로고침
             console.log("✅ 식단 저장 완료 - 현재 화면 유지");
           },
         },
@@ -852,7 +896,6 @@ const MealRecommendScreen = () => {
     }
   };
 
-  // ✅ 저장된 식단 삭제
   const handleDeleteSavedMeal = async (meal: any) => {
     const isLocalMeal =
       typeof meal.id === "string" && meal.id.startsWith("local_");
@@ -872,7 +915,6 @@ const MealRecommendScreen = () => {
               setLoading(true);
 
               if (isLocalMeal) {
-                // ✅ 로컬 식단 삭제
                 const stored = await AsyncStorage.getItem("savedMealPlans");
                 const existingMeals = stored ? JSON.parse(stored) : [];
                 const updatedMeals = existingMeals.filter(
@@ -885,12 +927,10 @@ const MealRecommendScreen = () => {
 
                 console.log("🗑️ 로컬 식단 삭제:", meal.id);
               } else {
-                // ✅ 서버 번들 삭제 - deleteBundle 사용
                 console.log("🗑️ 서버 번들 삭제:", meal.bundleId || meal.id);
                 await recommendedMealAPI.deleteBundle(meal.bundleId || meal.id);
               }
 
-              // ✅ 삭제 후 목록 새로고침
               await loadSavedMeals();
               Alert.alert("성공", "식단이 삭제되었습니다.");
             } catch (error: any) {
@@ -956,6 +996,7 @@ const MealRecommendScreen = () => {
             </Animated.View>
 
             <View style={styles.mainActions}>
+              {/* 1. 7일 추천 식단 받기 */}
               <TouchableOpacity
                 style={styles.primaryButton}
                 onPress={handleGetRecommendation}
@@ -974,10 +1015,38 @@ const MealRecommendScreen = () => {
                     color="#111827"
                     style={{ marginRight: 8 }}
                   />
-                  <Text style={styles.primaryButtonText}>추천 식단 받기</Text>
+                  <Text style={styles.primaryButtonText}>
+                    7일 추천 식단 받기
+                  </Text>
                 </LinearGradient>
               </TouchableOpacity>
 
+              {/* 2. 1일 추천 식단 받기 */}
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={handleGetSingleDayRecommendation}
+                disabled={loading}
+                activeOpacity={0.9}
+              >
+                <LinearGradient
+                  colors={["#e3ff7c", "#a8e063"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.primaryButtonGradient}
+                >
+                  <Icon
+                    name="today-outline"
+                    size={22}
+                    color="#111827"
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={styles.primaryButtonText}>
+                    1일 추천 식단 받기
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              {/* 3. 금지 식재료 관리 */}
               <TouchableOpacity
                 style={styles.secondaryButton}
                 onPress={() => setScreen("excludedIngredients")}
@@ -1029,7 +1098,6 @@ const MealRecommendScreen = () => {
               <View style={styles.savedMealsSection}>
                 <Text style={styles.sectionTitle}>저장된 식단</Text>
                 {savedMeals.map((meal) => {
-                  // ✅ 수정: "local_" 체크
                   const isLocalMeal =
                     typeof meal.id === "string" && meal.id.startsWith("local_");
 
@@ -1434,7 +1502,7 @@ const MealRecommendScreen = () => {
                 </LinearGradient>
               </View>
 
-              {/* 아침 */}
+              {/* ✅ 아침 */}
               <View style={styles.mealCardContainer}>
                 <LinearGradient
                   colors={["rgba(255,255,255,0.08)", "rgba(255,255,255,0.04)"]}
@@ -1503,23 +1571,52 @@ const MealRecommendScreen = () => {
                               ]}
                               style={styles.mealTagGradient}
                             >
-                              <Text style={styles.mealName}>{meal.name}</Text>
-                              <Text style={styles.mealCal}>
-                                ({meal.calories}kcal)
-                              </Text>
-                              <TouchableOpacity
-                                style={styles.mealDeleteBtn}
-                                onPress={() =>
-                                  handleDeleteMeal("breakfast", index)
-                                }
-                                activeOpacity={0.7}
-                              >
-                                <Icon
-                                  name="close-circle"
-                                  size={18}
-                                  color="rgba(0,0,0,0.5)"
-                                />
-                              </TouchableOpacity>
+                              <View style={styles.mealTagContent}>
+                                <View style={styles.mealTagTextContainer}>
+                                  <Text style={styles.mealName}>
+                                    {meal.name}
+                                  </Text>
+                                  <Text style={styles.mealCal}>
+                                    ({meal.calories}kcal)
+                                  </Text>
+                                </View>
+
+                                <View style={styles.mealTagActions}>
+                                  <TouchableOpacity
+                                    style={styles.mealLikeBtn}
+                                    onPress={() =>
+                                      handleToggleLike("breakfast", index)
+                                    }
+                                    activeOpacity={0.7}
+                                  >
+                                    <Icon
+                                      name={
+                                        meal.liked ? "heart" : "heart-outline"
+                                      }
+                                      size={18}
+                                      color={
+                                        meal.liked
+                                          ? "#ef4444"
+                                          : "rgba(0,0,0,0.4)"
+                                      }
+                                    />
+                                  </TouchableOpacity>
+
+                                  <TouchableOpacity
+                                    style={styles.mealDeleteBtn}
+                                    onPress={() =>
+                                      handleDeleteMeal("breakfast", index)
+                                    }
+                                    activeOpacity={0.7}
+                                  >
+                                    <Icon
+                                      name="close-circle"
+                                      size={18}
+                                      color="rgba(0,0,0,0.5)"
+                                    />
+                                  </TouchableOpacity>
+                                </View>
+                              </View>
                             </LinearGradient>
                           </View>
                         )
@@ -1529,7 +1626,7 @@ const MealRecommendScreen = () => {
                 </LinearGradient>
               </View>
 
-              {/* 점심 */}
+              {/* ✅ 점심 */}
               <View style={styles.mealCardContainer}>
                 <LinearGradient
                   colors={["rgba(255,255,255,0.08)", "rgba(255,255,255,0.04)"]}
@@ -1598,21 +1695,52 @@ const MealRecommendScreen = () => {
                               ]}
                               style={styles.mealTagGradient}
                             >
-                              <Text style={styles.mealName}>{meal.name}</Text>
-                              <Text style={styles.mealCal}>
-                                ({meal.calories}kcal)
-                              </Text>
-                              <TouchableOpacity
-                                style={styles.mealDeleteBtn}
-                                onPress={() => handleDeleteMeal("lunch", index)}
-                                activeOpacity={0.7}
-                              >
-                                <Icon
-                                  name="close-circle"
-                                  size={18}
-                                  color="rgba(0,0,0,0.5)"
-                                />
-                              </TouchableOpacity>
+                              <View style={styles.mealTagContent}>
+                                <View style={styles.mealTagTextContainer}>
+                                  <Text style={styles.mealName}>
+                                    {meal.name}
+                                  </Text>
+                                  <Text style={styles.mealCal}>
+                                    ({meal.calories}kcal)
+                                  </Text>
+                                </View>
+
+                                <View style={styles.mealTagActions}>
+                                  <TouchableOpacity
+                                    style={styles.mealLikeBtn}
+                                    onPress={() =>
+                                      handleToggleLike("lunch", index)
+                                    }
+                                    activeOpacity={0.7}
+                                  >
+                                    <Icon
+                                      name={
+                                        meal.liked ? "heart" : "heart-outline"
+                                      }
+                                      size={18}
+                                      color={
+                                        meal.liked
+                                          ? "#ef4444"
+                                          : "rgba(0,0,0,0.4)"
+                                      }
+                                    />
+                                  </TouchableOpacity>
+
+                                  <TouchableOpacity
+                                    style={styles.mealDeleteBtn}
+                                    onPress={() =>
+                                      handleDeleteMeal("lunch", index)
+                                    }
+                                    activeOpacity={0.7}
+                                  >
+                                    <Icon
+                                      name="close-circle"
+                                      size={18}
+                                      color="rgba(0,0,0,0.5)"
+                                    />
+                                  </TouchableOpacity>
+                                </View>
+                              </View>
                             </LinearGradient>
                           </View>
                         )
@@ -1622,7 +1750,7 @@ const MealRecommendScreen = () => {
                 </LinearGradient>
               </View>
 
-              {/* 저녁 */}
+              {/* ✅ 저녁 */}
               <View style={styles.mealCardContainer}>
                 <LinearGradient
                   colors={["rgba(255,255,255,0.08)", "rgba(255,255,255,0.04)"]}
@@ -1691,23 +1819,52 @@ const MealRecommendScreen = () => {
                               ]}
                               style={styles.mealTagGradient}
                             >
-                              <Text style={styles.mealName}>{meal.name}</Text>
-                              <Text style={styles.mealCal}>
-                                ({meal.calories}kcal)
-                              </Text>
-                              <TouchableOpacity
-                                style={styles.mealDeleteBtn}
-                                onPress={() =>
-                                  handleDeleteMeal("dinner", index)
-                                }
-                                activeOpacity={0.7}
-                              >
-                                <Icon
-                                  name="close-circle"
-                                  size={18}
-                                  color="rgba(0,0,0,0.5)"
-                                />
-                              </TouchableOpacity>
+                              <View style={styles.mealTagContent}>
+                                <View style={styles.mealTagTextContainer}>
+                                  <Text style={styles.mealName}>
+                                    {meal.name}
+                                  </Text>
+                                  <Text style={styles.mealCal}>
+                                    ({meal.calories}kcal)
+                                  </Text>
+                                </View>
+
+                                <View style={styles.mealTagActions}>
+                                  <TouchableOpacity
+                                    style={styles.mealLikeBtn}
+                                    onPress={() =>
+                                      handleToggleLike("dinner", index)
+                                    }
+                                    activeOpacity={0.7}
+                                  >
+                                    <Icon
+                                      name={
+                                        meal.liked ? "heart" : "heart-outline"
+                                      }
+                                      size={18}
+                                      color={
+                                        meal.liked
+                                          ? "#ef4444"
+                                          : "rgba(0,0,0,0.4)"
+                                      }
+                                    />
+                                  </TouchableOpacity>
+
+                                  <TouchableOpacity
+                                    style={styles.mealDeleteBtn}
+                                    onPress={() =>
+                                      handleDeleteMeal("dinner", index)
+                                    }
+                                    activeOpacity={0.7}
+                                  >
+                                    <Icon
+                                      name="close-circle"
+                                      size={18}
+                                      color="rgba(0,0,0,0.5)"
+                                    />
+                                  </TouchableOpacity>
+                                </View>
+                              </View>
                             </LinearGradient>
                           </View>
                         )
@@ -2464,14 +2621,36 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   mealTagGradient: {
-    flexDirection: "row",
-    alignItems: "center",
     paddingVertical: 10,
     paddingHorizontal: 14,
-    gap: 6,
     borderWidth: 1,
     borderColor: "rgba(227,255,124,0.2)",
     borderRadius: 14,
+  },
+  // ✅ 좋아요 기능을 위한 새 스타일
+  mealTagContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+  },
+  mealTagTextContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flex: 1,
+  },
+  mealTagActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginLeft: 8,
+  },
+  mealLikeBtn: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
   },
   mealName: {
     color: "#ffffff",
@@ -2485,7 +2664,10 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   mealDeleteBtn: {
-    marginLeft: 4,
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyMealState: {
     paddingVertical: 20,
