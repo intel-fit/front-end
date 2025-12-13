@@ -18,6 +18,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../../theme/colors";
 import InBodyPhotoModal from "../../components/modals/InBodyPhotoModal";
 import PremiumModal from "../../components/modals/PremiumModal";
@@ -44,6 +45,8 @@ import {
 } from "../../services/apiConfig";
 import MacroDonut from "../../components/charts/MacroDonut";
 import { authAPI, healthScoreAPI, ScoreTrendItem } from "../../services";
+import { LineChart } from "react-native-chart-kit";
+import { Dimensions } from "react-native";
 import { getLatestInBody, InBodyPayload } from "../../utils/inbodyApi";
 import { eventBus } from "../../utils/eventBus";
 import { getMembershipType } from "../../utils/membership-utils";
@@ -249,14 +252,14 @@ const AnalysisScreen = ({ navigation }: any) => {
   >({});
 
   // 식단 그래프 state
-  const [nutritionGraphUrl, setNutritionGraphUrl] = useState<string | null>(
-    null
-  );
+  // 식단 그래프 state (새로운 API 사용)
+  const [nutritionGraphData, setNutritionGraphData] = useState<any[]>([]);
   const [nutritionGraphLoading, setNutritionGraphLoading] = useState(false);
   const [nutritionWeeks, setNutritionWeeks] = useState<string>("");
 
-  // 운동 그래프 state
-  const [exerciseGraphUrl, setExerciseGraphUrl] = useState<string | null>(null);
+  // 운동 그래프 state (새로운 API 사용)
+  const [exerciseGraphData, setExerciseGraphData] = useState<any[]>([]);
+  const [exerciseGraphLoading, setExerciseGraphLoading] = useState(false);
   const [exerciseWeeks, setExerciseWeeks] = useState<string>("");
 
   // 건강점수 state
@@ -265,6 +268,9 @@ const AnalysisScreen = ({ navigation }: any) => {
     []
   );
   const [healthScoreLoading, setHealthScoreLoading] = useState(true);
+
+  // 프리미엄 여부 state
+  const [isPremium, setIsPremium] = useState<boolean>(false);
 
   const displayName = useMemo(
     () => (userName ? `${userName}님` : "회원님"),
@@ -503,6 +509,9 @@ const AnalysisScreen = ({ navigation }: any) => {
         (session as any)?.exercise?.id,
         (session as any)?.exercise?.code,
         (session as any)?.exerciseCode,
+        // 추가: 더 많은 필드 확인
+        (session as any)?.exerciseId,
+        (session as any)?.exerciseExternalId,
       ];
       for (const candidate of candidates) {
         if (candidate === undefined || candidate === null) continue;
@@ -684,169 +693,149 @@ const AnalysisScreen = ({ navigation }: any) => {
     return result;
   }, [completedWorkoutHistory, resolveExerciseIdentifier, makeExerciseKey]);
 
+  // 운동 이미지 캐시 (운동 ID 또는 이름으로 매핑)
+  // 운동 이미지 캐시 (운동 이름으로 매핑)
   const [exerciseImages, setExerciseImages] = useState<Record<string, string>>(
     {}
   );
-  const [exerciseImagesByName, setExerciseImagesByName] = useState<
-    Record<string, string>
-  >({});
-  const fetchedImageIdsRef = useRef<Set<string>>(new Set());
-  const fetchedNameRef = useRef<Set<string>>(new Set());
-  const failedImageIdsRef = useRef<Set<string>>(new Set());
-  const [failedImageLookupTick, setFailedImageLookupTick] = useState(0);
+  const loadingImagesRef = useRef<Set<string>>(new Set());
 
+  // 운동 이미지 로드 (새로운 간단한 로직)
   useEffect(() => {
-    const missingIds = exercises
-      .map((ex) => ({
-        id: ex.exerciseId,
-        name: ex.name,
-        fallbackUrl: ex.imageUrl,
-      }))
-      .filter((item) => {
-        if (!item.id) return false;
-        if (exerciseImages[item.id]) return false;
-        if (failedImageIdsRef.current.has(item.id)) return false;
-        if (fetchedImageIdsRef.current.has(item.id)) return false;
-        return true;
-      });
+    if (exercises.length === 0) return;
 
-    if (missingIds.length === 0) return;
+    const loadExerciseImages = async () => {
+      for (const exercise of exercises) {
+        // 이미 이미지가 있거나 로딩 중이면 스킵
+        const nameKey = exercise.name?.toLowerCase() || "";
+        if (!nameKey) continue;
+        if (exercise.imageUrl) {
+          // 이미 imageUrl이 있으면 캐시에 저장
+          setExerciseImages((prev) => ({
+            ...prev,
+            [nameKey]: exercise.imageUrl,
+          }));
+          continue;
+        }
+        if (exerciseImages[nameKey]) continue;
+        if (loadingImagesRef.current.has(nameKey)) continue;
 
-    let cancelled = false;
+        loadingImagesRef.current.add(nameKey);
 
-    const trackFailure = (id?: string) => {
-      if (!id) return;
-      if (failedImageIdsRef.current.has(id)) return;
-      failedImageIdsRef.current.add(id);
-      setFailedImageLookupTick((tick) => tick + 1);
-    };
-
-    const loadImages = async () => {
-      for (const { id } of missingIds) {
-        if (!id) continue;
-        fetchedImageIdsRef.current.add(id);
         try {
-          const detail = await fetchExerciseDetail(id);
-          const url =
-            detail?.imageUrl ||
-            detail?.image ||
-            detail?.imgUrl ||
-            detail?.photoUrl;
-          if (url && !cancelled) {
-            setExerciseImages((prev) => ({
-              ...prev,
-              [id]: url,
-            }));
-          } else if (!cancelled) {
-            trackFailure(id);
+          // 1. exerciseId가 있으면 상세 조회
+          if (exercise.exerciseId) {
+            try {
+              const detail = await fetchExerciseDetail(exercise.exerciseId);
+              const imageUrl =
+                detail?.imageUrl ||
+                detail?.image ||
+                detail?.imgUrl ||
+                detail?.photoUrl ||
+                detail?.gifUrl;
+
+              if (imageUrl) {
+                setExerciseImages((prev) => ({
+                  ...prev,
+                  [nameKey]: imageUrl,
+                }));
+                if (__DEV__) {
+                  console.log("[ANALYSIS] 운동 이미지 로드 성공 (ID):", {
+                    name: exercise.name,
+                    exerciseId: exercise.exerciseId,
+                    imageUrl,
+                  });
+                }
+                loadingImagesRef.current.delete(nameKey);
+                continue;
+              }
+            } catch (error) {
+              if (__DEV__) {
+                console.warn("[ANALYSIS] 운동 상세 조회 실패:", {
+                  exerciseId: exercise.exerciseId,
+                  error,
+                });
+              }
+            }
           }
+
+          // 2. 이름으로 검색
+          const searchKeywords = generateSearchKeywords(exercise.name);
+          const keywordList = searchKeywords.length > 0 ? searchKeywords : [exercise.name];
+
+          for (const keyword of keywordList) {
+            try {
+              const response = await fetchExercises({
+                keyword,
+                size: 10,
+                page: 0,
+              });
+
+              if (!response?.content || response.content.length === 0) {
+                continue;
+              }
+
+              // 모든 결과에서 이미지 찾기
+              for (const item of response.content) {
+                // API 응답의 모든 가능한 이미지 필드 확인
+                const imageUrl =
+                  item?.imageUrl ||
+                  item?.image ||
+                  item?.imgUrl ||
+                  item?.photoUrl ||
+                  item?.gifUrl ||
+                  item?.gif ||
+                  item?.mediaUrl ||
+                  item?.media;
+
+                if (imageUrl && typeof imageUrl === "string" && imageUrl.trim() !== "") {
+                  setExerciseImages((prev) => ({
+                    ...prev,
+                    [nameKey]: imageUrl,
+                  }));
+                  if (__DEV__) {
+                    console.log("[ANALYSIS] 운동 이미지 찾음 (검색):", {
+                      name: exercise.name,
+                      keyword,
+                      imageUrl,
+                      foundIn: Object.keys(item).filter((k) =>
+                        k.toLowerCase().includes("image") ||
+                        k.toLowerCase().includes("img") ||
+                        k.toLowerCase().includes("photo") ||
+                        k.toLowerCase().includes("gif") ||
+                        k.toLowerCase().includes("media")
+                      ),
+                    });
+                  }
+                  loadingImagesRef.current.delete(nameKey);
+                  return; // 이미지 찾으면 종료
+                }
+              }
+            } catch (error) {
+              if (__DEV__) {
+                console.warn("[ANALYSIS] 운동 검색 실패:", {
+                  keyword,
+                  error,
+                });
+              }
+            }
+          }
+
+          loadingImagesRef.current.delete(nameKey);
         } catch (error) {
           if (__DEV__) {
-            console.warn("[ANALYSIS] 운동 이미지 불러오기 실패:", {
-              id,
-              message: (error as Error)?.message,
+            console.warn("[ANALYSIS] 운동 이미지 로드 실패:", {
+              name: exercise.name,
+              error,
             });
           }
-          if (!cancelled) {
-            trackFailure(id);
-          }
+          loadingImagesRef.current.delete(nameKey);
         }
       }
     };
 
-    loadImages();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [exercises, exerciseImages]);
-
-  useEffect(() => {
-    const missingByName = exercises
-      .filter(
-        (ex) =>
-          ex.name &&
-          !ex.imageUrl &&
-          !exerciseImagesByName[ex.name.toLowerCase()] &&
-          !fetchedNameRef.current.has(ex.name.toLowerCase()) &&
-          (!ex.exerciseId ||
-            failedImageIdsRef.current.has(String(ex.exerciseId)))
-      )
-      .map((ex) => ({
-        rawName: ex.name as string,
-        keywords: generateSearchKeywords(ex.name),
-      }));
-
-    if (missingByName.length === 0) return;
-
-    let cancelled = false;
-
-    const loadByName = async () => {
-      for (const { rawName, keywords } of missingByName) {
-        const baseKey = rawName.toLowerCase();
-        fetchedNameRef.current.add(baseKey);
-        const keywordList =
-          keywords && keywords.length > 0 ? keywords : [rawName];
-        let resolved = false;
-
-        for (const keyword of keywordList) {
-          const keywordKey = keyword.toLowerCase();
-          try {
-            const response = await fetchExercises({
-              keyword,
-              size: 1,
-              page: 0,
-            });
-            const first = response?.content?.[0];
-            const url =
-              first?.imageUrl ||
-              first?.image ||
-              first?.imgUrl ||
-              first?.photoUrl;
-            if (url && !cancelled) {
-              setExerciseImagesByName((prev) => {
-                const next = { ...prev };
-                next[baseKey] = url;
-                keywordList.forEach((kw) => {
-                  const kwKey = kw.toLowerCase();
-                  next[kwKey] = url;
-                });
-                return next;
-              });
-              resolved = true;
-              break;
-            }
-          } catch (error) {
-            if (__DEV__) {
-              console.warn("[ANALYSIS] 운동 이미지 검색 실패:", {
-                name: rawName,
-                keyword,
-                message: (error as Error)?.message,
-              });
-            }
-          }
-        }
-
-        if (!resolved && __DEV__) {
-          console.warn("[ANALYSIS] 운동 이미지 검색 실패 - 모든 키워드 시도", {
-            name: rawName,
-            keywords: keywordList,
-          });
-        }
-      }
-    };
-
-    loadByName();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    exercises,
-    exerciseImagesByName,
-    failedImageLookupTick,
-    generateSearchKeywords,
-  ]);
+    loadExerciseImages();
+  }, [exercises, exerciseImages, generateSearchKeywords]);
 
   // 운동 기록 조회
   const loadLocalCompletions = useCallback(async () => {
@@ -1043,6 +1032,33 @@ const AnalysisScreen = ({ navigation }: any) => {
         "개 그룹"
       );
 
+      // 디버깅: 백엔드 응답 구조 확인
+      if (__DEV__ && savedGroups.length > 0) {
+        const firstGroup = savedGroups[0];
+        const firstSession = firstGroup?.sessions?.[0];
+        const firstRecord = firstSession?.records?.[0];
+        console.log("[ANALYSIS] 저장된 운동 응답 구조 확인:", {
+          groupsCount: savedGroups.length,
+          firstGroup: firstGroup ? {
+            title: firstGroup.title,
+            sessionsCount: firstGroup.sessions?.length || 0,
+            firstSession: firstSession ? {
+              sessionId: firstSession.sessionId,
+              exerciseId: firstSession.exerciseId,
+              externalId: firstSession.externalId,
+              recordsCount: firstSession.records?.length || 0,
+              firstRecord: firstRecord ? {
+                exerciseName: firstRecord.exerciseName,
+                exerciseId: firstRecord.exerciseId,
+                externalId: firstRecord.externalId,
+                exerciseCode: firstRecord.exerciseCode,
+                allKeys: Object.keys(firstRecord),
+              } : null,
+            } : null,
+          } : null,
+        });
+      }
+
       // SavedWorkoutGroup[]을 WorkoutSession[]로 변환
       // 같은 sessionId와 exerciseName을 가진 레코드들을 하나의 WorkoutSession으로 합침
       savedGroups.forEach((group) => {
@@ -1064,6 +1080,15 @@ const AnalysisScreen = ({ navigation }: any) => {
           // 각 운동별로 WorkoutSession 생성
           exerciseMap.forEach((records, exerciseName) => {
             const firstRecord = records[0];
+            // exerciseId 추출: 레코드 > 세션 순서로 확인
+            const extractedExerciseId = 
+              firstRecord.exerciseId || 
+              firstRecord.externalId || 
+              firstRecord.exerciseCode ||
+              session.exerciseId || 
+              session.externalId || 
+              undefined;
+            
             allWorkouts.push({
               sessionId: session.sessionId,
               exerciseName: exerciseName,
@@ -1079,7 +1104,7 @@ const AnalysisScreen = ({ navigation }: any) => {
                   isCompleted: true,
                 })),
               userId: userIdNum,
-              exerciseId: undefined,
+              exerciseId: extractedExerciseId,
               // @ts-ignore - 저장된 운동은 완료된 것으로 표시
               isCompleted: true,
               // @ts-ignore
@@ -1549,10 +1574,12 @@ const AnalysisScreen = ({ navigation }: any) => {
     }
   }, []);
 
-  // 식단 주간 그래프 로드 (초고속 렌더링)
+  // 식단 주간 그래프 로드 (새로운 API 사용)
   const loadNutritionWeeklyGraph = useCallback(async (weeks: number = 4) => {
     try {
-      // 1) aiUserId 구하기
+      setNutritionGraphLoading(true);
+      
+      // aiUserId 구하기
       let aiUserId: string | null = null;
       const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
       if (token) {
@@ -1580,51 +1607,48 @@ const AnalysisScreen = ({ navigation }: any) => {
           aiUserId = storedUserId;
         } else {
           console.warn("[ANALYSIS] 식단 그래프: aiUserId를 찾을 수 없음");
+          setNutritionGraphLoading(false);
           return;
         }
       }
 
-      // 2) 캐시 확인 (초고속 로딩)
-      const cacheKey = `nutrition_graph_${aiUserId}_${weeks}`;
-      const cachedUrl = await AsyncStorage.getItem(cacheKey);
-      if (cachedUrl) {
-        const cached = JSON.parse(cachedUrl);
-        const cacheTime = cached.timestamp || 0;
-        const now = Date.now();
-        // 캐시 유효기간: 1시간
-        if (now - cacheTime < 60 * 60 * 1000 && cached.url) {
-          // 캐시된 URL 즉시 사용 (로딩 상태 없이)
-          setNutritionGraphUrl(cached.url);
-          return;
-        }
+      // 새로운 API 호출: /analytics/weekly/{user_id}
+      const response = await requestAI<any>(
+        `/analytics/weekly/${aiUserId}`,
+        { method: "GET" }
+      );
+
+      if (__DEV__) {
+        console.log("[ANALYSIS] 식단 주간 그래프 API 응답:", response);
       }
 
-      // 3) API URL 생성 (image/png 반환) - 즉시 설정하여 빠른 렌더링
-      const url = `${AI_API_BASE_URL}/analytics/custom/weekly-graph/nutrition/${aiUserId}?weeks=${weeks}&_ts=${Date.now()}`;
-
-      // URL 즉시 설정 (로딩 상태 없이 바로 표시 시작)
-      setNutritionGraphUrl(url);
-
-      // 캐시 저장 (백그라운드)
-      AsyncStorage.setItem(
-        cacheKey,
-        JSON.stringify({
-          url: url,
-          timestamp: Date.now(),
-        })
-      ).catch(() => {}); // 캐시 실패는 무시
+      // API 응답 데이터를 배열로 변환
+      const weeklyData = Array.isArray(response) 
+        ? response 
+        : response?.data || response?.weekly_summary || [];
+      
+      if (__DEV__) {
+        console.log("[ANALYSIS] 식단 주간 그래프 파싱된 데이터:", weeklyData);
+      }
+      
+      setNutritionGraphData(weeklyData);
     } catch (error: any) {
       console.error("[ANALYSIS] 식단 주간 그래프 로드 실패:", {
         message: error?.message,
         status: error?.response?.status,
       });
+      setNutritionGraphData([]);
+    } finally {
+      setNutritionGraphLoading(false);
     }
   }, []);
 
-  // 운동 주간 그래프 로드 (초고속 렌더링)
+  // 운동 주간 그래프 로드 (새로운 API 사용)
   const loadExerciseWeeklyGraph = useCallback(async (weeks: number = 4) => {
     try {
-      // 1) aiUserId 구하기
+      setExerciseGraphLoading(true);
+      
+      // aiUserId 구하기
       let aiUserId: string | null = null;
       const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
       if (token) {
@@ -1652,44 +1676,39 @@ const AnalysisScreen = ({ navigation }: any) => {
           aiUserId = storedUserId;
         } else {
           console.warn("[ANALYSIS] 운동 그래프: aiUserId를 찾을 수 없음");
+          setExerciseGraphLoading(false);
           return;
         }
       }
 
-      // 2) 캐시 확인 (초고속 로딩)
-      const cacheKey = `exercise_graph_${aiUserId}_${weeks}`;
-      const cachedUrl = await AsyncStorage.getItem(cacheKey);
-      if (cachedUrl) {
-        const cached = JSON.parse(cachedUrl);
-        const cacheTime = cached.timestamp || 0;
-        const now = Date.now();
-        // 캐시 유효기간: 1시간
-        if (now - cacheTime < 60 * 60 * 1000 && cached.url) {
-          // 캐시된 URL 즉시 사용 (로딩 상태 없이)
-          setExerciseGraphUrl(cached.url);
-          return;
-        }
+      // 새로운 API 호출: /analytics/weekly/{user_id}
+      const response = await requestAI<any>(
+        `/analytics/weekly/${aiUserId}`,
+        { method: "GET" }
+      );
+
+      if (__DEV__) {
+        console.log("[ANALYSIS] 운동 주간 그래프 API 응답:", response);
       }
 
-      // 3) API URL 생성 (image/png 반환) - 즉시 설정하여 빠른 렌더링
-      const url = `${AI_API_BASE_URL}/analytics/custom/weekly-graph/exercise/${aiUserId}?weeks=${weeks}&_ts=${Date.now()}`;
-
-      // URL 즉시 설정 (로딩 상태 없이 바로 표시 시작)
-      setExerciseGraphUrl(url);
-
-      // 캐시 저장 (백그라운드)
-      AsyncStorage.setItem(
-        cacheKey,
-        JSON.stringify({
-          url: url,
-          timestamp: Date.now(),
-        })
-      ).catch(() => {}); // 캐시 실패는 무시
+      // API 응답 데이터를 배열로 변환
+      const weeklyData = Array.isArray(response) 
+        ? response 
+        : response?.data || response?.weekly_summary || [];
+      
+      if (__DEV__) {
+        console.log("[ANALYSIS] 운동 주간 그래프 파싱된 데이터:", weeklyData);
+      }
+      
+      setExerciseGraphData(weeklyData);
     } catch (error: any) {
       console.error("[ANALYSIS] 운동 주간 그래프 로드 실패:", {
         message: error?.message,
         status: error?.response?.status,
       });
+      setExerciseGraphData([]);
+    } finally {
+      setExerciseGraphLoading(false);
     }
   }, []);
 
@@ -1788,31 +1807,51 @@ const AnalysisScreen = ({ navigation }: any) => {
     setLatestInBodyDate(null);
   }, [userId, userIdLoaded]);
 
-  // userId가 로드된 후 그래프 로드 (숫자가 입력된 경우에만)
+  // userId가 로드된 후 그래프 로드 (항상 로드)
   useEffect(() => {
     if (userIdLoaded && userId) {
-      // 숫자가 입력되어 있을 때만 그래프 로드
-      if (nutritionWeeks && nutritionWeeks.trim() !== "") {
-        const nutritionWeeksNum = parseInt(nutritionWeeks, 10);
-        if (nutritionWeeksNum >= 1 && nutritionWeeksNum <= 52) {
-          loadNutritionWeeklyGraph(nutritionWeeksNum);
-        }
-      }
-      if (exerciseWeeks && exerciseWeeks.trim() !== "") {
-        const exerciseWeeksNum = parseInt(exerciseWeeks, 10);
-        if (exerciseWeeksNum >= 1 && exerciseWeeksNum <= 52) {
-          loadExerciseWeeklyGraph(exerciseWeeksNum);
-        }
-      }
+      loadNutritionWeeklyGraph(4);
+      loadExerciseWeeklyGraph(4);
     }
   }, [
     userIdLoaded,
     userId,
-    nutritionWeeks,
-    exerciseWeeks,
     loadNutritionWeeklyGraph,
     loadExerciseWeeklyGraph,
   ]);
+
+  // 프리미엄 여부 체크 함수
+  const checkPremium = useCallback(async () => {
+    try {
+      // API에서 직접 프로필을 조회하여 최신 상태 확인
+      const profile = await authAPI.getProfile();
+      const membershipType = profile?.membershipType?.toUpperCase();
+      const isPremiumUser = membershipType === "PREMIUM";
+      
+      setIsPremium(isPremiumUser);
+      
+      // AsyncStorage도 업데이트하여 다른 화면에서도 반영되도록
+      if (membershipType) {
+        await AsyncStorage.setItem("membershipType", membershipType);
+      }
+      
+      console.log("[ANALYSIS] 프리미엄 상태 체크:", isPremiumUser, "membershipType:", membershipType);
+    } catch (error) {
+      console.error("[ANALYSIS] 프리미엄 체크 실패:", error);
+      // API 호출 실패 시 getMembershipType으로 폴백
+      try {
+        const membershipType = await getMembershipType();
+        setIsPremium(membershipType === "PREMIUM");
+      } catch (fallbackError) {
+        setIsPremium(false);
+      }
+    }
+  }, []);
+
+  // 초기 프리미엄 여부 체크
+  useEffect(() => {
+    checkPremium();
+  }, [checkPremium]);
 
   const loadHealthScore = useCallback(async () => {
     try {
@@ -1863,6 +1902,9 @@ const AnalysisScreen = ({ navigation }: any) => {
   // 화면 포커스 시 운동 기록 새로고침
   useFocusEffect(
     useCallback(() => {
+      // 프리미엄 상태 다시 체크 (마이페이지에서 변경했을 수 있음)
+      checkPremium();
+      
       // 다른 데이터는 순차적으로 로드
       loadWorkoutHistory();
       console.log("[ANALYSIS] useFocusEffect에서 loadMealComparison 호출");
@@ -1875,6 +1917,7 @@ const AnalysisScreen = ({ navigation }: any) => {
 
       loadHealthScore();
     }, [
+      checkPremium,
       loadWorkoutHistory,
       loadMealComparison,
       loadLatestInBodyDate,
@@ -2160,105 +2203,167 @@ const AnalysisScreen = ({ navigation }: any) => {
         </View>
 
         {/* 운동 분석 섹션 */}
-        <View style={styles.exerciseSection}>
+        <View style={[styles.exerciseSection, !isPremium && { maxHeight: 280 }]}>
+          {!isPremium && (
+            <View style={styles.premiumOverlay}>
+              <LinearGradient
+                colors={["rgba(0, 0, 0, 0.3)", "rgba(0, 0, 0, 0.7)", "rgba(0, 0, 0, 0.9)"]}
+                style={styles.premiumOverlayGradient}
+              >
+                <View style={styles.premiumOverlayContent}>
+                  <View style={styles.premiumBadgeContainer}>
+                    <LinearGradient
+                      colors={["#e3ff7c", "#fff9c4", "#ffffff"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.premiumBadgeGradient}
+                    >
+                      <Text style={styles.premiumBadgeText}>premium</Text>
+                    </LinearGradient>
+                  </View>
+                  <Text style={styles.premiumOverlayDescription}>
+                    주간 운동 변화와 1RM 추이를 확인할 수 있어요
+                  </Text>
+                </View>
+              </LinearGradient>
+            </View>
+          )}
           <Text style={styles.sectionTitle}>운동 분석</Text>
           <Text style={styles.exerciseSummary}>
             {`${displayName}의 최근 운동 중량 변화와 1RM을 확인해보세요.`}
           </Text>
 
           {/* 운동 주간 그래프 */}
-          {exerciseWeeks && exerciseWeeks.trim() !== "" ? (
-            <View style={styles.weeklyGraphContainer}>
-              <View style={styles.graphHeader}>
-                <Text style={styles.graphTitle}>주간 운동 분석</Text>
-                <View style={styles.weeksInputContainer}>
-                  <Text style={styles.weeksLabel}>주:</Text>
-                  <TextInput
-                    style={styles.weeksInput}
-                    value={exerciseWeeks}
-                    onChangeText={(text) => {
-                      // 숫자만 입력 허용
-                      const numericValue = text.replace(/[^0-9]/g, "");
-                      if (
-                        numericValue === "" ||
-                        (parseInt(numericValue, 10) >= 1 &&
-                          parseInt(numericValue, 10) <= 52)
-                      ) {
-                        setExerciseWeeks(numericValue);
-                        if (numericValue && userIdLoaded && userId) {
-                          const weeks = parseInt(numericValue, 10) || 3;
-                          loadExerciseWeeklyGraph(weeks);
-                        } else if (!numericValue) {
-                          // 입력이 비어있으면 그래프 URL 초기화
-                          setExerciseGraphUrl(null);
-                        }
-                      }
-                    }}
-                    keyboardType="numeric"
-                    placeholder="숫자를 입력해보세요"
-                    placeholderTextColor="#666666"
-                    maxLength={2}
-                  />
-                </View>
-              </View>
-              {exerciseGraphUrl ? (
-                <View style={styles.graphImageWrapper}>
-                  <Image
-                    key={`exercise-graph-${exerciseGraphUrl}`}
-                    source={{ uri: exerciseGraphUrl }}
-                    style={styles.weeklyGraphImage}
-                    resizeMode="contain"
-                    accessibilityLabel="운동 주간 분석 그래프"
-                    cache="force-cache"
-                    onError={(e) => {
-                      console.error(
-                        "[ANALYSIS] 운동 그래프 이미지 로드 실패:",
-                        {
-                          error: e.nativeEvent.error,
-                          url: exerciseGraphUrl,
-                        }
-                      );
-                    }}
-                  />
-                </View>
-              ) : (
-                <View style={styles.weeklyGraphPlaceholder}>
-                  <ActivityIndicator size="small" color="#d6ff4b" />
-                  <Text style={styles.graphPlaceholderText}>
-                    그래프를 불러오는 중...
-                  </Text>
-                </View>
-              )}
+          {exerciseGraphLoading ? (
+            <View style={styles.weeklyGraphPlaceholder}>
+              <ActivityIndicator size="small" color="#d6ff4b" />
+              <Text style={styles.graphPlaceholderText}>
+                그래프를 불러오는 중...
+              </Text>
             </View>
-          ) : (
-            <View style={styles.weeksInputOnlyContainer}>
-              <Text style={styles.weeksInputLabel}>주간 운동 분석</Text>
-              <View style={styles.weeksInputRow}>
-                <Text style={styles.weeksLabel}>주:</Text>
-                <TextInput
-                  style={styles.weeksInput}
-                  value={exerciseWeeks}
-                  onChangeText={(text) => {
-                    // 숫자만 입력 허용
-                    const numericValue = text.replace(/[^0-9]/g, "");
-                    if (
-                      numericValue === "" ||
-                      (parseInt(numericValue, 10) >= 1 &&
-                        parseInt(numericValue, 10) <= 52)
-                    ) {
-                      setExerciseWeeks(numericValue);
-                      if (numericValue && userIdLoaded && userId) {
-                        const weeks = parseInt(numericValue, 10) || 3;
-                        loadExerciseWeeklyGraph(weeks);
+          ) : exerciseGraphData.length > 0 ? (
+            <>
+              {/* 주간 평균 운동 시간 */}
+              <View style={styles.weeklyGraphCard}>
+                <Text style={styles.weeklyGraphCardTitle}>주간 평균 운동 시간(분)</Text>
+                <LineChart
+                  data={{
+                    labels: exerciseGraphData.map((item: any, index: number) => {
+                      // 2주마다 또는 첫 번째, 마지막만 표시
+                      if (exerciseGraphData.length <= 4) {
+                        if (item.week_start && item.week_end) {
+                          return `${item.week_start.slice(5).replace(/-/g, ".")}~${item.week_end.slice(5).replace(/-/g, ".")}`;
+                        }
+                        return "";
                       }
-                    }
+                      // 데이터가 많으면 간격을 두고 표시
+                      const step = Math.ceil(exerciseGraphData.length / 4);
+                      if (index % step === 0 || index === exerciseGraphData.length - 1) {
+                        if (item.week_start && item.week_end) {
+                          return `${item.week_start.slice(5).replace(/-/g, ".")}~${item.week_end.slice(5).replace(/-/g, ".")}`;
+                        }
+                        return "";
+                      }
+                      return "";
+                    }),
+                    datasets: [
+                      {
+                        data: exerciseGraphData.map((item: any) => {
+                          return Number(item.exercise_avg?.duration_min ?? 0);
+                        }),
+                        color: (opacity = 1) => `rgba(200, 255, 61, ${opacity})`,
+                        strokeWidth: 2,
+                      },
+                    ],
                   }}
-                  keyboardType="numeric"
-                  placeholder="숫자를 입력해보세요"
-                  placeholderTextColor="#666666"
-                  maxLength={2}
+                  width={Dimensions.get("window").width - 100}
+                  height={160}
+                  chartConfig={{
+                    backgroundGradientFrom: "#111111",
+                    backgroundGradientTo: "#111111",
+                    decimalPlaces: 0,
+                    color: (opacity = 1) => `rgba(200, 255, 61, ${opacity})`,
+                    labelColor: (opacity = 1) => `rgba(220, 220, 220, ${opacity})`,
+                    propsForDots: {
+                      r: "4",
+                      strokeWidth: "2",
+                      stroke: "#111111",
+                    },
+                    propsForLabels: {
+                      fontSize: 9,
+                    },
+                  }}
+                  bezier
+                  fromZero
+                  style={{
+                    borderRadius: 12,
+                  }}
                 />
               </View>
+
+              {/* 주간 평균 운동 강도 */}
+              <View style={styles.weeklyGraphCard}>
+                <Text style={styles.weeklyGraphCardTitle}>주간 평균 운동 강도</Text>
+                <LineChart
+                  data={{
+                    labels: exerciseGraphData.map((item: any, index: number) => {
+                      // 2주마다 또는 첫 번째, 마지막만 표시
+                      if (exerciseGraphData.length <= 4) {
+                        if (item.week_start && item.week_end) {
+                          return `${item.week_start.slice(5).replace(/-/g, ".")}~${item.week_end.slice(5).replace(/-/g, ".")}`;
+                        }
+                        return "";
+                      }
+                      // 데이터가 많으면 간격을 두고 표시
+                      const step = Math.ceil(exerciseGraphData.length / 4);
+                      if (index % step === 0 || index === exerciseGraphData.length - 1) {
+                        if (item.week_start && item.week_end) {
+                          return `${item.week_start.slice(5).replace(/-/g, ".")}~${item.week_end.slice(5).replace(/-/g, ".")}`;
+                        }
+                        return "";
+                      }
+                      return "";
+                    }),
+                    datasets: [
+                      {
+                        data: exerciseGraphData.map((item: any) => {
+                          return Number(item.exercise_avg?.avg_intensity ?? 0);
+                        }),
+                        color: (opacity = 1) => `rgba(200, 255, 61, ${opacity})`,
+                        strokeWidth: 2,
+                      },
+                    ],
+                  }}
+                  width={Dimensions.get("window").width - 100}
+                  height={160}
+                  chartConfig={{
+                    backgroundGradientFrom: "#111111",
+                    backgroundGradientTo: "#111111",
+                    decimalPlaces: 0,
+                    color: (opacity = 1) => `rgba(200, 255, 61, ${opacity})`,
+                    labelColor: (opacity = 1) => `rgba(220, 220, 220, ${opacity})`,
+                    propsForDots: {
+                      r: "4",
+                      strokeWidth: "2",
+                      stroke: "#111111",
+                    },
+                    propsForLabels: {
+                      fontSize: 9,
+                    },
+                  }}
+                  bezier
+                  fromZero
+                  style={{
+                    borderRadius: 12,
+                  }}
+                />
+              </View>
+            </>
+          ) : (
+            <View style={styles.weeklyGraphPlaceholder}>
+              <Text style={styles.graphPlaceholderText}>
+                표시할 주간 데이터가 없어요.
+              </Text>
             </View>
           )}
 
@@ -2276,8 +2381,9 @@ const AnalysisScreen = ({ navigation }: any) => {
             </View>
           ) : (
             <ScrollView
-              style={styles.exerciseList}
+              style={[styles.exerciseList, !isPremium && { maxHeight: 216, overflow: "hidden" }]}
               showsVerticalScrollIndicator={false}
+              scrollEnabled={isPremium}
             >
               {exercises.map((exercise, index) => (
                 <View
@@ -2289,17 +2395,13 @@ const AnalysisScreen = ({ navigation }: any) => {
                 >
                   <View style={styles.exerciseIcon}>
                     {(() => {
-                      const idKey = exercise.exerciseId
-                        ? String(exercise.exerciseId)
-                        : undefined;
                       const nameKey = exercise.name
                         ? exercise.name.toLowerCase()
                         : undefined;
 
                       const displayUrl =
                         exercise.imageUrl ||
-                        (idKey ? exerciseImages[idKey] : undefined) ||
-                        (nameKey ? exerciseImagesByName[nameKey] : undefined);
+                        (nameKey ? exerciseImages[nameKey] : undefined);
                       if (displayUrl) {
                         return (
                           <Image
@@ -2366,102 +2468,164 @@ const AnalysisScreen = ({ navigation }: any) => {
         </View>
 
         {/* 식단 분석 섹션 */}
-        <View style={styles.dietSection}>
+        <View style={[styles.dietSection, !isPremium && { maxHeight: 280 }]}>
+          {!isPremium && (
+            <View style={styles.premiumOverlay}>
+              <LinearGradient
+                colors={["rgba(0, 0, 0, 0.3)", "rgba(0, 0, 0, 0.7)", "rgba(0, 0, 0, 0.9)"]}
+                style={styles.premiumOverlayGradient}
+              >
+                <View style={styles.premiumOverlayContent}>
+                  <View style={styles.premiumBadgeContainer}>
+                    <LinearGradient
+                      colors={["#e3ff7c", "#fff9c4", "#ffffff"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.premiumBadgeGradient}
+                    >
+                      <Text style={styles.premiumBadgeText}>premium</Text>
+                    </LinearGradient>
+                  </View>
+                  <Text style={styles.premiumOverlayDescription}>
+                    섭취 패턴과 영양 균형을 분석해드려요
+                  </Text>
+                </View>
+              </LinearGradient>
+            </View>
+          )}
           <Text style={styles.sectionTitle}>식단 분석</Text>
 
           {/* 식단 주간 그래프 */}
-          {nutritionWeeks && nutritionWeeks.trim() !== "" ? (
-            <View style={styles.weeklyGraphContainer}>
-              <View style={styles.graphHeader}>
-                <Text style={styles.graphTitle}>주간 식단 분석</Text>
-                <View style={styles.weeksInputContainer}>
-                  <Text style={styles.weeksLabel}>주:</Text>
-                  <TextInput
-                    style={styles.weeksInput}
-                    value={nutritionWeeks}
-                    onChangeText={(text) => {
-                      // 숫자만 입력 허용
-                      const numericValue = text.replace(/[^0-9]/g, "");
-                      if (
-                        numericValue === "" ||
-                        (parseInt(numericValue, 10) >= 1 &&
-                          parseInt(numericValue, 10) <= 52)
-                      ) {
-                        setNutritionWeeks(numericValue);
-                        if (numericValue && userIdLoaded && userId) {
-                          const weeks = parseInt(numericValue, 10) || 3;
-                          loadNutritionWeeklyGraph(weeks);
-                        } else if (!numericValue) {
-                          // 입력이 비어있으면 그래프 URL 초기화
-                          setNutritionGraphUrl(null);
-                        }
-                      }
-                    }}
-                    keyboardType="numeric"
-                    placeholder="숫자를 입력해보세요"
-                    placeholderTextColor="#666666"
-                    maxLength={2}
-                  />
-                </View>
-              </View>
-              {nutritionGraphUrl ? (
-                <View style={styles.graphImageWrapper}>
-                  <Image
-                    key={`nutrition-graph-${nutritionGraphUrl}`}
-                    source={{ uri: nutritionGraphUrl }}
-                    style={styles.weeklyGraphImage}
-                    resizeMode="contain"
-                    accessibilityLabel="식단 주간 분석 그래프"
-                    cache="force-cache"
-                    onError={(e) => {
-                      console.error(
-                        "[ANALYSIS] 식단 그래프 이미지 로드 실패:",
-                        {
-                          error: e.nativeEvent.error,
-                          url: nutritionGraphUrl,
-                        }
-                      );
-                    }}
-                  />
-                </View>
-              ) : (
-                <View style={styles.weeklyGraphPlaceholder}>
-                  <ActivityIndicator size="small" color="#d6ff4b" />
-                  <Text style={styles.graphPlaceholderText}>
-                    그래프를 불러오는 중...
-                  </Text>
-                </View>
-              )}
+          {nutritionGraphLoading ? (
+            <View style={styles.weeklyGraphPlaceholder}>
+              <ActivityIndicator size="small" color="#d6ff4b" />
+              <Text style={styles.graphPlaceholderText}>
+                그래프를 불러오는 중...
+              </Text>
             </View>
-          ) : (
-            <View style={styles.weeksInputOnlyContainer}>
-              <Text style={styles.weeksInputLabel}>주간 식단 분석</Text>
-              <View style={styles.weeksInputRow}>
-                <Text style={styles.weeksLabel}>주:</Text>
-                <TextInput
-                  style={styles.weeksInput}
-                  value={nutritionWeeks}
-                  onChangeText={(text) => {
-                    // 숫자만 입력 허용
-                    const numericValue = text.replace(/[^0-9]/g, "");
-                    if (
-                      numericValue === "" ||
-                      (parseInt(numericValue, 10) >= 1 &&
-                        parseInt(numericValue, 10) <= 52)
-                    ) {
-                      setNutritionWeeks(numericValue);
-                      if (numericValue && userIdLoaded && userId) {
-                        const weeks = parseInt(numericValue, 10) || 3;
-                        loadNutritionWeeklyGraph(weeks);
+          ) : nutritionGraphData.length > 0 ? (
+            <>
+              {/* 주간 평균 칼로리 */}
+              <View style={styles.weeklyGraphCard}>
+                <Text style={styles.weeklyGraphCardTitle}>주간 평균 칼로리(kcal)</Text>
+                <LineChart
+                  data={{
+                    labels: nutritionGraphData.map((item: any, index: number) => {
+                      // 2주마다 또는 첫 번째, 마지막만 표시
+                      if (nutritionGraphData.length <= 4) {
+                        if (item.week_start && item.week_end) {
+                          return `${item.week_start.slice(5).replace(/-/g, ".")}~${item.week_end.slice(5).replace(/-/g, ".")}`;
+                        }
+                        return "";
                       }
-                    }
+                      // 데이터가 많으면 간격을 두고 표시
+                      const step = Math.ceil(nutritionGraphData.length / 4);
+                      if (index % step === 0 || index === nutritionGraphData.length - 1) {
+                        if (item.week_start && item.week_end) {
+                          return `${item.week_start.slice(5).replace(/-/g, ".")}~${item.week_end.slice(5).replace(/-/g, ".")}`;
+                        }
+                        return "";
+                      }
+                      return "";
+                    }),
+                    datasets: [
+                      {
+                        data: nutritionGraphData.map((item: any) => {
+                          return Number(item.nutrition_avg?.kcal ?? 0);
+                        }),
+                        color: (opacity = 1) => `rgba(200, 255, 61, ${opacity})`,
+                        strokeWidth: 2,
+                      },
+                    ],
                   }}
-                  keyboardType="numeric"
-                  placeholder="숫자를 입력해보세요"
-                  placeholderTextColor="#666666"
-                  maxLength={2}
+                  width={Dimensions.get("window").width - 100}
+                  height={160}
+                  chartConfig={{
+                    backgroundGradientFrom: "#111111",
+                    backgroundGradientTo: "#111111",
+                    decimalPlaces: 0,
+                    color: (opacity = 1) => `rgba(200, 255, 61, ${opacity})`,
+                    labelColor: (opacity = 1) => `rgba(220, 220, 220, ${opacity})`,
+                    propsForDots: {
+                      r: "4",
+                      strokeWidth: "2",
+                      stroke: "#111111",
+                    },
+                    propsForLabels: {
+                      fontSize: 9,
+                    },
+                  }}
+                  bezier
+                  fromZero
+                  style={{
+                    borderRadius: 12,
+                  }}
                 />
               </View>
+
+              {/* 주간 평균 단백질 */}
+              <View style={styles.weeklyGraphCard}>
+                <Text style={styles.weeklyGraphCardTitle}>주간 평균 단백질(g)</Text>
+                <LineChart
+                  data={{
+                    labels: nutritionGraphData.map((item: any, index: number) => {
+                      // 2주마다 또는 첫 번째, 마지막만 표시
+                      if (nutritionGraphData.length <= 4) {
+                        if (item.week_start && item.week_end) {
+                          return `${item.week_start.slice(5).replace(/-/g, ".")}~${item.week_end.slice(5).replace(/-/g, ".")}`;
+                        }
+                        return "";
+                      }
+                      // 데이터가 많으면 간격을 두고 표시
+                      const step = Math.ceil(nutritionGraphData.length / 4);
+                      if (index % step === 0 || index === nutritionGraphData.length - 1) {
+                        if (item.week_start && item.week_end) {
+                          return `${item.week_start.slice(5).replace(/-/g, ".")}~${item.week_end.slice(5).replace(/-/g, ".")}`;
+                        }
+                        return "";
+                      }
+                      return "";
+                    }),
+                    datasets: [
+                      {
+                        data: nutritionGraphData.map((item: any) => {
+                          return Number(item.nutrition_avg?.protein ?? 0);
+                        }),
+                        color: (opacity = 1) => `rgba(200, 255, 61, ${opacity})`,
+                        strokeWidth: 2,
+                      },
+                    ],
+                  }}
+                  width={Dimensions.get("window").width - 100}
+                  height={160}
+                  chartConfig={{
+                    backgroundGradientFrom: "#111111",
+                    backgroundGradientTo: "#111111",
+                    decimalPlaces: 0,
+                    color: (opacity = 1) => `rgba(200, 255, 61, ${opacity})`,
+                    labelColor: (opacity = 1) => `rgba(220, 220, 220, ${opacity})`,
+                    propsForDots: {
+                      r: "4",
+                      strokeWidth: "2",
+                      stroke: "#111111",
+                    },
+                    propsForLabels: {
+                      fontSize: 9,
+                    },
+                  }}
+                  bezier
+                  fromZero
+                  style={{
+                    borderRadius: 12,
+                  }}
+                />
+              </View>
+            </>
+          ) : (
+            <View style={styles.weeklyGraphPlaceholder}>
+              <Text style={styles.graphPlaceholderText}>
+                표시할 주간 데이터가 없어요.
+              </Text>
             </View>
           )}
 
@@ -2891,6 +3055,8 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     paddingHorizontal: 20,
     marginBottom: 15,
+    position: "relative",
+    overflow: "hidden",
   },
   exerciseSummary: {
     fontSize: 12.8,
@@ -2903,7 +3069,7 @@ const styles = StyleSheet.create({
     fontWeight: "400",
   },
   exerciseList: {
-    maxHeight: 216,
+    // 기본 스타일 (유료일 때는 제한 없음)
   },
   loadingContainer: {
     paddingVertical: 40,
@@ -3008,6 +3174,8 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     paddingHorizontal: 20,
     marginBottom: 20,
+    position: "relative",
+    overflow: "hidden",
   },
   dietSummary: {
     fontSize: 12.8,
@@ -3154,10 +3322,23 @@ const styles = StyleSheet.create({
     color: "#888888",
     marginTop: 4,
   },
+  weeklyGraphCard: {
+    backgroundColor: "#1A1A1A",
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 10,
+  },
+  weeklyGraphCardTitle: {
+    color: "#EDEDED",
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 6,
+  },
   weeklyGraphContainer: {
     backgroundColor: "#1e1e1e",
     borderRadius: 12,
     padding: 16,
+    marginTop: 4,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: "#333333",
@@ -3234,6 +3415,15 @@ const styles = StyleSheet.create({
     height: 320,
     borderRadius: 8,
   },
+  chartContainer: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+    paddingHorizontal: 20,
+    overflow: "hidden",
+    paddingBottom: 10,
+  },
   weeklyGraphPlaceholder: {
     width: "100%",
     minHeight: 150,
@@ -3295,6 +3485,67 @@ const styles = StyleSheet.create({
   caloriePeriod: {
     fontSize: 11,
     color: "#777777",
+  },
+  premiumOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 10,
+    pointerEvents: "none",
+  },
+  premiumOverlayGradient: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 12,
+  },
+  premiumOverlayContent: {
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 12,
+  },
+  premiumOverlayDescription: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#dddddd",
+    textAlign: "center",
+    paddingHorizontal: 20,
+    lineHeight: 22,
+    marginTop: 5,
+    textShadowColor: "rgba(0, 0, 0, 0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  premiumBadgeContainer: {
+    overflow: "hidden",
+    borderRadius: 4,
+  },
+  premiumBadgeGradient: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  premiumBadgeText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#000000",
+    letterSpacing: 1,
+  },
+  graphPremiumOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 10,
+    pointerEvents: "none",
+  },
+  graphPremiumOverlayGradient: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 8,
   },
 });
 

@@ -734,11 +734,16 @@ export interface SavedWorkoutRecord {
   category?: string;
   exerciseName: string;
   workoutDate: string;
+  exerciseId?: string; // 운동 ID (백엔드에서 제공)
+  externalId?: string; // 외부 운동 ID (백엔드에서 제공)
+  exerciseCode?: string; // 운동 코드 (백엔드에서 제공)
 }
 
 export interface SavedWorkoutSession {
   sessionId: string;
   records: SavedWorkoutRecord[];
+  exerciseId?: string; // 세션 레벨의 운동 ID
+  externalId?: string; // 세션 레벨의 외부 운동 ID
 }
 
 export interface SavedWorkoutGroup {

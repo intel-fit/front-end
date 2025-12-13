@@ -60,13 +60,15 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
 //딥링크 설정
+// Expo Go에서는 exp:// 스킴 사용, 스탠드얼론 빌드에서는 intelfit:// 스킴 사용
 const linking = {
-  prefixes: ["intelfit://"],
+  prefixes: ["intelfit://", "exp://"],
   config: {
     screens: {
       PaymentSuccess: "pay/success",
       PaymentFail: "pay/fail",
       PaymentCancel: "pay/cancel",
+      Login: "auth/kakao",
     },
   },
 };

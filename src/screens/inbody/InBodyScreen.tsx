@@ -147,11 +147,23 @@ const InBodyScreen = ({ navigation, route }: any) => {
       // 응답 구조 처리: { success: true, inBody: {...} } 또는 직접 inBody 객체
       const data = response?.success ? response.inBody : response;
 
+      // segmentalFatAnalysis를 여러 위치에서 찾기 (API 수정 대응)
+      const segmentalFatAnalysis = 
+        data?.segmentalFatAnalysis || 
+        response?.segmentalFatAnalysis || 
+        response?.inBody?.segmentalFatAnalysis ||
+        null;
+
+      // data에 segmentalFatAnalysis가 없으면 추가
+      const finalData = segmentalFatAnalysis && !data?.segmentalFatAnalysis
+        ? { ...data, segmentalFatAnalysis }
+        : data;
+
       console.log("[INBODY SCREEN] 처리된 날짜별 데이터:", {
-        hasData: !!data,
-        hasMeasurementDate: !!data?.measurementDate,
-        measurementDate: data?.measurementDate,
-        dataKeys: data ? Object.keys(data) : [],
+        hasData: !!finalData,
+        hasMeasurementDate: !!finalData?.measurementDate,
+        measurementDate: finalData?.measurementDate,
+        dataKeys: finalData ? Object.keys(finalData) : [],
       });
 
       // 전체 응답 구조 확인 (segmentalFatAnalysis 찾기)
@@ -162,30 +174,31 @@ const InBodyScreen = ({ navigation, route }: any) => {
         hasSegmentalFatAnalysisInResponse: !!response?.segmentalFatAnalysis,
         hasSegmentalFatAnalysisInInBody:
           !!response?.inBody?.segmentalFatAnalysis,
-        hasSegmentalFatAnalysisInData: !!data?.segmentalFatAnalysis,
+        hasSegmentalFatAnalysisInData: !!finalData?.segmentalFatAnalysis,
         segmentalFatAnalysisInResponse: response?.segmentalFatAnalysis,
         segmentalFatAnalysisInInBody: response?.inBody?.segmentalFatAnalysis,
-        segmentalFatAnalysisInData: data?.segmentalFatAnalysis,
+        segmentalFatAnalysisInData: finalData?.segmentalFatAnalysis,
+        segmentalFatAnalysisFound: segmentalFatAnalysis,
       });
 
-      if (data && data.measurementDate) {
-        const normalizedDate = data.measurementDate.includes(".")
-          ? data.measurementDate
-          : data.measurementDate.replace(/-/g, ".");
+      if (finalData && finalData.measurementDate) {
+        const normalizedDate = finalData.measurementDate.includes(".")
+          ? finalData.measurementDate
+          : finalData.measurementDate.replace(/-/g, ".");
 
         setInBodyData({
-          ...data,
+          ...finalData,
           measurementDate: normalizedDate,
         });
         console.log("[INBODY SCREEN] 날짜별 인바디 데이터 설정 완료");
         console.log("[INBODY SCREEN] 날짜별 segmentalFatAnalysis 확인:", {
-          segmentalFatAnalysis: data.segmentalFatAnalysis,
-          hasSegmentalFatAnalysis: !!data.segmentalFatAnalysis,
-          rightArm: data.segmentalFatAnalysis?.rightArm,
-          leftArm: data.segmentalFatAnalysis?.leftArm,
-          trunk: data.segmentalFatAnalysis?.trunk,
-          rightLeg: data.segmentalFatAnalysis?.rightLeg,
-          leftLeg: data.segmentalFatAnalysis?.leftLeg,
+          segmentalFatAnalysis: finalData.segmentalFatAnalysis,
+          hasSegmentalFatAnalysis: !!finalData.segmentalFatAnalysis,
+          rightArm: finalData.segmentalFatAnalysis?.rightArm,
+          leftArm: finalData.segmentalFatAnalysis?.leftArm,
+          trunk: finalData.segmentalFatAnalysis?.trunk,
+          rightLeg: finalData.segmentalFatAnalysis?.rightLeg,
+          leftLeg: finalData.segmentalFatAnalysis?.leftLeg,
         });
       } else {
         // 데이터 없음은 정상적인 케이스 (에러 아님)
@@ -235,11 +248,23 @@ const InBodyScreen = ({ navigation, route }: any) => {
       // 응답 구조 처리: { success: true, inBody: {...} } 또는 직접 inBody 객체
       const latest = response?.success ? response.inBody : response;
 
+      // segmentalFatAnalysis를 여러 위치에서 찾기 (API 수정 대응)
+      const segmentalFatAnalysis = 
+        latest?.segmentalFatAnalysis || 
+        response?.segmentalFatAnalysis || 
+        response?.inBody?.segmentalFatAnalysis ||
+        null;
+
+      // latest에 segmentalFatAnalysis가 없으면 추가
+      const finalLatest = segmentalFatAnalysis && !latest?.segmentalFatAnalysis
+        ? { ...latest, segmentalFatAnalysis }
+        : latest;
+
       console.log("[INBODY SCREEN] 처리된 latest 데이터:", {
-        hasLatest: !!latest,
-        hasMeasurementDate: !!latest?.measurementDate,
-        measurementDate: latest?.measurementDate,
-        latestKeys: latest ? Object.keys(latest) : [],
+        hasLatest: !!finalLatest,
+        hasMeasurementDate: !!finalLatest?.measurementDate,
+        measurementDate: finalLatest?.measurementDate,
+        latestKeys: finalLatest ? Object.keys(finalLatest) : [],
       });
 
       // 전체 응답 구조 확인 (segmentalFatAnalysis 찾기)
@@ -250,35 +275,36 @@ const InBodyScreen = ({ navigation, route }: any) => {
         hasSegmentalFatAnalysisInResponse: !!response?.segmentalFatAnalysis,
         hasSegmentalFatAnalysisInInBody:
           !!response?.inBody?.segmentalFatAnalysis,
-        hasSegmentalFatAnalysisInLatest: !!latest?.segmentalFatAnalysis,
+        hasSegmentalFatAnalysisInLatest: !!finalLatest?.segmentalFatAnalysis,
         segmentalFatAnalysisInResponse: response?.segmentalFatAnalysis,
         segmentalFatAnalysisInInBody: response?.inBody?.segmentalFatAnalysis,
-        segmentalFatAnalysisInLatest: latest?.segmentalFatAnalysis,
+        segmentalFatAnalysisInLatest: finalLatest?.segmentalFatAnalysis,
+        segmentalFatAnalysisFound: segmentalFatAnalysis,
       });
 
-      if (latest && latest.measurementDate) {
-        const normalizedDate = latest.measurementDate.includes(".")
-          ? latest.measurementDate
-          : latest.measurementDate.replace(/-/g, ".");
+      if (finalLatest && finalLatest.measurementDate) {
+        const normalizedDate = finalLatest.measurementDate.includes(".")
+          ? finalLatest.measurementDate
+          : finalLatest.measurementDate.replace(/-/g, ".");
 
         console.log("[INBODY][FETCH][LATEST]", {
           normalizedDate,
-          source: latest?.source || "api",
+          source: finalLatest?.source || "api",
           segmental: {
-            segmentalMuscleAnalysis: latest?.segmentalMuscleAnalysis,
-            segmentalMuscleMass: latest?.segmentalMuscleMass,
-            rightArmMuscle: latest?.rightArmMuscle,
-            leftArmMuscle: latest?.leftArmMuscle,
-            trunkMuscle: latest?.trunkMuscle,
-            rightLegMuscle: latest?.rightLegMuscle,
-            leftLegMuscle: latest?.leftLegMuscle,
+            segmentalMuscleAnalysis: finalLatest?.segmentalMuscleAnalysis,
+            segmentalMuscleMass: finalLatest?.segmentalMuscleMass,
+            rightArmMuscle: finalLatest?.rightArmMuscle,
+            leftArmMuscle: finalLatest?.leftArmMuscle,
+            trunkMuscle: finalLatest?.trunkMuscle,
+            rightLegMuscle: finalLatest?.rightLegMuscle,
+            leftLegMuscle: finalLatest?.leftLegMuscle,
           },
         });
         if (__DEV__) {
           try {
             console.log(
               "[INBODY][FETCH][LATEST][RAW]",
-              JSON.stringify(latest, null, 2)
+              JSON.stringify(finalLatest, null, 2)
             );
           } catch (error) {
             console.log("[INBODY][FETCH][LATEST][RAW] stringify 실패", error);
@@ -286,7 +312,7 @@ const InBodyScreen = ({ navigation, route }: any) => {
         }
 
         const data = {
-          ...latest,
+          ...finalLatest,
           measurementDate: normalizedDate,
         };
         setInBodyData(data);
