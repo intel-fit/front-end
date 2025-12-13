@@ -43,7 +43,7 @@ const HealthScoreTrendScreen = ({ navigation }: any) => {
       console.log("🎯 [SCREEN] 데이터 길이:", data.length);
       console.log("🎯 [SCREEN] 첫 번째 아이템:", data[0]);
 
-      // ⭐ 유효한 데이터만 필터링
+      //  유효한 데이터만 필터링
       const validData = data.filter(
         (item) =>
           item &&
@@ -64,7 +64,7 @@ const HealthScoreTrendScreen = ({ navigation }: any) => {
     }
   };
 
-  // ⭐ 차트 데이터 생성 시 추가 검증
+  // 차트 데이터 생성 시 추가 검증
   const chartData = {
     labels:
       trendData.length > 0
@@ -90,13 +90,13 @@ const HealthScoreTrendScreen = ({ navigation }: any) => {
     ],
   };
 
-  // ⭐ 최근 점수 계산 시 검증
+  // 최근 점수 계산 시 검증
   const latestScore =
     trendData.length > 0
       ? Math.round(trendData[trendData.length - 1].total || 0)
       : 0;
 
-  // ⭐ 평균 점수 계산 시 검증
+  // 평균 점수 계산 시 검증
   const averageScore =
     trendData.length > 0
       ? Math.round(
