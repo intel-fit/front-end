@@ -134,9 +134,16 @@
     <script>
       // URL에서 쿼리 파라미터 가져오기
       const urlParams = new URLSearchParams(window.location.search);
-      const sessionId = urlParams.get("sessionId"); // Stripe
-      const orderId = urlParams.get("orderId"); // 카카오페이
+      
+      //  두 가지 형식 모두 지원 (session_id, sessionId)
+      const sessionId = urlParams.get("session_id") || urlParams.get("sessionId");
+      const orderId = urlParams.get("orderId");
       const userId = urlParams.get("userId");
+
+      console.log("🔍 URL 전체:", window.location.href);
+      console.log("🔍 sessionId:", sessionId);
+      console.log("🔍 orderId:", orderId);
+      console.log("🔍 userId:", userId);
 
       // Deep Link URL 생성
       let deepLinkUrl;
@@ -158,6 +165,8 @@
         console.log("⚠️ 결제 파라미터 없음 (테스트 모드)");
       }
 
+      console.log("🔗 생성된 Deep Link:", deepLinkUrl);
+
       // 버튼 클릭 시 앱으로 이동
       document.getElementById("returnButton").href = deepLinkUrl;
 
@@ -171,6 +180,7 @@
           autoRedirectText.textContent = `${countdown}초 후 자동으로 앱으로 이동합니다...`;
         } else {
           clearInterval(timer);
+          console.log("🚀 앱으로 이동 시도:", deepLinkUrl);
           window.location.href = deepLinkUrl;
         }
       }, 1000);
