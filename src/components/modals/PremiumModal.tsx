@@ -32,11 +32,12 @@ const PremiumModal: React.FC<PremiumModalProps> = ({
   onClose,
   onContinue,
 }) => {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [selectedPlan, setSelectedPlan] = useState<PlanType>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] =
     useState<PaymentMethod>(null);
-  
+
   const [showPaymentWebView, setShowPaymentWebView] = useState(false);
   const [paymentUrl, setPaymentUrl] = useState("");
 
@@ -69,7 +70,6 @@ const PremiumModal: React.FC<PremiumModalProps> = ({
         setPaymentUrl(url);
         setShowPaymentWebView(true);
         onClose();
-        
       } else if (selectedPaymentMethod === "kakaopay") {
         const { success, tid, redirectUrl, orderId } =
           await paymentAPI.createKakaoPayReady(planCode);
@@ -311,87 +311,99 @@ const PremiumModal: React.FC<PremiumModalProps> = ({
 
           {/* ⭐ WebView - 수정된 부분 */}
           <WebView
-  source={{ uri: paymentUrl }}
-  onNavigationStateChange={(navState) => {
-    console.log("🌐 WebView URL:", navState.url);
+            source={{ uri: paymentUrl }}
+            onNavigationStateChange={(navState) => {
+              console.log("🌐 WebView URL:", navState.url);
+              // 이 부분은 백업으로 남겨둠
+            }}
+            onShouldStartLoadWithRequest={(request) => {
+              console.log("🔍 로드 요청:", request.url);
 
-    // ⭐ Stripe success URL 감지 (수정됨)
-    if (navState.url.includes("/pay/stripe/success/callback")) {
-      setShowPaymentWebView(false);
+              // ✅ success 페이지 감지
+              if (request.url.includes("payment-success-web.html")) {
+                console.log("✅ 결제 완료 페이지 감지!");
 
-      const urlParts = navState.url.split("?");
-      if (urlParts.length > 1) {
-        const urlParams = new URLSearchParams(urlParts[1]);
-        const sessionId = urlParams.get("session_id") || urlParams.get("sessionId");
+                // WebView 즉시 닫기
+                setShowPaymentWebView(false);
 
-        console.log("✅ Stripe 결제 완료:", { sessionId });
+                // URL 파싱
+                const urlParts = request.url.split("?");
+                if (urlParts.length > 1) {
+                  const urlParams = new URLSearchParams(urlParts[1]);
+                  const sessionId =
+                    urlParams.get("session_id") || urlParams.get("sessionId");
+                  const orderId = urlParams.get("orderId");
 
-        if (sessionId) {
-          navigation.navigate("PaymentSuccess", { sessionId });
-        }
-      }
-    }
+                  if (sessionId) {
+                    console.log("✅ Stripe 결제 완료:", { sessionId });
+                    navigation.navigate("PaymentSuccess", { sessionId });
+                  } else if (orderId) {
+                    console.log("✅ 카카오페이 결제 완료:", { orderId });
+                    navigation.navigate("PaymentSuccess", { orderId });
+                  }
+                }
 
-    // ⭐ 카카오페이 success URL 감지 (추가)
-    if (navState.url.includes("payment-success-web.html")) {
-      setShowPaymentWebView(false);
+                // 페이지 로드는 차단
+                return false;
+              }
 
-      const urlParts = navState.url.split("?");
-      if (urlParts.length > 1) {
-        const urlParams = new URLSearchParams(urlParts[1]);
-        const orderId = urlParams.get("orderId");
+              // ✅ /pay/stripe/success/callback 처리 (백엔드가 바꿀 경우 대비)
+              if (request.url.includes("/pay/stripe/success/callback")) {
+                console.log("✅ Stripe callback 감지!");
 
-        console.log("✅ 카카오페이 결제 완료:", { orderId });
+                setShowPaymentWebView(false);
 
-        if (orderId) {
-          navigation.navigate("PaymentSuccess", { orderId });
-        }
-      }
-    }
+                const urlParts = request.url.split("?");
+                if (urlParts.length > 1) {
+                  const urlParams = new URLSearchParams(urlParts[1]);
+                  const sessionId =
+                    urlParams.get("session_id") || urlParams.get("sessionId");
 
-    // cancel URL 처리
-    if (navState.url.includes("payment-cancel")) {
-      console.log("❌ 결제 취소");
-      setShowPaymentWebView(false);
-      Alert.alert("결제 취소", "결제가 취소되었습니다.");
-    }
-  }}
-  onShouldStartLoadWithRequest={(request) => {
-    console.log("🔍 로드 요청:", request.url);
-    
-    // ⭐ Stripe success URL 차단 (수정됨)
-    if (request.url.includes("/pay/stripe/success/callback")) {
-      console.log("⛔ Stripe success 페이지 로드 차단");
-      return false;
-    }
+                  if (sessionId) {
+                    console.log("✅ Stripe 결제 완료 (callback):", {
+                      sessionId,
+                    });
+                    navigation.navigate("PaymentSuccess", { sessionId });
+                  }
+                }
 
-    // ⭐ 카카오페이 success URL 차단
-    if (request.url.includes("payment-success-web.html")) {
-      console.log("⛔ 카카오페이 success 페이지 로드 차단");
-      return false;
-    }
-    
-    return true;
-  }}
-  onError={(syntheticEvent) => {
-    const { nativeEvent } = syntheticEvent;
-    console.error("❌ WebView 에러:", nativeEvent);
-    
-    // ⭐ success URL에서 에러 나면 무시 (수정됨)
-    if (
-      nativeEvent.url?.includes("/pay/stripe/success/callback") ||
-      nativeEvent.url?.includes("payment-success-web.html")
-    ) {
-      console.log("ℹ️ success 페이지 에러 무시 (이미 처리됨)");
-      return;
-    }
-    
-    Alert.alert("페이지 로드 실패", "결제 페이지를 열 수 없습니다.");
-    setShowPaymentWebView(false);
-  }}
+                return false;
+              }
+
+              // cancel URL 처리
+              if (request.url.includes("payment-cancel")) {
+                console.log("❌ 결제 취소");
+                setShowPaymentWebView(false);
+                Alert.alert("결제 취소", "결제가 취소되었습니다.");
+                return false;
+              }
+
+              // 다른 페이지는 정상 로드
+              return true;
+            }}
+            onError={(syntheticEvent) => {
+              const { nativeEvent } = syntheticEvent;
+              console.error("❌ WebView 에러:", nativeEvent);
+
+              // success URL에서 에러 나도 무시 (이미 처리됨)
+              if (
+                nativeEvent.url?.includes("payment-success-web.html") ||
+                nativeEvent.url?.includes("/pay/stripe/success/callback")
+              ) {
+                console.log("ℹ️ success 페이지 에러 무시 (이미 처리됨)");
+                return;
+              }
+
+              Alert.alert("페이지 로드 실패", "결제 페이지를 열 수 없습니다.");
+              setShowPaymentWebView(false);
+            }}
             onHttpError={(syntheticEvent) => {
               const { nativeEvent } = syntheticEvent;
-              console.error("❌ HTTP 에러:", nativeEvent.statusCode, nativeEvent.url);
+              console.error(
+                "❌ HTTP 에러:",
+                nativeEvent.statusCode,
+                nativeEvent.url
+              );
             }}
             javaScriptEnabled={true}
             domStorageEnabled={true}
@@ -411,9 +423,7 @@ const PremiumModal: React.FC<PremiumModalProps> = ({
                   backgroundColor: "#000",
                 }}
               >
-                <Text style={{ color: "#fff", fontSize: 16 }}>
-                  로딩 중...
-                </Text>
+                <Text style={{ color: "#fff", fontSize: 16 }}>로딩 중...</Text>
               </View>
             )}
           />

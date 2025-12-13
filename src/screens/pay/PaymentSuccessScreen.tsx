@@ -1,5 +1,5 @@
 // src/screens/pay/PaymentSuccessScreen.tsx
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
@@ -8,11 +8,13 @@ import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRoute } from "@react-navigation/native";
 import { paymentAPI, authAPI } from "../../services";
+import { CommonActions } from "@react-navigation/native";
 
 const PaymentSuccessScreen = () => {
   const navigation = useNavigation();
   const route = useRoute<any>();
 
+  const [loading, setLoading] = useState(false);
   useEffect(() => {
     const sessionId = route.params?.sessionId;
     const orderId = route.params?.orderId;
@@ -28,141 +30,95 @@ const PaymentSuccessScreen = () => {
 
   const confirmStripePaymentAndUpgrade = async (sessionId: string) => {
     try {
-      console.log("🔵 1단계: sessionId 받음:", sessionId);
+      setLoading(true);
 
-      // 백엔드에 결제 완료 확인 (DB 업데이트)
+      // 1. 백엔드에 결제 확인
       await paymentAPI.confirmStripePayment(sessionId);
-      console.log("🔵 2단계: API 호출 완료");
+      console.log("✅ 결제 확인 완료");
 
-      // ⭐ 짧은 딜레이 후 프로필 조회 (DB 업데이트 대기)
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // 1초 대기
-      console.log("🔵 2.5단계: 1초 대기 완료");
+      // 2. 1초 대기 (DB 업데이트 시간)
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      try {
-        // 프로필 재조회해서 최신 membershipType 가져오기
-        const profile = await authAPI.getProfile();
-        console.log("🔵 3단계: 프로필 조회 완료:", profile.membershipType);
-        console.log(
-          "🔵 3-1단계: 전체 프로필:",
-          JSON.stringify(profile, null, 2)
-        );
+      // 3. 로컬에 PREMIUM 저장
+      await AsyncStorage.setItem("membershipType", "PREMIUM");
+      await AsyncStorage.removeItem("testMembershipType");
+      console.log("✅ 로컬 PREMIUM 저장 완료");
 
-        if (profile.membershipType === "PREMIUM") {
-          // AsyncStorage 업데이트
-          await AsyncStorage.setItem("membershipType", "PREMIUM");
-          console.log("🔵 4단계: AsyncStorage 저장 완료");
+      // 4. ✅ 로그아웃 처리
+      await AsyncStorage.removeItem("accessToken");
+      await AsyncStorage.removeItem("refreshToken");
+      console.log("✅ 로그아웃 완료");
 
-          // testMembershipType도 제거 (충돌 방지)
-          await AsyncStorage.removeItem("testMembershipType");
-          console.log("🔵 5단계: testMembershipType 제거 완료");
-
-          // 저장된 값 확인
-          const saved = await AsyncStorage.getItem("membershipType");
-          console.log("🔵 6단계: 저장 확인:", saved);
-
-          console.log("✅ 프리미엄 회원으로 업그레이드 완료 (Stripe)");
-
-          Alert.alert(
-            "업그레이드 완료! 🎉",
-            "프리미엄 회원으로 업그레이드되었습니다.\n모든 기능을 자유롭게 이용하세요!",
-            [{ text: "확인" }]
-          );
-        } else {
-          console.log(
-            "❌ 서버 membershipType이 PREMIUM이 아님:",
-            profile.membershipType
-          );
-          throw new Error(
-            "서버에서 프리미엄 업그레이드가 확인되지 않았습니다."
-          );
-        }
-      } catch (profileError: any) {
-        // ⭐ 프로필 조회 실패 시에도 일단 PREMIUM으로 설정
-        console.log(
-          "⚠️ 프로필 조회 실패, 로컬만 업데이트:",
-          profileError.message
-        );
-        await AsyncStorage.setItem("membershipType", "PREMIUM");
-        await AsyncStorage.removeItem("testMembershipType");
-        console.log("✅ 프리미엄 업그레이드 완료 (로컬만)");
-
-        Alert.alert(
-          "결제 완료! 🎉",
-          "결제가 완료되었습니다.\n앱을 재시작하면 프리미엄 기능을 이용하실 수 있습니다.",
-          [{ text: "확인" }]
-        );
-      }
-    } catch (error: any) {
-      console.error("❌ Stripe 결제 확인 실패:", error);
-      console.error("❌ 에러 상세:", error.message);
-      console.error("❌ 에러 스택:", error.stack);
+      // 5. 안내 메시지 + 로그인 화면으로 이동
       Alert.alert(
-        "결제 확인 실패",
-        "결제 확인에 실패했습니다. 고객센터로 문의해주세요.",
-        [{ text: "확인" }]
+        "업그레이드 완료! 🎉",
+        "프리미엄 회원이 되셨습니다!\n더 나은 서비스를 위해 다시 로그인해주세요.",
+        [
+          {
+            text: "로그인하러 가기",
+            onPress: () => {
+              // ✅ 스택 초기화하고 Login으로 이동
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [{ name: "Login" }],
+                })
+              );
+            },
+          },
+        ],
+        { cancelable: false } // 뒤로가기 방지
       );
+    } catch (error: any) {
+      console.error("❌ 결제 확인 실패:", error);
+      Alert.alert("결제 확인 실패", error.message || "다시 시도해주세요.");
+    } finally {
+      setLoading(false);
     }
   };
 
+  // ✅ 카카오페이도 동일하게 수정
   const confirmKakaoPaymentAndUpgrade = async (orderId: string) => {
     try {
-      console.log("🔵 1단계: orderId 받음:", orderId);
+      setLoading(true);
 
-      // 백엔드에 결제 완료 확인
       await paymentAPI.confirmKakaoPayment(orderId);
-      console.log("🔵 2단계: API 호출 완료");
+      console.log("✅ 카카오페이 결제 확인 완료");
 
-      // 짧은 딜레이 후 프로필 조회
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      console.log("🔵 2.5단계: 3초 대기 완료");
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      try {
-        // 프로필 재조회
-        const profile = await authAPI.getProfile();
-        console.log("🔵 3단계: 프로필 조회 완료:", profile.membershipType);
+      await AsyncStorage.setItem("membershipType", "PREMIUM");
+      await AsyncStorage.removeItem("testMembershipType");
+      console.log("✅ 로컬 PREMIUM 저장 완료");
 
-        if (profile.membershipType === "PREMIUM") {
-          // AsyncStorage 업데이트
-          await AsyncStorage.setItem("membershipType", "PREMIUM");
-          await AsyncStorage.removeItem("testMembershipType");
-          console.log("🔵 4단계: AsyncStorage 저장 완료");
+      // ✅ 로그아웃
+      await AsyncStorage.removeItem("accessToken");
+      await AsyncStorage.removeItem("refreshToken");
+      console.log("✅ 로그아웃 완료");
 
-          console.log("✅ 프리미엄 회원으로 업그레이드 완료 (카카오페이)");
-
-          Alert.alert(
-            "업그레이드 완료! 🎉",
-            "프리미엄 회원으로 업그레이드되었습니다.\n모든 기능을 자유롭게 이용하세요!",
-            [{ text: "확인" }]
-          );
-        } else {
-          throw new Error(
-            "서버에서 프리미엄 업그레이드가 확인되지 않았습니다."
-          );
-        }
-      } catch (profileError: any) {
-        // 프로필 조회 실패 시에도 일단 PREMIUM으로 설정
-        console.log(
-          "⚠️ 프로필 조회 실패, 로컬만 업데이트:",
-          profileError.message
-        );
-        await AsyncStorage.setItem("membershipType", "PREMIUM");
-        await AsyncStorage.removeItem("testMembershipType");
-        console.log("✅ 프리미엄 업그레이드 완료 (로컬만)");
-
-        Alert.alert(
-          "결제 완료! 🎉",
-          "결제가 완료되었습니다.\n앱을 재시작하면 프리미엄 기능을 이용하실 수 있습니다.",
-          [{ text: "확인" }]
-        );
-      }
+      Alert.alert(
+        "업그레이드 완료! 🎉",
+        "프리미엄 회원이 되셨습니다!\n더 나은 서비스를 위해 다시 로그인해주세요.",
+        [
+          {
+            text: "로그인하러 가기",
+            onPress: () => {
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [{ name: "Login" }],
+                })
+              );
+            },
+          },
+        ],
+        { cancelable: false }
+      );
     } catch (error: any) {
       console.error("❌ 카카오페이 결제 확인 실패:", error);
-      console.error("❌ 에러 상세:", error.message);
-      Alert.alert(
-        "결제 확인 실패",
-        "결제 확인에 실패했습니다. 고객센터로 문의해주세요.",
-        [{ text: "확인" }]
-      );
+      Alert.alert("결제 확인 실패", error.message || "다시 시도해주세요.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -224,21 +180,6 @@ const PaymentSuccessScreen = () => {
               </View>
             </LinearGradient>
           </View>
-
-          {/* 버튼 */}
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => navigation.navigate("Main" as never)}
-            activeOpacity={0.9}
-          >
-            <LinearGradient
-              colors={["#e3ff7c", "#a8e063"]}
-              style={styles.buttonGradient}
-            >
-              <Text style={styles.buttonText}>홈으로 돌아가기</Text>
-              <Icon name="arrow-forward" size={20} color="#111827" />
-            </LinearGradient>
-          </TouchableOpacity>
         </View>
       </SafeAreaView>
     </View>

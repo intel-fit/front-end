@@ -128,10 +128,13 @@ const MyPageScreen = ({ navigation }: any) => {
               }
 
               setCurrentMembershipType(result.newType);
-              
+
               // AsyncStorage에 멤버십 타입 업데이트 (다른 화면에서도 반영되도록)
               await AsyncStorage.setItem("membershipType", result.newType);
-              console.log("✅ AsyncStorage에 멤버십 타입 업데이트:", result.newType);
+              console.log(
+                "✅ AsyncStorage에 멤버십 타입 업데이트:",
+                result.newType
+              );
 
               Alert.alert(
                 "전환 완료 ✅",
@@ -374,7 +377,7 @@ const MyPageScreen = ({ navigation }: any) => {
               style={styles.linkItem}
               onPress={() => setIsPremiumModalOpen(true)}
             >
-              <Text style={styles.linkText}>내 플랜 보기</Text>
+              <Text style={styles.linkText}>구독 하기</Text>
               <Icon
                 name="chevron-forward"
                 size={18}
@@ -388,7 +391,7 @@ const MyPageScreen = ({ navigation }: any) => {
               style={styles.linkItem}
               onPress={() => setIsPaymentMethodModalOpen(true)}
             >
-              <Text style={styles.linkText}>결제 수단 관리</Text>
+              <Text style={styles.linkText}>내 플랜 보기</Text>
               <Icon
                 name="chevron-forward"
                 size={18}
