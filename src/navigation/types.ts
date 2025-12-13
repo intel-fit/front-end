@@ -29,7 +29,7 @@ export type RootStackParamList = {
   InBodyManual: undefined;
   HealthScoreTrend: undefined;
   // Payment
-  PaymentSuccess: { sessionId?: string; orderId?: string };
+  PaymentSuccess: undefined;
   PaymentFail: undefined;
   PaymentCancel: undefined;
 };

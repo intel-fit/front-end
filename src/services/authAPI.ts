@@ -845,15 +845,15 @@ export const authAPI = {
    * @returns 성공 여부
    */
   submitOnboarding: async (onboardingData: {
+    birthDate: string;
+    agreePrivacy: boolean;
+    agreeTerms: boolean;
     gender: "M" | "F";
     height: number;
     weight: number;
-    birthDate: string;
     weightGoal: number;
     healthGoal: string;
     workoutDaysPerWeek: string;
-    experienceLevel?: string;
-    fitnessConcerns?: string;
   }): Promise<{ success: boolean; message: string }> => {
     try {
       const response = await request<{ success: boolean; message: string }>(

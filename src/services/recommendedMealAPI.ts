@@ -36,6 +36,12 @@ export const recommendedMealAPI = {
       return response;
     } catch (error: any) {
       console.error("❌ 임시 식단 생성/조회 실패:", error);
+      
+      // 500 에러인 경우 더 명확한 메시지 제공
+      if (error.status === 500) {
+        throw new Error("서버에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요.");
+      }
+      
       throw new Error(error.message || "식단 생성에 실패했습니다.");
     }
   },

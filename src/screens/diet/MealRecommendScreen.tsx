@@ -595,7 +595,14 @@ const MealRecommendScreen = () => {
       Alert.alert("성공", "오늘의 맞춤 식단이 생성되었습니다! 🎉");
     } catch (error: any) {
       console.error("❌ 1일 식단 추천 실패:", error);
-      Alert.alert("오류", error.message || "식단을 불러오는데 실패했습니다.");
+      
+      // 500 에러인 경우 더 친절한 메시지
+      let errorMessage = error.message || "식단을 불러오는데 실패했습니다.";
+      if (error.status === 500) {
+        errorMessage = "서버에 일시적인 문제가 발생했습니다.\n잠시 후 다시 시도해주세요.";
+      }
+      
+      Alert.alert("오류", errorMessage);
     } finally {
       setLoading(false);
     }

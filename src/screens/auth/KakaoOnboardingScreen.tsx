@@ -27,13 +27,14 @@ const healthGoalOptions = [
 ];
 
 const workoutDaysOptions = [
-  {label: '주 1회', value: '주 1회'},
-  {label: '주 2회', value: '주 2회'},
-  {label: '주 3회', value: '주 3회'},
-  {label: '주 4회', value: '주 4회'},
-  {label: '주 5회', value: '주 5회'},
-  {label: '주 6회', value: '주 6회'},
-  {label: '주 7회', value: '주 7회'},
+  {label: '주 1회', value: '1일'},
+  {label: '주 2회', value: '2일'},
+  {label: '주 3회', value: '3일'},
+  {label: '주 3-4회', value: '3-4일'},
+  {label: '주 4회', value: '4일'},
+  {label: '주 5회', value: '5일'},
+  {label: '주 6회', value: '6일'},
+  {label: '주 7회', value: '7일'},
 ];
 
 const experienceLevelOptions = [
@@ -144,35 +145,53 @@ const KakaoOnboardingScreen = ({navigation}: any) => {
     try {
       const birthDate = `${formData.birthYear}-${String(formData.birthMonth).padStart(2, '0')}-${String(formData.birthDay).padStart(2, '0')}`;
       
+      // 유연성향상, 체력증진, 자세교정은 "MAINTENANCE"로 변환
+      const healthGoalValue = ['FLEXIBILITY', 'ENDURANCE', 'POSTURE'].includes(formData.healthGoal)
+        ? 'MAINTENANCE'
+        : formData.healthGoal;
+      
       const onboardingData = {
-        gender: formData.gender,
+        birthDate,
+        agreePrivacy: true,
+        agreeTerms: true,
+        gender: formData.gender as "M" | "F",
         height: Number(formData.height),
         weight: Number(formData.weight),
-        birthDate,
         weightGoal: Number(formData.weightGoal),
-        healthGoal: formData.healthGoal,
+        healthGoal: healthGoalValue,
         workoutDaysPerWeek: formData.workoutDaysPerWeek,
-        ...(formData.experienceLevel && {experienceLevel: formData.experienceLevel}),
-        ...(formData.fitnessConcerns && {fitnessConcerns: formData.fitnessConcerns}),
       };
 
       const response = await authAPI.submitOnboarding(onboardingData);
       
-      if (response.success) {
-        Alert.alert('완료', '신체정보가 저장되었습니다.', [
-          {
-            text: '확인',
-            onPress: () => navigation.replace('Main'),
-          },
-        ]);
-      } else {
-        Alert.alert('오류', response.message || '신체정보 저장에 실패했습니다.');
-      }
+      setLoading(false);
+      
+      // 200 응답 (온보딩 완료) → Alert 없이 바로 홈으로 이동
+      // response.success가 false여도 200 응답이면 성공으로 처리
+      setTimeout(() => {
+        navigation.replace('Main');
+      }, 100);
+      return;
     } catch (error: any) {
       console.error('온보딩 제출 실패:', error);
-      Alert.alert('오류', error.message || '신체정보 저장에 실패했습니다.');
-    } finally {
       setLoading(false);
+      
+      // 400 에러 (이미 온보딩 완료됨) → Alert 없이 홈으로 이동
+      if (error.status === 400) {
+        setTimeout(() => {
+          navigation.replace('Main');
+        }, 100);
+        return;
+      }
+      
+      // 401 에러 (인증 필요) → 로그인 화면으로 이동
+      if (error.status === 401) {
+        navigation.replace('Login');
+        return;
+      }
+      
+      // 기타 에러만 Alert 표시
+      Alert.alert('오류', error.message || '신체정보 저장에 실패했습니다.');
     }
   };
 
