@@ -79,6 +79,7 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
   const ageInputRef = useRef<TextInput>(null);
   const ageTextRef = useRef<string>("");
   const inputRefs = useRef<{ [key: string]: TextInput | null }>({});
+  const [ageValue, setAgeValue] = useState<string>("");
 
   // 날짜를 YYYY-MM-DD 형식으로 자동 포맷팅
   const formatDate = (text: string): string => {
@@ -157,6 +158,7 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
       setV((s) => ({ ...s, ...(defaultValues as any) }));
       if (typeof defaultValues.age === "string") {
         ageTextRef.current = defaultValues.age;
+        setAgeValue(defaultValues.age);
       }
     } else {
       console.log("[INBODY FORM] defaultValues 없음 또는 유효하지 않음:", defaultValues);
@@ -193,7 +195,57 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
     return (w / (m * m)).toFixed(1);
   }, [v.height, v.weight]);
 
+  // 필수 필드 검증
+  const isFormValid = useMemo(() => {
+    // 체중, 체지방률, 신장, 나이, 성별, 골격근량
+    const basicFieldsValid =
+      v.weight?.trim() !== "" &&
+      v.pbf?.trim() !== "" &&
+      v.height?.trim() !== "" &&
+      ageValue?.trim() !== "" &&
+      v.gender !== "" &&
+      v.smm?.trim() !== "";
+
+    // 부위별 체지방량 (5개 모두)
+    const fatFieldsValid =
+      v.rArmFat?.trim() !== "" &&
+      v.lArmFat?.trim() !== "" &&
+      v.trunkFat?.trim() !== "" &&
+      v.rLegFat?.trim() !== "" &&
+      v.lLegFat?.trim() !== "";
+
+    // 부위별 근육량 (5개 모두)
+    const muscleFieldsValid =
+      v.rArm?.trim() !== "" &&
+      v.lArm?.trim() !== "" &&
+      v.trunk?.trim() !== "" &&
+      v.rLeg?.trim() !== "" &&
+      v.lLeg?.trim() !== "";
+
+    return basicFieldsValid && fatFieldsValid && muscleFieldsValid;
+  }, [
+    v.weight,
+    v.pbf,
+    v.height,
+    ageValue,
+    v.gender,
+    v.smm,
+    v.rArmFat,
+    v.lArmFat,
+    v.trunkFat,
+    v.rLegFat,
+    v.lLegFat,
+    v.rArm,
+    v.lArm,
+    v.trunk,
+    v.rLeg,
+    v.lLeg,
+  ]);
+
   const handleSubmit = () => {
+    if (!isFormValid) {
+      return;
+    }
     const payload = {
       ...v,
       age: ageTextRef.current,
@@ -244,7 +296,9 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
 
           {/* 성별 */}
           <View style={styles.field}>
-            <Text style={styles.lab}>성별</Text>
+            <Text style={styles.lab}>
+              성별 <Text style={styles.required}>*</Text>
+            </Text>
             <View style={styles.row}>
               <TouchableOpacity
                 style={styles.radioButton}
@@ -275,7 +329,9 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
 
           {/* 나이 (비제어) */}
           <View style={styles.field}>
-            <Text style={styles.lab}>나이</Text>
+            <Text style={styles.lab}>
+              나이 <Text style={styles.required}>*</Text>
+            </Text>
             <View style={styles.unitBox}>
               <TextInput
                 ref={ageInputRef}
@@ -283,6 +339,7 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
                 defaultValue={v.age}
                 onChangeText={(text) => {
                   ageTextRef.current = text;
+                  setAgeValue(text);
                 }}
                 keyboardType="number-pad"
                 // ✅ 수정: InputAccessoryView 표시를 위해 필수
@@ -297,7 +354,9 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
 
           {/* 신장 */}
           <View style={styles.field}>
-            <Text style={styles.lab}>신장</Text>
+            <Text style={styles.lab}>
+              신장 <Text style={styles.required}>*</Text>
+            </Text>
             <View style={styles.unitBox}>
               <TextInput
                 style={styles.inpRight}
@@ -318,7 +377,9 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
         <View style={styles.sec}>
           {/* 체중 */}
           <View style={styles.field}>
-            <Text style={styles.lab}>체중</Text>
+            <Text style={styles.lab}>
+              체중 <Text style={styles.required}>*</Text>
+            </Text>
             <View style={styles.unitBox}>
               <TextInput
                 style={styles.inpRight}
@@ -336,7 +397,9 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
 
           {/* 골격근량 */}
           <View style={styles.field}>
-            <Text style={styles.lab}>골격근량(SMM)</Text>
+            <Text style={styles.lab}>
+              골격근량(SMM) <Text style={styles.required}>*</Text>
+            </Text>
             <View style={styles.unitBox}>
               <TextInput
                 style={styles.inpRight}
@@ -372,7 +435,9 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
 
           {/* 체지방률 */}
           <View style={styles.field}>
-            <Text style={styles.lab}>체지방률(PBF)</Text>
+            <Text style={styles.lab}>
+              체지방률(PBF) <Text style={styles.required}>*</Text>
+            </Text>
             <View style={styles.unitBox}>
               <TextInput
                 style={styles.inpRight}
@@ -438,7 +503,9 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
             { key: "lLeg", label: "왼다리" },
           ].map(({ key, label }) => (
             <View style={styles.field} key={key}>
-              <Text style={styles.smallLab}>{label}</Text>
+              <Text style={styles.smallLab}>
+                {label} <Text style={styles.required}>*</Text>
+              </Text>
               <View style={styles.unitBox}>
                 <TextInput
                   style={styles.inpRight}
@@ -467,7 +534,9 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
             { key: "lLegFat", label: "왼다리 체지방" },
           ].map(({ key, label }) => (
             <View style={styles.field} key={key}>
-              <Text style={styles.smallLab}>{label}</Text>
+              <Text style={styles.smallLab}>
+                {label} <Text style={styles.required}>*</Text>
+              </Text>
               <View style={styles.unitBox}>
                 <TextInput
                   style={styles.inpRight}
@@ -539,8 +608,14 @@ const InBodyManualForm: React.FC<InBodyManualFormProps> = ({
 
 
         {/* 저장 버튼 */}
-        <TouchableOpacity style={styles.submit} onPress={handleSubmit}>
-          <Text style={styles.submitText}>저장</Text>
+        <TouchableOpacity
+          style={[styles.submit, !isFormValid && styles.submitDisabled]}
+          onPress={handleSubmit}
+          disabled={!isFormValid}
+        >
+          <Text style={[styles.submitText, !isFormValid && styles.submitTextDisabled]}>
+            저장
+          </Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -685,10 +760,21 @@ const styles = StyleSheet.create({
     backgroundColor: "#d6ff4b",
     alignItems: "center",
   },
+  submitDisabled: {
+    backgroundColor: "#444444",
+    opacity: 0.5,
+  },
   submitText: {
     color: "#111111",
     fontWeight: "700",
     fontSize: 14,
+  },
+  submitTextDisabled: {
+    color: "#888888",
+  },
+  required: {
+    color: "#ff4444",
+    fontSize: 12,
   },
   // iOS 숫자패드 상단 액세서리 바
   bar: {

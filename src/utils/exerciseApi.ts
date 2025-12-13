@@ -151,6 +151,7 @@ export interface WorkoutSession {
   sets: WorkoutSet[];
   userId: number | string; // 필수 필드
   exerciseId?: string; // externalId
+  seconds?: number; // 각 운동에 소요된 시간 (초 단위)
   imageUrl?: string;
   exerciseImageUrl?: string;
   image?: string;
@@ -533,10 +534,19 @@ export const fetchDateProgress = async (
   }
 };
 
-// 오늘 운동시간 조회 API
+/**
+ * 오늘 운동시간 조회 API
+ * GET /api/workouts/time/{userId}
+ * 
+ * 특정 유저의 오늘 총 운동시간(totalExerciseSeconds)을 조회한다.
+ * 오늘의 운동시간 기본값은 0이다.
+ * 
+ * @param userId - 조회할 사용자 ID
+ * @returns { userId: number, totalSeconds: number } - userId: 사용자 ID, totalSeconds: 오늘 하루 누적된 운동시간(초)
+ */
 export interface GetTodayWorkoutTimeResponse {
   userId: number;
-  totalSeconds: number;
+  totalSeconds: number; // 오늘 하루 누적된 운동시간(초), 기본값 0
 }
 
 export const getTodayWorkoutTime = async (
@@ -561,15 +571,67 @@ export const getTodayWorkoutTime = async (
         status: error.response?.status,
         data: error.response?.data,
       });
-      // 404나 다른 에러 시 기본값 반환
+      // 404나 다른 에러 시 기본값 0 반환 (API 스펙에 따라)
       if (error.response?.status === 404) {
         return { userId, totalSeconds: 0 };
       }
     } else {
       console.error("[WORKOUT][TIME] 오늘 운동 시간 조회 예외:", error);
     }
-    // 에러 발생 시 기본값 반환
+    // 에러 발생 시 기본값 0 반환 (API 스펙에 따라)
     return { userId, totalSeconds: 0 };
+  }
+};
+
+/**
+ * 특정 날짜의 소모 칼로리 조회
+ * GET /api/workouts/{user_id}/calories/{date}
+ * 
+ * @param userId - 조회할 사용자 ID
+ * @param date - 조회할 날짜 (YYYY-MM-DD 형식)
+ * @returns { date: string, totalCalories: number, sessions: Array<{ sessionId: string, sessionCalories: number }> }
+ */
+export interface GetWorkoutCaloriesResponse {
+  date: string;
+  totalCalories: number;
+  sessions: Array<{
+    sessionId: string;
+    sessionCalories: number;
+  }>;
+}
+
+export const getWorkoutCalories = async (
+  userId: number,
+  date: string
+): Promise<GetWorkoutCaloriesResponse> => {
+  try {
+    const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    const url = `${WORKOUTS_API_URL}/${encodeURIComponent(userId)}/calories/${encodeURIComponent(date)}`;
+    console.log("[WORKOUT][CALORIES] 소모 칼로리 조회 요청:", url);
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token || ""}`,
+        Accept: "application/json",
+      },
+    });
+    console.log("[WORKOUT][CALORIES] 소모 칼로리 조회 응답:", response.data);
+    return response.data as GetWorkoutCaloriesResponse;
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      console.error("[WORKOUT][CALORIES] 소모 칼로리 조회 에러:", {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+      // 404나 다른 에러 시 기본값 반환
+      if (error.response?.status === 404) {
+        return { date, totalCalories: 0, sessions: [] };
+      }
+    } else {
+      console.error("[WORKOUT][CALORIES] 소모 칼로리 조회 예외:", error);
+    }
+    // 에러 발생 시 기본값 반환
+    return { date, totalCalories: 0, sessions: [] };
   }
 };
 
@@ -580,7 +642,6 @@ export interface SaveWorkoutTitleRequest {
   date: string; // 오늘의 날짜 정보만 넣어야함 (YYYY-MM-DD)
   intensity?: number[]; // 무거워요(7.5), 선택안함(5.0), 가벼워요(2.5)
   feedback?: string[]; // 좋아요(like), 선택안함(neutral), 싫어요(dislike)
-  seconds: number; // 운동 시간 (초 단위) - 필수 필드
 }
 
 export interface SaveWorkoutTitleResponse {
@@ -594,8 +655,7 @@ export const saveWorkoutTitle = async (
   userId: number,
   saveTitle: string,
   intensity?: number[],
-  feedback?: string[],
-  seconds?: number
+  feedback?: string[]
 ): Promise<SaveWorkoutTitleResponse> => {
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
@@ -624,10 +684,6 @@ export const saveWorkoutTitle = async (
       ...(intensityFloat &&
         intensityFloat.length > 0 && { intensity: intensityFloat }),
       ...(feedback && feedback.length > 0 && { feedback }),
-      // seconds는 필수 필드 (초 단위)
-      // 백엔드가 0을 허용하지 않을 수 있으므로 최소값 1로 설정
-      seconds:
-        seconds !== undefined && seconds !== null && seconds > 0 ? seconds : 1,
     };
 
     // 페이로드 검증 로그
@@ -643,8 +699,6 @@ export const saveWorkoutTitle = async (
         date: payload.date,
         intensityLength: payload.intensity?.length,
         feedbackLength: payload.feedback?.length,
-        seconds: payload.seconds,
-        secondsType: typeof payload.seconds,
       },
     });
 
