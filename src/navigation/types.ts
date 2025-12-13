@@ -5,6 +5,7 @@ export type RootStackParamList = {
   Signup: undefined;
   FindId: undefined;
   ResetPassword: undefined;
+  KakaoOnboarding: undefined;
   Main: undefined;
   Chatbot: undefined;
   Diet: undefined;
