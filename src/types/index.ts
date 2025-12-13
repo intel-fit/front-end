@@ -156,6 +156,9 @@ export interface DailyProgressWeekItem {
   date: string; // yyyy-MM-dd 형식
   exerciseRate: number; // 운동 달성률 (0~100)
   totalCalorie: number; // 총 칼로리
+  mealCount?: number; // 식사 횟수
+  exerciseCount?: number; // 운동 종목 수
+  exerciseTime?: number; // 운동 시간 (초)
 }
 
 // 영양 목표 타입

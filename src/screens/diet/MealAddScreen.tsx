@@ -1332,7 +1332,7 @@ const MealAddScreen = ({navigation, route}: any) => {
               <View style={styles.foodItemContent}>
                 <View style={styles.foodItemHeader}>
                   <View style={styles.foodNameContainer}>
-                    <Text style={styles.foodName} numberOfLines={2}>{food.name}</Text>
+                  <Text style={styles.foodName} numberOfLines={2}>{food.name}</Text>
                     <TouchableOpacity
                       style={styles.heartButton}
                       onPress={(e) => {
