@@ -599,6 +599,8 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   const hasPrevSequence = hasSequenceControls && sequenceIndex! > 0;
   const hasNextSequence =
     hasSequenceControls && sequenceIndex! < sequenceLength - 1;
+  const isLastSequence = hasSequenceControls && sequenceIndex === sequenceLength - 1;
+  const canFinishWorkout = isLastSequence && allSetsCompleted;
 
   const isExerciseSelected = (exercise: any) => {
     const key = getExerciseKey(exercise);
@@ -2292,10 +2294,21 @@ const getExerciseDisplayName = React.useCallback(
                   </View>
                 )}
                 <TouchableOpacity
-                  style={styles.endWorkoutBtn}
+                  style={[
+                    styles.endWorkoutBtn,
+                    !canFinishWorkout && styles.endWorkoutBtnDisabled,
+                  ]}
                   onPress={handleSave}
+                  disabled={!canFinishWorkout}
                 >
-                  <Text style={styles.endWorkoutBtnText}>운동 끝내기</Text>
+                  <Text
+                    style={[
+                      styles.endWorkoutBtnText,
+                      !canFinishWorkout && styles.endWorkoutBtnTextDisabled,
+                    ]}
+                  >
+                    운동 끝내기
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2796,10 +2809,21 @@ const getExerciseDisplayName = React.useCallback(
 
               <View style={styles.footer}>
                 <TouchableOpacity
-                  style={styles.endWorkoutBtn}
+                  style={[
+                    styles.endWorkoutBtn,
+                    !canFinishWorkout && styles.endWorkoutBtnDisabled,
+                  ]}
                   onPress={handleSave}
+                  disabled={!canFinishWorkout}
                 >
-                  <Text style={styles.endWorkoutBtnText}>운동 끝내기</Text>
+                  <Text
+                    style={[
+                      styles.endWorkoutBtnText,
+                      !canFinishWorkout && styles.endWorkoutBtnTextDisabled,
+                    ]}
+                  >
+                    운동 끝내기
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -3368,10 +3392,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
   },
+  endWorkoutBtnDisabled: {
+    backgroundColor: "#2a2a2a",
+    opacity: 0.5,
+  },
   endWorkoutBtnText: {
     color: "#ffffff",
     fontSize: 16,
     fontWeight: "600",
+  },
+  endWorkoutBtnTextDisabled: {
+    color: "#888888",
   },
   instructionScroll: {
     maxHeight: 260,
