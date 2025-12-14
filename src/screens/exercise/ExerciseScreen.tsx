@@ -605,12 +605,12 @@ const ExerciseScreen = ({ navigation }: any) => {
       typeof goalData.weeklyCalorieGoal === "number" &&
       goalData.weeklyCalorieGoal > 0
     ) {
-      parts.push(`${goalData.weeklyCalorieGoal}kcal`);
+      parts.push(`${goalData.weeklyCalorieGoal.toLocaleString()}kcal`);
     }
     if (parts.length === 0) {
       return "목표치가 아직 설정되지 않았습니다";
     }
-    return `목표치 | ${parts.join(" · ")}`;
+    return `목표치 | ${parts.join(", ")}`;
   }, [goalData]);
 
   const trimmedCompletionTitle = completionSummaryTitle.trim();

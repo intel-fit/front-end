@@ -22,7 +22,6 @@ import {
 } from "../../utils/inbodyApi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { eventBus } from "../../utils/eventBus";
-import InbodyDateNavigator from "../../components/common/InbodyDateNavigator";
 import InBodyCalendarModal from "../../components/common/InBodyCalendarModal";
 import { ROUTES } from "../../constants/routes";
 import { ACCESS_TOKEN_KEY } from "../../services/apiConfig";
@@ -1212,7 +1211,7 @@ const InBodyScreen = ({ navigation, route }: any) => {
             </View>
           )}
 
-          {/* 날짜 네비게이터 */}
+          {/* 날짜 선택 바 (캘린더 버튼만) */}
           {inBodyData && selectedDate && (
             <View style={styles.dateNavigatorContainer}>
               <TouchableOpacity
@@ -1227,15 +1226,6 @@ const InBodyScreen = ({ navigation, route }: any) => {
                 </Text>
                 <Icon name="chevron-down" size={16} color="#E3FF7C" />
               </TouchableOpacity>
-              {availableDates.length > 0 && (
-                <View style={styles.dateNavigatorWrapper}>
-                  <InbodyDateNavigator
-                    dates={availableDates}
-                    onChange={handleDateNavigatorChange}
-                    selectedDate={selectedDate}
-                  />
-                </View>
-              )}
             </View>
           )}
 
