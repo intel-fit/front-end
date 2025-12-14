@@ -534,12 +534,36 @@ export const getInBodyComment = async (
       },
     });
 
+    // 🔍 응답 전체 데이터 로깅 추가
+    console.log("[INBODY][COMMENT] AI 코멘트 조회 응답 전체:", JSON.stringify(response.data, null, 2));
+    console.log("[INBODY][COMMENT] response.data 타입:", typeof response.data);
+    console.log("[INBODY][COMMENT] response.data 키들:", response.data && typeof response.data === 'object' ? Object.keys(response.data) : 'N/A');
+    console.log("[INBODY][COMMENT] response.data.comment:", response.data?.comment);
+    console.log("[INBODY][COMMENT] response.data.comments:", response.data?.comments);
+    console.log("[INBODY][COMMENT] response.data.message:", response.data?.message);
+
+    // 🔧 comments (복수형) 필드도 확인
+    let comment = response.data?.comments || response.data?.comment || response.data?.message || "";
+    
+    // comments가 배열인 경우 랜덤으로 하나 선택
+    if (Array.isArray(comment) && comment.length > 0) {
+      const randomIndex = Math.floor(Math.random() * comment.length);
+      const selectedComment = comment[randomIndex];
+      console.log("[INBODY][COMMENT] 배열에서 랜덤 선택:", {
+        totalComments: comment.length,
+        selectedIndex: randomIndex,
+        selectedComment: selectedComment,
+      });
+      comment = selectedComment;
+    }
+    
+    console.log("[INBODY][COMMENT] 추출된 comment:", comment);
     console.log("[INBODY][COMMENT] AI 코멘트 조회 응답:", {
       status: response.status,
-      comment: response.data?.comment,
+      comment: comment,
     });
 
-    return response.data;
+    return { comment: typeof comment === 'string' ? comment : "" };
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;

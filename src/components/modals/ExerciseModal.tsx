@@ -12,8 +12,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  SafeAreaView,
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors } from "../../theme/colors";
@@ -118,6 +118,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   renderContentOnly = false,
   isCompleted = false,
 }) => {
+  const insets = useSafeAreaInsets();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("전체");
   const [currentMode, setCurrentMode] = useState<"add" | "edit" | "detail">(
@@ -1449,7 +1450,7 @@ const getExerciseDisplayName = React.useCallback(
       : [];
 
   const content = fullScreen ? (
-    <SafeAreaView style={styles.fullScreenContainer}>
+    <SafeAreaView style={styles.fullScreenContainer} edges={["top"]}>
       <View style={styles.fullScreenContent}>
           {currentMode === "add" ? (
             <KeyboardAvoidingView
@@ -2099,79 +2100,9 @@ const getExerciseDisplayName = React.useCallback(
                   styles.footer,
                   hasSequenceControls && styles.footerExtended,
                   allSetsCompleted && !isCompleted && styles.footerWithFeedback,
+                  { paddingBottom: Math.max(insets.bottom, 34) },
                 ]}
               >
-                {hasSequenceControls && (
-                  <View style={styles.sequenceControlRow}>
-                    <TouchableOpacity
-                      style={[
-                        styles.sequenceControlButton,
-                        !hasPrevSequence && styles.sequenceControlButtonDisabled,
-                      ]}
-                      onPress={() => handleSequenceNavigatePress("prev")}
-                      disabled={!hasPrevSequence}
-                    >
-                      <Text
-                        style={[
-                          styles.sequenceControlText,
-                          !hasPrevSequence && styles.sequenceControlTextDisabled,
-                        ]}
-                      >
-                        이전 운동
-                      </Text>
-                    </TouchableOpacity>
-                    {!isCompleted && (
-                      <TouchableOpacity
-                        style={[styles.sequenceControlButton, styles.sequenceTimerButton]}
-                        onPress={toggleWorkoutTimer}
-                      >
-                        <Text style={styles.sequenceTimerLabel}>타이머</Text>
-                        <Text
-                          style={[
-                            styles.sequenceTimerValue,
-                            !isWorkoutTimerRunning && styles.sequenceTimerValuePaused,
-                          ]}
-                        >
-                          {formatWorkoutTimer(workoutTimerSeconds)}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                      style={[
-                        styles.sequenceControlButton,
-                        !canNextExercise && styles.sequenceControlButtonDisabled,
-                      ]}
-                      onPress={() => handleSequenceNavigatePress("next")}
-                      disabled={!canNextExercise}
-                    >
-                      <Text
-                        style={[
-                          styles.sequenceControlText,
-                          !canNextExercise && styles.sequenceControlTextDisabled,
-                        ]}
-                      >
-                        다음 운동
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-                <TouchableOpacity
-                  style={[
-                    styles.endWorkoutBtn,
-                    !canFinishWorkout && styles.endWorkoutBtnDisabled,
-                  ]}
-                  onPress={handleSave}
-                  disabled={!canFinishWorkout}
-                >
-                  <Text
-                    style={[
-                      styles.endWorkoutBtnText,
-                      !canFinishWorkout && styles.endWorkoutBtnTextDisabled,
-                    ]}
-                  >
-                    운동 끝내기
-                  </Text>
-                </TouchableOpacity>
                 {allSetsCompleted && !isCompleted && (() => {
                   const currentExerciseName = getExerciseDisplayName(
                     selectedExercise || exerciseData || { name: "" }
@@ -2305,6 +2236,77 @@ const getExerciseDisplayName = React.useCallback(
                     </View>
                   );
                 })()}
+                {hasSequenceControls && (
+                  <View style={styles.sequenceControlRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.sequenceControlButton,
+                        !hasPrevSequence && styles.sequenceControlButtonDisabled,
+                      ]}
+                      onPress={() => handleSequenceNavigatePress("prev")}
+                      disabled={!hasPrevSequence}
+                    >
+                      <Text
+                        style={[
+                          styles.sequenceControlText,
+                          !hasPrevSequence && styles.sequenceControlTextDisabled,
+                        ]}
+                      >
+                        이전 운동
+                      </Text>
+                    </TouchableOpacity>
+                    {!isCompleted && (
+                      <TouchableOpacity
+                        style={[styles.sequenceControlButton, styles.sequenceTimerButton]}
+                        onPress={toggleWorkoutTimer}
+                      >
+                        <Text style={styles.sequenceTimerLabel}>타이머</Text>
+                        <Text
+                          style={[
+                            styles.sequenceTimerValue,
+                            !isWorkoutTimerRunning && styles.sequenceTimerValuePaused,
+                          ]}
+                        >
+                          {formatWorkoutTimer(workoutTimerSeconds)}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={[
+                        styles.sequenceControlButton,
+                        !canNextExercise && styles.sequenceControlButtonDisabled,
+                      ]}
+                      onPress={() => handleSequenceNavigatePress("next")}
+                      disabled={!canNextExercise}
+                    >
+                      <Text
+                        style={[
+                          styles.sequenceControlText,
+                          !canNextExercise && styles.sequenceControlTextDisabled,
+                        ]}
+                      >
+                        다음 운동
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                <TouchableOpacity
+                  style={[
+                    styles.endWorkoutBtn,
+                    !canFinishWorkout && styles.endWorkoutBtnDisabled,
+                  ]}
+                  onPress={handleSave}
+                  disabled={!canFinishWorkout}
+                >
+                  <Text
+                    style={[
+                      styles.endWorkoutBtnText,
+                      !canFinishWorkout && styles.endWorkoutBtnTextDisabled,
+                    ]}
+                  >
+                    운동 끝내기
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -3219,9 +3221,9 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   feedbackSection: {
-    marginTop: 12,
+    marginTop: 0,
     marginHorizontal: 0,
-    marginBottom: 0,
+    marginBottom: 12,
   },
   feedbackTitle: {
     fontSize: 18,
@@ -3827,8 +3829,8 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: 20,
-    paddingBottom: 8,
-    paddingTop: 8,
+    paddingBottom: 0,
+    paddingTop: 16,
     backgroundColor: "#2a2a2a",
   },
   footerExtended: {
@@ -3836,7 +3838,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   footerWithFeedback: {
-    paddingBottom: 16,
+    paddingBottom: 0,
   },
   saveExerciseBtn: {
     backgroundColor: "#e3ff7c",

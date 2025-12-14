@@ -145,12 +145,49 @@ export const healthScoreAPI = {
   getDailyComment: async (): Promise<string | null> => {
     try {
       const userId = await getUserId();
-      const response = await requestAI<{ comment: string }>(
+      console.log("[HEALTH_SCORE][COMMENT] 일일 코멘트 요청 시작, userId:", userId);
+      const response = await requestAI<any>(
         `/score/comment/daily/${userId}`,
         { method: "GET" }
       );
-      return response?.comment || null;
+      console.log("[HEALTH_SCORE][COMMENT] 일일 코멘트 응답 전체:", JSON.stringify(response, null, 2));
+      console.log("[HEALTH_SCORE][COMMENT] response 타입:", typeof response);
+      console.log("[HEALTH_SCORE][COMMENT] response가 문자열인가?", typeof response === 'string');
+      console.log("[HEALTH_SCORE][COMMENT] response 키들:", response && typeof response === 'object' ? Object.keys(response) : 'N/A');
+      console.log("[HEALTH_SCORE][COMMENT] response.comment:", response?.comment);
+      console.log("[HEALTH_SCORE][COMMENT] response.comments:", response?.comments);
+      console.log("[HEALTH_SCORE][COMMENT] response.message:", response?.message);
+      
+      // 응답이 문자열인 경우
+      if (typeof response === 'string') {
+        console.log("[HEALTH_SCORE][COMMENT] 응답이 문자열로 받아짐, 반환:", response);
+        return response.trim() || null;
+      }
+      
+      // 응답이 객체인 경우 - comments (복수형) 필드를 우선 확인
+      let comment = response?.comments || response?.comment || response?.message || null;
+      
+      // comments가 배열인 경우 랜덤으로 하나 선택
+      if (Array.isArray(comment) && comment.length > 0) {
+        const randomIndex = Math.floor(Math.random() * comment.length);
+        const selectedComment = comment[randomIndex];
+        console.log("[HEALTH_SCORE][COMMENT] 배열에서 랜덤 선택:", {
+          totalComments: comment.length,
+          selectedIndex: randomIndex,
+          selectedComment: selectedComment,
+        });
+        comment = selectedComment;
+      }
+      
+      console.log("[HEALTH_SCORE][COMMENT] 추출된 comment:", comment);
+      return typeof comment === 'string' && comment.trim() ? comment : null;
     } catch (error: any) {
+      console.error("[HEALTH_SCORE][COMMENT] 일일 코멘트 에러:", {
+        message: error.message,
+        status: error.status,
+        data: error.data,
+        stack: error.stack,
+      });
       if (error.status === 404) {
         return null;
       }
@@ -163,12 +200,49 @@ export const healthScoreAPI = {
   getWeeklyComment: async (): Promise<string | null> => {
     try {
       const userId = await getUserId();
-      const response = await requestAI<{ comment: string }>(
+      console.log("[HEALTH_SCORE][COMMENT] 주간 코멘트 요청 시작, userId:", userId);
+      const response = await requestAI<any>(
         `/score/comment/weekly/${userId}`,
         { method: "GET" }
       );
-      return response?.comment || null;
+      console.log("[HEALTH_SCORE][COMMENT] 주간 코멘트 응답 전체:", JSON.stringify(response, null, 2));
+      console.log("[HEALTH_SCORE][COMMENT] response 타입:", typeof response);
+      console.log("[HEALTH_SCORE][COMMENT] response가 문자열인가?", typeof response === 'string');
+      console.log("[HEALTH_SCORE][COMMENT] response 키들:", response && typeof response === 'object' ? Object.keys(response) : 'N/A');
+      console.log("[HEALTH_SCORE][COMMENT] response.comment:", response?.comment);
+      console.log("[HEALTH_SCORE][COMMENT] response.comments:", response?.comments);
+      console.log("[HEALTH_SCORE][COMMENT] response.message:", response?.message);
+      
+      // 응답이 문자열인 경우
+      if (typeof response === 'string') {
+        console.log("[HEALTH_SCORE][COMMENT] 응답이 문자열로 받아짐, 반환:", response);
+        return response.trim() || null;
+      }
+      
+      // 응답이 객체인 경우 - comments (복수형) 필드를 우선 확인
+      let comment = response?.comments || response?.comment || response?.message || null;
+      
+      // comments가 배열인 경우 랜덤으로 하나 선택
+      if (Array.isArray(comment) && comment.length > 0) {
+        const randomIndex = Math.floor(Math.random() * comment.length);
+        const selectedComment = comment[randomIndex];
+        console.log("[HEALTH_SCORE][COMMENT] 배열에서 랜덤 선택:", {
+          totalComments: comment.length,
+          selectedIndex: randomIndex,
+          selectedComment: selectedComment,
+        });
+        comment = selectedComment;
+      }
+      
+      console.log("[HEALTH_SCORE][COMMENT] 추출된 comment:", comment);
+      return typeof comment === 'string' && comment.trim() ? comment : null;
     } catch (error: any) {
+      console.error("[HEALTH_SCORE][COMMENT] 주간 코멘트 에러:", {
+        message: error.message,
+        status: error.status,
+        data: error.data,
+        stack: error.stack,
+      });
       if (error.status === 404) {
         return null;
       }
@@ -181,12 +255,49 @@ export const healthScoreAPI = {
   getMonthlyComment: async (): Promise<string | null> => {
     try {
       const userId = await getUserId();
-      const response = await requestAI<{ comment: string }>(
+      console.log("[HEALTH_SCORE][COMMENT] 월간 코멘트 요청 시작, userId:", userId);
+      const response = await requestAI<any>(
         `/score/comment/monthly/${userId}`,
         { method: "GET" }
       );
-      return response?.comment || null;
+      console.log("[HEALTH_SCORE][COMMENT] 월간 코멘트 응답 전체:", JSON.stringify(response, null, 2));
+      console.log("[HEALTH_SCORE][COMMENT] response 타입:", typeof response);
+      console.log("[HEALTH_SCORE][COMMENT] response가 문자열인가?", typeof response === 'string');
+      console.log("[HEALTH_SCORE][COMMENT] response 키들:", response && typeof response === 'object' ? Object.keys(response) : 'N/A');
+      console.log("[HEALTH_SCORE][COMMENT] response.comment:", response?.comment);
+      console.log("[HEALTH_SCORE][COMMENT] response.comments:", response?.comments);
+      console.log("[HEALTH_SCORE][COMMENT] response.message:", response?.message);
+      
+      // 응답이 문자열인 경우
+      if (typeof response === 'string') {
+        console.log("[HEALTH_SCORE][COMMENT] 응답이 문자열로 받아짐, 반환:", response);
+        return response.trim() || null;
+      }
+      
+      // 응답이 객체인 경우 - comments (복수형) 필드를 우선 확인
+      let comment = response?.comments || response?.comment || response?.message || null;
+      
+      // comments가 배열인 경우 랜덤으로 하나 선택
+      if (Array.isArray(comment) && comment.length > 0) {
+        const randomIndex = Math.floor(Math.random() * comment.length);
+        const selectedComment = comment[randomIndex];
+        console.log("[HEALTH_SCORE][COMMENT] 배열에서 랜덤 선택:", {
+          totalComments: comment.length,
+          selectedIndex: randomIndex,
+          selectedComment: selectedComment,
+        });
+        comment = selectedComment;
+      }
+      
+      console.log("[HEALTH_SCORE][COMMENT] 추출된 comment:", comment);
+      return typeof comment === 'string' && comment.trim() ? comment : null;
     } catch (error: any) {
+      console.error("[HEALTH_SCORE][COMMENT] 월간 코멘트 에러:", {
+        message: error.message,
+        status: error.status,
+        data: error.data,
+        stack: error.stack,
+      });
       if (error.status === 404) {
         return null;
       }
