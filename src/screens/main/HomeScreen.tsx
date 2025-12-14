@@ -649,6 +649,18 @@ const HomeScreen = ({ navigation }: any) => {
     };
   }, []);
 
+  // 인바디 업데이트 이벤트 리스너
+  useEffect(() => {
+    const unsubscribe = eventBus.on("inbodyUpdated", () => {
+      console.log("[HOME] 인바디 업데이트 이벤트 수신, 인바디 데이터 새로고침");
+      loadInBodyData();
+    });
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, []);
+
   const handleCalendarClick = () => {
     navigation.navigate("Calendar");
   };
