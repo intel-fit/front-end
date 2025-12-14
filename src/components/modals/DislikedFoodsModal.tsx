@@ -1,4 +1,3 @@
-// src/components/DislikedFoodsModal.tsx
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -12,6 +11,8 @@ import {
   ActivityIndicator,
   Dimensions,
   Keyboard,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -44,27 +45,18 @@ const DislikedFoodsModal = ({
     }
   }, [visible, userId]);
 
-  /**
-   * 비선호 식단 목록 불러오기
-   */
   const loadDislikedFoods = async () => {
     try {
       setInitialLoading(true);
       const foods = await userPreferencesAPI.getExclusions(userId);
       setDislikedFoods(foods);
-    } catch (error: any) {
-      console.error("비선호 식단 조회 실패:", error);
+    } catch (error) {
       Alert.alert("오류", "금지 식단을 불러오는데 실패했습니다.");
     } finally {
       setInitialLoading(false);
     }
   };
 
-  /**
-   * 음식 추가 핸들러
-   * - 쉼표로 구분된 여러 음식을 한 번에 입력 가능
-   * - 예: "굴비, 다랑어" 또는 "오이"
-   */
   const handleAdd = async () => {
     const trimmed = inputValue.trim();
 
@@ -73,7 +65,6 @@ const DislikedFoodsModal = ({
       return;
     }
 
-    // 쉼표로 구분하여 배열로 변환 (공백 제거)
     const foodsToAdd = trimmed
       .split(",")
       .map((food) => food.trim())
@@ -84,11 +75,8 @@ const DislikedFoodsModal = ({
       return;
     }
 
-    // 중복 검사 (기존 목록의 food_name과 비교)
     const duplicates = foodsToAdd.filter((newFood) =>
       dislikedFoods.some((item) => {
-        // item.food_name이 "굴비, 다랑어" 형태일 수 있으므로
-        // 쉼표로 분리해서 각각 비교
         const existingFoods = item.food_name.split(",").map((f) => f.trim());
         return existingFoods.includes(newFood);
       })
@@ -106,18 +94,14 @@ const DislikedFoodsModal = ({
       setProcessing(true);
       Keyboard.dismiss();
 
-      // API 호출: 배열 전달
-      const newFood = await userPreferencesAPI.addExclusions(
-        userId,
-        foodsToAdd
-      );
+      // ✅ 여러 개를 하나씩 추가 (반복문 내부에서 처리)
+      await userPreferencesAPI.addExclusions(userId, foodsToAdd);
 
-      // 응답: { id: 1, food_name: "굴비, 다랑어", reason: "taste" }
-      // 목록에 추가
-      setDislikedFoods((prev) => [...prev, newFood]);
+      // 목록 새로고침
+      await loadDislikedFoods();
       setInputValue("");
 
-      Alert.alert("완료", `"${newFood.food_name}"이(가) 추가되었습니다.`);
+      Alert.alert("완료", `${foodsToAdd.join(", ")}이(가) 추가되었습니다.`);
 
       if (onUpdate) onUpdate();
     } catch (error: any) {
@@ -128,13 +112,8 @@ const DislikedFoodsModal = ({
     }
   };
 
-  /**
-   * 음식 삭제 핸들러
-   * @param id exclusion_id (비선호 식단 저장한 식단의 id)
-   * @param name 표시용 음식 이름 (food_name)
-   */
   const handleRemove = (id: number, name: string) => {
-    Alert.alert("삭제", `"${name}"을(를) 제외 목록에서 삭제하시겠습니까?`, [
+    Alert.alert("삭제", `"${name}"을(를) 삭제하시겠습니까?`, [
       { text: "취소", style: "cancel" },
       {
         text: "삭제",
@@ -142,18 +121,10 @@ const DislikedFoodsModal = ({
         onPress: async () => {
           try {
             setProcessing(true);
-
-            // API 호출: exclusion_id로 삭제
             await userPreferencesAPI.deleteExclusion(id);
-
-            // 로컬 상태 업데이트
             setDislikedFoods((prev) => prev.filter((item) => item.id !== id));
-
-            Alert.alert("완료", "삭제되었습니다.");
-
             if (onUpdate) onUpdate();
-          } catch (error: any) {
-            console.error("삭제 실패:", error);
+          } catch {
             Alert.alert("오류", "삭제에 실패했습니다.");
           } finally {
             setProcessing(false);
@@ -166,178 +137,149 @@ const DislikedFoodsModal = ({
   return (
     <Modal
       visible={visible}
-      transparent={true}
+      transparent
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
-        <LinearGradient
-          colors={["rgba(0,0,0,0.95)", "rgba(17,24,39,0.95)"]}
-          style={StyleSheet.absoluteFill}
-        />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+      >
+        <View style={styles.overlay}>
+          <LinearGradient
+            colors={["rgba(0,0,0,0.95)", "rgba(17,24,39,0.95)"]}
+            style={StyleSheet.absoluteFill}
+          />
 
-        <View style={styles.container}>
-          {/* 헤더 */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Icon name="close" size={28} color="#ffffff" />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>금지 식단 설정</Text>
-            <View style={{ width: 28 }} />
-          </View>
-
-          {/* 안내 메시지 */}
-          <View style={styles.infoBox}>
-            <Icon name="information-circle" size={20} color="#4a90e2" />
-            <Text style={styles.infoText}>
-              쉼표(,)로 구분하여 여러 음식을 한 번에 추가할 수 있습니다.
-              {"\n"}
-              예: 굴비, 다랑어, 오이
-            </Text>
-          </View>
-
-          <View style={styles.content}>
-            {/* 입력 필드 */}
-            <View style={styles.inputSection}>
-              <Text style={styles.sectionTitle}>음식 추가</Text>
-              <View style={styles.inputContainer}>
-                <LinearGradient
-                  colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
-                  style={styles.inputWrapper}
-                >
-                  <Icon
-                    name="search"
-                    size={20}
-                    color="#6b7280"
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="예: 굴비, 다랑어, 오이"
-                    placeholderTextColor="#666666"
-                    value={inputValue}
-                    onChangeText={setInputValue}
-                    onSubmitEditing={handleAdd}
-                    returnKeyType="done"
-                    editable={!processing}
-                  />
-                </LinearGradient>
-                <TouchableOpacity
-                  style={[
-                    styles.addBtn,
-                    (!inputValue.trim() || processing) && styles.addBtnDisabled,
-                  ]}
-                  onPress={handleAdd}
-                  disabled={!inputValue.trim() || processing}
-                >
-                  <LinearGradient
-                    colors={["#e3ff7c", "#a8e063"]}
-                    style={styles.addBtnGradient}
-                  >
-                    {processing ? (
-                      <ActivityIndicator size="small" color="#111111" />
-                    ) : (
-                      <Icon name="add" size={28} color="#111111" />
-                    )}
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
+          <View style={styles.container}>
+            {/* 헤더 */}
+            <View style={styles.header}>
+              <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                <Icon name="close" size={28} color="#fff" />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>금지 식단 설정</Text>
+              <View style={{ width: 28 }} />
             </View>
 
-            {/* 금지 식단 목록 */}
-            <View style={{ flex: 1 }}>
-              <Text style={styles.sectionTitle}>
-                금지 식단 목록 ({dislikedFoods.length})
+            {/* 안내 */}
+            <View style={styles.infoBox}>
+              <Text style={styles.infoText}>
+                쉼표(,)로 여러 음식을 추가할 수 있습니다.{"\n"}
+                예: 굴비, 다랑어, 오이
               </Text>
-
-              {initialLoading ? (
-                <View style={styles.centerState}>
-                  <ActivityIndicator size="large" color="#a8e063" />
-                </View>
-              ) : (
-                <ScrollView
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={styles.listContent}
-                >
-                  {dislikedFoods.length === 0 ? (
-                    <View style={styles.emptyState}>
-                      <Icon
-                        name="restaurant-outline"
-                        size={60}
-                        color="#666666"
-                      />
-                      <Text style={styles.emptyText}>
-                        아직 추가된 금지 식단이 없습니다.
-                      </Text>
-                      <Text style={styles.emptySubText}>
-                        위 입력창에서 원하는 음식을 추가해보세요.
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={styles.foodList}>
-                      {dislikedFoods.map((item) => (
-                        <View key={item.id} style={styles.foodItem}>
-                          <LinearGradient
-                            colors={[
-                              "rgba(255,255,255,0.08)",
-                              "rgba(255,255,255,0.04)",
-                            ]}
-                            style={styles.foodItemGradient}
-                          >
-                            <View style={styles.foodItemLeft}>
-                              <View style={styles.foodItemIcon}>
-                                <Icon name="ban" size={18} color="#ef4444" />
-                              </View>
-                              <Text style={styles.foodName}>
-                                {item.food_name}
-                              </Text>
-                            </View>
-
-                            <TouchableOpacity
-                              onPress={() =>
-                                handleRemove(item.id, item.food_name)
-                              }
-                              style={styles.removeBtn}
-                              disabled={processing}
-                            >
-                              <Icon
-                                name="close-circle"
-                                size={24}
-                                color="#ef4444"
-                              />
-                            </TouchableOpacity>
-                          </LinearGradient>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                  <View style={{ height: 100 }} />
-                </ScrollView>
-              )}
             </View>
-          </View>
 
-          {/* 닫기 버튼 */}
-          <View style={styles.footer}>
-            <TouchableOpacity style={styles.saveBtn} onPress={onClose}>
-              <LinearGradient
-                colors={["#e3ff7c", "#a8e063"]}
-                style={styles.saveBtnGradient}
+            <View style={styles.content}>
+              {/* 입력 */}
+              <View style={styles.inputSection}>
+                <Text style={styles.sectionTitle}>음식 추가</Text>
+                <View style={styles.inputContainer}>
+                  <LinearGradient
+                    colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
+                    style={styles.inputWrapper}
+                  >
+                    <Icon
+                      name="search"
+                      size={20}
+                      color="#6b7280"
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="예: 굴비, 다랑어, 오이"
+                      placeholderTextColor="#666"
+                      value={inputValue}
+                      onChangeText={setInputValue}
+                      onSubmitEditing={handleAdd}
+                      returnKeyType="done"
+                      editable={!processing}
+                    />
+                  </LinearGradient>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.addBtn,
+                      (!inputValue.trim() || processing) &&
+                        styles.addBtnDisabled,
+                    ]}
+                    onPress={handleAdd}
+                    disabled={!inputValue.trim() || processing}
+                  >
+                    <LinearGradient
+                      colors={["#e3ff7c", "#a8e063"]}
+                      style={styles.addBtnGradient}
+                    >
+                      {processing ? (
+                        <ActivityIndicator size="small" color="#111" />
+                      ) : (
+                        <Icon name="add" size={28} color="#111" />
+                      )}
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* 리스트 */}
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ paddingBottom: 40 }}
               >
-                <Text style={styles.saveBtnText}>닫기</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                {initialLoading ? (
+                  <View style={styles.centerState}>
+                    <ActivityIndicator size="large" color="#a8e063" />
+                  </View>
+                ) : dislikedFoods.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Icon name="restaurant-outline" size={60} color="#666" />
+                    <Text style={styles.emptyText}>
+                      아직 추가된 금지 식단이 없습니다.
+                    </Text>
+                  </View>
+                ) : (
+                  dislikedFoods.map((item) => (
+                    <View key={item.id} style={styles.foodItem}>
+                      <LinearGradient
+                        colors={[
+                          "rgba(255,255,255,0.08)",
+                          "rgba(255,255,255,0.04)",
+                        ]}
+                        style={styles.foodItemGradient}
+                      >
+                        <Text style={styles.foodName}>{item.food_name}</Text>
+                        <TouchableOpacity
+                          onPress={() => handleRemove(item.id, item.food_name)}
+                        >
+                          <Icon name="close-circle" size={24} color="#ef4444" />
+                        </TouchableOpacity>
+                      </LinearGradient>
+                    </View>
+                  ))
+                )}
+              </ScrollView>
+            </View>
+
+            {/* footer (absolute 제거됨) */}
+            <View style={styles.footer}>
+              <TouchableOpacity onPress={onClose}>
+                <LinearGradient
+                  colors={["#e3ff7c", "#a8e063"]}
+                  style={styles.saveBtnGradient}
+                >
+                  <Text style={styles.saveBtnText}>닫기</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-  },
+  overlay: { flex: 1 },
   container: {
     flex: 1,
     marginTop: 50,
@@ -349,53 +291,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 20,
-    paddingHorizontal: 20,
+    padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: "#333333",
+    borderBottomColor: "#333",
   },
-  closeBtn: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#ffffff",
-  },
+  closeBtn: { padding: 4 },
+  headerTitle: { fontSize: 20, fontWeight: "700", color: "#fff" },
+
   infoBox: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: "#1e3a5f",
     padding: 16,
-    marginHorizontal: 20,
-    marginTop: 20,
+    margin: 20,
+    backgroundColor: "#333333",
     borderRadius: 12,
     gap: 12,
   },
-  infoText: {
-    flex: 1,
-    fontSize: 13,
-    color: "#ffffff",
-    lineHeight: 18,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  inputSection: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#ffffff",
-    marginBottom: 12,
-  },
-  inputContainer: {
-    flexDirection: "row",
-    gap: 12,
-  },
+  infoText: { color: "#fff", fontSize: 13, lineHeight: 18 },
+
+  content: { flex: 1, paddingHorizontal: 20 },
+
+  inputSection: { marginBottom: 20 },
+  sectionTitle: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  inputContainer: { flexDirection: "row", gap: 12 },
   inputWrapper: {
     flex: 1,
     flexDirection: "row",
@@ -405,122 +322,43 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
   },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    height: 50,
-    fontSize: 15,
-    color: "#ffffff",
-  },
-  addBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  addBtnDisabled: {
-    opacity: 0.5,
-  },
+  inputIcon: { marginRight: 12 },
+  input: { flex: 1, height: 50, color: "#fff" },
+
+  addBtn: { width: 56, height: 56, borderRadius: 12, overflow: "hidden" },
+  addBtnDisabled: { opacity: 0.5 },
   addBtnGradient: {
-    width: "100%",
-    height: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  centerState: {
     flex: 1,
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
-    marginTop: 40,
   },
-  emptyState: {
-    alignItems: "center",
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: "#999999",
-    textAlign: "center",
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptySubText: {
-    fontSize: 14,
-    color: "#666666",
-    textAlign: "center",
-  },
-  listContent: {
-    paddingBottom: 20,
-  },
-  foodList: {
-    gap: 12,
-  },
-  foodItem: {
-    borderRadius: 12,
-    overflow: "hidden",
-  },
+
+  foodItem: { marginBottom: 12 },
   foodItemGradient: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    padding: 16,
     borderRadius: 12,
   },
-  foodItemLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    gap: 12,
-  },
-  foodItemIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(239,68,68,0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  foodName: {
-    fontSize: 15,
-    fontWeight: "500",
-    color: "#ffffff",
-    flex: 1,
-  },
-  removeBtn: {
-    padding: 4,
-  },
+  foodName: { color: "#fff", fontSize: 15, flex: 1 },
+
+  emptyState: { alignItems: "center", marginTop: 40 },
+  emptyText: { color: "#999", marginTop: 16 },
+
+  centerState: { marginTop: 40 },
+
   footer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
     padding: 20,
-    backgroundColor: "#1a1a1a",
     borderTopWidth: 1,
-    borderTopColor: "#333333",
-  },
-  saveBtn: {
-    borderRadius: 12,
-    overflow: "hidden",
+    borderTopColor: "#333",
   },
   saveBtnGradient: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
     paddingVertical: 16,
-    gap: 8,
+    borderRadius: 12,
+    alignItems: "center",
   },
-  saveBtnText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#111111",
-  },
+  saveBtnText: { fontSize: 16, fontWeight: "700", color: "#111" },
 });
 
 export default DislikedFoodsModal;

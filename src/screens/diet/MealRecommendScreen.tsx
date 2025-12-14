@@ -17,15 +17,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
-// 🔹 authAPI import 추가
-import {
-  recommendedMealAPI,
-  userPreferencesAPI,
-  authAPI,
-} from "../../services";
+import { recommendedMealAPI, authAPI } from "../../services";
 import { LinearGradient } from "expo-linear-gradient";
 import DislikedFoodsModal from "../../components/modals/DislikedFoodsModal";
-import type { ExclusionResponse } from "../../types";
+import type {
+  ExclusionResponse,
+  PreferenceResponse,
+  PreferenceDeleteResponse,
+} from "../../types";
+import { userPreferencesAPI } from "../../services/userPreferencesAPI";
+import PreferredFoodsModal from "../../components/modals/PreferredFoodsModal";
 
 const { width } = Dimensions.get("window");
 
@@ -591,14 +592,19 @@ const MealRecommendScreen = () => {
 
   const [screen, setScreen] = useState<"welcome" | "meals">("welcome");
   const [showDislikedModal, setShowDislikedModal] = useState(false);
-
+  const [showPreferredModal, setShowPreferredModal] = useState(false);
   const [weeklyMeals, setWeeklyMeals] = useState<any[]>([]);
   const [currentDay, setCurrentDay] = useState(0);
 
   const [excludedIngredients, setExcludedIngredients] = useState<
     ExclusionResponse[]
   >([]);
-
+  const [preferredIngredients, setPreferredIngredients] = useState<
+    PreferenceResponse[]
+  >([]);
+  const [recommendationType, setRecommendationType] = useState<
+    "weekly" | "daily"
+  >("weekly");
   const [loading, setLoading] = useState(false);
   const [savedMeals, setSavedMeals] = useState<any[]>([]);
   const [currentPlanId, setCurrentPlanId] = useState<number | null>(null);
@@ -616,7 +622,7 @@ const MealRecommendScreen = () => {
     }).start();
   }, [screen]);
 
-  // 🔹 비선호 식단 목록 로드 함수 - userId를 파라미터로 받음
+  // 비선호 식단 목록 로드 함수 - userId를 파라미터로 받음
   const loadExclusions = async (currentUserId: string) => {
     try {
       const data = await userPreferencesAPI.getExclusions(currentUserId);
@@ -624,6 +630,17 @@ const MealRecommendScreen = () => {
       console.log("✅ 비선호 음식 로드 완료:", data.length, "개");
     } catch (error) {
       console.error("비선호 음식 로드 실패:", error);
+    }
+  };
+
+  //선호 식단 목록 로드 함수 추가
+  const loadPreferences = async (currentUserId: string) => {
+    try {
+      const data = await userPreferencesAPI.getPreferences(currentUserId);
+      setPreferredIngredients(data);
+      console.log("✅ 선호 음식 로드 완료:", data.length, "개");
+    } catch (error) {
+      console.error("선호 음식 로드 실패:", error);
     }
   };
 
@@ -636,9 +653,9 @@ const MealRecommendScreen = () => {
       setUserId(currentUserId);
       console.log("✅ 유저 ID 로드 완료:", currentUserId);
 
-      // 2. 획득한 userId로 비선호 식단 조회
+      // 2. 획득한 userId로 비선호 , 선호 식단 조회
       await loadExclusions(currentUserId);
-
+      await loadPreferences(currentUserId);
       // 3. 저장된 식단 불러오기
       await loadSavedMeals();
     } catch (error) {
@@ -715,6 +732,7 @@ const MealRecommendScreen = () => {
   // ✅ 7일 식단 추천 받기
   const handleGetRecommendation = async () => {
     setLoading(true);
+    setRecommendationType("weekly");
 
     try {
       console.log("🍽️ 임시 식단 생성 시작");
@@ -751,7 +769,7 @@ const MealRecommendScreen = () => {
   // ✅ 1일 식단 추천 받기
   const handleGetSingleDayRecommendation = async () => {
     setLoading(true);
-
+    setRecommendationType("daily");
     try {
       console.log("🍽️ 1일 식단 생성 시작");
       const tempMeals = await recommendedMealAPI.getDailyMealPlan(mealsPerDay);
@@ -784,7 +802,13 @@ const MealRecommendScreen = () => {
       setLoading(false);
     }
   };
-
+  const handleRefresh = () => {
+    if (recommendationType === "daily") {
+      handleGetSingleDayRecommendation();
+    } else {
+      handleGetRecommendation();
+    }
+  };
   // ✅ 좋아요 토글 함수
   const handleToggleLike = (mealType: string, mealIndex: number) => {
     setWeeklyMeals((prev) => {
@@ -805,6 +829,119 @@ const MealRecommendScreen = () => {
       updated[currentDay] = dayMeals;
       return updated;
     });
+  };
+  const collectLikedFoods = (): string[] => {
+    const likedFoods: string[] = [];
+
+    weeklyMeals.forEach((day) => {
+      // 아침
+      day.breakfast.meals.forEach((meal: any) => {
+        if (meal.liked) {
+          likedFoods.push(meal.name);
+        }
+      });
+
+      // 점심
+      day.lunch.meals.forEach((meal: any) => {
+        if (meal.liked) {
+          likedFoods.push(meal.name);
+        }
+      });
+
+      // 저녁
+      day.dinner.meals.forEach((meal: any) => {
+        if (meal.liked) {
+          likedFoods.push(meal.name);
+        }
+      });
+    });
+
+    // 중복 제거
+    return Array.from(new Set(likedFoods));
+  };
+
+  // 선호 음식 저장 함수
+  const handleSavePreferences = async () => {
+    const likedFoods = collectLikedFoods();
+
+    if (likedFoods.length === 0) {
+      Alert.alert(
+        "알림",
+        "좋아요한 음식이 없습니다.\n하트를 눌러 좋아하는 음식을 선택해주세요."
+      );
+      return;
+    }
+
+    try {
+      setLoading(true);
+      console.log("💚 선호 음식 저장 시작:", likedFoods);
+
+      await userPreferencesAPI.addPreferences(userId, likedFoods);
+
+      Alert.alert(
+        "저장 완료",
+        `${
+          likedFoods.length
+        }개의 음식이 선호 식단에 추가되었습니다! 💚\n\n추가된 음식:\n${likedFoods.join(
+          ", "
+        )}`
+      );
+    } catch (error: any) {
+      console.error("❌ 선호 음식 저장 실패:", error);
+      Alert.alert(
+        "저장 실패",
+        error.message || "선호 음식 저장에 실패했습니다."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 식단 저장 시 선호 음식도 함께 저장하는 통합 함수
+  const handleSaveMealPlanWithPreferences = async () => {
+    const likedFoods = collectLikedFoods();
+
+    Alert.alert(
+      "식단 저장",
+      likedFoods.length > 0
+        ? `식단과 함께 ${
+            likedFoods.length
+          }개의 선호 음식도 저장하시겠습니까?\n\n선호 음식: ${likedFoods.join(
+            ", "
+          )}`
+        : "식단을 저장하시겠습니까?",
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "저장",
+          onPress: async () => {
+            try {
+              setLoading(true);
+
+              // 1. 식단 저장
+              await recommendedMealAPI.saveTempMealPlan();
+
+              // 2. 선호 음식 저장 (있는 경우)
+              if (likedFoods.length > 0) {
+                await userPreferencesAPI.addPreferences(userId, likedFoods);
+              }
+
+              Alert.alert(
+                "저장 완료",
+                likedFoods.length > 0
+                  ? `식단과 ${likedFoods.length}개의 선호 음식이 저장되었습니다! 🎉`
+                  : "식단이 저장되었습니다! 🎉"
+              );
+            } catch (error: any) {
+              console.error("❌ 저장 실패:", error);
+              Alert.alert("저장 실패", error.message || "저장에 실패했습니다.");
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleDeleteMeal = (mealType: string, mealIndex: number) => {
@@ -983,6 +1120,12 @@ const MealRecommendScreen = () => {
             onUpdate={() => loadExclusions(userId)}
           />
 
+          <PreferredFoodsModal
+            visible={showPreferredModal}
+            userId={userId}
+            onClose={() => setShowPreferredModal(false)}
+            onUpdate={() => loadPreferences(userId)}
+          />
           <MealsSelectionModal
             visible={showMealsModal}
             currentMeals={mealsPerDay}
@@ -1087,13 +1230,32 @@ const MealRecommendScreen = () => {
                   <Icon
                     name="remove-circle-outline"
                     size={20}
-                    color="#ffffff"
+                    color="#ff0000ff"
                     style={{ marginRight: 8 }}
                   />
                   <Text style={styles.secondaryButtonText}>
                     금지 식재료 관리
-                    {excludedIngredients.length > 0 &&
-                      ` (${excludedIngredients.length})`}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => setShowPreferredModal(true)}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
+                  style={styles.secondaryButtonGradient}
+                >
+                  <Icon
+                    name="heart-outline"
+                    size={20}
+                    color="#22c55e"
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={styles.secondaryButtonText}>
+                    선호 식재료 관리
                   </Text>
                 </LinearGradient>
               </TouchableOpacity>
@@ -1142,7 +1304,47 @@ const MealRecommendScreen = () => {
                 </View>
               </View>
             )}
+            {/* 선호 식재료 UI */}
+            {preferredIngredients.length > 0 && (
+              <View style={[styles.excludedPreview, { marginTop: 0 }]}>
+                <View style={styles.glassCard}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      marginBottom: 16,
+                    }}
+                  >
+                    <Text
+                      style={[styles.excludedPreviewLabel, { marginBottom: 0 }]}
+                    >
+                      선호 식재료
+                    </Text>
+                  </View>
 
+                  <View style={styles.tagList}>
+                    {preferredIngredients.map((item) => (
+                      <View key={item.id} style={styles.tag}>
+                        <LinearGradient
+                          colors={[
+                            "rgba(227,255,124,0.2)",
+                            "rgba(168,224,99,0.1)",
+                          ]}
+                          style={styles.tagGradient}
+                        >
+                          <Text
+                            style={[styles.tagText, { color: "#ffffffff" }]}
+                          >
+                            {item.food_name}
+                          </Text>
+                        </LinearGradient>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            )}
             {savedMeals.length > 0 && (
               <View style={styles.savedMealsSection}>
                 <Text style={styles.sectionTitle}>저장된 식단</Text>
@@ -1256,6 +1458,12 @@ const MealRecommendScreen = () => {
       />
 
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
+        <LoadingOverlay
+          visible={loading}
+          messages={LOADING_MESSAGES}
+          onCancel={handleCancelLoading}
+        />
+
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => setScreen("welcome")}
@@ -1794,9 +2002,10 @@ const MealRecommendScreen = () => {
               </View>
 
               <View style={styles.actionButtons}>
+                {/* 식단 저장 버튼 (선호 음식 포함) */}
                 <TouchableOpacity
                   style={styles.saveButton}
-                  onPress={handleSaveMealPlan}
+                  onPress={handleSaveMealPlanWithPreferences}
                   disabled={loading}
                   activeOpacity={0.9}
                 >

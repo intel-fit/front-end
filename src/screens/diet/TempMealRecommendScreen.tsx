@@ -7,10 +7,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   Alert,
   ActivityIndicator,
-  Dimensions,
   Modal,
   Animated,
   Easing,
@@ -22,17 +20,14 @@ import { RootStackParamList } from "../../navigation/types";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-// 🔹 authAPI 추가 import
-import {
-  userPreferencesAPI,
-  recommendedMealAPI,
-  authAPI,
-} from "../../services";
+import { recommendedMealAPI, authAPI } from "../../services";
 import { TempDayMeal } from "../../services/recommendedMealAPI";
-import type { ExclusionResponse } from "../../types";
+import type { ExclusionResponse, PreferenceResponse } from "../../types";
+import { userPreferencesAPI } from "../../services/userPreferencesAPI";
+import DislikedFoodsModal from "../../components/modals/DislikedFoodsModal";
+import PreferredFoodsModal from "../../components/modals/PreferredFoodsModal";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
-const { width } = Dimensions.get("window");
 
 const LOADING_MESSAGES = [
   "입력하신 정보를 수집하는 중...",
@@ -41,9 +36,6 @@ const LOADING_MESSAGES = [
   "맛있는 조합을 찾는 중...",
   "거의 다 됐어요! 조금만 기다려주세요...",
 ];
-
-// ... (LoadingOverlay, MealsSelectionModal, mealsModalStyles, Interface 등은 기존과 동일하므로 생략) ...
-// (위쪽 코드는 변경사항이 없으므로 그대로 두시면 됩니다. TempMealRecommendScreen 컴포넌트 내부만 수정합니다.)
 
 const LoadingOverlay = ({
   visible,
@@ -54,7 +46,6 @@ const LoadingOverlay = ({
   messages?: string[];
   onCancel?: () => void;
 }) => {
-  // ... 기존 코드 유지
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const spinAnim = useRef(new Animated.Value(0)).current;
@@ -214,7 +205,6 @@ const MealsSelectionModal = ({
               colors={["rgba(26,26,46,0.98)", "rgba(22,33,62,0.98)"]}
               style={mealsModalStyles.content}
             >
-              {/* 헤더 */}
               <View style={mealsModalStyles.header}>
                 <Icon name="restaurant" size={28} color="#e3ff7c" />
                 <Text style={mealsModalStyles.title}>끼니 수 선택</Text>
@@ -224,7 +214,6 @@ const MealsSelectionModal = ({
                 하루에 몇 끼를 드시나요?
               </Text>
 
-              {/* 끼니 선택 버튼들 */}
               <View style={mealsModalStyles.optionsContainer}>
                 {[1, 2, 3].map((num) => (
                   <TouchableOpacity
@@ -290,7 +279,6 @@ const MealsSelectionModal = ({
                 ))}
               </View>
 
-              {/* 닫기 버튼 */}
               <TouchableOpacity
                 style={mealsModalStyles.closeButton}
                 onPress={onClose}
@@ -306,106 +294,6 @@ const MealsSelectionModal = ({
   );
 };
 
-const mealsModalStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.8)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  container: {
-    width: "85%",
-    maxWidth: 400,
-  },
-  content: {
-    borderRadius: 24,
-    padding: 28,
-    borderWidth: 1,
-    borderColor: "rgba(227,255,124,0.2)",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-    marginBottom: 12,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#ffffff",
-    letterSpacing: 0.5,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: "#9ca3af",
-    textAlign: "center",
-    marginBottom: 28,
-    letterSpacing: 0.3,
-  },
-  optionsContainer: {
-    gap: 12,
-    marginBottom: 24,
-  },
-  optionButton: {
-    borderRadius: 16,
-    overflow: "hidden",
-  },
-  optionGradient: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  optionContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 18,
-    gap: 16,
-  },
-  optionIconContainer: {
-    width: 48,
-    height: 48,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  optionTextContainer: {
-    flex: 1,
-  },
-  optionNumber: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#ffffff",
-    marginBottom: 4,
-    letterSpacing: 0.3,
-  },
-  optionNumberActive: {
-    color: "#111827",
-  },
-  optionDesc: {
-    fontSize: 13,
-    color: "#9ca3af",
-    letterSpacing: 0.2,
-  },
-  optionDescActive: {
-    color: "rgba(17,24,39,0.7)",
-  },
-  closeButton: {
-    paddingVertical: 14,
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  closeButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#9ca3af",
-    letterSpacing: 0.3,
-  },
-});
-
-// UI에 표시할 데이터 구조
 interface MealItem {
   mealType: string;
   mealTypeName: string;
@@ -427,14 +315,17 @@ const TempMealRecommendScreen: React.FC = () => {
 
   const [userId, setUserId] = useState<string>("");
 
-  const [screen, setScreen] = useState<
-    "input" | "excludedIngredients" | "result"
-  >("input");
+  const [screen, setScreen] = useState<"input" | "result">("input");
   const [currentDayTab, setCurrentDayTab] = useState(0);
 
   const [excludedFoods, setExcludedFoods] = useState<ExclusionResponse[]>([]);
+  const [preferredIngredients, setPreferredIngredients] = useState<
+    PreferenceResponse[]
+  >([]);
 
-  const [newIngredient, setNewIngredient] = useState("");
+  const [showDislikedModal, setShowDislikedModal] = useState(false);
+  const [showPreferredModal, setShowPreferredModal] = useState(false);
+
   const [selectedPeriod, setSelectedPeriod] = useState<"daily" | "weekly">(
     "daily"
   );
@@ -463,7 +354,6 @@ const TempMealRecommendScreen: React.FC = () => {
     }).start();
   }, [screen]);
 
-  // 🔹 [변경] 데이터 로드 로직 수정: 프로필 조회 후 -> 식단 조회
   useEffect(() => {
     const init = async () => {
       await loadUserData();
@@ -473,19 +363,22 @@ const TempMealRecommendScreen: React.FC = () => {
 
   const loadUserData = async () => {
     try {
-      // 1. 프로필 조회하여 userId 획득
       const profile = await authAPI.getProfile();
       const currentUserId = profile.userId;
       setUserId(currentUserId);
       console.log("✅ 유저 ID 로드 완료:", currentUserId);
 
-      // 2. 획득한 userId로 비선호 식단 조회
       const exclusions = await userPreferencesAPI.getExclusions(currentUserId);
       setExcludedFoods(exclusions);
       console.log("✅ 비선호 음식 로드 완료:", exclusions.length, "개");
+
+      const preferences = await userPreferencesAPI.getPreferences(
+        currentUserId
+      );
+      setPreferredIngredients(preferences);
+      console.log("✅ 선호 음식 로드 완료:", preferences.length, "개");
     } catch (error) {
       console.error("사용자 데이터 로드 실패:", error);
-      // 실패 시 로컬 스토리지 시도 (userId가 없으면 기능 제한될 수 있음)
       try {
         const stored = await AsyncStorage.getItem("excludedIngredients");
         if (stored) {
@@ -494,6 +387,30 @@ const TempMealRecommendScreen: React.FC = () => {
       } catch (e) {
         console.error("로컬 스토리지 읽기 실패:", e);
       }
+    }
+  };
+
+  const loadPreferences = async (currentUserId: string) => {
+    try {
+      console.log("💚 선호 음식 목록 조회:", currentUserId);
+      const preferences = await userPreferencesAPI.getPreferences(
+        currentUserId
+      );
+      setPreferredIngredients(preferences);
+      console.log("✅ 선호 음식 로드 완료:", preferences.length, "개");
+    } catch (error: any) {
+      console.error("선호 음식 로드 실패:", error);
+    }
+  };
+
+  const loadExclusions = async (currentUserId: string) => {
+    try {
+      console.log("🚫 비선호 음식 목록 조회:", currentUserId);
+      const exclusions = await userPreferencesAPI.getExclusions(currentUserId);
+      setExcludedFoods(exclusions);
+      console.log("✅ 비선호 음식 로드 완료:", exclusions.length, "개");
+    } catch (error: any) {
+      console.error("비선호 음식 로드 실패:", error);
     }
   };
 
@@ -656,89 +573,6 @@ const TempMealRecommendScreen: React.FC = () => {
     }
   };
 
-  // ✅ 금지 식재료 추가
-  const handleAddExcludedIngredient = async () => {
-    const trimmed = newIngredient.trim();
-
-    if (!trimmed) return;
-    if (!userId) {
-      Alert.alert(
-        "오류",
-        "유저 정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요."
-      );
-      return;
-    }
-
-    const isDuplicate = excludedFoods.some(
-      (item) => item.food_name === trimmed
-    );
-
-    if (isDuplicate) {
-      Alert.alert("알림", "이미 추가된 식재료입니다.");
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      // 🔹 [변경] state로 저장된 userId 사용
-      const newItem = await userPreferencesAPI.addExclusions(userId, [trimmed]);
-
-      const updatedList = [...excludedFoods, newItem];
-      setExcludedFoods(updatedList);
-
-      await AsyncStorage.setItem(
-        "excludedIngredients",
-        JSON.stringify(updatedList)
-      );
-
-      setNewIngredient("");
-      console.log("✅ 비선호 음식 추가 완료:", newItem);
-    } catch (error: any) {
-      console.error("비선호 음식 추가 실패:", error);
-      Alert.alert("오류", error.message || "식재료 추가에 실패했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ✅ 금지 식재료 삭제
-  const handleRemoveExcludedIngredient = async (id: number, name: string) => {
-    Alert.alert("삭제", `"${name}"를 삭제하시겠습니까?`, [
-      { text: "취소", style: "cancel" },
-      {
-        text: "삭제",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            setLoading(true);
-
-            await userPreferencesAPI.deleteExclusion(id);
-
-            const updatedList = excludedFoods.filter((item) => item.id !== id);
-            setExcludedFoods(updatedList);
-
-            await AsyncStorage.setItem(
-              "excludedIngredients",
-              JSON.stringify(updatedList)
-            );
-
-            console.log("✅ 비선호 음식 삭제 완료 (ID):", id);
-          } catch (error: any) {
-            console.error("비선호 음식 삭제 실패:", error);
-            Alert.alert("오류", error.message || "식재료 삭제에 실패했습니다.");
-          } finally {
-            setLoading(false);
-          }
-        },
-      },
-    ]);
-  };
-
-  // ... (나머지 render 코드는 UI만 그리므로 수정사항 없이 위에서 제공한 코드와 동일합니다.
-  //      styles나 loadingStyles도 동일합니다.)
-
-  // ✅ input 화면 (웰컴 화면)
   if (screen === "input") {
     return (
       <View style={styles.container}>
@@ -762,6 +596,20 @@ const TempMealRecommendScreen: React.FC = () => {
               console.log(`✅ 끼니 수 변경: ${num}끼`);
             }}
             onClose={() => setShowMealsModal(false)}
+          />
+
+          <DislikedFoodsModal
+            visible={showDislikedModal}
+            userId={userId}
+            onClose={() => setShowDislikedModal(false)}
+            onUpdate={() => loadExclusions(userId)}
+          />
+
+          <PreferredFoodsModal
+            visible={showPreferredModal}
+            userId={userId}
+            onClose={() => setShowPreferredModal(false)}
+            onUpdate={() => loadPreferences(userId)}
           />
 
           <View style={styles.header}>
@@ -827,30 +675,40 @@ const TempMealRecommendScreen: React.FC = () => {
               </LinearGradient>
             </View>
 
-            {/* ✅ 금지 식재료 관리 버튼 */}
-            <TouchableOpacity
-              style={styles.settingButton}
-              onPress={() => setScreen("excludedIngredients")}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
-                style={styles.settingButtonGradient}
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={styles.settingButtonHalf}
+                onPress={() => setShowDislikedModal(true)}
+                activeOpacity={0.8}
               >
-                <Icon
-                  name="remove-circle-outline"
-                  size={20}
-                  color="#ffffff"
-                  style={{ marginRight: 8 }}
-                />
-                <Text style={styles.settingButtonText}>
-                  금지 식재료 관리
-                  {excludedFoods.length > 0 && ` (${excludedFoods.length})`}
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
+                  style={styles.settingButtonGradient}
+                >
+                  <Icon
+                    name="remove-circle-outline"
+                    size={24}
+                    color="#ef4444"
+                  />
+                  <Text style={styles.settingButtonTextSmall}>금지 식재료</Text>
+                </LinearGradient>
+              </TouchableOpacity>
 
-            {/* ✅ 끼니 수정하기 버튼 */}
+              <TouchableOpacity
+                style={styles.settingButtonHalf}
+                onPress={() => setShowPreferredModal(true)}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
+                  style={styles.settingButtonGradient}
+                >
+                  <Icon name="heart-outline" size={24} color="#22c55e" />
+                  <Text style={styles.settingButtonTextSmall}>선호 식재료</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+
             <TouchableOpacity
               style={styles.settingButton}
               onPress={() => setShowMealsModal(true)}
@@ -858,7 +716,7 @@ const TempMealRecommendScreen: React.FC = () => {
             >
               <LinearGradient
                 colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
-                style={styles.settingButtonGradient}
+                style={styles.settingButtonGradientRow}
               >
                 <Icon
                   name="restaurant-outline"
@@ -872,11 +730,15 @@ const TempMealRecommendScreen: React.FC = () => {
               </LinearGradient>
             </TouchableOpacity>
 
-            {/* 금지 식재료 미리보기 */}
             {excludedFoods.length > 0 && (
               <View style={styles.excludedPreview}>
                 <View style={styles.glassCard}>
-                  <Text style={styles.excludedPreviewLabel}>제외된 식재료</Text>
+                  <View style={styles.previewHeader}>
+                    <Icon name="ban" size={20} color="#ef4444" />
+                    <Text style={styles.excludedPreviewLabel}>
+                      제외된 식재료
+                    </Text>
+                  </View>
                   <View style={styles.tagList}>
                     {excludedFoods.map((item) => (
                       <View key={item.id} style={styles.tag}>
@@ -884,6 +746,34 @@ const TempMealRecommendScreen: React.FC = () => {
                           colors={[
                             "rgba(239,68,68,0.2)",
                             "rgba(239,68,68,0.1)",
+                          ]}
+                          style={styles.tagGradient}
+                        >
+                          <Text style={styles.tagText}>{item.food_name}</Text>
+                        </LinearGradient>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {preferredIngredients.length > 0 && (
+              <View style={styles.excludedPreview}>
+                <View style={styles.glassCard}>
+                  <View style={styles.previewHeader}>
+                    <Icon name="heart" size={20} color="#22c55e" />
+                    <Text style={styles.preferredPreviewLabel}>
+                      선호 식재료
+                    </Text>
+                  </View>
+                  <View style={styles.tagList}>
+                    {preferredIngredients.map((item) => (
+                      <View key={item.id} style={styles.tag}>
+                        <LinearGradient
+                          colors={[
+                            "rgba(34,197,94,0.2)",
+                            "rgba(34,197,94,0.1)",
                           ]}
                           style={styles.tagGradient}
                         >
@@ -1054,142 +944,6 @@ const TempMealRecommendScreen: React.FC = () => {
     );
   }
 
-  // ✅ 금지 식재료 관리 화면
-  if (screen === "excludedIngredients") {
-    return (
-      <View style={styles.container}>
-        <LinearGradient
-          colors={["#0a0a0a", "#1a1a2e", "#16213e"]}
-          style={StyleSheet.absoluteFill}
-        />
-
-        <SafeAreaView style={styles.safeArea} edges={["top"]}>
-          <View style={styles.header}>
-            <TouchableOpacity
-              onPress={() => setScreen("input")}
-              style={styles.backButton}
-            >
-              <View style={styles.iconButton}>
-                <Icon name="chevron-back" size={24} color="#ffffff" />
-              </View>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>금지 식재료</Text>
-            <View style={{ width: 40 }} />
-          </View>
-
-          <ScrollView
-            style={styles.excludedForm}
-            contentContainerStyle={styles.excludedFormContent}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.inputGroup}>
-              <View style={styles.inputWrapper}>
-                <LinearGradient
-                  colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
-                  style={styles.inputGradient}
-                >
-                  <Icon
-                    name="search"
-                    size={20}
-                    color="#6b7280"
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    style={styles.textInput}
-                    value={newIngredient}
-                    onChangeText={setNewIngredient}
-                    onSubmitEditing={handleAddExcludedIngredient}
-                    placeholder="알러지 식재료를 입력하세요"
-                    placeholderTextColor="#6b7280"
-                  />
-                </LinearGradient>
-              </View>
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={handleAddExcludedIngredient}
-                activeOpacity={0.8}
-              >
-                <LinearGradient
-                  colors={["#e3ff7c", "#a8e063"]}
-                  style={styles.addButtonGradient}
-                >
-                  <Icon name="add" size={28} color="#111827" />
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.excludedList}>
-              {excludedFoods.map((item, index) => (
-                <Animated.View
-                  key={item.id}
-                  style={[styles.excludedItem, { opacity: fadeAnim }]}
-                >
-                  <LinearGradient
-                    colors={[
-                      "rgba(255,255,255,0.08)",
-                      "rgba(255,255,255,0.04)",
-                    ]}
-                    style={styles.excludedItemGradient}
-                  >
-                    <View style={styles.excludedItemLeft}>
-                      <View style={styles.excludedItemIcon}>
-                        <Icon name="ban" size={18} color="#ef4444" />
-                      </View>
-                      <Text style={styles.excludedItemText}>
-                        {item.food_name}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.removeButton}
-                      onPress={() =>
-                        handleRemoveExcludedIngredient(item.id, item.food_name)
-                      }
-                      activeOpacity={0.7}
-                    >
-                      <Icon name="close-circle" size={24} color="#ef4444" />
-                    </TouchableOpacity>
-                  </LinearGradient>
-                </Animated.View>
-              ))}
-
-              {excludedFoods.length === 0 && (
-                <View style={styles.emptyState}>
-                  <Icon name="restaurant-outline" size={64} color="#374151" />
-                  <Text style={styles.emptyMessage}>
-                    등록된 금지 식재료가 없습니다
-                  </Text>
-                  <Text style={styles.emptySubtext}>
-                    알러지나 선호하지 않는 식재료를 추가하세요
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            <TouchableOpacity
-              style={styles.completeButton}
-              onPress={() => setScreen("input")}
-              activeOpacity={0.9}
-            >
-              <LinearGradient
-                colors={["#e3ff7c", "#a8e063"]}
-                style={styles.completeButtonGradient}
-              >
-                <Icon
-                  name="checkmark-circle"
-                  size={22}
-                  color="#111827"
-                  style={{ marginRight: 8 }}
-                />
-                <Text style={styles.completeButtonText}>완료</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </ScrollView>
-        </SafeAreaView>
-      </View>
-    );
-  }
-
-  // ✅ 결과 화면
   return (
     <View style={styles.container}>
       <LinearGradient
@@ -1478,6 +1232,105 @@ const loadingStyles = StyleSheet.create({
   },
 });
 
+const mealsModalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  container: {
+    width: "85%",
+    maxWidth: 400,
+  },
+  content: {
+    borderRadius: 24,
+    padding: 28,
+    borderWidth: 1,
+    borderColor: "rgba(227,255,124,0.2)",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    marginBottom: 12,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#ffffff",
+    letterSpacing: 0.5,
+  },
+  subtitle: {
+    fontSize: 15,
+    color: "#9ca3af",
+    textAlign: "center",
+    marginBottom: 28,
+    letterSpacing: 0.3,
+  },
+  optionsContainer: {
+    gap: 12,
+    marginBottom: 24,
+  },
+  optionButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  optionGradient: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  optionContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 18,
+    gap: 16,
+  },
+  optionIconContainer: {
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  optionTextContainer: {
+    flex: 1,
+  },
+  optionNumber: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#ffffff",
+    marginBottom: 4,
+    letterSpacing: 0.3,
+  },
+  optionNumberActive: {
+    color: "#111827",
+  },
+  optionDesc: {
+    fontSize: 13,
+    color: "#9ca3af",
+    letterSpacing: 0.2,
+  },
+  optionDescActive: {
+    color: "rgba(17,24,39,0.7)",
+  },
+  closeButton: {
+    paddingVertical: 14,
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  closeButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#9ca3af",
+    letterSpacing: 0.3,
+  },
+});
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
@@ -1545,13 +1398,33 @@ const styles = StyleSheet.create({
   },
   premiumButtonText: { fontSize: 15, fontWeight: "700", color: "#111827" },
 
-  // ✅ 설정 버튼 스타일 (금지 식재료, 끼니 수정)
+  buttonRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 12,
+  },
+  settingButtonHalf: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: "hidden",
+  },
   settingButton: {
     borderRadius: 16,
     overflow: "hidden",
     marginBottom: 12,
   },
   settingButtonGradient: {
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    borderRadius: 16,
+    gap: 6,
+  },
+  settingButtonGradientRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -1567,8 +1440,20 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     letterSpacing: 0.3,
   },
+  settingButtonTextSmall: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#ffffff",
+    letterSpacing: 0.3,
+    textAlign: "center",
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#9ca3af",
+    marginTop: 2,
+  },
 
-  // 금지 식재료 미리보기
   excludedPreview: {
     marginTop: 8,
     marginBottom: 20,
@@ -1580,10 +1465,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
   },
+  previewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+    gap: 8,
+  },
   excludedPreviewLabel: {
     fontSize: 15,
     color: "#9ca3af",
-    marginBottom: 16,
+    fontWeight: "600",
+    letterSpacing: 0.3,
+  },
+  preferredPreviewLabel: {
+    fontSize: 15,
+    color: "#22c55e",
     fontWeight: "600",
     letterSpacing: 0.3,
   },
@@ -1702,151 +1598,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // ✅ 금지 식재료 관리 화면 스타일
-  excludedForm: {
-    flex: 1,
-  },
-  excludedFormContent: {
-    paddingHorizontal: 20,
-    paddingTop: 30,
-    paddingBottom: 40,
-  },
-  inputGroup: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 30,
-  },
-  inputWrapper: {
-    flex: 1,
-    borderRadius: 16,
-    overflow: "hidden",
-  },
-  inputGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: 16,
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
-  textInput: {
-    flex: 1,
-    height: 52,
-    color: "#ffffff",
-    fontSize: 15,
-    letterSpacing: 0.3,
-  },
-  addButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    overflow: "hidden",
-    shadowColor: "#E3FF7C",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  addButtonGradient: {
-    width: "100%",
-    height: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  excludedList: {
-    gap: 12,
-    marginBottom: 30,
-    minHeight: 200,
-  },
-  excludedItem: {
-    borderRadius: 14,
-    overflow: "hidden",
-  },
-  excludedItemGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: 14,
-  },
-  excludedItemLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    gap: 12,
-  },
-  excludedItemIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(239,68,68,0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  excludedItemText: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#ffffff",
-    flex: 1,
-    letterSpacing: 0.3,
-  },
-  removeButton: {
-    width: 32,
-    height: 32,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 60,
-    paddingHorizontal: 40,
-  },
-  emptyMessage: {
-    textAlign: "center",
-    color: "#6b7280",
-    fontSize: 16,
-    fontWeight: "600",
-    marginTop: 16,
-    marginBottom: 8,
-    letterSpacing: 0.3,
-  },
-  emptySubtext: {
-    textAlign: "center",
-    color: "#4b5563",
-    fontSize: 14,
-    letterSpacing: 0.2,
-  },
-  completeButton: {
-    borderRadius: 16,
-    overflow: "hidden",
-    shadowColor: "#E3FF7C",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  completeButtonGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 18,
-  },
-  completeButtonText: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#111827",
-    letterSpacing: 0.5,
-  },
-
-  // 결과 화면 스타일
   dayTabsWrapper: { marginBottom: 16 },
   dayTabsContent: { paddingHorizontal: 20, paddingBottom: 10, gap: 10 },
   dayTabTouch: { borderRadius: 20, overflow: "hidden" },

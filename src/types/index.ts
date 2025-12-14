@@ -208,20 +208,21 @@ export interface UserPreferencesResponse {
   dislikedFoods: string[];
   preferredFoods: string[];
 }
-
 // 비선호 음식 추가 응답 타입
 export interface ExclusionResponse {
   id: number;
   food_name: string;
   reason: string; // "taste"
 }
+
 // 비선호 음식 삭제 응답 타입
 export interface RemoveDislikedFoodResponse {
   success: boolean;
   message?: string;
   dislikedFoods: string[];
 }
-//비선호 음식 삭제 응답 타입
+
+// 비선호 음식 삭제 응답 타입
 export interface DeleteExclusionResponse {
   status: string; // 예: "deleted"
 }
@@ -279,4 +280,14 @@ export interface HomeResponse {
     message: string;
   };
   aiChatbotAvailable: boolean;
+}
+export interface PreferenceResponse {
+  id: number;
+  food_name: string;
+  score: number;
+  source: string;
+}
+
+export interface PreferenceDeleteResponse {
+  status: "deleted";
 }
