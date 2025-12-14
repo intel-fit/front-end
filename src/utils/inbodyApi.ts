@@ -144,7 +144,7 @@ export const getLatestInBody = async (): Promise<any> => {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
       const errorData = error.response?.data;
-      
+
       // 400 또는 404는 데이터 없음으로 처리
       if (status === 400 || status === 404) {
         console.log("[INBODY][GET LATEST] 데이터 없음:", {
@@ -155,7 +155,7 @@ export const getLatestInBody = async (): Promise<any> => {
         });
         return null;
       }
-      
+
       console.error("[INBODY][GET LATEST] API 에러:", {
         message: error.message,
         status,
@@ -252,12 +252,12 @@ export const patchInBody = async (
 export const getInBodyByDatePath = async (date: string): Promise<any> => {
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-    
+
     // 날짜 형식 정규화 (YYYY-MM-DD)
     const normalizedDate = date.replace(/\./g, "-").split("T")[0].split(" ")[0];
-    
+
     const url = `${INBODY_API_URL}/date/${normalizedDate}`;
-    
+
     console.log("[INBODY][GET BY DATE PATH] API 요청:", {
       url,
       date: normalizedDate,
@@ -282,7 +282,7 @@ export const getInBodyByDatePath = async (date: string): Promise<any> => {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
       const errorData = error.response?.data;
-      
+
       // 400 또는 404는 데이터 없음으로 처리
       if (status === 400 || status === 404) {
         console.log("[INBODY][GET BY DATE PATH] 데이터 없음:", {
@@ -293,7 +293,7 @@ export const getInBodyByDatePath = async (date: string): Promise<any> => {
         });
         return null;
       }
-      
+
       console.error("[INBODY][GET BY DATE PATH] API 에러:", {
         message: error.message,
         status,
@@ -426,16 +426,16 @@ export const uploadInBodyImage = async (
 
     // FormData 생성
     const formData = new FormData();
-    
+
     // 파일 추가
     const fileData = {
       uri: file.uri,
       type: file.type || "image/jpeg",
       name: file.fileName || "inbody.jpg",
     } as any;
-    
+
     formData.append("file", fileData);
-    
+
     console.log("[INBODY][UPLOAD] FormData 생성 완료:", {
       fileUri: fileData.uri,
       fileType: fileData.type,
@@ -504,7 +504,7 @@ export const getInBodyComment = async (
 ): Promise<InBodyCommentResponse> => {
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-    
+
     // GET 요청을 위한 쿼리 파라미터 구성
     const params = new URLSearchParams({
       user_id: request.user_id,
@@ -517,7 +517,7 @@ export const getInBodyComment = async (
       body_fat_percentage_trend: request.trend.body_fat_percentage,
       skeletal_muscle_mass_trend: request.trend.skeletal_muscle_mass,
     });
-    
+
     const url = `${INBODY_API_URL}/comment/daily/weight?${params.toString()}`;
 
     console.log("[INBODY][COMMENT] AI 코멘트 조회 요청:", {
@@ -562,7 +562,9 @@ export const getInBodyComment = async (
 
       // 500 에러는 서버 내부 오류이므로 빈 코멘트 반환 (사용자에게는 표시 안 함)
       if (status === 500) {
-        console.warn("[INBODY][COMMENT] 서버 내부 오류 (500) - 코멘트 표시 안 함");
+        console.warn(
+          "[INBODY][COMMENT] 서버 내부 오류 (500) - 코멘트 표시 안 함"
+        );
         return { comment: "" };
       }
     } else {

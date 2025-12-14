@@ -679,7 +679,7 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
                         style={{ marginRight: 8 }}
                       />
                       <Text style={styles.primaryButtonText}>
-                        무료 루틴 받기
+                        1일 무료 루틴 받기
                       </Text>
                     </LinearGradient>
                   )}

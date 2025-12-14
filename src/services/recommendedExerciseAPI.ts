@@ -1,5 +1,5 @@
-import { request } from "./apiConfig";
-
+import { request, requestAI, ACCESS_TOKEN_KEY } from "./apiConfig";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 /**
  * 운동 루틴 추천 API
  */
@@ -86,7 +86,38 @@ export const recommendedExerciseAPI = {
       throw error;
     }
   },
+  /**
+   * [NEW] 7일치 주간 운동 루틴 생성 (AI 서버)
+   */
+  generateWeeklyExercisePlan: async (data: any): Promise<any> => {
+    try {
+      console.log("📅 주간 루틴 생성 요청 (AI)");
 
+      // 1. 토큰 가져오기
+      const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+      // 만약 ACCESS_TOKEN_KEY import가 안되면 문자열 "accessToken" 등을 직접 쓰셔도 됩니다.
+      // 예: const token = await AsyncStorage.getItem("accessToken");
+
+      console.log("🔑 토큰 존재 여부:", !!token);
+
+      // 2. 헤더에 토큰 추가하여 요청 보내기
+      const response = await requestAI("/ai/exercise_plan", {
+        // 찾으신 경로 사용
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // 🔥 핵심: 이 줄이 있어야 401이 해결됩니다.
+        },
+        body: JSON.stringify(data),
+      });
+
+      console.log("✅ 주간 루틴 생성 성공");
+      return response;
+    } catch (error: any) {
+      console.error("❌ 주간 루틴 생성 실패:", error);
+      throw error;
+    }
+  },
   /**
    * 2. 운동 플랜 저장
    * @param planId - 저장할 플랜 ID

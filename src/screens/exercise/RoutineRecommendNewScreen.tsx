@@ -18,7 +18,7 @@ import { Ionicons as Icon } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { recommendedExerciseAPI } from "../../services";
 import { LinearGradient } from "expo-linear-gradient";
-
+import { getLatestInBody } from "../../utils/inbodyApi";
 const { width } = Dimensions.get("window");
 
 const LOADING_MESSAGES = [
@@ -28,6 +28,46 @@ const LOADING_MESSAGES = [
   "가장 효과적인 운동 조합을 찾는 중...",
   "거의 다 됐어요! 득근할 준비 되셨나요?",
 ];
+
+//나이 계산
+const calculateAge = (birthDateString: string): number => {
+  if (!birthDateString) return 25; // 기본값
+  const birthDate = new Date(birthDateString);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
+};
+
+// 성별 변환 (M/F -> male/female)
+const mapGenderToAPI = (gender: string): string => {
+  return gender === "F" ? "female" : "male";
+};
+
+// 운동 목표 변환 (한글/코드 -> API Enum)
+const mapGoalToAPI = (goal: string): string => {
+  // 사용자의 healthGoal 값에 따라 매핑 (예시)
+  if (!goal) return "hypertrophy";
+  if (goal.includes("다이어트") || goal === "DIET") return "weight_loss";
+  if (goal.includes("근력") || goal.includes("비대") || goal === "MUSCLE")
+    return "hypertrophy";
+  if (goal.includes("건강") || goal === "HEALTH") return "general_fitness";
+  if (goal.includes("체력") || goal === "STAMINA") return "endurance";
+  return "hypertrophy"; // 기본값
+};
+
+// 경력 변환 (초급/중급/고급 -> beginner/intermediate/advanced)
+const mapExperienceToAPI = (levelStr: string): string => {
+  const map: { [key: string]: string } = {
+    초급: "beginner",
+    중급: "intermediate",
+    고급: "advanced",
+  };
+  return map[levelStr] || "beginner";
+};
 
 const LoadingOverlay = ({
   visible,
@@ -254,9 +294,11 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
     duration: 0,
     calories: 0,
   });
-  const [todayFocus, setTodayFocus] = useState<string>(""); // ← focus 저장
-
-  // ✅ 오늘의 운동만 저장 (단일 배열)
+  const [todayFocus, setTodayFocus] = useState<string>("");
+  const [weeklyRoutine, setWeeklyRoutine] = useState<any[]>([]);
+  const [isWeeklyMode, setIsWeeklyMode] = useState(false);
+  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
+  // 오늘의 운동만 저장 (단일 배열)
   const [todayRoutine, setTodayRoutine] = useState<any[]>([]);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -339,7 +381,36 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
       setEquipment([...equipment, item]);
     }
   };
+  const selectWeeklyDay = (
+    index: number,
+    fullRoutine: any[] = weeklyRoutine
+  ) => {
+    // 인자로 받은 루틴이 없으면 state에 저장된 weeklyRoutine 사용
+    const targetRoutine =
+      fullRoutine && fullRoutine.length > 0 ? fullRoutine : weeklyRoutine;
 
+    if (!targetRoutine || !targetRoutine[index]) return;
+
+    const dayData = targetRoutine[index];
+    setSelectedDayIndex(index);
+
+    // UI 변환 로직 재사용 (기존 transformDailyExerciseToUI 활용)
+    const uiExercises = transformDailyExerciseToUI(dayData);
+    setTodayRoutine(uiExercises);
+
+    // 메트릭스 업데이트
+    if (dayData.metrics) {
+      setTodayMetrics({
+        duration: Math.round(dayData.metrics.total_duration_min || 0),
+        calories: Math.round(dayData.metrics.total_kcal || 0),
+      });
+    }
+
+    // Focus 업데이트
+    if (dayData.focus) {
+      setTodayFocus(dayData.focus);
+    }
+  };
   const handleCancelLoading = () => {
     Alert.alert("요청 취소", "운동 루틴 생성을 취소하시겠습니까?", [
       { text: "계속 기다리기", style: "cancel" },
@@ -499,66 +570,329 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
     }
   };
 
-  const handleSaveRoutine = async () => {
-    // ✅ ExerciseScreen으로 이동하여 운동 시작
-    const currentDate = new Date();
-    const dateStr = `${currentDate.getFullYear()}-${String(
-      currentDate.getMonth() + 1
-    ).padStart(2, "0")}-${String(currentDate.getDate()).padStart(2, "0")}`;
+  const handleGetWeeklyRoutine = async () => {
+    setLoading(true);
+    setIsWeeklyMode(true);
 
-    const groupKey = `ai_recommend_${Date.now()}`;
-    const groupTitle = todayFocus
-      ? `AI 추천 운동 - ${mapFocusToKorean(todayFocus)}`
-      : "AI 추천 운동";
+    try {
+      console.log("📅 7일 운동 루틴 추천 시작");
 
-    // API 응답을 Activity 형식으로 변환
-    const activities = todayRoutine.map((exercise: any, index: number) => {
-      // 세트 배열 생성 (API의 sets 개수만큼)
-      const setsCount = exercise.sets || 3;
-      const sets = Array.from({ length: setsCount }, (_, i) => ({
-        id: i + 1,
-        order: i + 1,
-        weight: exercise.weight_kg || 0,
-        reps: exercise.reps || 0,
-        isCompleted: false,
-      }));
+      // 1. 프로필 조회
+      let userProfile;
+      try {
+        userProfile = await recommendedExerciseAPI.getProfile();
+        await AsyncStorage.setItem("userInfo", JSON.stringify(userProfile));
+      } catch (error: any) {
+        if (error.status === 401) {
+          Alert.alert("로그인 필요", "로그인이 만료되었습니다.", [
+            { text: "확인", onPress: () => navigation.navigate("Login") },
+          ]);
+          setLoading(false);
+          return;
+        }
+        const stored = await AsyncStorage.getItem("userInfo");
+        if (stored) userProfile = JSON.parse(stored);
+        else throw new Error("사용자 정보를 불러올 수 없습니다.");
+      }
 
-      return {
-        id: Date.now() + index,
-        name: exercise.name || "운동",
-        details: `${exercise.weight_kg || 0}kg ${
-          exercise.reps || 0
-        }회 ${setsCount}세트`,
-        time: currentDate.toLocaleTimeString("ko-KR", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true,
-        }),
-        date: dateStr,
-        isCompleted: false,
-        externalId: exercise.exerciseId,
-        sets: sets,
-        saveTitle: groupTitle,
-        groupKey: groupKey,
-        // 추가 메타 정보
-        target: exercise.target,
-        category: exercise.category,
+      // 2. 최신 인바디 데이터 조회 및 점수 변환
+      let inbodyData = {
+        arms: { muscle_score: 0.0, fat_score: 0.0 },
+        chest: { muscle_score: 0.0, fat_score: 0.0 },
+        back: { muscle_score: 0.0, fat_score: 0.0 },
+        shoulders: { muscle_score: 0.0, fat_score: 0.0 },
+        legs: { muscle_score: 0.0, fat_score: 0.0 },
+        glutes: { muscle_score: 0.0, fat_score: 0.0 },
+        core: { muscle_score: 0.0, fat_score: 0.0 },
       };
-    });
 
-    console.log("🚀 ExerciseScreen으로 이동:", {
-      activitiesCount: activities.length,
-      groupTitle,
-      groupKey,
-    });
+      let currentWeight = userProfile.weight || 75;
 
-    // ExerciseScreen으로 네비게이션 (탭 네비게이션)
-    navigation.navigate("Stats", {
-      screen: "Exercise",
-      params: {
-        recommendedExercises: activities,
-      },
-    });
+      try {
+        console.log("📊 최신 인바디 데이터 조회 시도...");
+        const response = await getLatestInBody();
+        const latestInBody = response?.success ? response.inBody : response;
+
+        if (latestInBody) {
+          // (1) 체중 업데이트
+          if (latestInBody.muscleFatAnalysis?.weight) {
+            currentWeight = Number(latestInBody.muscleFatAnalysis.weight);
+          } else if (latestInBody.weight) {
+            currentWeight = Number(latestInBody.weight);
+          }
+
+          // (2) 점수 계산 헬퍼 ((값-100)/100)
+          const calcScore = (val: any) => {
+            const num = Number(val);
+            if (isNaN(num)) return 0.0;
+            return Number(((num - 100) / 100).toFixed(2));
+          };
+
+          const muscleObj = latestInBody.segmentalMuscleAnalysis || {};
+          const fatObj = latestInBody.segmentalFatAnalysis || {};
+
+          // 데이터 추출
+          const armM =
+            (Number(muscleObj.leftArm || 100) +
+              Number(muscleObj.rightArm || 100)) /
+            2;
+          const armF =
+            (Number(fatObj.leftArm || 100) + Number(fatObj.rightArm || 100)) /
+            2;
+          const legM =
+            (Number(muscleObj.leftLeg || 100) +
+              Number(muscleObj.rightLeg || 100)) /
+            2;
+          const legF =
+            (Number(fatObj.leftLeg || 100) + Number(fatObj.rightLeg || 100)) /
+            2;
+          const trunkM = Number(muscleObj.trunk || 100);
+          const trunkF = Number(fatObj.trunk || 100);
+
+          const armScore = {
+            muscle_score: calcScore(armM),
+            fat_score: calcScore(armF),
+          };
+          const legScore = {
+            muscle_score: calcScore(legM),
+            fat_score: calcScore(legF),
+          };
+          const trunkScore = {
+            muscle_score: calcScore(trunkM),
+            fat_score: calcScore(trunkF),
+          };
+
+          inbodyData = {
+            arms: armScore,
+            shoulders: armScore,
+            chest: trunkScore,
+            back: trunkScore,
+            core: trunkScore,
+            legs: legScore,
+            glutes: legScore,
+          };
+        }
+      } catch (e: any) {
+        console.log("ℹ️ 인바디 조회 실패 (기본값 사용):", e.message);
+      }
+
+      // 3. 필수 정보 검증
+      if (!userProfile?.id && !userProfile?.userId) {
+        throw new Error("유저 ID를 찾을 수 없습니다.");
+      }
+
+      const finalUserId = userProfile.id
+        ? String(userProfile.id)
+        : userProfile.userId;
+
+      // 4. 요청 바디 구성
+      // [수정] 고급 선택 시 빈 값 방지를 위해 중급으로 변경하는 함수
+      const getSafeExperienceLevel = (uiLevel: string) => {
+        if (uiLevel === "초급") return "beginner";
+        if (uiLevel === "중급") return "intermediate";
+        if (uiLevel === "고급") return "intermediate"; // 안전장치
+        return "intermediate";
+      };
+
+      const requestBody = {
+        user_id: finalUserId,
+        age: calculateAge(userProfile.birthDate),
+        sex: mapGenderToAPI(userProfile.gender),
+        goal: mapGoalToAPI(userProfile.healthGoal),
+
+        // 🔥 화면 선택값을 반영하되, '고급'은 '중급'으로 안전하게 요청
+        experience: getSafeExperienceLevel(level),
+
+        environment: "gym",
+
+        // 장비는 사용자 선택값 반영 (한글 그대로 전송)
+        available_equipment: equipment.length > 0 ? equipment : ["덤벨"],
+
+        // 건강상태는 사용자 선택값 반영
+        health_conditions: weakParts,
+
+        plan_days: 7,
+        target_time_min: 60,
+        weight_kg: Number(currentWeight),
+        inbody: inbodyData,
+      };
+
+      console.log("📤 AI 요청 바디:", JSON.stringify(requestBody, null, 2));
+
+      // 5. API 호출
+      const apiResponse =
+        await recommendedExerciseAPI.generateWeeklyExercisePlan(requestBody);
+      console.log("📦 AI 응답 수신 완료");
+
+      // 6. 응답 데이터 처리
+      if (apiResponse && apiResponse.plan && Array.isArray(apiResponse.plan)) {
+        const sessionDetails = apiResponse.metrics?.session_details || [];
+        const mergedPlan = apiResponse.plan.map((dayPlan: any) => {
+          const dayMetrics = sessionDetails.find(
+            (d: any) => d.day === dayPlan.day
+          );
+          return {
+            ...dayPlan,
+            metrics: {
+              total_duration_min: dayMetrics?.duration_min || 0,
+              total_kcal: dayMetrics?.kcal || 0,
+            },
+          };
+        });
+
+        setWeeklyRoutine(mergedPlan);
+        selectWeeklyDay(0, mergedPlan);
+        setShowRoutine(true);
+        Alert.alert("생성 완료", `AI가 루틴을 설계했습니다! 💪`);
+      } else {
+        throw new Error("루틴 데이터 형식이 올바르지 않습니다.");
+      }
+    } catch (error: any) {
+      console.error("❌ 7일 루틴 생성 에러:", error);
+      Alert.alert(
+        "실패",
+        "운동 루틴을 생성하지 못했습니다.\n" + (error.message || "서버 오류")
+      );
+      setIsWeeklyMode(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveRoutine = async () => {
+    const today = new Date();
+    let activitiesToSave: any[] = [];
+
+    // 🅰️ [CASE 1] 7일 추천 모드일 때
+    if (isWeeklyMode && weeklyRoutine.length > 0) {
+      console.log("📦 7일치 전체 루틴 저장을 시작합니다.");
+
+      const groupKey = `ai_weekly_${Date.now()}`; // 7일치를 묶어줄 고유 키
+
+      // Day 1부터 Day 7까지 반복
+      weeklyRoutine.forEach((dayPlan, dayIndex) => {
+        // 휴식일(Rest)이거나 운동이 없으면 건너뜀
+        if (!dayPlan.exercises || dayPlan.exercises.length === 0) return;
+
+        // 날짜 계산: 오늘 + dayIndex (0, 1, 2...)
+        const targetDate = new Date(today);
+        targetDate.setDate(today.getDate() + dayIndex);
+
+        // YYYY-MM-DD 형식으로 변환
+        const dateStr = `${targetDate.getFullYear()}-${String(
+          targetDate.getMonth() + 1
+        ).padStart(2, "0")}-${String(targetDate.getDate()).padStart(2, "0")}`;
+
+        const groupTitle = `AI 7일 루틴 (Day ${dayIndex + 1})`;
+
+        // 해당 요일의 운동들을 리스트로 변환
+        const dayActivities = dayPlan.exercises.map(
+          (exercise: any, exIndex: number) => {
+            // 세트 수 생성
+            const setsCount = exercise.sets || 3;
+            const sets = Array.from({ length: setsCount }, (_, i) => ({
+              id: i + 1,
+              order: i + 1,
+              weight: exercise.weight_kg || 0,
+              reps: exercise.reps || 0,
+              isCompleted: false,
+            }));
+
+            // 상세 설명 텍스트 (예: "20kg 10회 3세트")
+            const detailParts = [];
+            if (exercise.weight_kg) detailParts.push(`${exercise.weight_kg}kg`);
+            if (exercise.reps) detailParts.push(`${exercise.reps}회`);
+            if (setsCount) detailParts.push(`${setsCount}세트`);
+            const details = detailParts.join(" ") || exercise.detail || "";
+
+            return {
+              // ID 충돌 방지를 위해 날짜 인덱스를 섞어서 생성
+              id: Date.now() + dayIndex * 10000 + exIndex,
+              name: exercise.name || "운동",
+              details: details,
+              time: "00:00",
+              date: dateStr,
+              isCompleted: false,
+              externalId: exercise.exerciseId,
+              sets: sets,
+              saveTitle: groupTitle,
+              groupKey: groupKey,
+              target: exercise.target,
+              category: exercise.category,
+            };
+          }
+        );
+
+        // 전체 리스트에 합치기
+        activitiesToSave = [...activitiesToSave, ...dayActivities];
+      });
+    }
+    // [CASE 2] 1일 추천
+    else {
+      if (todayRoutine.length === 0) {
+        Alert.alert("알림", "저장할 운동 데이터가 없습니다.");
+        return;
+      }
+
+      const dateStr = `${today.getFullYear()}-${String(
+        today.getMonth() + 1
+      ).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+      const groupKey = `ai_daily_${Date.now()}`;
+      const groupTitle = todayFocus
+        ? `AI 추천 - ${mapFocusToKorean(todayFocus)}`
+        : "AI 추천 운동";
+
+      activitiesToSave = todayRoutine.map((exercise: any, index: number) => {
+        const setsCount = exercise.sets || 3;
+        const sets = Array.from({ length: setsCount }, (_, i) => ({
+          id: i + 1,
+          order: i + 1,
+          weight: exercise.weight_kg || 0,
+          reps: exercise.reps || 0,
+          isCompleted: false,
+        }));
+
+        return {
+          id: Date.now() + index,
+          name: exercise.name || "운동",
+          details: exercise.detail,
+          time: today.toLocaleTimeString("ko-KR", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true,
+          }),
+          date: dateStr,
+          isCompleted: false,
+          externalId: exercise.exerciseId,
+          sets: sets,
+          saveTitle: groupTitle,
+          groupKey: groupKey,
+          target: exercise.target,
+          category: exercise.category,
+        };
+      });
+    }
+
+    // 운동 목록이 있으면 다음 화면으로 이동
+    if (activitiesToSave.length > 0) {
+      console.log(
+        `🚀 총 ${activitiesToSave.length}개의 운동 데이터를 Exercise 화면으로 전송합니다.`
+      );
+
+      // ExerciseScreen(운동 목록 화면)으로 이동하면서 데이터 전달
+      navigation.navigate("Stats", {
+        screen: "Exercise",
+        params: {
+          recommendedExercises: activitiesToSave,
+        },
+      });
+    } else {
+      Alert.alert(
+        "알림",
+        "저장할 운동 루틴이 없습니다. (휴식일만 있거나 데이터 오류)"
+      );
+    }
   };
 
   const addRoutineToActivities = async (routine: any) => {
@@ -728,6 +1062,29 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
                       style={{ marginRight: 8 }}
                     />
                     <Text style={styles.primaryButtonText}>추천 루틴 받기</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                {/* 7일 추천 루틴 버튼 추가 */}
+                <TouchableOpacity
+                  style={styles.primaryButton}
+                  onPress={handleGetWeeklyRoutine}
+                  disabled={loading}
+                  activeOpacity={0.9}
+                >
+                  <LinearGradient
+                    colors={["#e3ff7c", "#a8e063"]}
+                    style={styles.primaryButtonGradient}
+                  >
+                    <Icon
+                      name="calendar"
+                      size={20}
+                      color="#111827"
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text style={styles.primaryButtonText}>
+                      7일 추천 루틴 받기
+                    </Text>
                   </LinearGradient>
                 </TouchableOpacity>
 
@@ -997,26 +1354,86 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
           >
             <View style={styles.routineView}>
               <View style={styles.routineHeader}>
-                <View>
+                {/* 왼쪽 텍스트 영역 (flex: 1을 줘서 탭이 길어져도 아이콘과 안 겹치게 함) */}
+                <View style={{ flex: 1, paddingRight: 10 }}>
                   <Text style={styles.routineTitle}>
                     AI 추천 운동
                     {todayFocus ? ` - ${mapFocusToKorean(todayFocus)}` : ""}
                   </Text>
+
+                  {/* ▼▼▼ [위치 이동] Day 탭을 여기(날짜 바로 위)로 옮겼습니다 ▼▼▼ */}
+                  {isWeeklyMode && weeklyRoutine.length > 0 && (
+                    <View style={{ marginTop: 8, marginBottom: 8, height: 34 }}>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={{ gap: 8, paddingRight: 20 }}
+                      >
+                        {weeklyRoutine.map((_, index) => (
+                          <TouchableOpacity
+                            key={index}
+                            onPress={() => selectWeeklyDay(index)}
+                            activeOpacity={0.8}
+                          >
+                            <LinearGradient
+                              colors={
+                                selectedDayIndex === index
+                                  ? ["#e3ff7c", "#a8e063"]
+                                  : [
+                                      "rgba(255,255,255,0.1)",
+                                      "rgba(255,255,255,0.05)",
+                                    ]
+                              }
+                              style={{
+                                paddingVertical: 6,
+                                paddingHorizontal: 14,
+                                borderRadius: 16,
+                                borderWidth: 1,
+                                borderColor:
+                                  selectedDayIndex === index
+                                    ? "transparent"
+                                    : "rgba(255,255,255,0.1)",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  fontSize: 12,
+                                  color:
+                                    selectedDayIndex === index
+                                      ? "#111827"
+                                      : "#9ca3af",
+                                  fontWeight:
+                                    selectedDayIndex === index ? "700" : "500",
+                                }}
+                              >
+                                Day {index + 1}
+                              </Text>
+                            </LinearGradient>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                  {/* ▲▲▲ Day 탭 끝 ▲▲▲ */}
+
                   <Text style={styles.routineDate}>
-                    {new Date().toLocaleDateString("ko-KR", {
-                      month: "long",
-                      day: "numeric",
-                      weekday: "short",
-                    })}
+                    {(() => {
+                      // 날짜 표시 로직: 7일 모드면 선택된 날짜, 아니면 오늘 날짜 표시
+                      const displayDate = new Date();
+                      if (isWeeklyMode) {
+                        displayDate.setDate(
+                          displayDate.getDate() + selectedDayIndex
+                        );
+                      }
+                      return displayDate.toLocaleDateString("ko-KR", {
+                        month: "long",
+                        day: "numeric",
+                        weekday: "short",
+                      });
+                    })()}
                   </Text>
-                </View>
-                <View style={styles.routineHeaderIcon}>
-                  <LinearGradient
-                    colors={["rgba(227,255,124,0.2)", "rgba(168,224,99,0.1)"]}
-                    style={styles.routineHeaderIconGradient}
-                  >
-                    <Icon name="today" size={24} color="#e3ff7c" />
-                  </LinearGradient>
                 </View>
               </View>
 
