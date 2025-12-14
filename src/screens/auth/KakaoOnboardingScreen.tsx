@@ -11,6 +11,7 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  SafeAreaView,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { authAPI } from "../../services";
@@ -43,6 +44,15 @@ const experienceLevelOptions = [
   { label: "고급자", value: "ADVANCED" },
 ];
 
+const healthConcernOptions = [
+  { label: "의지 부족", value: "WILLPOWER" },
+  { label: "근육의 자극", value: "MUSCLE_STIMULATION" },
+  { label: "루틴 짜기 어려움", value: "ROUTINE_DIFFICULTY" },
+  { label: "올바른 운동 자세", value: "CORRECT_FORM" },
+  { label: "식단 관리", value: "DIET_MANAGEMENT" },
+  { label: "기타", value: "OTHER" },
+];
+
 const KakaoOnboardingScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -70,6 +80,7 @@ const KakaoOnboardingScreen = ({ navigation }: any) => {
   const [healthGoalModalVisible, setHealthGoalModalVisible] = useState(false);
   const [experienceLevelModalVisible, setExperienceLevelModalVisible] =
     useState(false);
+  const [healthConcernModalVisible, setHealthConcernModalVisible] = useState(false);
 
   const handleChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -205,11 +216,15 @@ const KakaoOnboardingScreen = ({ navigation }: any) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
         <View style={styles.header}>
           <Text style={styles.title}>신체정보를 입력해주세요</Text>
           <Text style={styles.subtitle}>
@@ -318,12 +333,14 @@ const KakaoOnboardingScreen = ({ navigation }: any) => {
                       }}
                       style={styles.modalPicker}
                       itemStyle={styles.pickerItemStyle}
+                      dropdownIconColor="#ffffff"
                     >
                       {generateYearOptions().map((year) => (
                         <Picker.Item
                           key={year}
                           label={String(year)}
                           value={String(year)}
+                          color={Platform.OS === "android" ? "#ffffff" : undefined}
                         />
                       ))}
                     </Picker>
@@ -349,12 +366,14 @@ const KakaoOnboardingScreen = ({ navigation }: any) => {
                       }}
                       style={styles.modalPicker}
                       itemStyle={styles.pickerItemStyle}
+                      dropdownIconColor="#ffffff"
                     >
                       {generateMonthOptions().map((month) => (
                         <Picker.Item
                           key={month}
                           label={String(month).padStart(2, "0")}
                           value={String(month)}
+                          color={Platform.OS === "android" ? "#ffffff" : undefined}
                         />
                       ))}
                     </Picker>
@@ -368,6 +387,7 @@ const KakaoOnboardingScreen = ({ navigation }: any) => {
                       }}
                       style={styles.modalPicker}
                       itemStyle={styles.pickerItemStyle}
+                      dropdownIconColor="#ffffff"
                     >
                       {(() => {
                         if (tempPickerValue.year && tempPickerValue.month) {
@@ -401,6 +421,7 @@ const KakaoOnboardingScreen = ({ navigation }: any) => {
                           key={day}
                           label={String(day).padStart(2, "0")}
                           value={String(day)}
+                          color={Platform.OS === "android" ? "#ffffff" : undefined}
                         />
                       ))}
                     </Picker>
@@ -727,23 +748,23 @@ const KakaoOnboardingScreen = ({ navigation }: any) => {
             </TouchableOpacity>
           </Modal>
 
-          {/* 운동 경험 수준 (선택) */}
+          {/* 헬스 고민 (선택) */}
           <View style={styles.inputGroup}>
             <TouchableOpacity
               activeOpacity={0.8}
               style={styles.birthDateButtonContainer}
-              onPress={() => setExperienceLevelModalVisible(true)}
+              onPress={() => setHealthConcernModalVisible(true)}
             >
               <TextInput
                 style={styles.input}
                 value={
-                  formData.experienceLevel
-                    ? experienceLevelOptions.find(
-                        (opt) => opt.value === formData.experienceLevel
+                  formData.fitnessConcerns
+                    ? healthConcernOptions.find(
+                        (opt) => opt.value === formData.fitnessConcerns
                       )?.label || ""
                     : ""
                 }
-                placeholder="운동 경험 수준 (선택)"
+                placeholder="헬스 고민"
                 placeholderTextColor="rgba(255, 255, 255, 0.7)"
                 editable={false}
                 pointerEvents="none"
@@ -751,17 +772,17 @@ const KakaoOnboardingScreen = ({ navigation }: any) => {
             </TouchableOpacity>
           </View>
 
-          {/* 운동 경험 수준 선택 모달 */}
+          {/* 헬스 고민 선택 모달 */}
           <Modal
-            visible={experienceLevelModalVisible}
+            visible={healthConcernModalVisible}
             transparent={true}
             animationType="slide"
-            onRequestClose={() => setExperienceLevelModalVisible(false)}
+            onRequestClose={() => setHealthConcernModalVisible(false)}
           >
             <TouchableOpacity
               style={styles.modalOverlay}
               activeOpacity={1}
-              onPress={() => setExperienceLevelModalVisible(false)}
+              onPress={() => setHealthConcernModalVisible(false)}
             >
               <TouchableOpacity
                 activeOpacity={1}
@@ -770,32 +791,32 @@ const KakaoOnboardingScreen = ({ navigation }: any) => {
               >
                 <View style={styles.modalHeader}>
                   <TouchableOpacity
-                    onPress={() => setExperienceLevelModalVisible(false)}
+                    onPress={() => setHealthConcernModalVisible(false)}
                   >
                     <Text style={styles.modalCancelText}>취소</Text>
                   </TouchableOpacity>
-                  <Text style={styles.modalTitle}>운동 경험 수준 선택</Text>
+                  <Text style={styles.modalTitle}>헬스 고민 선택</Text>
                   <View style={{ width: 50 }} />
                 </View>
                 <View style={styles.modalOptionContainer}>
                   <View style={styles.optionGrid}>
-                    {experienceLevelOptions.map((option) => (
+                    {healthConcernOptions.map((option) => (
                       <TouchableOpacity
                         key={option.value}
                         style={[
                           styles.optionButton,
-                          formData.experienceLevel === option.value &&
+                          formData.fitnessConcerns === option.value &&
                             styles.optionButtonSelected,
                         ]}
                         onPress={() => {
-                          handleChange("experienceLevel", option.value);
-                          setExperienceLevelModalVisible(false);
+                          handleChange("fitnessConcerns", option.value);
+                          setHealthConcernModalVisible(false);
                         }}
                       >
                         <Text
                           style={[
                             styles.optionButtonText,
-                            formData.experienceLevel === option.value &&
+                            formData.fitnessConcerns === option.value &&
                               styles.optionButtonTextSelected,
                           ]}
                         >
@@ -808,18 +829,6 @@ const KakaoOnboardingScreen = ({ navigation }: any) => {
               </TouchableOpacity>
             </TouchableOpacity>
           </Modal>
-
-          {/* 헬스 고민 (선택) */}
-          <View style={styles.inputGroup}>
-            <TextInput
-              style={styles.input}
-              placeholder="헬스 고민 (선택)"
-              value={formData.fitnessConcerns}
-              onChangeText={(text) => handleChange("fitnessConcerns", text)}
-              placeholderTextColor="rgba(255, 255, 255, 0.7)"
-              multiline
-            />
-          </View>
         </View>
 
         <TouchableOpacity
@@ -834,7 +843,8 @@ const KakaoOnboardingScreen = ({ navigation }: any) => {
           )}
         </TouchableOpacity>
       </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
@@ -843,10 +853,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#252525",
   },
+  keyboardView: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: Platform.OS === "ios" ? 20 : 40,
     paddingBottom: 40,
   },
   header: {
@@ -885,6 +898,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "400",
     color: "#ffffff",
+  },
+  textAreaInput: {
+    height: 120,
+    paddingTop: 16,
+    paddingBottom: 16,
   },
   birthDateButtonContainer: {
     width: "100%",
@@ -962,9 +980,12 @@ const styles = StyleSheet.create({
   modalPicker: {
     width: "100%",
     height: 150,
+    backgroundColor: "#252525",
   },
   pickerItemStyle: {
     color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "400",
   },
   genderOptionContainer: {
     paddingHorizontal: 20,

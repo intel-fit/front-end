@@ -33,6 +33,17 @@
           "action": "VIEW",
           "data": [
             {
+              "scheme": "intelfit",
+              "host": "*",
+              "pathPrefix": "/auth/kakao"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
               "scheme": "intelfit"
             }
           ],
