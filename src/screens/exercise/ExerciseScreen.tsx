@@ -477,13 +477,12 @@ const ExerciseScreen = ({ navigation }: any) => {
   const [monthlyProgress, setMonthlyProgress] = useState<
     DailyProgressWeekItem[]
   >([]);
-<<<<<<< HEAD
   const [todayProgress, setTodayProgress] =
     useState<DailyProgressWeekItem | null>(null);
-=======
   // 달력에 표시할 칼로리 데이터 (날짜별)
-  const [calendarCalories, setCalendarCalories] = useState<Record<string, number>>({});
->>>>>>> main
+  const [calendarCalories, setCalendarCalories] = useState<
+    Record<string, number>
+  >({});
   const [showMonthView, setShowMonthView] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isIntroVisible, setIsIntroVisible] = useState(false);
@@ -2206,34 +2205,55 @@ const ExerciseScreen = ({ navigation }: any) => {
   // 달력에 표시할 날짜들의 칼로리 데이터 로드
   const loadCalendarCalories = async (dates: string[]) => {
     try {
-      console.log('📅 [운동 화면] 달력 칼로리 데이터 로드 시작:', dates.length, '일');
-      
+      console.log(
+        "📅 [운동 화면] 달력 칼로리 데이터 로드 시작:",
+        dates.length,
+        "일"
+      );
+
       // 각 날짜에 대해 영양성분 요약 조회 (병렬 처리)
       const nutritionPromises = dates.map(async (date, index) => {
         try {
-          console.log(`📡 [운동 화면] ${index + 1}/${dates.length} - ${date} 영양성분 조회 중...`);
+          console.log(
+            `📡 [운동 화면] ${index + 1}/${
+              dates.length
+            } - ${date} 영양성분 조회 중...`
+          );
           const summary = await mealAPI.getNutritionSummary(date);
           const calories = summary.calories || 0;
-          console.log(`✅ [운동 화면] ${index + 1}/${dates.length} - ${date} 칼로리: ${calories}kcal`);
+          console.log(
+            `✅ [운동 화면] ${index + 1}/${
+              dates.length
+            } - ${date} 칼로리: ${calories}kcal`
+          );
           return { date, calories };
         } catch (error) {
-          console.error(`❌ [운동 화면] ${index + 1}/${dates.length} - ${date} 영양성분 조회 실패:`, error);
+          console.error(
+            `❌ [운동 화면] ${index + 1}/${
+              dates.length
+            } - ${date} 영양성분 조회 실패:`,
+            error
+          );
           return { date, calories: 0 };
         }
       });
 
       const nutritionResults = await Promise.all(nutritionPromises);
-      console.log('📅 [운동 화면] 달력 칼로리 데이터 조회 완료:', nutritionResults.length, '일');
+      console.log(
+        "📅 [운동 화면] 달력 칼로리 데이터 조회 완료:",
+        nutritionResults.length,
+        "일"
+      );
 
       // 상태 업데이트
       const caloriesMap: Record<string, number> = {};
       nutritionResults.forEach(({ date, calories }) => {
         caloriesMap[date] = calories;
       });
-      
-      setCalendarCalories(prev => ({ ...prev, ...caloriesMap }));
+
+      setCalendarCalories((prev) => ({ ...prev, ...caloriesMap }));
     } catch (error) {
-      console.error('❌ [운동 화면] 달력 칼로리 데이터 로드 실패:', error);
+      console.error("❌ [운동 화면] 달력 칼로리 데이터 로드 실패:", error);
     }
   };
 
@@ -2253,13 +2273,15 @@ const ExerciseScreen = ({ navigation }: any) => {
   React.useEffect(() => {
     if (showMonthView) {
       loadMonthlyProgress(monthBase.getFullYear(), monthBase.getMonth());
-      
+
       // 해당 월의 모든 날짜에 대해 칼로리 데이터 로드
       const year = monthBase.getFullYear();
       const month = monthBase.getMonth();
       const firstOfMonth = new Date(year, month, 1);
       const nextMonth = new Date(year, month + 1, 1);
-      const daysInMonth = Math.round((nextMonth.getTime() - firstOfMonth.getTime()) / (1000 * 60 * 60 * 24));
+      const daysInMonth = Math.round(
+        (nextMonth.getTime() - firstOfMonth.getTime()) / (1000 * 60 * 60 * 24)
+      );
       const monthDates = Array.from({ length: daysInMonth }).map((_, i) => {
         const d = new Date(year, month, i + 1);
         return formatDateToString(d);
@@ -2274,13 +2296,15 @@ const ExerciseScreen = ({ navigation }: any) => {
     if (showMonthView) {
       // 달력을 펼칠 때 monthBase의 달 데이터 가져오기
       loadMonthlyProgress(monthBase.getFullYear(), monthBase.getMonth());
-      
+
       // 해당 월의 모든 날짜에 대해 칼로리 데이터 로드
       const year = monthBase.getFullYear();
       const month = monthBase.getMonth();
       const firstOfMonth = new Date(year, month, 1);
       const nextMonth = new Date(year, month + 1, 1);
-      const daysInMonth = Math.round((nextMonth.getTime() - firstOfMonth.getTime()) / (1000 * 60 * 60 * 24));
+      const daysInMonth = Math.round(
+        (nextMonth.getTime() - firstOfMonth.getTime()) / (1000 * 60 * 60 * 24)
+      );
       const monthDates = Array.from({ length: daysInMonth }).map((_, i) => {
         const d = new Date(year, month, i + 1);
         return formatDateToString(d);
@@ -2289,7 +2313,7 @@ const ExerciseScreen = ({ navigation }: any) => {
     } else {
       // 달력을 접을 때 선택된 날짜의 달 데이터 가져오기 (주간 달력 표시 시)
       loadMonthlyProgress(dateToFetch.getFullYear(), dateToFetch.getMonth());
-      
+
       // 이번 주의 날짜 범위 계산 (일~토)
       const getStartOfWeek = (d: Date) => {
         const n = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -2314,7 +2338,7 @@ const ExerciseScreen = ({ navigation }: any) => {
   React.useEffect(() => {
     const dateToFetch = selectedDate || new Date();
     loadMonthlyProgress(dateToFetch.getFullYear(), dateToFetch.getMonth());
-    
+
     // 주간 달력인 경우 이번 주 7일의 칼로리 데이터 로드
     if (!showMonthView) {
       const getStartOfWeek = (d: Date) => {
@@ -2342,37 +2366,31 @@ const ExerciseScreen = ({ navigation }: any) => {
   useFocusEffect(
     React.useCallback(() => {
       if (!userIdLoaded) return;
-      
+
       // StatsScreen에서 날짜 처리를 하므로 여기서는 날짜를 변경하지 않음
       // 단지 현재 선택된 날짜를 사용하여 데이터 로드
       const dateToFetch = selectedDate || new Date();
-      setMonthBase(new Date(dateToFetch.getFullYear(), dateToFetch.getMonth(), 1));
-      
+      setMonthBase(
+        new Date(dateToFetch.getFullYear(), dateToFetch.getMonth(), 1)
+      );
+
       loadGoalData();
       loadWeeklyCalories();
       loadTodayProgress(); // 오늘 진행률 로드 (게이지 업데이트)
       // 해당 달의 월별 데이터 가져오기
-<<<<<<< HEAD
-      loadMonthlyProgress(today.getFullYear(), today.getMonth());
-    }, [
-      userIdLoaded,
-      loadGoalData,
-      loadWeeklyCalories,
-      loadTodayProgress,
-      setSelectedDate,
-    ])
-=======
       loadMonthlyProgress(dateToFetch.getFullYear(), dateToFetch.getMonth());
-      
+
       // 달력 칼로리 데이터 새로고침
-      const dateToUse = selectedDate || today;
+      const dateToUse = selectedDate || new Date();
       if (showMonthView) {
         // 월간 달력인 경우 해당 월의 모든 날짜
         const year = dateToUse.getFullYear();
         const month = dateToUse.getMonth();
         const firstOfMonth = new Date(year, month, 1);
         const nextMonth = new Date(year, month + 1, 1);
-        const daysInMonth = Math.round((nextMonth.getTime() - firstOfMonth.getTime()) / (1000 * 60 * 60 * 24));
+        const daysInMonth = Math.round(
+          (nextMonth.getTime() - firstOfMonth.getTime()) / (1000 * 60 * 60 * 24)
+        );
         const monthDates = Array.from({ length: daysInMonth }).map((_, i) => {
           const d = new Date(year, month, i + 1);
           return formatDateToString(d);
@@ -2397,8 +2415,14 @@ const ExerciseScreen = ({ navigation }: any) => {
         });
         loadCalendarCalories(weekDates);
       }
-    }, [userIdLoaded, loadGoalData, loadWeeklyCalories, showMonthView, selectedDate])
->>>>>>> main
+    }, [
+      userIdLoaded,
+      loadGoalData,
+      loadWeeklyCalories,
+      loadTodayProgress,
+      showMonthView,
+      selectedDate,
+    ])
   );
 
   // 완료 횟수 저장 helper
@@ -3708,7 +3732,10 @@ const ExerciseScreen = ({ navigation }: any) => {
                           const dayProgress = getDayProgress(d);
                           const dateStr = formatDateToString(d);
                           // 달력 칼로리 데이터 우선 사용, 없으면 진행률 데이터 사용
-                          const calories = calendarCalories[dateStr] ?? dayProgress?.totalCalorie ?? 0;
+                          const calories =
+                            calendarCalories[dateStr] ??
+                            dayProgress?.totalCalorie ??
+                            0;
                           const rate = dayProgress?.exerciseRate || 0;
                           return (
                             <>
@@ -3799,7 +3826,10 @@ const ExerciseScreen = ({ navigation }: any) => {
                         const dayProgress = getDayProgress(d);
                         const dateStr = formatDateToString(d);
                         // 달력 칼로리 데이터 우선 사용, 없으면 진행률 데이터 사용
-                        const calories = calendarCalories[dateStr] ?? dayProgress?.totalCalorie ?? 0;
+                        const calories =
+                          calendarCalories[dateStr] ??
+                          dayProgress?.totalCalorie ??
+                          0;
                         const rate = dayProgress?.exerciseRate || 0;
                         return (
                           <>
