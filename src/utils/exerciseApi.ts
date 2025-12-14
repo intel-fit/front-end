@@ -546,7 +546,8 @@ export const fetchDateProgress = async (
  */
 export interface GetTodayWorkoutTimeResponse {
   userId: number;
-  totalSeconds: number; // 오늘 하루 누적된 운동시간(초), 기본값 0
+  totalSeconds?: number; // 오늘 하루 누적된 운동시간(초), 기본값 0
+  totalExerciseSeconds?: number; // API 응답 필드명 (totalExerciseSeconds 또는 totalSeconds)
 }
 
 export const getTodayWorkoutTime = async (
@@ -554,6 +555,7 @@ export const getTodayWorkoutTime = async (
 ): Promise<GetTodayWorkoutTimeResponse> => {
   try {
     const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    // API URL: http://43.200.40.140/api/workouts/time/{userId}
     const url = `${WORKOUTS_API_URL}/time/${encodeURIComponent(userId)}`;
     console.log("[WORKOUT][TIME] 오늘 운동 시간 조회 요청:", url);
     const response = await axios.get(url, {
@@ -563,7 +565,15 @@ export const getTodayWorkoutTime = async (
       },
     });
     console.log("[WORKOUT][TIME] 오늘 운동 시간 조회 응답:", response.data);
-    return response.data as GetTodayWorkoutTimeResponse;
+    
+    // API 응답에서 totalExerciseSeconds 또는 totalSeconds 추출
+    const data = response.data;
+    const totalSeconds = data.totalExerciseSeconds ?? data.totalSeconds ?? 0;
+    
+    return {
+      userId: data.userId ?? userId,
+      totalSeconds,
+    };
   } catch (error: any) {
     if (axios.isAxiosError(error)) {
       console.error("[WORKOUT][TIME] 오늘 운동 시간 조회 에러:", {

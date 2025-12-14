@@ -156,6 +156,256 @@ export const homeAPI = {
     }
   },
 
+  // 오늘 또는 특정 날짜의 운동 달성률과 칼로리 조회
+  // GET /api/daily-progress/today?date={date}
+  getTodayProgress: async (date: string): Promise<{
+    date: string;
+    exerciseRate: number;
+    totalCalorie: number;
+    totalExerciseSeconds: number;
+    minutes: number;
+    seconds: number;
+  }> => {
+    try {
+      console.log('📡 [오늘 진행률] API 호출: GET /api/daily-progress/today', { date });
+      const response = await request<{
+        date: string;
+        exerciseRate: number;
+        totalCalorie: number;
+        totalExerciseSeconds: number;
+        minutes: number;
+        seconds: number;
+      }>(`/api/daily-progress/today?date=${encodeURIComponent(date)}`, {
+        method: 'GET',
+      });
+      
+      console.log('✅ [오늘 진행률] 데이터 수신:', response);
+      return response;
+    } catch (error: any) {
+      console.error('❌ [오늘 진행률] API 호출 실패:', error);
+      // 에러 시 기본값 반환
+      return {
+        date,
+        exerciseRate: 0,
+        totalCalorie: 0,
+        totalExerciseSeconds: 0,
+        minutes: 0,
+        seconds: 0,
+      };
+    }
+  },
+
+  // AI 코멘트 조회 함수들
+  // GET /analytics/comment/daily/exercise/{user_id}
+  getDailyExerciseComment: async (): Promise<string> => {
+    try {
+      const userId = await getUserId();
+      const url = `http://43.200.40.140:8000/analytics/comment/daily/exercise/${userId}`;
+      
+      console.log('[HOME] 일일 운동 코멘트 API 호출:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.text(); // 문자열 반환
+      console.log('[HOME] 일일 운동 코멘트 응답:', data);
+      
+      // JSON 문자열인 경우 파싱하여 comment 필드만 추출
+      try {
+        const parsed = JSON.parse(data);
+        return parsed.comment || data || '';
+      } catch {
+        return data || '';
+      }
+    } catch (error: any) {
+      console.error('[HOME] 일일 운동 코멘트 API 호출 실패:', error);
+      return '';
+    }
+  },
+
+  // GET /analytics/comment/weekly/exercise/{user_id}
+  getWeeklyExerciseComment: async (): Promise<string> => {
+    try {
+      const userId = await getUserId();
+      const url = `http://43.200.40.140:8000/analytics/comment/weekly/exercise/${userId}`;
+      
+      console.log('[HOME] 주간 운동 코멘트 API 호출:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.text();
+      console.log('[HOME] 주간 운동 코멘트 응답:', data);
+      
+      // JSON 문자열인 경우 파싱하여 comment 필드만 추출
+      try {
+        const parsed = JSON.parse(data);
+        return parsed.comment || data || '';
+      } catch {
+        return data || '';
+      }
+    } catch (error: any) {
+      console.error('[HOME] 주간 운동 코멘트 API 호출 실패:', error);
+      return '';
+    }
+  },
+
+  // GET /analytics/comment/monthly/exercise/{user_id}?month=YYYY-MM
+  getMonthlyExerciseComment: async (month: string): Promise<string> => {
+    try {
+      const userId = await getUserId();
+      const url = `http://43.200.40.140:8000/analytics/comment/monthly/exercise/${userId}?month=${encodeURIComponent(month)}`;
+      
+      console.log('[HOME] 월간 운동 코멘트 API 호출:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.text();
+      console.log('[HOME] 월간 운동 코멘트 응답:', data);
+      
+      // JSON 문자열인 경우 파싱하여 comment 필드만 추출
+      try {
+        const parsed = JSON.parse(data);
+        return parsed.comment || data || '';
+      } catch {
+        return data || '';
+      }
+    } catch (error: any) {
+      console.error('[HOME] 월간 운동 코멘트 API 호출 실패:', error);
+      return '';
+    }
+  },
+
+  // GET /analytics/comment/daily/nutrition/{user_id}
+  getDailyNutritionComment: async (): Promise<string> => {
+    try {
+      const userId = await getUserId();
+      const url = `http://43.200.40.140:8000/analytics/comment/daily/nutrition/${userId}`;
+      
+      console.log('[HOME] 일일 영양 코멘트 API 호출:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.text();
+      console.log('[HOME] 일일 영양 코멘트 응답:', data);
+      
+      // JSON 문자열인 경우 파싱하여 comment 필드만 추출
+      try {
+        const parsed = JSON.parse(data);
+        return parsed.comment || data || '';
+      } catch {
+        return data || '';
+      }
+    } catch (error: any) {
+      console.error('[HOME] 일일 영양 코멘트 API 호출 실패:', error);
+      return '';
+    }
+  },
+
+  // GET /analytics/comment/weekly/nutrition/{user_id}
+  getWeeklyNutritionComment: async (): Promise<string> => {
+    try {
+      const userId = await getUserId();
+      const url = `http://43.200.40.140:8000/analytics/comment/weekly/nutrition/${userId}`;
+      
+      console.log('[HOME] 주간 영양 코멘트 API 호출:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.text();
+      console.log('[HOME] 주간 영양 코멘트 응답:', data);
+      
+      // JSON 문자열인 경우 파싱하여 comment 필드만 추출
+      try {
+        const parsed = JSON.parse(data);
+        return parsed.comment || data || '';
+      } catch {
+        return data || '';
+      }
+    } catch (error: any) {
+      console.error('[HOME] 주간 영양 코멘트 API 호출 실패:', error);
+      return '';
+    }
+  },
+
+  // GET /analytics/comment/monthly/nutrition/{user_id}?month=YYYY-MM
+  getMonthlyNutritionComment: async (month: string): Promise<string> => {
+    try {
+      const userId = await getUserId();
+      const url = `http://43.200.40.140:8000/analytics/comment/monthly/nutrition/${userId}?month=${encodeURIComponent(month)}`;
+      
+      console.log('[HOME] 월간 영양 코멘트 API 호출:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.text();
+      console.log('[HOME] 월간 영양 코멘트 응답:', data);
+      
+      // JSON 문자열인 경우 파싱하여 comment 필드만 추출
+      try {
+        const parsed = JSON.parse(data);
+        return parsed.comment || data || '';
+      } catch {
+        return data || '';
+      }
+    } catch (error: any) {
+      console.error('[HOME] 월간 영양 코멘트 API 호출 실패:', error);
+      return '';
+    }
+  },
+
   // 영양 목표 조회
   // GET /food/nutrition-goal/get?user_id={user_id}&date={date}
   getNutritionGoal: async (date: string): Promise<any> => {

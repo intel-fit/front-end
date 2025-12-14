@@ -21,6 +21,7 @@ import KakaoOnboardingScreen from "../screens/auth/KakaoOnboardingScreen";
 import HomeScreen from "../screens/main/HomeScreen";
 import MyPageScreen from "../screens/main/MyPageScreen";
 import StatsScreen from "../screens/main/StatsScreen";
+import HomeWidgetEditScreen from "../screens/main/HomeWidgetEditScreen";
 
 // Diet Screens
 import DietScreen from "../screens/diet/DietScreen";
@@ -169,6 +170,12 @@ export default function AppNavigator() {
           <Stack.Screen name="KakaoOnboarding" component={KakaoOnboardingScreen} />
           {/* Main Tabs */}
           <Stack.Screen name={ROUTES.MAIN} component={MainTabs} />
+          {/* Home Widget Edit */}
+          <Stack.Screen
+            name="HomeWidgetEdit"
+            component={HomeWidgetEditScreen}
+            options={{ headerShown: false }}
+          />
           {/* Payment Stack*/}
           <Stack.Screen
             name="PaymentSuccess"

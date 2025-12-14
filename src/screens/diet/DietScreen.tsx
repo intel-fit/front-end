@@ -49,6 +49,8 @@ const DietScreen = ({navigation, route}: any) => {
   const [monthlyProgress, setMonthlyProgress] = useState<DailyProgressWeekItem[]>([]);
   // 달력에 표시할 칼로리 데이터 (날짜별)
   const [calendarCalories, setCalendarCalories] = useState<Record<string, number>>({});
+  // 달력에 표시할 운동 시간 데이터 (날짜별, 초 단위)
+  const [dailyWorkoutSeconds, setDailyWorkoutSeconds] = useState<Record<string, number>>({});
 
   // 추천 식단 관련 상태
   const [savedMealPlans, setSavedMealPlans] = useState<any[]>([]);
@@ -117,10 +119,10 @@ const DietScreen = ({navigation, route}: any) => {
     return monthlyProgress.find((item) => item.date === dateStr);
   };
 
-  // 달력에 표시할 날짜들의 칼로리 데이터 로드
+  // 달력에 표시할 날짜들의 칼로리 및 운동 시간 데이터 로드
   const loadCalendarCalories = async (dates: string[]) => {
     try {
-      console.log('📅 [식단 화면] 달력 칼로리 데이터 로드 시작:', dates.length, '일');
+      console.log('📅 [식단 화면] 달력 칼로리 및 운동 시간 데이터 로드 시작:', dates.length, '일');
       
       // 각 날짜에 대해 영양성분 요약 조회 (병렬 처리)
       const nutritionPromises = dates.map(async (date, index) => {
@@ -136,8 +138,26 @@ const DietScreen = ({navigation, route}: any) => {
         }
       });
 
-      const nutritionResults = await Promise.all(nutritionPromises);
-      console.log('📅 [식단 화면] 달력 칼로리 데이터 조회 완료:', nutritionResults.length, '일');
+      // 각 날짜에 대해 운동 시간 조회 (병렬 처리)
+      const workoutTimePromises = dates.map(async (date, index) => {
+        try {
+          console.log(`📡 [식단 화면] ${index + 1}/${dates.length} - ${date} 운동 시간 조회 중...`);
+          const progress = await homeAPI.getTodayProgress(date);
+          const totalSeconds = progress.totalExerciseSeconds || 0;
+          console.log(`✅ [식단 화면] ${index + 1}/${dates.length} - ${date} 운동 시간: ${totalSeconds}초`);
+          return { date, totalSeconds };
+        } catch (error) {
+          console.error(`❌ [식단 화면] ${index + 1}/${dates.length} - ${date} 운동 시간 조회 실패:`, error);
+          return { date, totalSeconds: 0 };
+        }
+      });
+
+      const [nutritionResults, workoutTimeResults] = await Promise.all([
+        Promise.all(nutritionPromises),
+        Promise.all(workoutTimePromises),
+      ]);
+
+      console.log('📅 [식단 화면] 달력 칼로리 및 운동 시간 데이터 조회 완료:', nutritionResults.length, '일');
 
       // 상태 업데이트
       const caloriesMap: Record<string, number> = {};
@@ -145,9 +165,15 @@ const DietScreen = ({navigation, route}: any) => {
         caloriesMap[date] = calories;
       });
       
+      const workoutSecondsMap: Record<string, number> = {};
+      workoutTimeResults.forEach(({ date, totalSeconds }) => {
+        workoutSecondsMap[date] = totalSeconds;
+      });
+      
       setCalendarCalories(prev => ({ ...prev, ...caloriesMap }));
+      setDailyWorkoutSeconds(prev => ({ ...prev, ...workoutSecondsMap }));
     } catch (error) {
-      console.error('❌ [식단 화면] 달력 칼로리 데이터 로드 실패:', error);
+      console.error('❌ [식단 화면] 달력 데이터 로드 실패:', error);
     }
   };
 
@@ -504,6 +530,15 @@ const DietScreen = ({navigation, route}: any) => {
       navigation.setParams({updatedProgress: undefined, updatedDate: undefined});
     }
   }, [route?.params?.updatedProgress, route?.params?.updatedDate, navigation]);
+
+  // route params에서 activeTab 받기 (홈 위젯에서 추천 식단으로 이동할 때)
+  useEffect(() => {
+    if (route?.params?.activeTab === 'recommendations') {
+      setActiveTab('recommendations');
+      // params 초기화
+      navigation.setParams({ activeTab: undefined });
+    }
+  }, [route?.params?.activeTab, navigation]);
 
   // 화면 포커스 시 데이터 새로고침
   // 다른 페이지에 갔다 오거나 운동 기록을 갔다 왔을 때, 탭 바꾸기 등 모든 행동 시
@@ -937,7 +972,29 @@ const DietScreen = ({navigation, route}: any) => {
                           const dateStr = formatDateToString(d);
                           // 달력 칼로리 데이터 우선 사용, 없으면 진행률 데이터 사용
                           const calories = calendarCalories[dateStr] ?? dayProgress?.totalCalorie ?? 0;
-                          const rate = dayProgress?.exerciseRate || 0;
+                          // 해당 날짜의 운동 시간(초) 가져오기
+                          const totalSeconds = dailyWorkoutSeconds[dateStr] ?? 0;
+                          
+                          // 운동 시간 포맷: 초만 있으면 "38s", 분이면 "39m", 60분 이상이면 "1h 39m"
+                          const formatWorkoutTime = (seconds: number): string => {
+                            if (seconds === 0) return '';
+                            
+                            const hours = Math.floor(seconds / 3600);
+                            const minutes = Math.floor((seconds % 3600) / 60);
+                            const secs = seconds % 60;
+                            
+                            if (hours > 0) {
+                              // 60분 이상: "1h 39m"
+                              return `${hours}h ${minutes}m`;
+                            } else if (minutes > 0) {
+                              // 분만: "39m"
+                              return `${minutes}m`;
+                            } else {
+                              // 초만: "38s"
+                              return `${secs}s`;
+                            }
+                          };
+
                           return (
                             <>
                               <Text style={[
@@ -947,10 +1004,10 @@ const DietScreen = ({navigation, route}: any) => {
                                 {calories > 0 ? `${Math.round(calories)}k` : ''}
                               </Text>
                               <Text style={[
-                                styles.calendarPercentage,
+                                styles.calendarWorkoutTime,
                                 !isCurrentMonth && styles.monthMuted,
                               ]}>
-                                {rate > 0 ? `${Math.round(rate)}%` : ''}
+                                {formatWorkoutTime(totalSeconds)}
                               </Text>
                             </>
                           );
@@ -1018,14 +1075,36 @@ const DietScreen = ({navigation, route}: any) => {
                         const dateStr = formatDateToString(d);
                         // 달력 칼로리 데이터 우선 사용, 없으면 진행률 데이터 사용
                         const calories = calendarCalories[dateStr] ?? dayProgress?.totalCalorie ?? 0;
-                        const rate = dayProgress?.exerciseRate || 0;
+                        // 해당 날짜의 운동 시간(초) 가져오기
+                        const totalSeconds = dailyWorkoutSeconds[dateStr] ?? 0;
+                        
+                        // 운동 시간 포맷: 초만 있으면 "38s", 분이면 "39m", 60분 이상이면 "1h 39m"
+                        const formatWorkoutTime = (seconds: number): string => {
+                          if (seconds === 0) return '';
+                          
+                          const hours = Math.floor(seconds / 3600);
+                          const minutes = Math.floor((seconds % 3600) / 60);
+                          const secs = seconds % 60;
+                          
+                          if (hours > 0) {
+                            // 60분 이상: "1h 39m"
+                            return `${hours}h ${minutes}m`;
+                          } else if (minutes > 0) {
+                            // 분만: "39m"
+                            return `${minutes}m`;
+                          } else {
+                            // 초만: "38s"
+                            return `${secs}s`;
+                          }
+                        };
+
                         return (
                           <>
                             <Text style={styles.calendarCalories}>
                               {calories > 0 ? `${Math.round(calories)}k` : ''}
                             </Text>
-                            <Text style={styles.calendarPercentage}>
-                              {rate > 0 ? `${Math.round(rate)}%` : ''}
+                            <Text style={styles.calendarWorkoutTime}>
+                              {formatWorkoutTime(totalSeconds)}
                             </Text>
                           </>
                         );
@@ -1603,6 +1682,14 @@ const styles = StyleSheet.create({
     lineHeight: 14.52,
   },
   calendarPercentage: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: colors.text,
+    textAlign: 'center',
+    height: 15,
+    lineHeight: 14.52,
+  },
+  calendarWorkoutTime: {
     fontSize: 12,
     fontWeight: '400',
     color: colors.text,
