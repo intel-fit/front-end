@@ -16,7 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../../theme/colors";
 import { ROUTES } from "../../constants/routes";
 import { useDate } from "../../contexts/DateContext";
-import { homeAPI, authAPI, mealAPI } from "../../services";
+import { homeAPI, authAPI, mealAPI, recommendedExerciseAPI } from "../../services";
 import type { WeeklyCoachReport } from "../../services/homeAPI";
 import {
   getTodayWorkoutTime,
@@ -39,8 +39,8 @@ const HomeScreen = ({ navigation }: any) => {
   const [todayExerciseCount, setTodayExerciseCount] = useState(0);
   const [todayCalories, setTodayCalories] = useState(0);
   const [inBodyData, setInBodyData] = useState<any>(null);
-  // 각 날짜별 운동 시간(분) 데이터
-  const [dailyWorkoutMinutes, setDailyWorkoutMinutes] = useState<Record<string, number>>({});
+  // 각 날짜별 운동 시간(초) 데이터
+  const [dailyWorkoutSeconds, setDailyWorkoutSeconds] = useState<Record<string, number>>({});
   const isLoadingRef = useRef(false);
 
   // 멤버십 정보 state
@@ -50,6 +50,17 @@ const HomeScreen = ({ navigation }: any) => {
   // 코치 리포트 state
   const [coachReport, setCoachReport] = useState<WeeklyCoachReport | null>(null);
   const [randomActionItem, setRandomActionItem] = useState<string | null>(null);
+  // AI 코멘트 state (이전 값과 비교하여 변경된 것만 표시)
+  const [aiComment, setAiComment] = useState<string | null>(null);
+  // 추천 운동 요약 state
+  const [tempExerciseSummary, setTempExerciseSummary] = useState<{
+    date: string;
+    focus: string;
+    durationMin: number;
+    kcal: number;
+    exerciseCount: number;
+    title: string;
+  } | null>(null);
 
   // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
   // 한국 시간대(UTC+9) 기준으로 날짜 계산
@@ -129,24 +140,24 @@ const HomeScreen = ({ navigation }: any) => {
         try {
           console.log(`📡 [홈 화면] ${index + 1}/7 - ${date} 운동 시간 조회 중...`);
           const progress = await homeAPI.getTodayProgress(date);
-          const minutes = progress.minutes || 0;
-          console.log(`✅ [홈 화면] ${index + 1}/7 - ${date} 운동 시간: ${minutes}분`);
-          return { date, minutes };
+          const totalSeconds = progress.totalExerciseSeconds || 0;
+          console.log(`✅ [홈 화면] ${index + 1}/7 - ${date} 운동 시간: ${totalSeconds}초`);
+          return { date, totalSeconds };
         } catch (error) {
           console.error(`❌ [홈 화면] ${index + 1}/7 - ${date} 운동 시간 조회 실패:`, error);
-          return { date, minutes: 0 };
+          return { date, totalSeconds: 0 };
         }
       });
 
       const workoutTimeResults = await Promise.all(workoutTimePromises);
       console.log('🏠 [홈 화면] 이번 주 운동 시간 데이터 조회 완료 (7일):', workoutTimeResults);
 
-      // 운동 시간 데이터를 state에 저장
-      const workoutMinutesMap: Record<string, number> = {};
-      workoutTimeResults.forEach(({ date, minutes }) => {
-        workoutMinutesMap[date] = minutes;
+      // 운동 시간 데이터를 state에 저장 (초 단위)
+      const workoutSecondsMap: Record<string, number> = {};
+      workoutTimeResults.forEach(({ date, totalSeconds }) => {
+        workoutSecondsMap[date] = totalSeconds;
       });
-      setDailyWorkoutMinutes(prev => ({ ...prev, ...workoutMinutesMap }));
+      setDailyWorkoutSeconds(prev => ({ ...prev, ...workoutSecondsMap }));
 
       // 기존 데이터와 병합 (칼로리 데이터 업데이트)
       let updatedData: DailyProgressWeekItem[] = [];
@@ -563,6 +574,97 @@ const HomeScreen = ({ navigation }: any) => {
     }
   };
 
+  // AI 코멘트 로드 및 비교
+  const loadAIComments = async () => {
+    try {
+      console.log('[HOME] AI 코멘트 로드 시작');
+      
+      // 이전 코멘트 가져오기
+      const previousCommentsKey = 'previousAIComments';
+      const previousCommentsStr = await AsyncStorage.getItem(previousCommentsKey);
+      const previousComments: Record<string, string> = previousCommentsStr 
+        ? JSON.parse(previousCommentsStr) 
+        : {};
+
+      // 일일/주간 AI 코멘트 API 병렬 호출 (월간 제외)
+      const [
+        dailyExerciseComment,
+        weeklyExerciseComment,
+        dailyNutritionComment,
+        weeklyNutritionComment,
+      ] = await Promise.all([
+        homeAPI.getDailyExerciseComment(),
+        homeAPI.getWeeklyExerciseComment(),
+        homeAPI.getDailyNutritionComment(),
+        homeAPI.getWeeklyNutritionComment(),
+      ]);
+
+      // 현재 코멘트들
+      const currentComments: Record<string, string> = {
+        dailyExercise: dailyExerciseComment,
+        weeklyExercise: weeklyExerciseComment,
+        dailyNutrition: dailyNutritionComment,
+        weeklyNutrition: weeklyNutritionComment,
+      };
+
+      console.log('[HOME] AI 코멘트 수신 완료:', currentComments);
+
+      // 이전 코멘트가 있는지 확인 (첫 번째 진입인지 확인)
+      const isFirstVisit = Object.keys(previousComments).length === 0;
+      console.log(`[HOME] 이전 코멘트 존재 여부: ${isFirstVisit ? '없음 (첫 방문)' : '있음 (이전 방문과 비교)'}`);
+
+      // 변경된 코멘트만 필터링
+      const changedComments: string[] = [];
+      // 모든 유효한 코멘트 (빈 문자열이 아닌 것) - 4개 모두
+      const allValidComments: string[] = [];
+      
+      Object.keys(currentComments).forEach((key) => {
+        const current = currentComments[key]?.trim() || '';
+        const previous = previousComments[key]?.trim() || '';
+        
+        // 유효한 코멘트면 전체 목록에 추가 (4개 모두)
+        if (current) {
+          allValidComments.push(current);
+        }
+        
+        // 첫 번째 진입이 아니고, 값이 있고 이전과 다른 경우만 변경 목록에 추가
+        if (!isFirstVisit && current && current !== previous) {
+          changedComments.push(current);
+          console.log(`[HOME] 변경된 코멘트 발견 (${key}):`, current);
+        }
+      });
+
+      // 선택 로직:
+      // 1. 첫 번째 진입: 4개 중 랜덤
+      // 2. 두 번째 이후 진입: 변경된 코멘트가 있으면 변경된 것들 중 랜덤, 없으면 4개 중 랜덤
+      const commentsToChooseFrom = changedComments.length > 0 ? changedComments : allValidComments;
+      
+      if (commentsToChooseFrom.length > 0) {
+        const randomIndex = Math.floor(Math.random() * commentsToChooseFrom.length);
+        const selectedComment = commentsToChooseFrom[randomIndex];
+        setAiComment(selectedComment);
+        
+        if (isFirstVisit) {
+          console.log('[HOME] 첫 방문 - 4개 중 랜덤 선택:', selectedComment);
+        } else if (changedComments.length > 0) {
+          console.log('[HOME] 이전과 비교하여 변경된 코멘트 중 랜덤 선택:', selectedComment, `(변경된 코멘트: ${changedComments.length}개)`);
+        } else {
+          console.log('[HOME] 변경된 코멘트 없음 - 4개 중 랜덤 선택:', selectedComment);
+        }
+      } else {
+        console.log('[HOME] 표시할 AI 코멘트 없음');
+        setAiComment(null);
+      }
+
+      // 현재 코멘트를 이전 값으로 저장
+      await AsyncStorage.setItem(previousCommentsKey, JSON.stringify(currentComments));
+      console.log('[HOME] AI 코멘트 저장 완료');
+    } catch (error: any) {
+      console.error('[HOME] AI 코멘트 로드 실패:', error);
+      setAiComment(null);
+    }
+  };
+
   // 랜덤 action_item 선택 함수
   const selectRandomActionItem = (report: WeeklyCoachReport | null) => {
     if (report && report.action_items && report.action_items.length > 0) {
@@ -570,6 +672,27 @@ const HomeScreen = ({ navigation }: any) => {
       setRandomActionItem(report.action_items[randomIndex]);
     } else {
       setRandomActionItem(null);
+    }
+  };
+
+  // 추천 운동 요약 로드
+  const loadTempExerciseSummary = async () => {
+    try {
+      const dateStr = formatDateToString(selectedDate);
+      console.log('[HOME] 추천 운동 요약 조회 시작:', dateStr);
+      
+      const summary = await recommendedExerciseAPI.getTempSummary(dateStr);
+      
+      if (summary) {
+        setTempExerciseSummary(summary);
+        console.log('[HOME] 추천 운동 요약 조회 성공:', summary);
+      } else {
+        setTempExerciseSummary(null);
+        console.log('[HOME] 추천 운동 요약 없음');
+      }
+    } catch (error: any) {
+      console.error('[HOME] 추천 운동 요약 조회 실패:', error);
+      setTempExerciseSummary(null);
     }
   };
 
@@ -631,6 +754,8 @@ const HomeScreen = ({ navigation }: any) => {
         loadTodayWorkoutTime(),
         loadInBodyData(),
         loadProfileInfo(),
+        loadAIComments(), // AI 코멘트 로드
+        loadTempExerciseSummary(), // 추천 운동 요약 로드
       ]).finally(() => {
         isLoadingRef.current = false;
         console.log("[HOME] 화면 포커스, 데이터 새로고침 완료 (이번 주 칼로리 포함)");
@@ -655,6 +780,8 @@ const HomeScreen = ({ navigation }: any) => {
       loadInBodyData(),
       loadProfileInfo(),
       loadCoachReport(),
+      loadAIComments(), // AI 코멘트 로드
+      loadTempExerciseSummary(), // 추천 운동 요약 로드
     ]).finally(() => {
       isLoadingRef.current = false;
       console.log("[HOME] 초기 로드 완료");
@@ -752,14 +879,14 @@ const HomeScreen = ({ navigation }: any) => {
           </View>
         </View>
 
-        {/* 알림 카드 - 코치 리포트 */}
-        {randomActionItem && (
+        {/* 알림 카드 - AI 코멘트 (우선) 또는 코치 리포트 */}
+        {(aiComment || randomActionItem) && (
           <View style={styles.notificationCardContainer}>
             <View style={styles.notificationCardBorder} />
             <View style={styles.notificationCard}>
               <Ionicons name="sparkles" size={25} color="#e3ff7c" />
               <Text style={styles.notificationText}>
-                {randomActionItem}
+                {aiComment || randomActionItem}
               </Text>
             </View>
           </View>
@@ -825,16 +952,36 @@ const HomeScreen = ({ navigation }: any) => {
                         const dayProgress = getDayProgress(d);
                         const calories = dayProgress?.totalCalorie ?? 0;
                         const dateStr = formatDateToString(d);
-                        // 해당 날짜의 운동 시간(분) 가져오기
-                        const workoutMinutes = dailyWorkoutMinutes[dateStr] ?? 0;
+                        // 해당 날짜의 운동 시간(초) 가져오기
+                        const totalSeconds = dailyWorkoutSeconds[dateStr] ?? 0;
+                        
+                        // 운동 시간 포맷: 초만 있으면 "38s", 분이면 "39m", 60분 이상이면 "1h 39m"
+                        const formatWorkoutTime = (seconds: number): string => {
+                          if (seconds === 0) return '';
+                          
+                          const hours = Math.floor(seconds / 3600);
+                          const minutes = Math.floor((seconds % 3600) / 60);
+                          const secs = seconds % 60;
+                          
+                          if (hours > 0) {
+                            // 60분 이상: "1h 39m"
+                            return `${hours}h ${minutes}m`;
+                          } else if (minutes > 0) {
+                            // 분만: "39m"
+                            return `${minutes}m`;
+                          } else {
+                            // 초만: "38s"
+                            return `${secs}s`;
+                          }
+                        };
 
                         return (
                           <>
                             <Text style={styles.calendarCalories}>
-                              {`${Math.round(calories)}k`}
+                              {calories > 0 ? `${Math.round(calories)}k` : ''}
                             </Text>
                             <Text style={styles.calendarWorkoutTime}>
-                              {workoutMinutes > 0 ? `${workoutMinutes}분` : ''}
+                              {formatWorkoutTime(totalSeconds)}
                             </Text>
                           </>
                         );
@@ -891,30 +1038,35 @@ const HomeScreen = ({ navigation }: any) => {
         </View>
 
         {/* 운동 루틴 카드 */}
-        <View style={styles.routineCard}>
-          <Text style={styles.routineTitle}>Day 1 하체</Text>
-          <View style={styles.routineStats}>
-            <View style={styles.routineStatItem}>
-              <Ionicons name="barbell" size={40} color="#ffffff" />
-              <Text style={styles.routineStatText}>4가지 운동</Text>
+        {tempExerciseSummary && (
+          <View style={styles.routineCard}>
+            <Text style={styles.routineTitle}>{tempExerciseSummary.title || `${tempExerciseSummary.focus} day`}</Text>
+            <View style={styles.routineStats}>
+              <View style={styles.routineStatItem}>
+                <Ionicons name="barbell" size={40} color="#ffffff" />
+                <Text style={styles.routineStatText}>{tempExerciseSummary.exerciseCount}가지 운동</Text>
+              </View>
+              <View style={styles.routineStatItem}>
+                <Ionicons name="stopwatch-outline" size={40} color="#ffffff" />
+                <Text style={styles.routineStatText}>{tempExerciseSummary.durationMin}분</Text>
+              </View>
+              <View style={styles.routineStatItem}>
+                <MaterialIcons
+                  name="local-fire-department"
+                  size={40}
+                  color="#ffffff"
+                />
+                <Text style={styles.routineStatText}>{tempExerciseSummary.kcal} kcal</Text>
+              </View>
             </View>
-            <View style={styles.routineStatItem}>
-              <Ionicons name="stopwatch-outline" size={40} color="#ffffff" />
-              <Text style={styles.routineStatText}>13세트</Text>
-            </View>
-            <View style={styles.routineStatItem}>
-              <MaterialIcons
-                name="local-fire-department"
-                size={40}
-                color="#ffffff"
-              />
-              <Text style={styles.routineStatText}>229 kcal</Text>
-            </View>
+            <TouchableOpacity 
+              style={styles.routineButton}
+              onPress={handleRoutineRecommendNavigation}
+            >
+              <Text style={styles.routineButtonText}>오늘 운동 시작하기</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.routineButton}>
-            <Text style={styles.routineButtonText}>오늘 운동 시작하기</Text>
-          </TouchableOpacity>
-        </View>
+        )}
 
         {/* 운동 통계 카드 */}
         <View style={styles.exerciseStatsCard}>
@@ -1436,10 +1588,10 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   bodyStatValue: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: "700",
-    color: "#e3ff7c",
-    lineHeight: 24,
+    color: "#ffffff",
+    lineHeight: 20,
     textAlign: "center",
   },
   additionalMenuSection: {

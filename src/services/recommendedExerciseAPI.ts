@@ -313,4 +313,44 @@ export const recommendedExerciseAPI = {
       throw error; // 에러를 상위로 던져서 저장 프로세스를 중단할지 결정
     }
   },
+
+  /**
+   * 7. 임시 추천 운동 요약 조회 (TempSummary)
+   * @param date - 날짜 (yyyy-MM-dd 형식)
+   */
+  getTempSummary: async (date: string): Promise<{
+    date: string;
+    focus: string;
+    durationMin: number;
+    kcal: number;
+    exerciseCount: number;
+    title: string;
+  }> => {
+    try {
+      console.log("📋 임시 추천 운동 요약 조회:", date);
+
+      const response = await request(
+        `/api/exercise-recommendations/temp?date=${encodeURIComponent(date)}`,
+        {
+          method: "GET",
+        }
+      );
+
+      console.log("✅ 임시 추천 운동 요약 조회 성공:", response);
+      return response;
+    } catch (error: any) {
+      console.error("❌ 임시 추천 운동 요약 조회 실패:", error);
+
+      if (error.status === 401) {
+        throw new Error("로그인이 필요합니다.");
+      }
+
+      if (error.status === 404) {
+        // 데이터가 없을 경우 null 반환
+        return null as any;
+      }
+
+      throw error;
+    }
+  },
 };
