@@ -2965,15 +2965,15 @@ const styles = StyleSheet.create({
   fullScreenHeader: {
     paddingHorizontal: 20,
     backgroundColor: "#0c0c0c",
-    paddingTop: 6,
+    paddingTop: 16,
     paddingBottom: 2,
   },
   fullScreenHeaderAdd: {
-    paddingTop: 10,
+    paddingTop: 20,
     paddingBottom: 4,
   },
   fullScreenHeaderDetail: {
-    paddingTop: 10,
+    paddingTop: 20,
     paddingBottom: 4,
   },
   backBtnTop: {
