@@ -10,9 +10,12 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Modal,
+  SafeAreaView,
 } from "react-native";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
+import { WebView } from "react-native-webview";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors } from "../../theme/colors";
 import { authAPI } from "../../services";
@@ -39,6 +42,8 @@ const LoginScreen = ({ navigation }: any) => {
     password?: string;
   }>({});
   const [loading, setLoading] = useState(false);
+  const [showKakaoWebView, setShowKakaoWebView] = useState(false);
+  const [kakaoLoginUrl, setKakaoLoginUrl] = useState("");
 
   const handleChange = (name: string, value: string) => {
     setFormData((prev) => ({
@@ -107,7 +112,20 @@ const LoginScreen = ({ navigation }: any) => {
     console.log("🔗 [카카오 로그인] 딥링크 처리 시작:", url);
     console.log("🔗 [카카오 로그인] 플랫폼:", Platform.OS);
 
-    const parsed = Linking.parse(url);
+    // 카카오 네이티브 스킴(kakaob46c5ece88946636902899138451ac5e://oauth)을 intelfit://auth/kakao로 변환
+    let processedUrl = url;
+    if (url.includes("kakaob46c5ece88946636902899138451ac5e://oauth")) {
+      // 카카오 스킴에서 쿼리 파라미터 추출
+      const urlObj = new URL(url.replace("kakaob46c5ece88946636902899138451ac5e", "http"));
+      const params = urlObj.searchParams;
+      const code = params.get("code");
+      if (code) {
+        processedUrl = `intelfit://auth/kakao?code=${code}`;
+        console.log("🔗 [카카오 로그인] 카카오 스킴을 intelfit 스킴으로 변환:", processedUrl);
+      }
+    }
+
+    const parsed = Linking.parse(processedUrl);
     const code = parsed.queryParams?.code as string | undefined;
     const accessToken = parsed.queryParams?.accessToken as string | undefined;
     const refreshToken = parsed.queryParams?.refreshToken as
@@ -251,9 +269,15 @@ const LoginScreen = ({ navigation }: any) => {
     const checkInitialUrl = async () => {
       try {
         const initialUrl = await Linking.getInitialURL();
-        if (initialUrl && initialUrl.includes("intelfit://auth/kakao")) {
-          console.log("🔗 [카카오 로그인] 초기 딥링크 발견:", initialUrl);
-          handleKakaoDeepLink(initialUrl);
+        if (initialUrl) {
+          // intelfit://auth/kakao 또는 kakaob46c5ece88946636902899138451ac5e://oauth 스킴 처리
+          if (
+            initialUrl.includes("intelfit://auth/kakao") ||
+            initialUrl.includes("kakaob46c5ece88946636902899138451ac5e://oauth")
+          ) {
+            console.log("🔗 [카카오 로그인] 초기 딥링크 발견:", initialUrl);
+            handleKakaoDeepLink(initialUrl);
+          }
         }
       } catch (error) {
         console.error("❌ [카카오 로그인] 초기 URL 확인 실패:", error);
@@ -265,7 +289,13 @@ const LoginScreen = ({ navigation }: any) => {
     // 🔹 ② redirect_uri 가로채기 (가장 중요)
     const subscription = Linking.addEventListener("url", async ({ url }) => {
       console.log("🔗 [카카오 로그인] 딥링크 수신:", url);
-      handleKakaoDeepLink(url);
+      // intelfit://auth/kakao 또는 kakaob46c5ece88946636902899138451ac5e://oauth 스킴 처리
+      if (
+        url.includes("intelfit://auth/kakao") ||
+        url.includes("kakaob46c5ece88946636902899138451ac5e://oauth")
+      ) {
+        handleKakaoDeepLink(url);
+      }
     });
 
     // 앱이 이미 열려있을 때 딥링크 처리
@@ -444,218 +474,91 @@ const LoginScreen = ({ navigation }: any) => {
 
       // ✅ 방법 2: openAuthSessionAsync 사용 (Expo Go에서도 작동, 딥링크 리다이렉트 감지 가능)
       const KAKAO_CLIENT_ID = "99baee411cc547822f138712b19b032c";
+      // 백엔드 콜백 URL 사용 (백엔드에서 딥링크로 리다이렉트해야 함)
       const REDIRECT_URI = "https://www.intelfits.com/api/auth/kakao/callback";
       const loginUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_CLIENT_ID}&redirect_uri=${encodeURIComponent(
         REDIRECT_URI
       )}&response_type=code&scope=profile_nickname,profile_image`;
 
       console.log("🔵 [카카오 로그인] WebBrowser 방식 사용");
+      console.log("🔵 [카카오 로그인] Platform:", Platform.OS);
+      console.log("🔵 [카카오 로그인] REDIRECT_URI:", REDIRECT_URI);
       console.log("🔵 [카카오 로그인] URL:", loginUrl);
 
       // 딥링크 스킴 설정 (앱 내부 브라우저에서 열리도록)
+      // 백엔드 콜백에서 이 딥링크로 리다이렉트해야 함
       const deepLinkScheme = "intelfit://auth/kakao";
       console.log("🔵 [카카오 로그인] 딥링크 스킴:", deepLinkScheme);
 
-      let result;
-      
-      // 안드로이드에서는 openBrowserAsync 사용 (앱 내부 브라우저)
-      if (Platform.OS === "android") {
+      // iOS와 안드로이드 플랫폼별 처리
+      if (Platform.OS === "ios") {
+        // iOS는 openAuthSessionAsync 사용 (결과를 직접 받음)
+        let result;
         try {
-          console.log("🔵 [카카오 로그인] 안드로이드 - openBrowserAsync 사용 (앱 내부 브라우저)");
-          await WebBrowser.openBrowserAsync(loginUrl, {
-            enableBarCollapsing: false,
-            showInRecents: false,
-            // 안드로이드에서 앱 내부 브라우저 사용
-            toolbarColor: "#000000",
-            controlsColor: "#ffffff",
-          });
-          // openBrowserAsync는 딥링크를 자동으로 처리하지 않으므로
-          // Linking 이벤트 리스너가 처리하도록 함
-          setLoading(false);
-          return;
+          console.log("🔵 [카카오 로그인] iOS - openAuthSessionAsync 사용");
+          result = await WebBrowser.openAuthSessionAsync(
+            loginUrl,
+            deepLinkScheme,
+            {
+              preferEphemeralSession: false,
+            }
+          );
+          console.log("🔵 [카카오 로그인] openAuthSessionAsync 결과:", result);
         } catch (browserError: any) {
-          console.error("❌ [카카오 로그인] openBrowserAsync 에러:", browserError);
+          console.error("❌ [카카오 로그인] WebBrowser 에러:", browserError);
           Alert.alert("오류", "카카오 로그인 페이지를 열 수 없습니다.");
           setLoading(false);
           return;
         }
-      }
 
-      // iOS는 openAuthSessionAsync 사용
-      try {
-        result = await WebBrowser.openAuthSessionAsync(
-          loginUrl,
-          deepLinkScheme,
-          {
-            preferEphemeralSession: false,
-          }
-        );
-      } catch (browserError: any) {
-        console.error("❌ [카카오 로그인] WebBrowser 에러:", browserError);
-        Alert.alert("오류", "카카오 로그인 페이지를 열 수 없습니다.");
-        setLoading(false);
-        return;
-      }
+        // iOS는 result를 직접 처리
+        if (result) {
+          console.log("🔵 [카카오 로그인] 결과:", result);
 
-      // iOS와 안드로이드 모두 result 처리
-      if (result) {
-        console.log("🔵 [카카오 로그인] 결과:", result);
-
-        // openAuthSessionAsync가 성공적으로 딥링크를 받은 경우
-        if (result.type === "success" && result.url) {
-        console.log("🔵 [카카오 로그인] 딥링크 URL 받음:", result.url);
-
-        // 기존 Linking 리스너가 처리하도록 이벤트 트리거
-        // 또는 직접 파싱해서 처리
-        const parsed = Linking.parse(result.url);
-        const code = parsed.queryParams?.code as string | undefined;
-        const accessToken = parsed.queryParams?.accessToken as
-          | string
-          | undefined;
-        const refreshToken = parsed.queryParams?.refreshToken as
-          | string
-          | undefined;
-
-        // 백엔드가 이미 처리해서 토큰을 딥링크에 포함한 경우
-        if (accessToken) {
-          console.log("✅ [카카오 로그인] 토큰이 딥링크에 포함됨");
-          try {
-            setLoading(true);
-
-            // 토큰 저장
-            await AsyncStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-            if (refreshToken) {
-              await AsyncStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-            }
-
-            // userId가 있으면 저장
-            const userId = parsed.queryParams?.userId as string | undefined;
-            if (userId) {
-              await AsyncStorage.setItem("userId", userId);
-            }
-
-            // membershipType 저장 (기본값 FREE)
-            const membershipType =
-              (parsed.queryParams?.membershipType as string | undefined) ||
-              "FREE";
-            await AsyncStorage.setItem("membershipType", membershipType);
-
-            // 온보딩 여부 확인 (isOnboarded 우선 확인)
-            const isOnboarded = parsed.queryParams?.isOnboarded;
-            const onboarded = parsed.queryParams?.onboarded;
-            const shouldOnboard =
-              isOnboarded === "false" || onboarded === "false";
-
-            // 신규 유저 확인 (온보딩이 완료된 경우에만)
-            const newUser = parsed.queryParams?.newUser;
-            const isNewUser = newUser === "true";
-
-            console.log("✅ [카카오 로그인] 토큰 저장 완료");
-            if (shouldOnboard || isNewUser) {
-              navigation.replace("KakaoOnboarding");
-            } else {
-              navigation.replace("Main");
-            }
-          } catch (error: any) {
-            console.error("❌ [카카오 로그인] 토큰 저장 실패:", error);
-            Alert.alert(
-              "로그인 실패",
-              error.message || "토큰 저장 중 오류가 발생했습니다."
-            );
-          } finally {
+          if (result.type === "success" && result.url) {
+            console.log("🔵 [카카오 로그인] 딥링크 URL 받음:", result.url);
+            // iOS는 result.url을 직접 처리
+            await handleKakaoDeepLink(result.url);
+          } else if (result.type === "cancel") {
+            console.log("⚠️ [카카오 로그인] 사용자가 취소함");
+            Alert.alert("알림", "카카오 로그인이 취소되었습니다.");
+            setLoading(false);
+          } else if (result.type === "dismiss") {
+            console.log("⚠️ [카카오 로그인] 브라우저가 닫힘");
+            setLoading(false);
+          } else {
+            console.log("⚠️ [카카오 로그인] 예상치 못한 결과:", result);
+            Alert.alert("오류", "카카오 로그인에 실패했습니다. 다시 시도해주세요.");
             setLoading(false);
           }
-          return;
-        }
-
-        // 인증 코드가 있는 경우 (백엔드 API 호출 필요)
-        if (code) {
-          console.log(
-            "🔵 [카카오 로그인] 인증 코드 받음, 백엔드 API 호출 시작"
-          );
-          try {
-            setLoading(true);
-
-            // 👉 서버 API 호출
-            const res = await fetch(
-              "https://www.intelfits.com/api/auth/kakao/login",
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ code }),
-              }
-            );
-
-            console.log("🔵 [카카오 로그인] 백엔드 응답 상태:", res.status);
-            const data = await res.json();
-            console.log("🔵 [카카오 로그인] 백엔드 응답 데이터:", data);
-
-            if (!res.ok) {
-              throw new Error(data.message || "카카오 로그인에 실패했습니다");
-            }
-
-            // 토큰 저장
-            if (data.accessToken) {
-              await AsyncStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
-            }
-            if (data.refreshToken) {
-              await AsyncStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
-            }
-            if (data.userId) {
-              await AsyncStorage.setItem("userId", String(data.userId));
-            }
-            if (data.membershipType) {
-              await AsyncStorage.setItem("membershipType", data.membershipType);
-            } else {
-              await AsyncStorage.setItem("membershipType", "FREE");
-            }
-
-            // 신규 유저/기존 유저 확인 (newUser 값 우선 확인)
-            const isNewUser = data.newUser === true;
-            if (isNewUser) {
-              navigation.replace("KakaoOnboarding");
-            } else {
-              navigation.replace("Main");
-            }
-          } catch (error: any) {
-            console.error("카카오 로그인 처리 실패:", error);
-            const errorMessage =
-              error.message || "카카오 로그인에 실패했습니다";
-            if (typeof window !== "undefined" && (window as any).alert) {
-              (window as any).alert(`로그인 실패\n${errorMessage}`);
-            } else {
-              Alert.alert("로그인 실패", errorMessage);
-            }
-          } finally {
-            setLoading(false);
-          }
-        }
-        } else if (result.type === "cancel") {
-          console.log("⚠️ [카카오 로그인] 사용자가 취소함");
-          Alert.alert("알림", "카카오 로그인이 취소되었습니다.");
-          setLoading(false);
-        } else if (result.type === "dismiss") {
-          console.log("⚠️ [카카오 로그인] 브라우저가 닫힘");
-          // iOS에서 dismiss는 사용자가 브라우저를 닫은 경우
-          setLoading(false);
-        } else {
-          console.log("⚠️ [카카오 로그인] 예상치 못한 결과:", result);
-          Alert.alert("오류", "카카오 로그인에 실패했습니다. 다시 시도해주세요.");
-          setLoading(false);
         }
       } else {
-        // 안드로이드에서 result가 없는 경우 (Linking 이벤트 리스너가 처리)
-        console.log("🔵 [카카오 로그인] 안드로이드 - Linking 이벤트 리스너가 처리하도록 대기");
-        // setLoading(false는 하지 않음 - Linking 이벤트에서 처리될 때까지 대기
+        // 안드로이드는 WebView를 사용하여 앱 내부에서 브라우저 열기
+        try {
+          console.log("🔵 [카카오 로그인] Android - WebView 사용 (앱 내부 브라우저)");
+          console.log("🔵 [카카오 로그인] Login URL:", loginUrl);
+          
+          // WebView 모달 열기
+          setKakaoLoginUrl(loginUrl);
+          setShowKakaoWebView(true);
+          setLoading(false);
+        } catch (browserError: any) {
+          console.error("❌ [카카오 로그인] WebBrowser 에러:", browserError);
+          console.error("❌ [카카오 로그인] 에러 상세:", JSON.stringify(browserError, null, 2));
+          Alert.alert("오류", "카카오 로그인 페이지를 열 수 없습니다.");
+          setLoading(false);
+          return;
+        }
       }
     } catch (error: any) {
       console.error("❌ [카카오 로그인] 에러:", error);
       const errorMessage =
         error.message || "카카오 로그인 페이지를 열 수 없습니다.";
       Alert.alert("오류", errorMessage);
-    } finally {
       setLoading(false);
     }
+    // 안드로이드는 Linking 이벤트 리스너가 처리하므로 finally에서 setLoading(false)를 호출하지 않음
+    // iOS는 위의 각 분기에서 이미 setLoading(false)를 호출함
   };
 
   return (
@@ -730,6 +633,90 @@ const LoginScreen = ({ navigation }: any) => {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* 안드로이드용 카카오 로그인 WebView 모달 */}
+      {Platform.OS === "android" && (
+        <Modal
+          visible={showKakaoWebView}
+          animationType="slide"
+          onRequestClose={() => {
+            setShowKakaoWebView(false);
+            setLoading(false);
+          }}
+        >
+          <SafeAreaView style={styles.webViewContainer}>
+            <View style={styles.webViewHeader}>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowKakaoWebView(false);
+                  setLoading(false);
+                }}
+                style={styles.webViewCloseBtn}
+              >
+                <Text style={styles.webViewCloseText}>✕</Text>
+              </TouchableOpacity>
+              <Text style={styles.webViewTitle}>카카오 로그인</Text>
+              <View style={{ width: 40 }} />
+            </View>
+
+            <WebView
+              source={{ uri: kakaoLoginUrl }}
+              onNavigationStateChange={(navState) => {
+                console.log("🌐 [카카오 로그인] WebView URL:", navState.url);
+                
+                // 딥링크 감지
+                if (
+                  navState.url.includes("intelfit://auth/kakao") ||
+                  navState.url.includes("kakaob46c5ece88946636902899138451ac5e://oauth")
+                ) {
+                  console.log("🔗 [카카오 로그인] 딥링크 감지, WebView 닫기");
+                  setShowKakaoWebView(false);
+                  // Linking 이벤트 리스너가 처리하도록 딥링크 트리거
+                  handleKakaoDeepLink(navState.url);
+                }
+              }}
+              onShouldStartLoadWithRequest={(request) => {
+                console.log("🔍 [카카오 로그인] 로드 요청:", request.url);
+                
+                // 딥링크 감지
+                if (
+                  request.url.includes("intelfit://auth/kakao") ||
+                  request.url.includes("kakaob46c5ece88946636902899138451ac5e://oauth")
+                ) {
+                  console.log("🔗 [카카오 로그인] 딥링크 감지, WebView 닫기");
+                  setShowKakaoWebView(false);
+                  // Linking 이벤트 리스너가 처리하도록 딥링크 트리거
+                  handleKakaoDeepLink(request.url);
+                  return false; // 페이지 로드 차단
+                }
+                return true;
+              }}
+              onError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.error("❌ [카카오 로그인] WebView 에러:", nativeEvent);
+                Alert.alert("오류", "카카오 로그인 페이지를 불러올 수 없습니다.");
+                setShowKakaoWebView(false);
+                setLoading(false);
+              }}
+              onHttpError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.error("❌ [카카오 로그인] HTTP 에러:", nativeEvent.statusCode, nativeEvent.url);
+              }}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              startInLoadingState={true}
+              scalesPageToFit={true}
+              style={{ flex: 1 }}
+              renderLoading={() => (
+                <View style={styles.webViewLoading}>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                  <Text style={styles.webViewLoadingText}>로딩 중...</Text>
+                </View>
+              )}
+            />
+          </SafeAreaView>
+        </Modal>
+      )}
     </KeyboardAvoidingView>
   );
 };
@@ -831,6 +818,51 @@ const styles = StyleSheet.create({
     color: "#47292b",
     fontSize: 16,
     fontWeight: "400",
+  },
+  webViewContainer: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+  webViewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "#252525",
+    borderBottomWidth: 1,
+    borderBottomColor: "#333",
+  },
+  webViewCloseBtn: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  webViewCloseText: {
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: "300",
+  },
+  webViewTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  webViewLoading: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#252525",
+  },
+  webViewLoadingText: {
+    color: "#fff",
+    fontSize: 16,
+    marginTop: 12,
   },
 });
 
