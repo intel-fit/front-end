@@ -2941,7 +2941,7 @@ const ExerciseScreen = ({ navigation }: any) => {
     })();
   }, [allActivities, userIdLoaded, getStorageKey]);
 
-  // AI 추천 운동 수신
+  // AI 추천 운동 수신 및 자동 시작 처리
   useFocusEffect(
     React.useCallback(() => {
       if (!initialLoadComplete) return;
@@ -2950,6 +2950,24 @@ const ExerciseScreen = ({ navigation }: any) => {
       const recommendedExercises =
         rawParams.recommendedExercises ||
         rawParams.params?.recommendedExercises;
+      const autoStart =
+        rawParams.autoStart ||
+        rawParams.params?.autoStart; // 홈에서 운동 시작하기 버튼 클릭 시 전달되는 플래그
+
+      // 홈에서 운동 시작하기 버튼 클릭 시 자동으로 시작
+      if (autoStart) {
+        console.log("🏋️ [홈] 자동 운동 시작 요청");
+        // 파라미터 초기화 (재실행 방지)
+        navigation.setParams({
+          autoStart: undefined,
+          params: undefined,
+        });
+        // 약간의 지연 후 시작 (화면 렌더링 완료 대기)
+        setTimeout(() => {
+          handleStartWorkoutSequence();
+        }, 300);
+        return;
+      }
 
       if (
         recommendedExercises &&
@@ -3017,7 +3035,7 @@ const ExerciseScreen = ({ navigation }: any) => {
           );
         }, 500);
       }
-    }, [initialLoadComplete, route.params, selectedDate])
+    }, [initialLoadComplete, route.params, selectedDate, handleStartWorkoutSequence])
   );
   // (임시 API 테스트 버튼 제거)
 

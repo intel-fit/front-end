@@ -737,6 +737,17 @@ const HomeScreen = ({ navigation }: any) => {
     }
   };
 
+  // 홈에서 운동 시작하기 핸들러 (운동 기록하기의 시작 버튼과 동일한 동작)
+  const handleStartWorkoutFromHome = () => {
+    // Stats 화면으로 이동하면서 autoStart 파라미터 전달
+    navigation.navigate(ROUTES.STATS, {
+      screen: "Exercise",
+      params: {
+        autoStart: true, // 자동 시작 플래그
+      },
+    });
+  };
+
   // 화면 포커스 시 데이터 로드
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
@@ -1037,10 +1048,29 @@ const HomeScreen = ({ navigation }: any) => {
           </View>
         </View>
 
-        {/* 운동 루틴 카드 */}
-        {tempExerciseSummary && (
-          <View style={styles.routineCard}>
-            <Text style={styles.routineTitle}>{tempExerciseSummary.title || `${tempExerciseSummary.focus} day`}</Text>
+        {/* 운동 루틴 카드 - 추천 운동이 있고 focus가 undefined가 아닐 때만 표시 */}
+        {tempExerciseSummary && 
+         tempExerciseSummary.focus && 
+         tempExerciseSummary.focus !== 'undefined' &&
+         (() => {
+          // focus 값을 한글로 변환
+          const getFocusKorean = (focus: string): string => {
+            const focusMap: Record<string, string> = {
+              'Upper': '상체',
+              'Lower': '하체',
+              'Full': '전신',
+              'Core': '코어',
+              'Cardio': '유산소',
+            };
+            return focusMap[focus] || focus;
+          };
+
+          const focusKorean = getFocusKorean(tempExerciseSummary.focus);
+          const displayTitle = `오늘의 운동 : ${focusKorean}`;
+
+          return (
+            <View style={styles.routineCard}>
+              <Text style={styles.routineTitle}>{displayTitle}</Text>
             <View style={styles.routineStats}>
               <View style={styles.routineStatItem}>
                 <Ionicons name="barbell" size={40} color="#ffffff" />
@@ -1061,44 +1091,47 @@ const HomeScreen = ({ navigation }: any) => {
             </View>
             <TouchableOpacity 
               style={styles.routineButton}
-              onPress={handleRoutineRecommendNavigation}
+              onPress={handleStartWorkoutFromHome}
             >
               <Text style={styles.routineButtonText}>오늘 운동 시작하기</Text>
             </TouchableOpacity>
           </View>
-        )}
+          );
+        })()}
 
-        {/* 운동 통계 카드 */}
-        <View style={styles.exerciseStatsCard}>
-          <View style={styles.exerciseStatsContent}>
-            <View style={styles.exerciseStatColumn}>
-              <Text style={styles.exerciseStatLabel}>운동 시간</Text>
-              <Text style={styles.exerciseStatValue}>
-                {formatWorkoutTime(todayWorkoutSeconds)}
-              </Text>
-            </View>
-            <View style={styles.exerciseStatDivider} />
-            <View style={styles.exerciseStatColumn}>
-              <Text style={styles.exerciseStatLabel}>소모 칼로리</Text>
-              <View style={styles.exerciseStatValueRow}>
+        {/* 운동 통계 카드 - 운동 시간이 0이 아닐 때만 표시 */}
+        {todayWorkoutSeconds > 0 && (
+          <View style={styles.exerciseStatsCard}>
+            <View style={styles.exerciseStatsContent}>
+              <View style={styles.exerciseStatColumn}>
+                <Text style={styles.exerciseStatLabel}>운동 시간</Text>
                 <Text style={styles.exerciseStatValue}>
-                  {todayCalories.toLocaleString()}
+                  {formatWorkoutTime(todayWorkoutSeconds)}
                 </Text>
-                <Text style={styles.exerciseStatUnit}>kcal</Text>
               </View>
-            </View>
-            <View style={styles.exerciseStatDivider} />
-            <View style={styles.exerciseStatColumn}>
-              <Text style={styles.exerciseStatLabel}>완료 운동</Text>
-              <View style={styles.exerciseStatValueRow}>
-                <Text style={styles.exerciseStatValue}>
-                  {todayExerciseCount}
-                </Text>
-                <Text style={styles.exerciseStatUnit}>개</Text>
+              <View style={styles.exerciseStatDivider} />
+              <View style={styles.exerciseStatColumn}>
+                <Text style={styles.exerciseStatLabel}>소모 칼로리</Text>
+                <View style={styles.exerciseStatValueRow}>
+                  <Text style={styles.exerciseStatValue}>
+                    {todayCalories.toLocaleString()}
+                  </Text>
+                  <Text style={styles.exerciseStatUnit}>kcal</Text>
+                </View>
+              </View>
+              <View style={styles.exerciseStatDivider} />
+              <View style={styles.exerciseStatColumn}>
+                <Text style={styles.exerciseStatLabel}>완료 운동</Text>
+                <View style={styles.exerciseStatValueRow}>
+                  <Text style={styles.exerciseStatValue}>
+                    {todayExerciseCount}
+                  </Text>
+                  <Text style={styles.exerciseStatUnit}>개</Text>
+                </View>
               </View>
             </View>
           </View>
-        </View>
+        )}
 
         {/* 체중/골격근량/체지방량 카드 - 인바디 기록이 있을 때만 표시 */}
         {(() => {
