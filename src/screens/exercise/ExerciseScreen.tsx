@@ -218,14 +218,36 @@ const ExerciseScreen = ({ navigation }: any) => {
     const selectedDateStr = `${selectedDate.getFullYear()}-${String(
       selectedDate.getMonth() + 1
     ).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+
+    // 🔍 디버깅 로그
+    console.log("🔍 activities 필터링:", {
+      selectedDateStr,
+      allActivitiesCount: allActivities.length,
+      // AI 추천 운동이 있는지 확인
+      aiActivities: allActivities.filter((a) => a.date === selectedDateStr),
+    });
+
     return allActivities.filter(
       (activity) => activity.date === selectedDateStr
     );
   }, [allActivities, selectedDate]);
-  const workoutActivities = React.useMemo(
-    () => activities.filter((activity) => !isStretchActivity(activity)),
-    [activities]
-  );
+  const workoutActivities = React.useMemo(() => {
+    const filtered = activities.filter(
+      (activity) => !isStretchActivity(activity)
+    );
+
+    // 🔍 디버깅 로그
+    console.log("🏋️ workoutActivities 필터링:", {
+      activitiesCount: activities.length,
+      workoutActivitiesCount: filtered.length,
+      // AI 추천 운동이 포함되는지 확인
+      aiWorkouts: filtered.filter((a) => a.saveTitle?.includes("AI")),
+      // 스트레칭으로 제외된 운동
+      stretchActivities: activities.filter((a) => isStretchActivity(a)),
+    });
+
+    return filtered;
+  }, [activities]);
 
   const [savedWorkouts, setSavedWorkouts] = useState<SavedWorkoutGroup[]>([]);
   const [savedWorkoutsLoading, setSavedWorkoutsLoading] = useState(false);
@@ -582,11 +604,30 @@ const ExerciseScreen = ({ navigation }: any) => {
 
   // 완료되지 않은 운동이 있는지 확인
   const hasIncompleteActivities = React.useMemo(() => {
-    return workoutActivities.some(
+    const result = workoutActivities.some(
       (activity) => !isActivityFullyCompleted(activity)
     );
-  }, [workoutActivities, isActivityFullyCompleted]);
 
+    // 🔍 디버깅: 각 운동의 완료 상태 확인
+    console.log("🎯 시작 버튼 조건:", {
+      hasIncomplete: result,
+      workoutActivitiesLength: workoutActivities.length,
+      // 각 운동별 상세 정보
+      details: workoutActivities.map((a) => ({
+        name: a.name,
+        isCompleted: a.isCompleted,
+        setsLength: a.sets?.length || 0,
+        setsDetail: a.sets?.map((s: any) => ({
+          isCompleted: s.isCompleted,
+          weight: s.weight,
+          reps: s.reps,
+        })),
+        fullyCompleted: isActivityFullyCompleted(a),
+      })),
+    });
+
+    return result;
+  }, [workoutActivities, isActivityFullyCompleted]);
   const goalSummaryText = React.useMemo(() => {
     if (!goalData) {
       return "목표치가 아직 설정되지 않았습니다";
@@ -2517,32 +2558,32 @@ const ExerciseScreen = ({ navigation }: any) => {
   };
 
   const handleStartWorkoutSequence = () => {
-    // 저장된 운동(saveTitle이 있는)은 제외하고 진행 가능한 운동만 필터링
+    console.log("🚀 handleStartWorkoutSequence 실행 시작!");
+    console.log("workoutActivities:", workoutActivities);
+
+    // ✅ 수정: 저장된 세션(완료된 운동)만 제외
     const availableActivities = workoutActivities.filter(
-      (activity) => !activity.saveTitle || activity.saveTitle.trim() === ""
+      (activity) => !isActivityFullyCompleted(activity)
     );
 
+    console.log("🏃 시작 가능한 운동:", availableActivities.length);
+
     if (availableActivities.length === 0) {
+      console.log("⚠️ 시작 가능한 운동이 없어서 운동 추가 모달 열기");
       handleWorkoutStartPress();
       return;
     }
 
-    // 운동 시작 시점의 누적 시간 기록 (현재 세션 시간 계산을 위해)
+    console.log("✅ 운동 시작:", availableActivities[0].name);
+
+    // 운동 시작 시점의 누적 시간 기록
     setWorkoutStartTime(todayTotalWorkoutSeconds);
-    // 현재 운동의 시작 시간도 기록 (각 운동별 시간 추적)
     setCurrentExerciseStartTime(todayTotalWorkoutSeconds);
-    // 실제 타임스탬프 기록 (실제 운동 시간 계산용)
     setCurrentExerciseStartTimestamp(Date.now());
 
-    // 아직 완료하지 않은 첫 번째 운동을 찾음
-    const nextActivity =
-      availableActivities.find(
-        (activity) => !isActivityFullyCompleted(activity)
-      ) || availableActivities[0];
-
-    const nextIndex = availableActivities.findIndex(
-      (activity) => activity.id === nextActivity.id
-    );
+    // 첫 번째 미완료 운동 선택
+    const nextActivity = availableActivities[0];
+    const nextIndex = 0;
 
     // 이미지 찾기
     const resolvedImageUrl =
@@ -2554,20 +2595,17 @@ const ExerciseScreen = ({ navigation }: any) => {
         ? exerciseImagesByName[nextActivity.name.toLowerCase()]
         : null);
 
-    // ✅이미지 포함된 객체 생성
     const activityWithImage = {
       ...nextActivity,
       imageUrl: resolvedImageUrl || undefined,
     };
 
-    // 저장된 운동을 제외한 운동 목록만 시퀀스에 설정
     setExerciseSequence(availableActivities);
     setExerciseSequenceIndex(nextIndex);
     setModalMode("edit");
     setSelectedExercise(activityWithImage);
     setIsModalOpen(true);
   };
-
   const handleSequenceNavigate = (direction: "prev" | "next") => {
     if (!exerciseSequence.length) return;
     const delta = direction === "next" ? 1 : -1;
@@ -2867,14 +2905,12 @@ const ExerciseScreen = ({ navigation }: any) => {
   // AI 추천 운동 수신
   useFocusEffect(
     React.useCallback(() => {
-      // 1. 로딩 대기
       if (!initialLoadComplete) return;
 
-      // 2. 파라미터 구조 유연하게 확인 (route.params 또는 route.params.params)
       const rawParams = (route.params as any) || {};
       const recommendedExercises =
         rawParams.recommendedExercises ||
-        rawParams.params?.recommendedExercises; // 👈 여기가 핵심! 한 단계 더 깊이 확인
+        rawParams.params?.recommendedExercises;
 
       if (
         recommendedExercises &&
@@ -2885,7 +2921,13 @@ const ExerciseScreen = ({ navigation }: any) => {
           `🚀 [AI] 추천 운동 ${recommendedExercises.length}개 수신 성공!`
         );
 
-        // 3. 날짜 동기화
+        // 🔍 디버깅: AI 추천 운동의 구조 확인
+        console.log(
+          "🔍 AI 추천 운동 첫 번째:",
+          JSON.stringify(recommendedExercises[0], null, 2)
+        );
+
+        // 날짜 동기화
         const routineDateStr = recommendedExercises[0].date;
         if (routineDateStr) {
           const [year, month, day] = routineDateStr.split("-").map(Number);
@@ -2900,29 +2942,34 @@ const ExerciseScreen = ({ navigation }: any) => {
           }
         }
 
-        // 4. 데이터 추가
-        setAllActivities((prev) => {
-          const existingGroupKey = recommendedExercises[0]?.groupKey;
-          const alreadyExists = prev.some(
-            (activity) => activity.groupKey === existingGroupKey
-          );
+        // ⏱️ 약간의 딜레이 후 운동 추가 (State 업데이트 타이밍 보장)
+        setTimeout(() => {
+          setAllActivities((prev) => {
+            const existingGroupKey = recommendedExercises[0]?.groupKey;
+            const alreadyExists = prev.some(
+              (activity) => activity.groupKey === existingGroupKey
+            );
 
-          if (alreadyExists) {
-            console.log("⚠️ [AI] 이미 추가된 루틴입니다.");
-            return prev;
-          }
+            if (alreadyExists) {
+              console.log("⚠️ [AI] 이미 추가된 루틴입니다.");
+              return prev;
+            }
 
-          console.log("✅ [AI] 리스트에 운동 추가 완료!");
-          return [...prev, ...recommendedExercises];
-        });
+            console.log("✅ [AI] 리스트에 운동 추가 완료!");
+            console.log(
+              "🔍 추가 후 전체 개수:",
+              prev.length + recommendedExercises.length
+            );
 
-        // 5. 파라미터 초기화 (재실행 방지)
+            return [...prev, ...recommendedExercises];
+          });
+        }, 100); // 👈 100ms 딜레이 추가
+
         navigation.setParams({
           recommendedExercises: undefined,
-          params: undefined, // 중첩된 params도 초기화
+          params: undefined,
         });
 
-        // 6. 알림
         setTimeout(() => {
           Alert.alert(
             "루틴 추가 완료",
@@ -3883,20 +3930,55 @@ const ExerciseScreen = ({ navigation }: any) => {
         </TouchableOpacity>
 
         {/* 운동 기록 섹션 */}
+        {/* 운동 기록 섹션 */}
         <View style={styles.logSection}>
           <View style={styles.sectionTitleRow}>
             <Text style={styles.sectionTitle}>운동 기록하기</Text>
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
             >
-              {hasIncompleteActivities && workoutActivities.length > 0 ? (
-                <TouchableOpacity
-                  style={styles.startWorkoutButton}
-                  onPress={handleStartWorkoutSequence}
-                >
-                  <Text style={styles.startWorkoutButtonText}>시작</Text>
-                </TouchableOpacity>
-              ) : null}
+              {/* 🔍 디버깅: 조건 확인 */}
+              {(() => {
+                const shouldShow =
+                  hasIncompleteActivities && workoutActivities.length > 0;
+                console.log("🚨 시작 버튼 렌더링 체크:", {
+                  hasIncompleteActivities,
+                  workoutActivitiesLength: workoutActivities.length,
+                  shouldShow,
+                });
+
+                if (shouldShow) {
+                  console.log("✅ 시작 버튼 렌더링됨!");
+                } else {
+                  console.log("❌ 시작 버튼 조건 불만족");
+                }
+
+                return shouldShow ? (
+                  <TouchableOpacity
+                    style={[
+                      styles.startWorkoutButton,
+                      { backgroundColor: "#4a9eff", padding: 15 }, // 눈에 잘 보이게
+                    ]}
+                    onPress={() => {
+                      console.log("🎯🎯🎯 시작 버튼 클릭됨!");
+                      console.log(
+                        "workoutActivities:",
+                        workoutActivities.length
+                      );
+                      handleStartWorkoutSequence();
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.startWorkoutButtonText,
+                        { color: "white", fontSize: 16 },
+                      ]}
+                    >
+                      시작
+                    </Text>
+                  </TouchableOpacity>
+                ) : null;
+              })()}
             </View>
           </View>
 
@@ -3950,7 +4032,7 @@ const ExerciseScreen = ({ navigation }: any) => {
                     <View
                       style={[
                         styles.logGroupHeader,
-                        isAIRecommended && styles.logGroupHeaderAI, // ✅ AI 추천용 스타일
+                        isAIRecommended && styles.logGroupHeaderAI,
                       ]}
                     >
                       <Text style={styles.logGroupTitle}>

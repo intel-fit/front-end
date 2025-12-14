@@ -425,7 +425,6 @@ interface FoodItem {
 const TempMealRecommendScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
 
-  // 🔹 [변경] 하드코딩 제거 후 state로 관리
   const [userId, setUserId] = useState<string>("");
 
   const [screen, setScreen] = useState<

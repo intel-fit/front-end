@@ -23,8 +23,8 @@ const { width } = Dimensions.get("window");
 interface DislikedFoodsModalProps {
   visible: boolean;
   onClose: () => void;
-  userId: string; // [필수] API 호출을 위한 유저 ID (예: "ehdrb")
-  onUpdate?: () => void; // 데이터 변경 시 부모에게 알림 (선택 사항)
+  userId: string;
+  onUpdate?: () => void;
 }
 
 const DislikedFoodsModal = ({
@@ -33,28 +33,27 @@ const DislikedFoodsModal = ({
   userId,
   onUpdate,
 }: DislikedFoodsModalProps) => {
-  // 데이터 구조 변경: 단순 string[] -> { id, food_name, reason }[]
   const [dislikedFoods, setDislikedFoods] = useState<ExclusionResponse[]>([]);
   const [inputValue, setInputValue] = useState("");
-
-  // 로딩 상태 분리 (목록 로드 vs 작업 처리)
   const [initialLoading, setInitialLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
 
-  // 모달 열릴 때 목록 새로고침
   useEffect(() => {
     if (visible && userId) {
       loadDislikedFoods();
     }
   }, [visible, userId]);
 
+  /**
+   * 비선호 식단 목록 불러오기
+   */
   const loadDislikedFoods = async () => {
     try {
       setInitialLoading(true);
       const foods = await userPreferencesAPI.getExclusions(userId);
       setDislikedFoods(foods);
     } catch (error: any) {
-      console.error("Failed to load disliked foods", error);
+      console.error("비선호 식단 조회 실패:", error);
       Alert.alert("오류", "금지 식단을 불러오는데 실패했습니다.");
     } finally {
       setInitialLoading(false);
@@ -62,7 +61,9 @@ const DislikedFoodsModal = ({
   };
 
   /**
-   * 음식 추가 핸들러 (API 즉시 호출)
+   * 음식 추가 핸들러
+   * - 쉼표로 구분된 여러 음식을 한 번에 입력 가능
+   * - 예: "굴비, 다랑어" 또는 "오이"
    */
   const handleAdd = async () => {
     const trimmed = inputValue.trim();
@@ -72,12 +73,32 @@ const DislikedFoodsModal = ({
       return;
     }
 
-    // 중복 검사 (이름 기준)
-    const isDuplicate = dislikedFoods.some(
-      (item) => item.food_name === trimmed
+    // 쉼표로 구분하여 배열로 변환 (공백 제거)
+    const foodsToAdd = trimmed
+      .split(",")
+      .map((food) => food.trim())
+      .filter((food) => food.length > 0);
+
+    if (foodsToAdd.length === 0) {
+      Alert.alert("알림", "유효한 음식 이름을 입력해주세요.");
+      return;
+    }
+
+    // 중복 검사 (기존 목록의 food_name과 비교)
+    const duplicates = foodsToAdd.filter((newFood) =>
+      dislikedFoods.some((item) => {
+        // item.food_name이 "굴비, 다랑어" 형태일 수 있으므로
+        // 쉼표로 분리해서 각각 비교
+        const existingFoods = item.food_name.split(",").map((f) => f.trim());
+        return existingFoods.includes(newFood);
+      })
     );
-    if (isDuplicate) {
-      Alert.alert("알림", "이미 목록에 있는 음식입니다.");
+
+    if (duplicates.length > 0) {
+      Alert.alert(
+        "알림",
+        `이미 목록에 있는 음식입니다: ${duplicates.join(", ")}`
+      );
       return;
     }
 
@@ -85,16 +106,22 @@ const DislikedFoodsModal = ({
       setProcessing(true);
       Keyboard.dismiss();
 
-      // [API] 추가 요청
-      const newFood = await userPreferencesAPI.addExclusions(userId, [trimmed]);
+      // API 호출: 배열 전달
+      const newFood = await userPreferencesAPI.addExclusions(
+        userId,
+        foodsToAdd
+      );
 
-      // 목록 갱신
+      // 응답: { id: 1, food_name: "굴비, 다랑어", reason: "taste" }
+      // 목록에 추가
       setDislikedFoods((prev) => [...prev, newFood]);
       setInputValue("");
 
+      Alert.alert("완료", `"${newFood.food_name}"이(가) 추가되었습니다.`);
+
       if (onUpdate) onUpdate();
     } catch (error: any) {
-      console.error("Add failed", error);
+      console.error("음식 추가 실패:", error);
       Alert.alert("오류", "음식을 추가하지 못했습니다.");
     } finally {
       setProcessing(false);
@@ -102,9 +129,9 @@ const DislikedFoodsModal = ({
   };
 
   /**
-   * 음식 삭제 핸들러 (API 즉시 호출)
-   * @param id 삭제할 항목의 고유 ID
-   * @param name 표시용 음식 이름
+   * 음식 삭제 핸들러
+   * @param id exclusion_id (비선호 식단 저장한 식단의 id)
+   * @param name 표시용 음식 이름 (food_name)
    */
   const handleRemove = (id: number, name: string) => {
     Alert.alert("삭제", `"${name}"을(를) 제외 목록에서 삭제하시겠습니까?`, [
@@ -116,15 +143,17 @@ const DislikedFoodsModal = ({
           try {
             setProcessing(true);
 
-            // [API] 삭제 요청 (ID 사용)
+            // API 호출: exclusion_id로 삭제
             await userPreferencesAPI.deleteExclusion(id);
 
             // 로컬 상태 업데이트
             setDislikedFoods((prev) => prev.filter((item) => item.id !== id));
 
+            Alert.alert("완료", "삭제되었습니다.");
+
             if (onUpdate) onUpdate();
           } catch (error: any) {
-            console.error("Delete failed", error);
+            console.error("삭제 실패:", error);
             Alert.alert("오류", "삭제에 실패했습니다.");
           } finally {
             setProcessing(false);
@@ -161,7 +190,9 @@ const DislikedFoodsModal = ({
           <View style={styles.infoBox}>
             <Icon name="information-circle" size={20} color="#4a90e2" />
             <Text style={styles.infoText}>
-              추가된 음식은 즉시 서버에 저장되며 식단 추천에서 제외됩니다.
+              쉼표(,)로 구분하여 여러 음식을 한 번에 추가할 수 있습니다.
+              {"\n"}
+              예: 굴비, 다랑어, 오이
             </Text>
           </View>
 
@@ -182,7 +213,7 @@ const DislikedFoodsModal = ({
                   />
                   <TextInput
                     style={styles.input}
-                    placeholder="예: 굴비, 오이"
+                    placeholder="예: 굴비, 다랑어, 오이"
                     placeholderTextColor="#666666"
                     value={inputValue}
                     onChangeText={setInputValue}
@@ -238,6 +269,9 @@ const DislikedFoodsModal = ({
                       <Text style={styles.emptyText}>
                         아직 추가된 금지 식단이 없습니다.
                       </Text>
+                      <Text style={styles.emptySubText}>
+                        위 입력창에서 원하는 음식을 추가해보세요.
+                      </Text>
                     </View>
                   ) : (
                     <View style={styles.foodList}>
@@ -254,7 +288,6 @@ const DislikedFoodsModal = ({
                               <View style={styles.foodItemIcon}>
                                 <Icon name="ban" size={18} color="#ef4444" />
                               </View>
-                              {/* item.food_name 사용 */}
                               <Text style={styles.foodName}>
                                 {item.food_name}
                               </Text>
@@ -278,14 +311,13 @@ const DislikedFoodsModal = ({
                       ))}
                     </View>
                   )}
-                  {/* 하단 여백 */}
                   <View style={{ height: 100 }} />
                 </ScrollView>
               )}
             </View>
           </View>
 
-          {/* 닫기 버튼 (이제 '저장'이 아니라 단순 '닫기' 역할) */}
+          {/* 닫기 버튼 */}
           <View style={styles.footer}>
             <TouchableOpacity style={styles.saveBtn} onPress={onClose}>
               <LinearGradient
@@ -332,7 +364,7 @@ const styles = StyleSheet.create({
   },
   infoBox: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     backgroundColor: "#1e3a5f",
     padding: 16,
     marginHorizontal: 20,
@@ -342,9 +374,9 @@ const styles = StyleSheet.create({
   },
   infoText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 13,
     color: "#ffffff",
-    lineHeight: 20,
+    lineHeight: 18,
   },
   content: {
     flex: 1,
@@ -414,6 +446,11 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 16,
     marginBottom: 8,
+  },
+  emptySubText: {
+    fontSize: 14,
+    color: "#666666",
+    textAlign: "center",
   },
   listContent: {
     paddingBottom: 20,

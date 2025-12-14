@@ -17,7 +17,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
-import { recommendedMealAPI, userPreferencesAPI } from "../../services";
+// 🔹 authAPI import 추가
+import {
+  recommendedMealAPI,
+  userPreferencesAPI,
+  authAPI,
+} from "../../services";
 import { LinearGradient } from "expo-linear-gradient";
 import DislikedFoodsModal from "../../components/modals/DislikedFoodsModal";
 import type { ExclusionResponse } from "../../types";
@@ -269,7 +274,6 @@ const MealsSelectionModal = ({
               colors={["rgba(26,26,46,0.98)", "rgba(22,33,62,0.98)"]}
               style={mealsModalStyles.content}
             >
-              {/* 헤더 */}
               <View style={mealsModalStyles.header}>
                 <Icon name="restaurant" size={28} color="#e3ff7c" />
                 <Text style={mealsModalStyles.title}>끼니 수 선택</Text>
@@ -279,7 +283,6 @@ const MealsSelectionModal = ({
                 하루에 몇 끼를 드시나요?
               </Text>
 
-              {/* 끼니 선택 버튼들 */}
               <View style={mealsModalStyles.optionsContainer}>
                 {[1, 2, 3].map((num) => (
                   <TouchableOpacity
@@ -345,7 +348,6 @@ const MealsSelectionModal = ({
                 ))}
               </View>
 
-              {/* 닫기 버튼 */}
               <TouchableOpacity
                 style={mealsModalStyles.closeButton}
                 onPress={onClose}
@@ -461,8 +463,6 @@ const mealsModalStyles = StyleSheet.create({
 });
 
 const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
-  // console.log(`🔄 ${dayIndex}일차 변환 시작`); // 로그 줄임
-
   let breakfast, lunch, dinner;
 
   if (tempDay.meals && tempDay.meals.length > 0) {
@@ -471,7 +471,6 @@ const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
     dinner = tempDay.meals.find((m: any) => m.mealType === "DINNER");
 
     if (!breakfast && !lunch && !dinner) {
-      // console.log(`⚠️ ${dayIndex}일차는 SNACK만 있음 - 변환 시작`);
       const snacks = tempDay.meals.filter((m: any) => m.mealType === "SNACK");
 
       if (snacks.length >= 1) {
@@ -588,7 +587,7 @@ const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
 
 const MealRecommendScreen = () => {
   const navigation = useNavigation();
-  const userId = "ehdrb";
+  const [userId, setUserId] = useState<string>("");
 
   const [screen, setScreen] = useState<"welcome" | "meals">("welcome");
   const [showDislikedModal, setShowDislikedModal] = useState(false);
@@ -596,7 +595,6 @@ const MealRecommendScreen = () => {
   const [weeklyMeals, setWeeklyMeals] = useState<any[]>([]);
   const [currentDay, setCurrentDay] = useState(0);
 
-  // 🔹 [수정] string[] -> ExclusionResponse[] (객체 배열)
   const [excludedIngredients, setExcludedIngredients] = useState<
     ExclusionResponse[]
   >([]);
@@ -605,7 +603,6 @@ const MealRecommendScreen = () => {
   const [savedMeals, setSavedMeals] = useState<any[]>([]);
   const [currentPlanId, setCurrentPlanId] = useState<number | null>(null);
 
-  // ✅ 끼니 수 관련 state
   const [mealsPerDay, setMealsPerDay] = useState(3);
   const [showMealsModal, setShowMealsModal] = useState(false);
 
@@ -619,10 +616,10 @@ const MealRecommendScreen = () => {
     }).start();
   }, [screen]);
 
-  // 🔹 [추가] 비선호 식단 목록 로드 함수
-  const loadExclusions = async () => {
+  // 🔹 비선호 식단 목록 로드 함수 - userId를 파라미터로 받음
+  const loadExclusions = async (currentUserId: string) => {
     try {
-      const data = await userPreferencesAPI.getExclusions(userId);
+      const data = await userPreferencesAPI.getExclusions(currentUserId);
       setExcludedIngredients(data);
       console.log("✅ 비선호 음식 로드 완료:", data.length, "개");
     } catch (error) {
@@ -630,21 +627,32 @@ const MealRecommendScreen = () => {
     }
   };
 
+  // 🔹 유저 데이터 로드 함수
+  const loadUserData = async () => {
+    try {
+      // 1. 프로필 조회하여 userId 획득
+      const profile = await authAPI.getProfile();
+      const currentUserId = profile.userId;
+      setUserId(currentUserId);
+      console.log("✅ 유저 ID 로드 완료:", currentUserId);
+
+      // 2. 획득한 userId로 비선호 식단 조회
+      await loadExclusions(currentUserId);
+
+      // 3. 저장된 식단 불러오기
+      await loadSavedMeals();
+    } catch (error) {
+      console.error("사용자 데이터 로드 실패:", error);
+    }
+  };
+
+  // 🔹 useEffect에서 loadUserData 호출
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        console.log("========== 초기 데이터 로드 ==========");
-
-        // 비선호 식단 불러오기
-        await loadExclusions();
-
-        // 저장된 식단 불러오기
-        await loadSavedMeals();
-      } catch (error) {
-        console.error("데이터 로드 실패:", error);
-      }
+    const init = async () => {
+      console.log("========== 초기 데이터 로드 ==========");
+      await loadUserData();
     };
-    loadData();
+    init();
   }, []);
 
   const loadSavedMeals = async () => {
@@ -968,15 +976,13 @@ const MealRecommendScreen = () => {
             onCancel={handleCancelLoading}
           />
 
-          {/* 🔹 [수정] 모달 연결: userId 및 onUpdate 전달 */}
           <DislikedFoodsModal
             visible={showDislikedModal}
             userId={userId}
             onClose={() => setShowDislikedModal(false)}
-            onUpdate={loadExclusions}
+            onUpdate={() => loadExclusions(userId)}
           />
 
-          {/* ✅ 끼니 선택 모달 */}
           <MealsSelectionModal
             visible={showMealsModal}
             currentMeals={mealsPerDay}
@@ -1021,7 +1027,6 @@ const MealRecommendScreen = () => {
             </Animated.View>
 
             <View style={styles.mainActions}>
-              {/* 1. 7일 추천 식단 받기 */}
               <TouchableOpacity
                 style={styles.primaryButton}
                 onPress={handleGetRecommendation}
@@ -1046,7 +1051,6 @@ const MealRecommendScreen = () => {
                 </LinearGradient>
               </TouchableOpacity>
 
-              {/* 2. 1일 추천 식단 받기 */}
               <TouchableOpacity
                 style={styles.primaryButton}
                 onPress={handleGetSingleDayRecommendation}
@@ -1071,7 +1075,6 @@ const MealRecommendScreen = () => {
                 </LinearGradient>
               </TouchableOpacity>
 
-              {/* 3. 금지 식재료 관리 */}
               <TouchableOpacity
                 style={styles.secondaryButton}
                 onPress={() => setShowDislikedModal(true)}
@@ -1095,7 +1098,6 @@ const MealRecommendScreen = () => {
                 </LinearGradient>
               </TouchableOpacity>
 
-              {/* ✅ 4. 끼니 수정하기 */}
               <TouchableOpacity
                 style={styles.secondaryButton}
                 onPress={() => setShowMealsModal(true)}
@@ -1118,7 +1120,6 @@ const MealRecommendScreen = () => {
               </TouchableOpacity>
             </View>
 
-            {/* 🔹 [수정] 제외된 식재료 미리보기 (객체 구조 반영) */}
             {excludedIngredients.length > 0 && (
               <View style={styles.excludedPreview}>
                 <View style={styles.glassCard}>
@@ -1133,7 +1134,6 @@ const MealRecommendScreen = () => {
                           ]}
                           style={styles.tagGradient}
                         >
-                          {/* item.food_name 사용 */}
                           <Text style={styles.tagText}>{item.food_name}</Text>
                         </LinearGradient>
                       </View>
@@ -1181,7 +1181,6 @@ const MealRecommendScreen = () => {
                           setScreen("meals");
                           setCurrentDay(0);
                         } else {
-                          // TODO: 서버 식단 상세 보기 구현 시 연결
                           navigation.navigate("MealRecommendHistory" as never);
                         }
                       }}
@@ -1422,7 +1421,7 @@ const MealRecommendScreen = () => {
                 </LinearGradient>
               </View>
 
-              {/* ✅ 아침 */}
+              {/* 아침 */}
               <View style={styles.mealCardContainer}>
                 <LinearGradient
                   colors={["rgba(255,255,255,0.08)", "rgba(255,255,255,0.04)"]}
@@ -1546,7 +1545,7 @@ const MealRecommendScreen = () => {
                 </LinearGradient>
               </View>
 
-              {/* ✅ 점심 */}
+              {/* 점심 */}
               <View style={styles.mealCardContainer}>
                 <LinearGradient
                   colors={["rgba(255,255,255,0.08)", "rgba(255,255,255,0.04)"]}
@@ -1670,7 +1669,7 @@ const MealRecommendScreen = () => {
                 </LinearGradient>
               </View>
 
-              {/* ✅ 저녁 */}
+              {/* 저녁 */}
               <View style={styles.mealCardContainer}>
                 <LinearGradient
                   colors={["rgba(255,255,255,0.08)", "rgba(255,255,255,0.04)"]}
