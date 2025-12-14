@@ -140,4 +140,58 @@ export const healthScoreAPI = {
       throw error;
     }
   },
+
+  // 일일 코멘트
+  getDailyComment: async (): Promise<string | null> => {
+    try {
+      const userId = await getUserId();
+      const response = await requestAI<{ comment: string }>(
+        `/score/comment/daily/${userId}`,
+        { method: "GET" }
+      );
+      return response?.comment || null;
+    } catch (error: any) {
+      if (error.status === 404) {
+        return null;
+      }
+      console.error("[HEALTH_SCORE] 일일 코멘트 로드 실패:", error.message);
+      return null;
+    }
+  },
+
+  // 주간 코멘트
+  getWeeklyComment: async (): Promise<string | null> => {
+    try {
+      const userId = await getUserId();
+      const response = await requestAI<{ comment: string }>(
+        `/score/comment/weekly/${userId}`,
+        { method: "GET" }
+      );
+      return response?.comment || null;
+    } catch (error: any) {
+      if (error.status === 404) {
+        return null;
+      }
+      console.error("[HEALTH_SCORE] 주간 코멘트 로드 실패:", error.message);
+      return null;
+    }
+  },
+
+  // 월간 코멘트
+  getMonthlyComment: async (): Promise<string | null> => {
+    try {
+      const userId = await getUserId();
+      const response = await requestAI<{ comment: string }>(
+        `/score/comment/monthly/${userId}`,
+        { method: "GET" }
+      );
+      return response?.comment || null;
+    } catch (error: any) {
+      if (error.status === 404) {
+        return null;
+      }
+      console.error("[HEALTH_SCORE] 월간 코멘트 로드 실패:", error.message);
+      return null;
+    }
+  },
 };

@@ -600,6 +600,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
   const hasNextSequence =
     hasSequenceControls && sequenceIndex! < sequenceLength - 1;
   const isLastSequence = hasSequenceControls && sequenceIndex === sequenceLength - 1;
+  const canNextExercise = hasNextSequence && allSetsCompleted;
   const canFinishWorkout = isLastSequence && allSetsCompleted;
 
   const isExerciseSelected = (exercise: any) => {
@@ -2053,6 +2054,16 @@ const getExerciseDisplayName = React.useCallback(
                 </View>
 
                 <View style={styles.setsContainer}>
+                  <View style={styles.addSetButtonWrapper}>
+                    <TouchableOpacity
+                      style={styles.addSetCircleButton}
+                      onPress={handleAddSet}
+                      activeOpacity={0.85}
+                    >
+                      <Icon name="add" size={20} color="#0c0c0c" />
+                    </TouchableOpacity>
+                  </View>
+
                   <View style={styles.setsList}>
                     {sets.map((set) => (
                       <ExerciseSetItem
@@ -2079,156 +2090,6 @@ const getExerciseDisplayName = React.useCallback(
                       />
                     ))}
                   </View>
-
-                  {allSetsCompleted && (() => {
-                    const currentExerciseName = getExerciseDisplayName(
-                      selectedExercise || exerciseData || { name: "" }
-                    );
-                    const currentFeedback = exerciseFeedbacks[currentExerciseName] || {
-                      intensity: null,
-                      feedback: null,
-                    };
-
-                    const handleIntensityClick = (value: "heavy" | "light") => {
-                      setExerciseFeedbacks((prev) => {
-                        const newFeedback = {
-                          ...prev[currentExerciseName],
-                          intensity:
-                            prev[currentExerciseName]?.intensity === value
-                              ? null
-                              : value,
-                          feedback: prev[currentExerciseName]?.feedback || null,
-                        };
-                        const updated = {
-                          ...prev,
-                          [currentExerciseName]: newFeedback,
-                        };
-                        // ExerciseScreen에 피드백 업데이트 전달
-                        if (onFeedbackUpdate) {
-                          onFeedbackUpdate(currentExerciseName, newFeedback);
-                        }
-                        return updated;
-                      });
-                    };
-
-                    const handleFeedbackClick = (value: "like" | "dislike") => {
-                      setExerciseFeedbacks((prev) => {
-                        const newFeedback = {
-                          ...prev[currentExerciseName],
-                          intensity: prev[currentExerciseName]?.intensity || null,
-                          feedback:
-                            prev[currentExerciseName]?.feedback === value
-                              ? null
-                              : value,
-                        };
-                        const updated = {
-                          ...prev,
-                          [currentExerciseName]: newFeedback,
-                        };
-                        // ExerciseScreen에 피드백 업데이트 전달
-                        if (onFeedbackUpdate) {
-                          onFeedbackUpdate(currentExerciseName, newFeedback);
-                        }
-                        return updated;
-                      });
-                    };
-
-                    if (isCompleted) {
-                      return null;
-                    }
-                    if (isCompleted) {
-                      return null;
-                    }
-                    return (
-                    <View style={styles.feedbackSection}>
-                      <Text style={styles.feedbackTitle}>이 운동 어땠나요?</Text>
-                      <View style={styles.feedbackButtonsRow}>
-                          <TouchableOpacity
-                            style={[
-                              styles.feedbackButton,
-                              currentFeedback.intensity === "heavy" &&
-                                styles.feedbackButtonSelected,
-                            ]}
-                            onPress={() => handleIntensityClick("heavy")}
-                          >
-                            <Text
-                              style={[
-                                styles.feedbackButtonText,
-                                currentFeedback.intensity === "heavy" &&
-                                  styles.feedbackButtonTextSelected,
-                              ]}
-                            >
-                              무거워요
-                            </Text>
-                        </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[
-                              styles.feedbackButton,
-                              currentFeedback.intensity === "light" &&
-                                styles.feedbackButtonSelected,
-                            ]}
-                            onPress={() => handleIntensityClick("light")}
-                          >
-                            <Text
-                              style={[
-                                styles.feedbackButtonText,
-                                currentFeedback.intensity === "light" &&
-                                  styles.feedbackButtonTextSelected,
-                              ]}
-                            >
-                              가벼워요
-                            </Text>
-                        </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[
-                              styles.feedbackButton,
-                              currentFeedback.feedback === "like" &&
-                                styles.feedbackButtonSelected,
-                            ]}
-                            onPress={() => handleFeedbackClick("like")}
-                          >
-                            <Text
-                              style={[
-                                styles.feedbackButtonText,
-                                currentFeedback.feedback === "like" &&
-                                  styles.feedbackButtonTextSelected,
-                              ]}
-                            >
-                              좋아요
-                            </Text>
-                        </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[
-                              styles.feedbackButton,
-                              currentFeedback.feedback === "dislike" &&
-                                styles.feedbackButtonSelected,
-                            ]}
-                            onPress={() => handleFeedbackClick("dislike")}
-                          >
-                            <Text
-                              style={[
-                                styles.feedbackButtonText,
-                                currentFeedback.feedback === "dislike" &&
-                                  styles.feedbackButtonTextSelected,
-                              ]}
-                            >
-                              싫어요
-                            </Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                    );
-                  })()}
-
-                  <View style={styles.addSetButtonWrapper}>
-                    <TouchableOpacity
-                      style={styles.addSetCircleButton}
-                      onPress={handleAddSet}
-                      activeOpacity={0.85}
-                    >
-                      <Icon name="add" size={22} color="#0c0c0c" />
-                    </TouchableOpacity>
-                  </View>
                 </View>
                 </ScrollView>
               </KeyboardAvoidingView>
@@ -2237,6 +2098,7 @@ const getExerciseDisplayName = React.useCallback(
                 style={[
                   styles.footer,
                   hasSequenceControls && styles.footerExtended,
+                  allSetsCompleted && !isCompleted && styles.footerWithFeedback,
                 ]}
               >
                 {hasSequenceControls && (
@@ -2277,15 +2139,15 @@ const getExerciseDisplayName = React.useCallback(
                     <TouchableOpacity
                       style={[
                         styles.sequenceControlButton,
-                        !hasNextSequence && styles.sequenceControlButtonDisabled,
+                        !canNextExercise && styles.sequenceControlButtonDisabled,
                       ]}
                       onPress={() => handleSequenceNavigatePress("next")}
-                      disabled={!hasNextSequence}
+                      disabled={!canNextExercise}
                     >
                       <Text
                         style={[
                           styles.sequenceControlText,
-                          !hasNextSequence && styles.sequenceControlTextDisabled,
+                          !canNextExercise && styles.sequenceControlTextDisabled,
                         ]}
                       >
                         다음 운동
@@ -2310,6 +2172,139 @@ const getExerciseDisplayName = React.useCallback(
                     운동 끝내기
                   </Text>
                 </TouchableOpacity>
+                {allSetsCompleted && !isCompleted && (() => {
+                  const currentExerciseName = getExerciseDisplayName(
+                    selectedExercise || exerciseData || { name: "" }
+                  );
+                  const currentFeedback = exerciseFeedbacks[currentExerciseName] || {
+                    intensity: null,
+                    feedback: null,
+                  };
+
+                  const handleIntensityClick = (value: "heavy" | "light") => {
+                    setExerciseFeedbacks((prev) => {
+                      const newFeedback = {
+                        ...prev[currentExerciseName],
+                        intensity:
+                          prev[currentExerciseName]?.intensity === value
+                            ? null
+                            : value,
+                        feedback: prev[currentExerciseName]?.feedback || null,
+                      };
+                      const updated = {
+                        ...prev,
+                        [currentExerciseName]: newFeedback,
+                      };
+                      // ExerciseScreen에 피드백 업데이트 전달
+                      if (onFeedbackUpdate) {
+                        onFeedbackUpdate(currentExerciseName, newFeedback);
+                      }
+                      return updated;
+                    });
+                  };
+
+                  const handleFeedbackClick = (value: "like" | "dislike") => {
+                    setExerciseFeedbacks((prev) => {
+                      const newFeedback = {
+                        ...prev[currentExerciseName],
+                        intensity: prev[currentExerciseName]?.intensity || null,
+                        feedback:
+                          prev[currentExerciseName]?.feedback === value
+                            ? null
+                            : value,
+                      };
+                      const updated = {
+                        ...prev,
+                        [currentExerciseName]: newFeedback,
+                      };
+                      // ExerciseScreen에 피드백 업데이트 전달
+                      if (onFeedbackUpdate) {
+                        onFeedbackUpdate(currentExerciseName, newFeedback);
+                      }
+                      return updated;
+                    });
+                  };
+
+                  return (
+                    <View style={styles.feedbackSection}>
+                      <Text style={styles.feedbackTitle}>이 운동 어땠나요?</Text>
+                      <View style={styles.feedbackButtonsRow}>
+                        <TouchableOpacity
+                          style={[
+                            styles.feedbackButton,
+                            currentFeedback.intensity === "heavy" &&
+                              styles.feedbackButtonSelected,
+                          ]}
+                          onPress={() => handleIntensityClick("heavy")}
+                        >
+                          <Text
+                            style={[
+                              styles.feedbackButtonText,
+                              currentFeedback.intensity === "heavy" &&
+                                styles.feedbackButtonTextSelected,
+                            ]}
+                          >
+                            무거워요
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.feedbackButton,
+                            currentFeedback.intensity === "light" &&
+                              styles.feedbackButtonSelected,
+                          ]}
+                          onPress={() => handleIntensityClick("light")}
+                        >
+                          <Text
+                            style={[
+                              styles.feedbackButtonText,
+                              currentFeedback.intensity === "light" &&
+                                styles.feedbackButtonTextSelected,
+                            ]}
+                          >
+                            가벼워요
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.feedbackButton,
+                            currentFeedback.feedback === "like" &&
+                              styles.feedbackButtonSelected,
+                          ]}
+                          onPress={() => handleFeedbackClick("like")}
+                        >
+                          <Text
+                            style={[
+                              styles.feedbackButtonText,
+                              currentFeedback.feedback === "like" &&
+                                styles.feedbackButtonTextSelected,
+                            ]}
+                          >
+                            좋아요
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.feedbackButton,
+                            currentFeedback.feedback === "dislike" &&
+                              styles.feedbackButtonSelected,
+                          ]}
+                          onPress={() => handleFeedbackClick("dislike")}
+                        >
+                          <Text
+                            style={[
+                              styles.feedbackButtonText,
+                              currentFeedback.feedback === "dislike" &&
+                                styles.feedbackButtonTextSelected,
+                            ]}
+                          >
+                            싫어요
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })()}
               </View>
             </View>
           )}
@@ -2633,6 +2628,16 @@ const getExerciseDisplayName = React.useCallback(
                 </View>
 
                 <View style={styles.setsContainer}>
+                  <View style={styles.addSetButtonWrapper}>
+                    <TouchableOpacity
+                      style={styles.addSetCircleButton}
+                      onPress={handleAddSet}
+                      activeOpacity={0.85}
+                    >
+                      <Icon name="add" size={20} color="#0c0c0c" />
+                    </TouchableOpacity>
+                  </View>
+
                   <View style={styles.setsList}>
                     {sets.map((set) => (
                       <ExerciseSetItem
@@ -2659,155 +2664,16 @@ const getExerciseDisplayName = React.useCallback(
                       />
                     ))}
                   </View>
-
-                  {allSetsCompleted && (() => {
-                    const currentExerciseName = getExerciseDisplayName(
-                      selectedExercise || exerciseData || { name: "" }
-                    );
-                    const currentFeedback = exerciseFeedbacks[currentExerciseName] || {
-                      intensity: null,
-                      feedback: null,
-                    };
-
-                    const handleIntensityClick = (value: "heavy" | "light") => {
-                      setExerciseFeedbacks((prev) => {
-                        const newFeedback = {
-                          ...prev[currentExerciseName],
-                          intensity:
-                            prev[currentExerciseName]?.intensity === value
-                              ? null
-                              : value,
-                          feedback: prev[currentExerciseName]?.feedback || null,
-                        };
-                        const updated = {
-                          ...prev,
-                          [currentExerciseName]: newFeedback,
-                        };
-                        // ExerciseScreen에 피드백 업데이트 전달
-                        if (onFeedbackUpdate) {
-                          onFeedbackUpdate(currentExerciseName, newFeedback);
-                        }
-                        return updated;
-                      });
-                    };
-
-                    const handleFeedbackClick = (value: "like" | "dislike") => {
-                      setExerciseFeedbacks((prev) => {
-                        const newFeedback = {
-                          ...prev[currentExerciseName],
-                          intensity: prev[currentExerciseName]?.intensity || null,
-                          feedback:
-                            prev[currentExerciseName]?.feedback === value
-                              ? null
-                              : value,
-                        };
-                        const updated = {
-                          ...prev,
-                          [currentExerciseName]: newFeedback,
-                        };
-                        // ExerciseScreen에 피드백 업데이트 전달
-                        if (onFeedbackUpdate) {
-                          onFeedbackUpdate(currentExerciseName, newFeedback);
-                        }
-                        return updated;
-                      });
-                    };
-
-                    return (
-                    <View style={styles.feedbackSection}>
-                      <Text style={styles.feedbackTitle}>이 운동 어땠나요?</Text>
-                      <View style={styles.feedbackButtonsRow}>
-                          <TouchableOpacity
-                            style={[
-                              styles.feedbackButton,
-                              currentFeedback.intensity === "heavy" &&
-                                styles.feedbackButtonSelected,
-                            ]}
-                            onPress={() => handleIntensityClick("heavy")}
-                          >
-                            <Text
-                              style={[
-                                styles.feedbackButtonText,
-                                currentFeedback.intensity === "heavy" &&
-                                  styles.feedbackButtonTextSelected,
-                              ]}
-                            >
-                              무거워요
-                            </Text>
-                        </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[
-                              styles.feedbackButton,
-                              currentFeedback.intensity === "light" &&
-                                styles.feedbackButtonSelected,
-                            ]}
-                            onPress={() => handleIntensityClick("light")}
-                          >
-                            <Text
-                              style={[
-                                styles.feedbackButtonText,
-                                currentFeedback.intensity === "light" &&
-                                  styles.feedbackButtonTextSelected,
-                              ]}
-                            >
-                              가벼워요
-                            </Text>
-                        </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[
-                              styles.feedbackButton,
-                              currentFeedback.feedback === "like" &&
-                                styles.feedbackButtonSelected,
-                            ]}
-                            onPress={() => handleFeedbackClick("like")}
-                          >
-                            <Text
-                              style={[
-                                styles.feedbackButtonText,
-                                currentFeedback.feedback === "like" &&
-                                  styles.feedbackButtonTextSelected,
-                              ]}
-                            >
-                              좋아요
-                            </Text>
-                        </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[
-                              styles.feedbackButton,
-                              currentFeedback.feedback === "dislike" &&
-                                styles.feedbackButtonSelected,
-                            ]}
-                            onPress={() => handleFeedbackClick("dislike")}
-                          >
-                            <Text
-                              style={[
-                                styles.feedbackButtonText,
-                                currentFeedback.feedback === "dislike" &&
-                                  styles.feedbackButtonTextSelected,
-                              ]}
-                            >
-                              싫어요
-                            </Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                    );
-                  })()}
-
-                  <View style={styles.addSetButtonWrapper}>
-                    <TouchableOpacity
-                      style={styles.addSetCircleButton}
-                      onPress={handleAddSet}
-                      activeOpacity={0.85}
-                    >
-                      <Icon name="add" size={22} color="#0c0c0c" />
-                    </TouchableOpacity>
-                  </View>
                 </View>
                 </ScrollView>
               </KeyboardAvoidingView>
 
-              <View style={styles.footer}>
+              <View
+                style={[
+                  styles.footer,
+                  allSetsCompleted && !isCompleted && styles.footerWithFeedback,
+                ]}
+              >
                 <TouchableOpacity
                   style={[
                     styles.endWorkoutBtn,
@@ -2825,6 +2691,139 @@ const getExerciseDisplayName = React.useCallback(
                     운동 끝내기
                   </Text>
                 </TouchableOpacity>
+                {allSetsCompleted && !isCompleted && (() => {
+                  const currentExerciseName = getExerciseDisplayName(
+                    selectedExercise || exerciseData || { name: "" }
+                  );
+                  const currentFeedback = exerciseFeedbacks[currentExerciseName] || {
+                    intensity: null,
+                    feedback: null,
+                  };
+
+                  const handleIntensityClick = (value: "heavy" | "light") => {
+                    setExerciseFeedbacks((prev) => {
+                      const newFeedback = {
+                        ...prev[currentExerciseName],
+                        intensity:
+                          prev[currentExerciseName]?.intensity === value
+                            ? null
+                            : value,
+                        feedback: prev[currentExerciseName]?.feedback || null,
+                      };
+                      const updated = {
+                        ...prev,
+                        [currentExerciseName]: newFeedback,
+                      };
+                      // ExerciseScreen에 피드백 업데이트 전달
+                      if (onFeedbackUpdate) {
+                        onFeedbackUpdate(currentExerciseName, newFeedback);
+                      }
+                      return updated;
+                    });
+                  };
+
+                  const handleFeedbackClick = (value: "like" | "dislike") => {
+                    setExerciseFeedbacks((prev) => {
+                      const newFeedback = {
+                        ...prev[currentExerciseName],
+                        intensity: prev[currentExerciseName]?.intensity || null,
+                        feedback:
+                          prev[currentExerciseName]?.feedback === value
+                            ? null
+                            : value,
+                      };
+                      const updated = {
+                        ...prev,
+                        [currentExerciseName]: newFeedback,
+                      };
+                      // ExerciseScreen에 피드백 업데이트 전달
+                      if (onFeedbackUpdate) {
+                        onFeedbackUpdate(currentExerciseName, newFeedback);
+                      }
+                      return updated;
+                    });
+                  };
+
+                  return (
+                    <View style={styles.feedbackSection}>
+                      <Text style={styles.feedbackTitle}>이 운동 어땠나요?</Text>
+                      <View style={styles.feedbackButtonsRow}>
+                        <TouchableOpacity
+                          style={[
+                            styles.feedbackButton,
+                            currentFeedback.intensity === "heavy" &&
+                              styles.feedbackButtonSelected,
+                          ]}
+                          onPress={() => handleIntensityClick("heavy")}
+                        >
+                          <Text
+                            style={[
+                              styles.feedbackButtonText,
+                              currentFeedback.intensity === "heavy" &&
+                                styles.feedbackButtonTextSelected,
+                            ]}
+                          >
+                            무거워요
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.feedbackButton,
+                            currentFeedback.intensity === "light" &&
+                              styles.feedbackButtonSelected,
+                          ]}
+                          onPress={() => handleIntensityClick("light")}
+                        >
+                          <Text
+                            style={[
+                              styles.feedbackButtonText,
+                              currentFeedback.intensity === "light" &&
+                                styles.feedbackButtonTextSelected,
+                            ]}
+                          >
+                            가벼워요
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.feedbackButton,
+                            currentFeedback.feedback === "like" &&
+                              styles.feedbackButtonSelected,
+                          ]}
+                          onPress={() => handleFeedbackClick("like")}
+                        >
+                          <Text
+                            style={[
+                              styles.feedbackButtonText,
+                              currentFeedback.feedback === "like" &&
+                                styles.feedbackButtonTextSelected,
+                            ]}
+                          >
+                            좋아요
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.feedbackButton,
+                            currentFeedback.feedback === "dislike" &&
+                              styles.feedbackButtonSelected,
+                          ]}
+                          onPress={() => handleFeedbackClick("dislike")}
+                        >
+                          <Text
+                            style={[
+                              styles.feedbackButtonText,
+                              currentFeedback.feedback === "dislike" &&
+                                styles.feedbackButtonTextSelected,
+                            ]}
+                          >
+                            싫어요
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })()}
               </View>
             </View>
           )}
@@ -3203,13 +3202,13 @@ const styles = StyleSheet.create({
   },
   addSetButtonWrapper: {
     alignItems: "center",
-    marginTop: 12,
-    marginBottom: 8,
+    marginTop: 0,
+    marginBottom: 12,
   },
   addSetCircleButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: "#e3ff7c",
     justifyContent: "center",
     alignItems: "center",
@@ -3220,9 +3219,9 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   feedbackSection: {
-    marginTop: 24,
-    marginHorizontal: 20,
-    marginBottom: 24,
+    marginTop: 12,
+    marginHorizontal: 0,
+    marginBottom: 0,
   },
   feedbackTitle: {
     fontSize: 18,
@@ -3388,7 +3387,7 @@ const styles = StyleSheet.create({
   },
   endWorkoutBtn: {
     backgroundColor: "#404040",
-    paddingVertical: 16,
+    paddingVertical: 10,
     borderRadius: 12,
     alignItems: "center",
   },
@@ -3828,13 +3827,16 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: 20,
-    paddingBottom: 20,
-    paddingTop: 14,
+    paddingBottom: 8,
+    paddingTop: 8,
     backgroundColor: "#2a2a2a",
   },
   footerExtended: {
     flexDirection: "column",
-    gap: 12,
+    gap: 6,
+  },
+  footerWithFeedback: {
+    paddingBottom: 16,
   },
   saveExerciseBtn: {
     backgroundColor: "#e3ff7c",
@@ -3893,7 +3895,7 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 12,
     backgroundColor: "#272727",
-    paddingVertical: 14,
+    paddingVertical: 8,
     alignItems: "center",
     justifyContent: "center",
   },

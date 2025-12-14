@@ -272,6 +272,10 @@ const AnalysisScreen = ({ navigation }: any) => {
   // 프리미엄 여부 state
   const [isPremium, setIsPremium] = useState<boolean>(false);
 
+  // 코멘트 state
+  const [scoreComment, setScoreComment] = useState<string | null>(null);
+  const [scoreCommentLoading, setScoreCommentLoading] = useState(false);
+
   const displayName = useMemo(
     () => (userName ? `${userName}님` : "회원님"),
     [userName]
@@ -1889,6 +1893,38 @@ const AnalysisScreen = ({ navigation }: any) => {
     }
   }, []);
 
+  // 랜덤 코멘트 로드
+  const loadRandomScoreComment = useCallback(async () => {
+    try {
+      setScoreCommentLoading(true);
+      setScoreComment(null);
+
+      // 3개 API 중 랜덤으로 하나 선택
+      const commentTypes = [
+        healthScoreAPI.getDailyComment,
+        healthScoreAPI.getWeeklyComment,
+        healthScoreAPI.getMonthlyComment,
+      ];
+      const randomIndex = Math.floor(Math.random() * commentTypes.length);
+      const selectedCommentAPI = commentTypes[randomIndex];
+
+      console.log("[ANALYSIS] 코멘트 API 선택:", randomIndex === 0 ? "daily" : randomIndex === 1 ? "weekly" : "monthly");
+
+      const comment = await selectedCommentAPI();
+      if (comment) {
+        setScoreComment(comment);
+        console.log("[ANALYSIS] 코멘트 로드 성공:", comment);
+      } else {
+        console.log("[ANALYSIS] 코멘트 없음");
+      }
+    } catch (error) {
+      console.error("[ANALYSIS] 코멘트 로드 실패:", error);
+      setScoreComment(null);
+    } finally {
+      setScoreCommentLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadUserId();
   }, [loadUserId]);
@@ -1916,6 +1952,7 @@ const AnalysisScreen = ({ navigation }: any) => {
       // 그래프는 userId useEffect에서만 로드 (중복 방지)
 
       loadHealthScore();
+      loadRandomScoreComment();
     }, [
       checkPremium,
       loadWorkoutHistory,
@@ -1924,6 +1961,7 @@ const AnalysisScreen = ({ navigation }: any) => {
       loadUserName,
       loadLocalCompletions,
       loadHealthScore,
+      loadRandomScoreComment,
       userId,
     ])
   );
@@ -2118,6 +2156,21 @@ const AnalysisScreen = ({ navigation }: any) => {
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
       >
+        {/* 건강점수 코멘트 섹션 */}
+        {scoreCommentLoading ? (
+          <View style={styles.scoreCommentContainer}>
+            <ActivityIndicator size="small" color="#E3FF7C" />
+            <Text style={styles.scoreCommentLoadingText}>분석 중...</Text>
+          </View>
+        ) : scoreComment ? (
+          <View style={styles.scoreCommentContainer}>
+            <View style={styles.scoreCommentHeader}>
+              <Icon name="sparkles" size={16} color="#E3FF7C" />
+              <Text style={styles.scoreCommentText}>{scoreComment}</Text>
+            </View>
+          </View>
+        ) : null}
+
         {/* 건강점수 섹션 */}
         <TouchableOpacity
           style={styles.healthScoreSection}
@@ -2977,6 +3030,32 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  scoreCommentContainer: {
+    marginBottom: 15,
+    paddingHorizontal: 20,
+  },
+  scoreCommentLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    gap: 8,
+  },
+  scoreCommentLoadingText: {
+    fontSize: 14,
+    color: "#888888",
+  },
+  scoreCommentHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  scoreCommentText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    color: "#ffffff",
   },
   inbodySection: {
     backgroundColor: "#2a2a2a",
