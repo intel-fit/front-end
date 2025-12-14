@@ -256,4 +256,61 @@ export const recommendedExerciseAPI = {
       throw error;
     }
   },
+
+  getRecommendedHistory: async (): Promise<any> => {
+    try {
+      console.log("📅 운동 추천 내역 조회 요청");
+      // GET 요청 전송
+      const response = await request(
+        "/api/exercise-recommendations/recommended-exercises",
+        {
+          method: "GET",
+        }
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ 내역 조회 실패:", error);
+      throw error;
+    }
+  },
+  saveWeeklyExercisePlan: async (data: { days: any[] }): Promise<any> => {
+    try {
+      console.log("💾 주간 운동 플랜 저장 요청");
+
+      // 백엔드가 알려준 저장 API 주소: /api/exercise-recommendations/weekly/save
+      const response = await request(
+        "/api/exercise-recommendations/weekly/save",
+        {
+          method: "POST",
+          body: JSON.stringify(data),
+        }
+      );
+
+      console.log("✅ 주간 운동 플랜 저장 성공");
+      return response;
+    } catch (error: any) {
+      console.error("❌ 주간 운동 플랜 저장 실패:", error);
+      throw error;
+    }
+  },
+  saveTempSummary: async (data: {
+    date: string;
+    focus: string;
+    durationMin: number;
+    kcal: number;
+    exerciseCount: number;
+    title: string;
+  }): Promise<any> => {
+    try {
+      console.log("📝 추천 요약(TEMP) 저장 요청:", data.date, data.title);
+      const response = await request("/api/exercise-recommendations/temp", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return response;
+    } catch (error) {
+      console.error("❌ 추천 요약(TEMP) 저장 실패:", error);
+      throw error; // 에러를 상위로 던져서 저장 프로세스를 중단할지 결정
+    }
+  },
 };

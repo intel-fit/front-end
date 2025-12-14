@@ -312,7 +312,10 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
   const [level, setLevel] = useState("");
   const [targetParts, setTargetParts] = useState<string[]>([]);
   const [equipment, setEquipment] = useState<string[]>(["덤벨"]);
-
+  const [todayMetrics, setTodayMetrics] = useState<{
+    duration: number;
+    calories: number;
+  }>();
   const [loading, setLoading] = useState(false);
 
   const [todayRoutine, setTodayRoutine] = useState<any[]>([]);
@@ -493,57 +496,96 @@ const TempRoutineRecommendScreen = ({ navigation }: any) => {
   };
 
   const handleSaveRoutine = async () => {
-    const currentDate = new Date();
-    const dateStr = `${currentDate.getFullYear()}-${String(
-      currentDate.getMonth() + 1
-    ).padStart(2, "0")}-${String(currentDate.getDate()).padStart(2, "0")}`;
+    // 1. 저장할 운동 데이터가 있는지 확인
+    if (todayRoutine.length === 0) {
+      Alert.alert("알림", "저장할 운동 데이터가 없습니다.");
+      return;
+    }
 
-    const groupKey = `ai_recommend_free_${Date.now()}`;
-    const groupTitle = todayFocus
-      ? `AI 추천 (무료) - ${mapFocusToKorean(todayFocus)}`
-      : "AI 추천 (무료)";
+    // 로딩 상태가 있다면 true로 설정 (선택사항)
+    // setLoading(true);
 
-    const activities = todayRoutine.map((exercise: any, index: number) => {
-      const setsCount = exercise.sets || 3;
-      const sets = Array.from({ length: setsCount }, (_, i) => ({
-        id: i + 1,
-        order: i + 1,
-        weight: exercise.weight_kg || 0,
-        reps: exercise.reps || 0,
-        isCompleted: false,
-      }));
+    try {
+      const currentDate = new Date();
+      const dateStr = `${currentDate.getFullYear()}-${String(
+        currentDate.getMonth() + 1
+      ).padStart(2, "0")}-${String(currentDate.getDate()).padStart(2, "0")}`;
 
-      return {
-        id: Date.now() + index,
-        name: exercise.name || "운동",
-        details: `${exercise.weight_kg || 0}kg ${
-          exercise.reps || 0
-        }회 ${setsCount}세트`,
-        time: currentDate.toLocaleTimeString("ko-KR", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true,
-        }),
+      // ---------------------------------------------------------
+      // ✅ [NEW] TEMP 요약 API 호출 (서버에 기록 남기기)
+      // ---------------------------------------------------------
+      const focusValue = todayFocus || "General";
+
+      const summaryBody = {
         date: dateStr,
-        isCompleted: false,
-        externalId: exercise.exerciseId,
-        targetMuscle: exercise.target,
-        sets: sets,
-        saveTitle: groupTitle,
-        groupKey: groupKey,
+        focus: focusValue,
+        // todayMetrics가 state에 있다면 사용하고, 없으면 기본값 사용
+        durationMin:
+          typeof todayMetrics !== "undefined" ? todayMetrics.duration : 45,
+        kcal: typeof todayMetrics !== "undefined" ? todayMetrics.calories : 300,
+        exerciseCount: todayRoutine.length,
+        title: `${focusValue} day`, // 예: "Upper day"
       };
-    });
 
-    console.log("🚀 ExerciseScreen으로 이동:", {
-      activitiesCount: activities.length,
-    });
+      console.log("📝 무료 회원 요약(TEMP) 저장 요청...");
+      await recommendedExerciseAPI.saveTempSummary(summaryBody);
+      console.log("✅ 무료 회원 요약(TEMP) 저장 완료!");
+      // ---------------------------------------------------------
 
-    navigation.navigate("Stats", {
-      screen: "Exercise",
-      params: {
-        recommendedExercises: activities,
-      },
-    });
+      // 3. UI 데이터 변환 및 이동 (기존 로직 유지)
+      const groupKey = `ai_recommend_free_${Date.now()}`;
+      const groupTitle = todayFocus
+        ? `AI 추천 (무료) - ${mapFocusToKorean(todayFocus)}`
+        : "AI 추천 (무료)";
+
+      const activities = todayRoutine.map((exercise: any, index: number) => {
+        const setsCount = exercise.sets || 3;
+        const sets = Array.from({ length: setsCount }, (_, i) => ({
+          id: i + 1,
+          order: i + 1,
+          weight: exercise.weight_kg || 0,
+          reps: exercise.reps || 0,
+          isCompleted: false,
+        }));
+
+        return {
+          id: Date.now() + index,
+          name: exercise.name || "운동",
+          details: `${exercise.weight_kg || 0}kg ${
+            exercise.reps || 0
+          }회 ${setsCount}세트`,
+          time: currentDate.toLocaleTimeString("ko-KR", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true,
+          }),
+          date: dateStr,
+          isCompleted: false,
+          externalId: exercise.exerciseId,
+          targetMuscle: exercise.target, // 혹은 exercise.targetMuscle
+          sets: sets,
+          saveTitle: groupTitle,
+          groupKey: groupKey,
+        };
+      });
+
+      console.log("🚀 ExerciseScreen으로 이동:", {
+        activitiesCount: activities.length,
+      });
+
+      // 4. 페이지 이동
+      navigation.navigate("Stats", {
+        screen: "Exercise",
+        params: {
+          recommendedExercises: activities,
+        },
+      });
+    } catch (error) {
+      console.error("❌ 저장 실패:", error);
+      Alert.alert("오류", "루틴 저장 중 문제가 발생했습니다.");
+    } finally {
+      // setLoading(false);
+    }
   };
 
   const handleRecommendAgain = () => {

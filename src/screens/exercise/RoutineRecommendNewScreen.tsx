@@ -1,4 +1,3 @@
-// src/screens/RoutineRecommendNewScreen.tsx
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -758,37 +757,214 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
       setLoading(false);
     }
   };
-
   const handleSaveRoutine = async () => {
     const today = new Date();
-    let activitiesToSave: any[] = [];
 
-    // 🅰️ [CASE 1] 7일 추천 모드일 때
+    // ------------------------------------------------------------
+    // 🅰️ [CASE 1] 7일 추천 모드일 때 (서버 저장 + TEMP 요약 저장)
+    // ------------------------------------------------------------
     if (isWeeklyMode && weeklyRoutine.length > 0) {
-      console.log("📦 7일치 전체 루틴 저장을 시작합니다.");
+      setLoading(true);
 
-      const groupKey = `ai_weekly_${Date.now()}`; // 7일치를 묶어줄 고유 키
+      try {
+        // 1. [기존] 7일치 상세 루틴 저장 데이터 구성
+        const serverPayload = weeklyRoutine
+          .map((dayPlan, dayIndex) => {
+            if (!dayPlan.exercises || dayPlan.exercises.length === 0)
+              return null;
 
-      // Day 1부터 Day 7까지 반복
-      weeklyRoutine.forEach((dayPlan, dayIndex) => {
-        // 휴식일(Rest)이거나 운동이 없으면 건너뜀
-        if (!dayPlan.exercises || dayPlan.exercises.length === 0) return;
+            // 유효성 필터링
+            const validExercises = dayPlan.exercises.filter((ex: any) => {
+              if (!ex.exerciseId) return false;
+              const id = String(ex.exerciseId);
+              return id.trim() !== "" && !id.startsWith("seed_");
+            });
 
-        // 날짜 계산: 오늘 + dayIndex (0, 1, 2...)
-        const targetDate = new Date(today);
-        targetDate.setDate(today.getDate() + dayIndex);
+            if (validExercises.length === 0) return null;
 
-        // YYYY-MM-DD 형식으로 변환
-        const dateStr = `${targetDate.getFullYear()}-${String(
-          targetDate.getMonth() + 1
-        ).padStart(2, "0")}-${String(targetDate.getDate()).padStart(2, "0")}`;
+            const targetDate = new Date(today);
+            targetDate.setDate(today.getDate() + dayIndex);
 
-        const groupTitle = `AI 7일 루틴 (Day ${dayIndex + 1})`;
+            const dateStr = `${targetDate.getFullYear()}-${String(
+              targetDate.getMonth() + 1
+            ).padStart(2, "0")}-${String(targetDate.getDate()).padStart(
+              2,
+              "0"
+            )}`;
 
-        // 해당 요일의 운동들을 리스트로 변환
-        const dayActivities = dayPlan.exercises.map(
-          (exercise: any, exIndex: number) => {
-            // 세트 수 생성
+            const exercisesPayload = validExercises.map((ex: any) => ({
+              exerciseId: String(ex.exerciseId),
+              name: ex.name,
+              target: ex.target || "",
+            }));
+
+            return {
+              date: dateStr,
+              exercises: exercisesPayload,
+              // TEMP 저장을 위해 원본 데이터도 잠시 들고 있음 (서버 전송시엔 제거됨)
+              _originalPlan: dayPlan,
+            };
+          })
+          .filter((day) => day !== null);
+
+        if (serverPayload.length === 0) {
+          Alert.alert("알림", "저장할 수 있는 유효한 운동 데이터가 없습니다.");
+          setLoading(false);
+          return;
+        }
+
+        // 2. [NEW] TEMP 요약 API 호출 (운동이 있는 날짜별로 각각 호출)
+        console.log("📝 7일치 요약(TEMP) 저장을 시작합니다...");
+
+        // Promise.all로 병렬 처리하여 빠르게 저장
+        const summaryPromises = serverPayload.map((dayData: any) => {
+          const original = dayData._originalPlan;
+
+          // Focus 값 추출 (없으면 'Body' 기본값)
+          const focusValue = original.focus || "Body";
+
+          const summaryBody = {
+            date: dayData.date, // "2025-12-14"
+            focus: focusValue, // "Upper"
+            durationMin: original.metrics?.total_duration_min || 45,
+            kcal: original.metrics?.total_kcal || 300,
+            exerciseCount: dayData.exercises.length,
+            title: `${focusValue} day`, // "Upper day"
+          };
+
+          return recommendedExerciseAPI.saveTempSummary(summaryBody);
+        });
+
+        await Promise.all(summaryPromises);
+        console.log("✅ 7일치 요약(TEMP) 저장 완료!");
+
+        // 3. [기존] 7일치 상세 루틴 서버 저장 (cleanPayload로 _originalPlan 제거 후 전송)
+        const cleanPayload = serverPayload.map(
+          ({ _originalPlan, ...rest }) => rest
+        );
+
+        console.log("💾 상세 루틴 저장을 요청합니다...");
+        const saveResponse =
+          await recommendedExerciseAPI.saveWeeklyExercisePlan({
+            days: cleanPayload,
+          });
+
+        if (saveResponse && saveResponse.success) {
+          console.log("✅ 상세 루틴 저장 성공:", saveResponse.message);
+
+          // 4. UI 데이터 변환 및 이동 (기존 로직 유지)
+          let activitiesToSave: any[] = [];
+          const groupKey = `ai_weekly_${Date.now()}`;
+
+          weeklyRoutine.forEach((dayPlan, dayIndex) => {
+            if (!dayPlan.exercises || dayPlan.exercises.length === 0) return;
+
+            const validExercises = dayPlan.exercises.filter((ex: any) => {
+              if (!ex.exerciseId) return false;
+              const id = String(ex.exerciseId);
+              return id.trim() !== "" && !id.startsWith("seed_");
+            });
+
+            const targetDate = new Date(today);
+            targetDate.setDate(today.getDate() + dayIndex);
+            const dateStr = `${targetDate.getFullYear()}-${String(
+              targetDate.getMonth() + 1
+            ).padStart(2, "0")}-${String(targetDate.getDate()).padStart(
+              2,
+              "0"
+            )}`;
+
+            const groupTitle = `AI 7일 루틴 (Day ${dayIndex + 1})`;
+
+            const dayActivities = validExercises.map(
+              (exercise: any, exIndex: number) => {
+                const setsCount = exercise.sets || 3;
+                const sets = Array.from({ length: setsCount }, (_, i) => ({
+                  id: i + 1,
+                  order: i + 1,
+                  weight: exercise.weight_kg || 0,
+                  reps: exercise.reps || 0,
+                  isCompleted: false,
+                }));
+                const details = []; // (간략화) 상세 로직은 기존 코드 참조
+                if (exercise.weight_kg) details.push(`${exercise.weight_kg}kg`);
+                if (exercise.reps) details.push(`${exercise.reps}회`);
+                if (setsCount) details.push(`${setsCount}세트`);
+
+                return {
+                  id: Date.now() + dayIndex * 10000 + exIndex,
+                  name: exercise.name || "운동",
+                  details: details.join(" "),
+                  time: "00:00",
+                  date: dateStr,
+                  isCompleted: false,
+                  externalId: exercise.exerciseId,
+                  sets: sets,
+                  saveTitle: groupTitle,
+                  groupKey: groupKey,
+                  target: exercise.target,
+                  category: exercise.category,
+                };
+              }
+            );
+            activitiesToSave = [...activitiesToSave, ...dayActivities];
+          });
+
+          navigation.navigate("Stats", {
+            screen: "Exercise",
+            params: { recommendedExercises: activitiesToSave, refresh: true },
+          });
+        } else {
+          throw new Error(saveResponse?.message || "저장에 실패했습니다.");
+        }
+      } catch (error: any) {
+        console.error("❌ 저장 실패:", error);
+        Alert.alert("오류", error.message || "저장 중 문제가 발생했습니다.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // ------------------------------------------------------------
+    // 🅱️ [CASE 2] 1일 추천 모드일 때 (TEMP 요약 저장 추가)
+    // ------------------------------------------------------------
+    else {
+      if (todayRoutine.length === 0) {
+        Alert.alert("알림", "저장할 운동 데이터가 없습니다.");
+        return;
+      }
+
+      setLoading(true); // 로딩 시작
+
+      try {
+        const dateStr = `${today.getFullYear()}-${String(
+          today.getMonth() + 1
+        ).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+        // 1. [NEW] 1일치 TEMP 요약 저장
+        const focusValue = todayFocus || "General";
+
+        const summaryBody = {
+          date: dateStr,
+          focus: focusValue,
+          durationMin: todayMetrics.duration || 45,
+          kcal: todayMetrics.calories || 300,
+          exerciseCount: todayRoutine.length,
+          title: `${focusValue} day`, // "Upper day"
+        };
+
+        console.log("📝 1일치 요약(TEMP) 저장을 요청합니다...");
+        await recommendedExerciseAPI.saveTempSummary(summaryBody);
+        console.log("✅ 1일치 요약(TEMP) 저장 완료!");
+
+        // 2. [기존] UI 데이터 변환 및 이동
+        const groupKey = `ai_daily_${Date.now()}`;
+        const groupTitle = todayFocus
+          ? `AI 추천 - ${mapFocusToKorean(todayFocus)}`
+          : "AI 추천 운동";
+
+        const activitiesToSave = todayRoutine.map(
+          (exercise: any, index: number) => {
             const setsCount = exercise.sets || 3;
             const sets = Array.from({ length: setsCount }, (_, i) => ({
               id: i + 1,
@@ -798,19 +974,15 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
               isCompleted: false,
             }));
 
-            // 상세 설명 텍스트 (예: "20kg 10회 3세트")
-            const detailParts = [];
-            if (exercise.weight_kg) detailParts.push(`${exercise.weight_kg}kg`);
-            if (exercise.reps) detailParts.push(`${exercise.reps}회`);
-            if (setsCount) detailParts.push(`${setsCount}세트`);
-            const details = detailParts.join(" ") || exercise.detail || "";
-
             return {
-              // ID 충돌 방지를 위해 날짜 인덱스를 섞어서 생성
-              id: Date.now() + dayIndex * 10000 + exIndex,
+              id: Date.now() + index,
               name: exercise.name || "운동",
-              details: details,
-              time: "00:00",
+              details: exercise.detail,
+              time: today.toLocaleTimeString("ko-KR", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true,
+              }),
               date: dateStr,
               isCompleted: false,
               externalId: exercise.exerciseId,
@@ -823,75 +995,18 @@ const RoutineRecommendNewScreen = ({ navigation }: any) => {
           }
         );
 
-        // 전체 리스트에 합치기
-        activitiesToSave = [...activitiesToSave, ...dayActivities];
-      });
-    }
-    // [CASE 2] 1일 추천
-    else {
-      if (todayRoutine.length === 0) {
-        Alert.alert("알림", "저장할 운동 데이터가 없습니다.");
-        return;
+        navigation.navigate("Stats", {
+          screen: "Exercise",
+          params: {
+            recommendedExercises: activitiesToSave,
+          },
+        });
+      } catch (error: any) {
+        console.error("❌ 1일 추천 저장 실패:", error);
+        Alert.alert("오류", "저장 중 문제가 발생했습니다.");
+      } finally {
+        setLoading(false);
       }
-
-      const dateStr = `${today.getFullYear()}-${String(
-        today.getMonth() + 1
-      ).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-
-      const groupKey = `ai_daily_${Date.now()}`;
-      const groupTitle = todayFocus
-        ? `AI 추천 - ${mapFocusToKorean(todayFocus)}`
-        : "AI 추천 운동";
-
-      activitiesToSave = todayRoutine.map((exercise: any, index: number) => {
-        const setsCount = exercise.sets || 3;
-        const sets = Array.from({ length: setsCount }, (_, i) => ({
-          id: i + 1,
-          order: i + 1,
-          weight: exercise.weight_kg || 0,
-          reps: exercise.reps || 0,
-          isCompleted: false,
-        }));
-
-        return {
-          id: Date.now() + index,
-          name: exercise.name || "운동",
-          details: exercise.detail,
-          time: today.toLocaleTimeString("ko-KR", {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: true,
-          }),
-          date: dateStr,
-          isCompleted: false,
-          externalId: exercise.exerciseId,
-          sets: sets,
-          saveTitle: groupTitle,
-          groupKey: groupKey,
-          target: exercise.target,
-          category: exercise.category,
-        };
-      });
-    }
-
-    // 운동 목록이 있으면 다음 화면으로 이동
-    if (activitiesToSave.length > 0) {
-      console.log(
-        `🚀 총 ${activitiesToSave.length}개의 운동 데이터를 Exercise 화면으로 전송합니다.`
-      );
-
-      // ExerciseScreen(운동 목록 화면)으로 이동하면서 데이터 전달
-      navigation.navigate("Stats", {
-        screen: "Exercise",
-        params: {
-          recommendedExercises: activitiesToSave,
-        },
-      });
-    } else {
-      Alert.alert(
-        "알림",
-        "저장할 운동 루틴이 없습니다. (휴식일만 있거나 데이터 오류)"
-      );
     }
   };
 
