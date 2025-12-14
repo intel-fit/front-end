@@ -78,6 +78,15 @@ const StatsScreen = ({navigation, route}: any) => {
     }
   }, [route?.params?.activeTab, navigation]);
 
+  // route params에서 dietActiveTab 받아서 DietScreen에 전달
+  const [dietActiveTab, setDietActiveTab] = useState<'meals' | 'recommendations' | undefined>(undefined);
+  useEffect(() => {
+    if (route?.params?.dietActiveTab !== undefined) {
+      setDietActiveTab(route.params.dietActiveTab);
+      navigation.setParams({dietActiveTab: undefined});
+    }
+  }, [route?.params?.dietActiveTab, navigation]);
+
   // 화면 포커스 시: 다른 탭에서 돌아온 경우 날짜를 오늘로 설정
   useFocusEffect(
     useCallback(() => {
@@ -115,7 +124,7 @@ const StatsScreen = ({navigation, route}: any) => {
       case 0:
         return <ExerciseScreen navigation={navigation} />;
       case 1:
-        return <DietScreen navigation={navigation} route={route} />;
+        return <DietScreen navigation={navigation} route={{...route, params: {...route?.params, activeTab: dietActiveTab}}} />;
       default:
         return null;
     }

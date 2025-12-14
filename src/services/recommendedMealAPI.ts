@@ -390,6 +390,35 @@ export const recommendedMealAPI = {
       throw new Error(error.message || "일괄 삭제에 실패했습니다.");
     }
   },
+
+  /**
+   * 8) 저장된 식단 번들 목록 조회 (번들 + 플랜 포함)
+   * GET /api/recommended-meals/saved/bundles
+   */
+  getSavedMealBundles: async () => {
+    try {
+      console.log("📋 저장된 식단 번들 목록 조회 (번들 + 플랜)");
+
+      const response = await request<{
+        totalCount: number;
+        bundles: Array<{
+          bundleId: string;
+          planCount: number;
+          totalCalories: number;
+          createdAt: string;
+          plans: MealPlan[];
+        }>;
+      }>("/api/recommended-meals/saved/bundles", {
+        method: "GET",
+      });
+
+      console.log("✅ 저장된 식단 번들:", response.totalCount, "개");
+      return response.bundles || [];
+    } catch (error: any) {
+      console.error("❌ 저장된 식단 번들 조회 실패:", error);
+      return [];
+    }
+  },
 };
 
 /**

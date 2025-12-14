@@ -531,6 +531,15 @@ const DietScreen = ({navigation, route}: any) => {
     }
   }, [route?.params?.updatedProgress, route?.params?.updatedDate, navigation]);
 
+  // route params에서 activeTab 받기 (홈 위젯에서 추천 식단으로 이동할 때)
+  useEffect(() => {
+    if (route?.params?.activeTab === 'recommendations') {
+      setActiveTab('recommendations');
+      // params 초기화
+      navigation.setParams({ activeTab: undefined });
+    }
+  }, [route?.params?.activeTab, navigation]);
+
   // 화면 포커스 시 데이터 새로고침
   // 다른 페이지에 갔다 오거나 운동 기록을 갔다 왔을 때, 탭 바꾸기 등 모든 행동 시
   useFocusEffect(

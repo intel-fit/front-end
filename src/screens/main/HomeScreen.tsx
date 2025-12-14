@@ -16,7 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../../theme/colors";
 import { ROUTES } from "../../constants/routes";
 import { useDate } from "../../contexts/DateContext";
-import { homeAPI, authAPI, mealAPI, recommendedExerciseAPI } from "../../services";
+import { homeAPI, authAPI, mealAPI, recommendedExerciseAPI, recommendedMealAPI } from "../../services";
 import type { WeeklyCoachReport } from "../../services/homeAPI";
 import {
   getTodayWorkoutTime,
@@ -61,6 +61,32 @@ const HomeScreen = ({ navigation }: any) => {
     exerciseCount: number;
     title: string;
   } | null>(null);
+
+  // 시간대별 식단 추천 state
+  const [mealRecommendation, setMealRecommendation] = useState<{
+    mealType: "BREAKFAST" | "LUNCH" | "DINNER";
+    mealTypeName: string;
+    foods: Array<{
+      id: number;
+      foodName: string;
+      servingSize: number;
+    }>;
+    totalCalories: number;
+  } | null>(null);
+  const [todayRecordedMeals, setTodayRecordedMeals] = useState<Set<string>>(new Set());
+
+  // 위젯 순서 state
+  const [widgetOrder, setWidgetOrder] = useState<string[]>([
+    'recommendationCard',
+    'notificationCard',
+    'weekCalendar',
+    'exerciseRoutineCard',
+    'exerciseStatsCard',
+    'bodyStatsCard',
+    'mealRecommendationCard',
+    'calorieCard',
+  ]);
+
 
   // 날짜 형식 변환 함수 (Date -> yyyy-MM-dd)
   // 한국 시간대(UTC+9) 기준으로 날짜 계산
@@ -230,7 +256,7 @@ const HomeScreen = ({ navigation }: any) => {
           console.warn("[HOME][식단데이터] 식단 데이터 로드 실패:", err);
           return null;
         }),
-        homeAPI.getNutritionGoal(dateString).catch((err) => {
+        mealAPI.getNutritionGoal(dateString).catch((err) => {
           console.warn("[HOME][영양목표] 영양 목표 로드 실패:", err);
           return null;
         }),
@@ -276,19 +302,19 @@ const HomeScreen = ({ navigation }: any) => {
       if (data && nutritionGoalResponse.status === "fulfilled" && nutritionGoalResponse.value) {
         const nutritionGoal = nutritionGoalResponse.value;
         if (data.todayMeal) {
-          // target_calorie 또는 target_calories 필드 확인
-          const targetCalories = nutritionGoal.target_calorie || nutritionGoal.target_calories;
-          if (targetCalories) {
-            data.todayMeal.targetCalories = targetCalories;
-            // 달성률 재계산
-            if (data.todayMeal.totalCalories > 0 && data.todayMeal.targetCalories > 0) {
-              data.todayMeal.calorieAchievementRate = Math.min(
-                100,
-                (data.todayMeal.totalCalories / data.todayMeal.targetCalories) * 100
-              );
-            } else {
-              data.todayMeal.calorieAchievementRate = 0;
-            }
+          // mealAPI.getNutritionGoal은 NutritionGoal 타입 반환 (targetCalories 필드 사용)
+          const targetCalories = nutritionGoal.targetCalories || nutritionGoal.target_calorie || nutritionGoal.target_calories || 0;
+          // 목표 칼로리를 명시적으로 설정 (0이어도 0으로 설정)
+          data.todayMeal.targetCalories = targetCalories;
+          
+          // 달성률 재계산
+          if (data.todayMeal.totalCalories > 0 && data.todayMeal.targetCalories > 0) {
+            data.todayMeal.calorieAchievementRate = Math.min(
+              100,
+              (data.todayMeal.totalCalories / data.todayMeal.targetCalories) * 100
+            );
+          } else {
+            data.todayMeal.calorieAchievementRate = 0;
           }
         }
         console.log("[HOME][영양목표] 목표 칼로리 업데이트:", {
@@ -296,6 +322,15 @@ const HomeScreen = ({ navigation }: any) => {
           targetCalories: data.todayMeal?.targetCalories,
           achievementRate: data.todayMeal?.calorieAchievementRate,
         });
+      } else if (data && nutritionGoalResponse.status === "rejected") {
+        console.warn("[HOME][영양목표] 영양 목표 로드 실패:", nutritionGoalResponse.reason);
+        // 영양 목표 로드 실패 시 0으로 설정
+        if (data.todayMeal) {
+          data.todayMeal.targetCalories = 0;
+        }
+      } else if (data && data.todayMeal) {
+        // 영양 목표 응답이 없을 때도 0으로 설정
+        data.todayMeal.targetCalories = 0;
       }
 
       // 식단 데이터가 없어도 todayMeal이 없으면 기본값 설정
@@ -339,6 +374,7 @@ const HomeScreen = ({ navigation }: any) => {
       setHomeData(null);
     }
   };
+
 
   // 오늘의 총 운동 시간 조회 (백엔드 API 사용)
   const loadTodayWorkoutTime = async () => {
@@ -696,6 +732,149 @@ const HomeScreen = ({ navigation }: any) => {
     }
   };
 
+  // 시간대별 식단 추천 로드
+  const loadMealRecommendation = async () => {
+    try {
+      // 현재 시간 확인 (한국 시간대)
+      const now = new Date();
+      const koreaTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+      const hours = koreaTime.getHours();
+      const minutes = koreaTime.getMinutes();
+      const currentTime = hours * 60 + minutes; // 분 단위로 변환
+
+      console.log('[HOME] 현재 시간:', hours + ':' + String(minutes).padStart(2, '0'), '분 단위:', currentTime);
+
+      // 시간대별 끼니 타입 결정
+      let targetMealType: "BREAKFAST" | "LUNCH" | "DINNER" | null = null;
+      let mealTypeName = "";
+
+      // 00:00 - 4:00: 아침
+      if (currentTime >= 0 && currentTime < 4 * 60) {
+        targetMealType = "BREAKFAST";
+        mealTypeName = "아침";
+      }
+      // 4:00 - 18:00: 점심
+      else if (currentTime >= 4 * 60 && currentTime < 18 * 60) {
+        targetMealType = "LUNCH";
+        mealTypeName = "점심";
+      }
+      // 18:00 - 24:00: 저녁
+      else if (currentTime >= 18 * 60 && currentTime < 24 * 60) {
+        targetMealType = "DINNER";
+        mealTypeName = "저녁";
+      }
+      // 00:00 - 4:00 범위가 아니면 아침 (새벽 시간대)
+      else {
+        targetMealType = "BREAKFAST";
+        mealTypeName = "아침";
+      }
+
+      const today = new Date();
+      const dateStr = formatDateToString(today);
+      console.log('[HOME] 시간대별 식단 추천 조회 시작:', dateStr, targetMealType, mealTypeName, '현재 시간:', hours + ':' + String(minutes).padStart(2, '0'));
+
+      // 오늘 기록된 식단 확인
+      let recordedMealTypes = new Set<string>();
+      try {
+        const dailyMeals = await mealAPI.getDailyMeals(dateStr).catch(() => null);
+        
+        if (dailyMeals && dailyMeals.meals) {
+          dailyMeals.meals.forEach((meal: any) => {
+            // mealType이 있으면 직접 사용
+            if (meal.mealType === "BREAKFAST" || meal.mealType === "LUNCH" || meal.mealType === "DINNER") {
+              recordedMealTypes.add(meal.mealType);
+            } else {
+              // meal_name에서 끼니 타입 추출
+              const mealName = meal.meal_name || "";
+              if (mealName.includes("아침") || mealName.includes("BREAKFAST")) {
+                recordedMealTypes.add("BREAKFAST");
+              } else if (mealName.includes("점심") || mealName.includes("LUNCH")) {
+                recordedMealTypes.add("LUNCH");
+              } else if (mealName.includes("저녁") || mealName.includes("DINNER")) {
+                recordedMealTypes.add("DINNER");
+              }
+            }
+          });
+        }
+      } catch (error) {
+        console.warn('[HOME] 오늘 기록된 식단 확인 실패:', error);
+      }
+
+      // 상태 업데이트
+      setTodayRecordedMeals(recordedMealTypes);
+
+      // 해당 끼니가 이미 기록되어 있으면 위젯 숨김
+      if (recordedMealTypes.has(targetMealType)) {
+        console.log('[HOME] 이미 기록된 끼니:', targetMealType);
+        setMealRecommendation(null);
+        return;
+      }
+
+      // 저장된 추천 식단 목록 가져오기
+      const savedPlans = await recommendedMealAPI.getSavedMealPlans();
+      
+      if (!savedPlans || savedPlans.length === 0) {
+        console.log('[HOME] 저장된 추천 식단 없음');
+        setMealRecommendation(null);
+        return;
+      }
+
+      // 모든 플랜에서 오늘 날짜의 해당 끼니 찾기
+      let foundMeal: any = null;
+
+      for (const plan of savedPlans) {
+        const details = await recommendedMealAPI.getSavedMealPlansByBundle(
+          plan.bundleId
+        );
+
+        // 오늘 날짜의 해당 끼니 찾기
+        const targetMeal = details.find(
+          (meal: any) =>
+            meal.targetDate === dateStr && meal.mealType === targetMealType
+        );
+
+        if (targetMeal) {
+          foundMeal = targetMeal;
+          break;
+        }
+      }
+
+      if (foundMeal && foundMeal.foods && foundMeal.foods.length > 0) {
+        setMealRecommendation({
+          mealType: targetMealType,
+          mealTypeName,
+          foods: foundMeal.foods.map((food: any) => ({
+            id: food.id,
+            foodName: food.foodName,
+            servingSize: food.servingSize,
+          })),
+          totalCalories: foundMeal.totalCalories || 0,
+        });
+        console.log('[HOME] 시간대별 식단 추천 조회 성공:', targetMealType, mealTypeName, foundMeal.foods.length, '개 음식');
+      } else {
+        setMealRecommendation(null);
+        console.log('[HOME] 오늘 날짜의', mealTypeName, '추천 식단 없음');
+      }
+    } catch (error: any) {
+      console.error('[HOME] 시간대별 식단 추천 조회 실패:', error);
+      setMealRecommendation(null);
+    }
+  };
+
+  // 위젯 순서 불러오기
+  const loadWidgetOrder = async () => {
+    try {
+      const savedOrder = await AsyncStorage.getItem('homeWidgetOrder');
+      if (savedOrder) {
+        const parsed = JSON.parse(savedOrder);
+        setWidgetOrder(parsed);
+        console.log('[HOME] 위젯 순서 불러오기 성공:', parsed);
+      }
+    } catch (error) {
+      console.error('[HOME] 위젯 순서 불러오기 실패:', error);
+    }
+  };
+
   //식단 추천 네비게이션 핸들러 (멤버십 분기 처리)
   const handleMealRecommendNavigation = async () => {
     try {
@@ -767,6 +946,7 @@ const HomeScreen = ({ navigation }: any) => {
         loadProfileInfo(),
         loadAIComments(), // AI 코멘트 로드
         loadTempExerciseSummary(), // 추천 운동 요약 로드
+        loadMealRecommendation(), // 시간대별 식단 추천 로드
       ]).finally(() => {
         isLoadingRef.current = false;
         console.log("[HOME] 화면 포커스, 데이터 새로고침 완료 (이번 주 칼로리 포함)");
@@ -793,6 +973,8 @@ const HomeScreen = ({ navigation }: any) => {
       loadCoachReport(),
       loadAIComments(), // AI 코멘트 로드
       loadTempExerciseSummary(), // 추천 운동 요약 로드
+      loadMealRecommendation(), // 시간대별 식단 추천 로드
+      loadWidgetOrder(), // 위젯 순서 불러오기
     ]).finally(() => {
       isLoadingRef.current = false;
       console.log("[HOME] 초기 로드 완료");
@@ -826,89 +1008,85 @@ const HomeScreen = ({ navigation }: any) => {
     };
   }, []);
 
-  const handleCalendarClick = () => {
-    navigation.navigate("Calendar");
-  };
+  // 위젯 편집 화면에서 돌아올 때 위젯 순서 다시 불러오기
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      loadWidgetOrder();
+    });
+    return unsubscribe;
+  }, [navigation]);
 
-  return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <View style={styles.header}>
-        <Text style={styles.logoText}>INTEL FIT</Text>
-      </View>
-      <View style={styles.divider} />
+  // 위젯 렌더링 함수들
+  const renderRecommendationCard = () => (
+    <View key="recommendationCard" style={styles.enhancedRecommendationWrapper}>
+      <View style={styles.enhancedRecommendationCardContainer}>
+        <View style={styles.enhancedRecommendationCardBorder} />
+        <View style={styles.enhancedRecommendationCard}>
+          <View style={styles.enhancedRecommendationContent}>
+            <Text style={styles.enhancedRecommendationTitle}>
+              {homeData?.userSummary?.name} 회원님을 위한{"\n"}
+              <Text style={styles.enhancedRecommendationTitleGreen}>
+                맞춤형 식단과 운동
+              </Text>
+              을 받아보세요!
+            </Text>
 
-      <ScrollView style={styles.content}>
-        {/* ✅ 식단/운동 추천 카드 */}
-        <View style={styles.enhancedRecommendationWrapper}>
-          <View style={styles.enhancedRecommendationCardContainer}>
-            <View style={styles.enhancedRecommendationCardBorder} />
-            <View style={styles.enhancedRecommendationCard}>
-              <View style={styles.enhancedRecommendationContent}>
-                <Text style={styles.enhancedRecommendationTitle}>
-                  {homeData?.userSummary?.name}회원님을 위한{"\n"}
-                  <Text style={styles.enhancedRecommendationTitleGreen}>
-                    맞춤형 식단과 운동
+            <View style={styles.enhancedRecommendationButtons}>
+              <TouchableOpacity
+                style={styles.enhancedRecButtonWrapper}
+                onPress={handleMealRecommendNavigation}
+              >
+                <LinearGradient
+                  colors={["#e3ff7c", "#e8ff93"]}
+                  style={styles.enhancedRecButton}
+                >
+                  <Ionicons name="restaurant" size={14} color="#000" />
+                  <Text style={styles.enhancedRecButtonText}>
+                    추천 식단 받기
                   </Text>
-                  을 받아보세요!
-                </Text>
+                  <Ionicons name="chevron-forward" size={16} color="#000" />
+                </LinearGradient>
+              </TouchableOpacity>
 
-                <View style={styles.enhancedRecommendationButtons}>
-                  <TouchableOpacity
-                    style={styles.enhancedRecButtonWrapper}
-                    onPress={handleMealRecommendNavigation}
-                  >
-                    <LinearGradient
-                      colors={["#e3ff7c", "#e8ff93"]}
-                      style={styles.enhancedRecButton}
-                    >
-                      <Ionicons name="restaurant" size={14} color="#000" />
-                      <Text style={styles.enhancedRecButtonText}>
-                        추천 식단 받기
-                      </Text>
-                      <Ionicons name="chevron-forward" size={16} color="#000" />
-                    </LinearGradient>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.enhancedRecButtonWrapper}
-                    onPress={handleRoutineRecommendNavigation}
-                  >
-                    <LinearGradient
-                      colors={["#e3ff7c", "#e8ff93"]}
-                      style={styles.enhancedRecButton}
-                    >
-                      <Ionicons name="barbell" size={14} color="#000" />
-                      <Text style={styles.enhancedRecButtonText}>
-                        추천 운동 받기
-                      </Text>
-                      <Ionicons name="chevron-forward" size={16} color="#000" />
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </View>
-              </View>
+              <TouchableOpacity
+                style={styles.enhancedRecButtonWrapper}
+                onPress={handleRoutineRecommendNavigation}
+              >
+                <LinearGradient
+                  colors={["#e3ff7c", "#e8ff93"]}
+                  style={styles.enhancedRecButton}
+                >
+                  <Ionicons name="barbell" size={14} color="#000" />
+                  <Text style={styles.enhancedRecButtonText}>
+                    추천 운동 받기
+                  </Text>
+                  <Ionicons name="chevron-forward" size={16} color="#000" />
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
+      </View>
+    </View>
+  );
 
-        {/* 알림 카드 - AI 코멘트 (우선) 또는 코치 리포트 */}
-        {(aiComment || randomActionItem) && (
-          <View style={styles.notificationCardContainer}>
-            <View style={styles.notificationCardBorder} />
-            <View style={styles.notificationCard}>
-              <Ionicons name="sparkles" size={25} color="#e3ff7c" />
-              <Text style={styles.notificationText}>
-                {aiComment || randomActionItem}
-              </Text>
-            </View>
-          </View>
-        )}
+  const renderNotificationCard = () => {
+    if (!aiComment && !randomActionItem) return null;
+    return (
+      <View key="notificationCard" style={styles.notificationCardContainer}>
+        <View style={styles.notificationCardBorder} />
+        <View style={styles.notificationCard}>
+          <Ionicons name="sparkles" size={25} color="#e3ff7c" />
+          <Text style={styles.notificationText}>
+            {aiComment || randomActionItem}
+          </Text>
+        </View>
+      </View>
+    );
+  };
 
-        {/* 주간 진행률 섹션 */}
-        <TouchableOpacity
-          style={styles.exerciseProgressSection}
-          onPress={handleCalendarClick}
-          activeOpacity={0.7}
-        >
+  const renderWeekCalendar = () => (
+    <View key="weekCalendar" style={styles.exerciseProgressSection}>
           <View style={styles.weekCalendar}>
             <View style={styles.calendarGrid}>
               {(() => {
@@ -1003,10 +1181,11 @@ const HomeScreen = ({ navigation }: any) => {
               })()}
             </View>
           </View>
-        </TouchableOpacity>
+        </View>
+  );
 
-        {/* 칼로리 섹션 */}
-        <View style={styles.calorieSection}>
+  const renderCalorieCard = () => (
+    <View key="calorieCard" style={styles.calorieSection}>
           <View style={styles.calorieStatsContent}>
             <View style={[styles.calorieStatColumn, styles.calorieStatColumnWide]}>
               <Text style={styles.calorieStatLabel}>칼로리</Text>
@@ -1047,188 +1226,249 @@ const HomeScreen = ({ navigation }: any) => {
             </View>
           </View>
         </View>
+  );
 
-        {/* 운동 루틴 카드 - 추천 운동이 있고 focus가 undefined가 아닐 때만 표시 */}
-        {tempExerciseSummary && 
-         tempExerciseSummary.focus && 
-         tempExerciseSummary.focus !== 'undefined' &&
-         (() => {
-          // focus 값을 한글로 변환
-          const getFocusKorean = (focus: string): string => {
-            const focusMap: Record<string, string> = {
-              'Upper': '상체',
-              'Lower': '하체',
-              'Full': '전신',
-              'Core': '코어',
-              'Cardio': '유산소',
-            };
-            return focusMap[focus] || focus;
-          };
+  const renderExerciseRoutineCard = () => {
+    if (!tempExerciseSummary || 
+        !tempExerciseSummary.focus || 
+        tempExerciseSummary.focus === 'undefined' ||
+        todayWorkoutSeconds !== 0) {
+      return null;
+    }
 
-          const focusKorean = getFocusKorean(tempExerciseSummary.focus);
-          const displayTitle = `오늘의 운동 : ${focusKorean}`;
+    const getFocusKorean = (focus: string): string => {
+      const focusMap: Record<string, string> = {
+        'Upper': '상체',
+        'Lower': '하체',
+        'Full': '전신',
+        'Core': '코어',
+        'Cardio': '유산소',
+      };
+      return focusMap[focus] || focus;
+    };
 
-          return (
-            <View style={styles.routineCard}>
-              <Text style={styles.routineTitle}>{displayTitle}</Text>
-            <View style={styles.routineStats}>
-              <View style={styles.routineStatItem}>
-                <Ionicons name="barbell" size={40} color="#ffffff" />
-                <Text style={styles.routineStatText}>{tempExerciseSummary.exerciseCount}가지 운동</Text>
-              </View>
-              <View style={styles.routineStatItem}>
-                <Ionicons name="stopwatch-outline" size={40} color="#ffffff" />
-                <Text style={styles.routineStatText}>{tempExerciseSummary.durationMin}분</Text>
-              </View>
-              <View style={styles.routineStatItem}>
-                <MaterialIcons
-                  name="local-fire-department"
-                  size={40}
-                  color="#ffffff"
-                />
-                <Text style={styles.routineStatText}>{tempExerciseSummary.kcal} kcal</Text>
-              </View>
-            </View>
-            <TouchableOpacity 
-              style={styles.routineButton}
-              onPress={handleStartWorkoutFromHome}
-            >
-              <Text style={styles.routineButtonText}>오늘 운동 시작하기</Text>
-            </TouchableOpacity>
+    const focusKorean = getFocusKorean(tempExerciseSummary.focus);
+    const displayTitle = `오늘의 운동 : ${focusKorean}`;
+
+    return (
+      <View key="exerciseRoutineCard" style={styles.routineCard}>
+        <Text style={styles.routineTitle}>{displayTitle}</Text>
+        <View style={styles.routineStats}>
+          <View style={styles.routineStatItem}>
+            <Ionicons name="barbell" size={40} color="#ffffff" />
+            <Text style={styles.routineStatText}>{Math.round(tempExerciseSummary.exerciseCount)}가지 운동</Text>
           </View>
-          );
-        })()}
-
-        {/* 운동 통계 카드 - 운동 시간이 0이 아닐 때만 표시 */}
-        {todayWorkoutSeconds > 0 && (
-          <View style={styles.exerciseStatsCard}>
-            <View style={styles.exerciseStatsContent}>
-              <View style={styles.exerciseStatColumn}>
-                <Text style={styles.exerciseStatLabel}>운동 시간</Text>
-                <Text style={styles.exerciseStatValue}>
-                  {formatWorkoutTime(todayWorkoutSeconds)}
-                </Text>
-              </View>
-              <View style={styles.exerciseStatDivider} />
-              <View style={styles.exerciseStatColumn}>
-                <Text style={styles.exerciseStatLabel}>소모 칼로리</Text>
-                <View style={styles.exerciseStatValueRow}>
-                  <Text style={styles.exerciseStatValue}>
-                    {todayCalories.toLocaleString()}
-                  </Text>
-                  <Text style={styles.exerciseStatUnit}>kcal</Text>
-                </View>
-              </View>
-              <View style={styles.exerciseStatDivider} />
-              <View style={styles.exerciseStatColumn}>
-                <Text style={styles.exerciseStatLabel}>완료 운동</Text>
-                <View style={styles.exerciseStatValueRow}>
-                  <Text style={styles.exerciseStatValue}>
-                    {todayExerciseCount}
-                  </Text>
-                  <Text style={styles.exerciseStatUnit}>개</Text>
-                </View>
-              </View>
-            </View>
+          <View style={styles.routineStatItem}>
+            <Ionicons name="stopwatch-outline" size={40} color="#ffffff" />
+            <Text style={styles.routineStatText}>{Math.round(tempExerciseSummary.durationMin)}분</Text>
           </View>
-        )}
-
-        {/* 체중/골격근량/체지방량 카드 - 인바디 기록이 있을 때만 표시 */}
-        {(() => {
-          // 인바디 기록이 있는지 확인 (체중, 골격근량, 체지방량 중 하나라도 값이 있으면 표시)
-          const hasWeight = 
-            inBodyData?.weight ||
-            inBodyData?.bodyComposition?.weight ||
-            inBodyData?.muscleFatAnalysis?.weight;
-          const hasSkeletalMuscleMass = 
-            inBodyData?.skeletalMuscleMass ||
-            inBodyData?.muscleFatAnalysis?.skeletalMuscleMass;
-          const hasBodyFatMass = 
-            inBodyData?.bodyFatMass ||
-            inBodyData?.muscleFatAnalysis?.bodyFatMass ||
-            inBodyData?.bodyComposition?.bodyFatMass;
-          
-          const hasInBodyData = hasWeight || hasSkeletalMuscleMass || hasBodyFatMass;
-          
-          if (!hasInBodyData) {
-            return null;
-          }
-          
-          return (
-            <View style={styles.bodyStatsContainer}>
-              <View style={[styles.bodyStatCard]}>
-                <Text style={styles.bodyStatLabel}>체중</Text>
-                <Text style={styles.bodyStatValue}>
-                  {inBodyData?.weight
-                    ? `${inBodyData.weight.toFixed(1)}kg`
-                    : inBodyData?.bodyComposition?.weight
-                    ? `${parseFloat(
-                        String(inBodyData.bodyComposition.weight).replace(
-                          /[^\d.]/g,
-                          ""
-                        )
-                      ).toFixed(1)}kg`
-                    : inBodyData?.muscleFatAnalysis?.weight
-                    ? `${inBodyData.muscleFatAnalysis.weight.toFixed(1)}kg`
-                    : "-"}
-                </Text>
-              </View>
-
-              <View style={[styles.bodyStatCard]}>
-                <Text style={styles.bodyStatLabel}>골격근량</Text>
-                <Text style={styles.bodyStatValue}>
-                  {inBodyData?.skeletalMuscleMass
-                    ? `${inBodyData.skeletalMuscleMass.toFixed(1)}kg`
-                    : inBodyData?.muscleFatAnalysis?.skeletalMuscleMass
-                    ? `${inBodyData.muscleFatAnalysis.skeletalMuscleMass.toFixed(
-                        1
-                      )}kg`
-                    : "-"}
-                </Text>
-              </View>
-
-              <View style={[styles.bodyStatCard, { marginRight: 0 }]}>
-                <Text style={styles.bodyStatLabel}>체지방량</Text>
-                <Text style={styles.bodyStatValue}>
-                  {inBodyData?.bodyFatMass
-                    ? `${inBodyData.bodyFatMass.toFixed(1)}kg`
-                    : inBodyData?.muscleFatAnalysis?.bodyFatMass
-                    ? `${inBodyData.muscleFatAnalysis.bodyFatMass.toFixed(1)}kg`
-                    : inBodyData?.bodyComposition?.bodyFatMass
-                    ? `${parseFloat(
-                        String(inBodyData.bodyComposition.bodyFatMass).replace(
-                          /[^\d.]/g,
-                          ""
-                        )
-                      ).toFixed(1)}kg`
-                    : "-"}
-                </Text>
-              </View>
-            </View>
-          );
-        })()}
-
-        {/* 식단 추천 섹션 */}
-        <View style={styles.dietRecommendationSection}>
-          <View style={styles.recommendationContent}>
-            <Text style={styles.recommendationTitle}>
-              운동 잘 마무리 하셨나요?
-            </Text>
-            <Text style={styles.recommendationSubtitle}>저녁 식단으로</Text>
-            <View style={styles.foodRecommendations}>
-              <View style={styles.foodItem}>
-                <Text style={styles.foodItemText}>닭가슴살 300g</Text>
-              </View>
-              <View style={styles.foodItem}>
-                <Text style={styles.foodItemText}>단백질 쉐이크</Text>
-              </View>
-              <View style={styles.foodItem}>
-                <Text style={styles.foodItemText}>구운 계란 2개</Text>
-              </View>
-            </View>
-            <Text style={styles.recommendationQuestion}>어떤가요?</Text>
+          <View style={styles.routineStatItem}>
+            <MaterialIcons
+              name="local-fire-department"
+              size={40}
+              color="#ffffff"
+            />
+            <Text style={styles.routineStatText}>{Math.round(tempExerciseSummary.kcal)} kcal</Text>
           </View>
         </View>
+        <TouchableOpacity 
+          style={styles.routineButton}
+          onPress={handleStartWorkoutFromHome}
+        >
+          <Text style={styles.routineButtonText}>오늘 운동 시작하기</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  const renderExerciseStatsCard = () => {
+    if (todayWorkoutSeconds === 0) return null;
+    return (
+      <View key="exerciseStatsCard" style={styles.exerciseStatsCard}>
+        <View style={styles.exerciseStatsContent}>
+          <View style={styles.exerciseStatColumn}>
+            <Text style={styles.exerciseStatLabel}>운동 시간</Text>
+            <Text style={styles.exerciseStatValue}>
+              {formatWorkoutTime(todayWorkoutSeconds)}
+            </Text>
+          </View>
+          <View style={styles.exerciseStatDivider} />
+          <View style={styles.exerciseStatColumn}>
+            <Text style={styles.exerciseStatLabel}>소모 칼로리</Text>
+            <View style={styles.exerciseStatValueRow}>
+              <Text style={styles.exerciseStatValue}>
+                {todayCalories.toLocaleString()}
+              </Text>
+              <Text style={styles.exerciseStatUnit}>kcal</Text>
+            </View>
+          </View>
+          <View style={styles.exerciseStatDivider} />
+          <View style={styles.exerciseStatColumn}>
+            <Text style={styles.exerciseStatLabel}>완료 운동</Text>
+            <View style={styles.exerciseStatValueRow}>
+              <Text style={styles.exerciseStatValue}>
+                {todayExerciseCount}
+              </Text>
+              <Text style={styles.exerciseStatUnit}>개</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderBodyStatsCard = () => {
+    const hasWeight = 
+      inBodyData?.weight ||
+      inBodyData?.bodyComposition?.weight ||
+      inBodyData?.muscleFatAnalysis?.weight;
+    const hasSkeletalMuscleMass = 
+      inBodyData?.skeletalMuscleMass ||
+      inBodyData?.muscleFatAnalysis?.skeletalMuscleMass;
+    const hasBodyFatMass = 
+      inBodyData?.bodyFatMass ||
+      inBodyData?.muscleFatAnalysis?.bodyFatMass ||
+      inBodyData?.bodyComposition?.bodyFatMass;
+    
+    const hasInBodyData = hasWeight || hasSkeletalMuscleMass || hasBodyFatMass;
+    
+    if (!hasInBodyData) {
+      return null;
+    }
+
+    return (
+      <View key="bodyStatsCard" style={styles.bodyStatsContainer}>
+        <View style={[styles.bodyStatCard]}>
+          <Text style={styles.bodyStatLabel}>체중</Text>
+          <Text style={styles.bodyStatValue}>
+            {inBodyData?.weight
+              ? `${inBodyData.weight.toFixed(1)}kg`
+              : inBodyData?.bodyComposition?.weight
+              ? `${parseFloat(
+                  String(inBodyData.bodyComposition.weight).replace(
+                    /[^\d.]/g,
+                    ""
+                  )
+                ).toFixed(1)}kg`
+              : inBodyData?.muscleFatAnalysis?.weight
+              ? `${inBodyData.muscleFatAnalysis.weight.toFixed(1)}kg`
+              : "-"}
+          </Text>
+        </View>
+
+        <View style={[styles.bodyStatCard]}>
+          <Text style={styles.bodyStatLabel}>골격근량</Text>
+          <Text style={styles.bodyStatValue}>
+            {inBodyData?.skeletalMuscleMass
+              ? `${inBodyData.skeletalMuscleMass.toFixed(1)}kg`
+              : inBodyData?.muscleFatAnalysis?.skeletalMuscleMass
+              ? `${inBodyData.muscleFatAnalysis.skeletalMuscleMass.toFixed(
+                  1
+                )}kg`
+              : "-"}
+          </Text>
+        </View>
+
+        <View style={[styles.bodyStatCard, { marginRight: 0 }]}>
+          <Text style={styles.bodyStatLabel}>체지방량</Text>
+          <Text style={styles.bodyStatValue}>
+            {inBodyData?.bodyFatMass
+              ? `${inBodyData.bodyFatMass.toFixed(1)}kg`
+              : inBodyData?.muscleFatAnalysis?.bodyFatMass
+              ? `${inBodyData.muscleFatAnalysis.bodyFatMass.toFixed(1)}kg`
+              : inBodyData?.bodyComposition?.bodyFatMass
+              ? `${parseFloat(
+                  String(inBodyData.bodyComposition.bodyFatMass).replace(
+                    /[^\d.]/g,
+                    ""
+                  )
+                ).toFixed(1)}kg`
+              : "-"}
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
+  const renderMealRecommendationCard = () => {
+    if (!mealRecommendation || 
+        mealRecommendation.foods.length === 0 || 
+        todayRecordedMeals.has(mealRecommendation.mealType)) {
+      return null;
+    }
+
+    return (
+      <TouchableOpacity
+        key="mealRecommendationCard"
+        style={styles.dietRecommendationSection}
+        onPress={() => {
+          navigation.navigate("Stats", { 
+            activeTab: 1,
+            dietActiveTab: "recommendations"
+          });
+        }}
+        activeOpacity={0.7}
+      >
+        <View style={styles.recommendationContent}>
+          <Text style={styles.recommendationSubtitle}>
+            {mealRecommendation.mealTypeName} 식단으로
+          </Text>
+          <View style={styles.foodRecommendations}>
+            {mealRecommendation.foods.slice(0, 3).map((food, index) => (
+              <View key={food.id || index} style={styles.foodItem}>
+                <Text style={styles.foodItemText}>
+                  {food.foodName} {food.servingSize > 0 ? `${food.servingSize}g` : ''}
+                </Text>
+              </View>
+            ))}
+          </View>
+          <View style={styles.recommendationQuestionRow}>
+            <Text style={styles.recommendationQuestion}>어떤가요?</Text>
+            <View style={styles.dietRecordLink}>
+              <Text style={styles.dietRecordLinkText}>식단 기록하기</Text>
+              <Ionicons name="chevron-forward" size={16} color="#999999" />
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  // 위젯 렌더링 맵
+  const widgetRenderMap: Record<string, () => React.ReactNode> = {
+    recommendationCard: renderRecommendationCard,
+    notificationCard: renderNotificationCard,
+    weekCalendar: renderWeekCalendar,
+    exerciseRoutineCard: renderExerciseRoutineCard,
+    exerciseStatsCard: renderExerciseStatsCard,
+    bodyStatsCard: renderBodyStatsCard,
+    mealRecommendationCard: renderMealRecommendationCard,
+    calorieCard: renderCalorieCard,
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <View style={styles.header}>
+        <Text style={styles.logoText}>INTELFIT</Text>
+      </View>
+      <View style={styles.divider} />
+
+      <ScrollView style={styles.content}>
+        {/* 위젯들을 순서대로 렌더링 */}
+        {widgetOrder.map((widgetId) => {
+          const renderWidget = widgetRenderMap[widgetId];
+          return renderWidget ? renderWidget() : null;
+        })}
+
+        {/* 홈 수정하기 버튼 */}
+        <TouchableOpacity
+          style={styles.editHomeButton}
+          onPress={() => navigation.navigate("HomeWidgetEdit")}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="settings-outline" size={16} color="#999999" />
+          <Text style={styles.editHomeButtonText}>위젯 정렬</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -1276,9 +1516,9 @@ const styles = StyleSheet.create({
   exerciseProgressSection: {
     backgroundColor: "#393a38",
     borderRadius: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    marginBottom: 20,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: "#2a2a2a",
   },
@@ -1290,15 +1530,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     gap: 0,
-    height: 60,
-    marginVertical: 6,
+    height: 55,
+    marginVertical: 4,
   },
   calendarItem: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     gap: 4,
-    minHeight: 60,
+    minHeight: 55,
   },
   calendarNumber: {
     minHeight: 30,
@@ -1352,9 +1592,9 @@ const styles = StyleSheet.create({
   calorieSection: {
     backgroundColor: "#393a38",
     borderRadius: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 20,
-    marginBottom: 20,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: "#2a2a2a",
   },
@@ -1362,7 +1602,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    height: 60,
+    height: 50,
   },
   calorieStatColumn: {
     alignItems: "center",
@@ -1457,13 +1697,13 @@ const styles = StyleSheet.create({
   dietRecommendationSection: {
     backgroundColor: "#393a38",
     borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: "#2a2a2a",
   },
   recommendationContent: {
-    maxWidth: 249,
+    width: "100%",
   },
   recommendationTitle: {
     fontSize: 16,
@@ -1472,38 +1712,54 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   recommendationSubtitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "700",
     color: "#ffffff",
-    marginBottom: 10,
+    marginBottom: 12,
   },
   foodRecommendations: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 6,
-    marginBottom: 8,
+    marginBottom: 12,
   },
   foodItem: {
     backgroundColor: "#e3ff7c",
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 8,
   },
   foodItemText: {
     color: "#000000",
     fontSize: 14,
     fontWeight: "700",
   },
+  recommendationQuestionRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "space-between" as const,
+    width: "100%",
+  },
   recommendationQuestion: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "700",
     color: "#ffffff",
+  },
+  dietRecordLink: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 4,
+  },
+  dietRecordLinkText: {
+    fontSize: 14,
+    fontWeight: "500" as const,
+    color: "#999999",
   },
   routineCard: {
     backgroundColor: "#393a38",
     borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: "#2a2a2a",
   },
@@ -1511,13 +1767,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     color: "#e3ff7c",
-    marginBottom: 20,
+    marginBottom: 14,
     lineHeight: 19,
   },
   routineStats: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 20,
+    marginBottom: 14,
     paddingHorizontal: 4,
   },
   routineStatItem: {
@@ -1550,9 +1806,9 @@ const styles = StyleSheet.create({
   exerciseStatsCard: {
     backgroundColor: "#393a38",
     borderRadius: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 20,
-    marginBottom: 20,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: "#2a2a2a",
   },
@@ -1560,7 +1816,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    height: 60,
+    height: 50,
   },
   exerciseStatColumn: {
     flex: 1,
@@ -1599,16 +1855,16 @@ const styles = StyleSheet.create({
   bodyStatsContainer: {
     flexDirection: "row",
     gap: 8,
-    marginBottom: 20,
+    marginBottom: 12,
   },
   bodyStatCard: {
     flex: 1,
     backgroundColor: "#393a38",
     borderRadius: 20,
-    padding: 15,
+    padding: 12,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 70,
+    minHeight: 60,
     borderWidth: 1,
     borderColor: "#2a2a2a",
   },
@@ -1729,7 +1985,7 @@ const styles = StyleSheet.create({
   },
 
   enhancedRecommendationWrapper: {
-    marginBottom: 20,
+    marginBottom: 12,
   },
   enhancedRecommendationCardContainer: {
     position: "relative",
@@ -1758,12 +2014,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderRadius: 20,
     borderColor: "#e3ff7c",
-    padding: 20,
+    padding: 14,
     zIndex: 1,
     overflow: "hidden",
   },
   enhancedRecommendationContent: {
-    gap: 20,
+    gap: 14,
   },
   enhancedRecommendationTitle: {
     fontSize: 16,
@@ -1803,7 +2059,7 @@ const styles = StyleSheet.create({
   },
   notificationCardContainer: {
     position: "relative",
-    marginBottom: 20,
+    marginBottom: 12,
   },
   notificationCardBorder: {
     position: "absolute",
@@ -1829,10 +2085,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderRadius: 20,
     borderColor: "#e3ff7c",
-    padding: 16,
+    padding: 12,
     flexDirection: "row",
     alignItems: "center",
-    gap: 16,
+    gap: 12,
     zIndex: 1,
     overflow: "hidden",
   },
@@ -1842,6 +2098,122 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#ffffff",
     lineHeight: 20,
+  },
+  recommendedMealWidgetContainer: {
+    position: "relative",
+    marginBottom: 20,
+  },
+  recommendedMealWidgetBorder: {
+    position: "absolute",
+    top: -2,
+    left: -2,
+    right: -2,
+    bottom: -2,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "#e3ff7c",
+    backgroundColor: "transparent",
+    shadowColor: "#e3ff7c",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  recommendedMealWidget: {
+    backgroundColor: "#393a38",
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#2a2a2a",
+  },
+  recommendedMealWidgetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+  recommendedMealWidgetTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#ffffff",
+    lineHeight: 20,
+  },
+  recommendedMealWidgetContent: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 12,
+  },
+  recommendedMealFoodItem: {
+    backgroundColor: "#2a2a2a",
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  recommendedMealFoodName: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#ffffff",
+    maxWidth: 80,
+  },
+  recommendedMealFoodServing: {
+    fontSize: 11,
+    fontWeight: "400",
+    color: "#cccccc",
+  },
+  recommendedMealMoreText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#e3ff7c",
+    alignSelf: "center",
+  },
+  recommendedMealWidgetFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#2a2a2a",
+  },
+  recommendedMealWidgetNutrient: {
+    flex: 1,
+    alignItems: "center",
+  },
+  recommendedMealWidgetNutrientLabel: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "#cccccc",
+    marginBottom: 4,
+  },
+  recommendedMealWidgetNutrientValue: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#ffffff",
+  },
+  recommendedMealWidgetDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: "#2a2a2a",
+  },
+  recommendedMealWidgetArrow: {
+    position: "absolute" as const,
+    right: 16,
+    top: 16,
+  },
+  editHomeButton: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    marginTop: 20,
+    marginBottom: 20,
+    gap: 6,
+  },
+  editHomeButtonText: {
+    fontSize: 14,
+    fontWeight: "500" as const,
+    color: "#999999",
   },
 });
 
