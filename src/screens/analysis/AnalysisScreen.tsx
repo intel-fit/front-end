@@ -1896,6 +1896,7 @@ const AnalysisScreen = ({ navigation }: any) => {
   // 랜덤 코멘트 로드
   const loadRandomScoreComment = useCallback(async () => {
     try {
+      console.log("[ANALYSIS][COMMENT] 코멘트 로드 시작");
       setScoreCommentLoading(true);
       setScoreComment(null);
 
@@ -1907,21 +1908,35 @@ const AnalysisScreen = ({ navigation }: any) => {
       ];
       const randomIndex = Math.floor(Math.random() * commentTypes.length);
       const selectedCommentAPI = commentTypes[randomIndex];
+      const apiType = randomIndex === 0 ? "daily" : randomIndex === 1 ? "weekly" : "monthly";
 
-      console.log("[ANALYSIS] 코멘트 API 선택:", randomIndex === 0 ? "daily" : randomIndex === 1 ? "weekly" : "monthly");
+      console.log("[ANALYSIS][COMMENT] 코멘트 API 선택:", apiType, "index:", randomIndex);
 
       const comment = await selectedCommentAPI();
+      console.log("[ANALYSIS][COMMENT] API 호출 완료, 반환된 comment:", comment);
+      console.log("[ANALYSIS][COMMENT] comment 타입:", typeof comment);
+      console.log("[ANALYSIS][COMMENT] comment가 truthy인가?", !!comment);
+      console.log("[ANALYSIS][COMMENT] comment가 문자열인가?", typeof comment === 'string');
+      console.log("[ANALYSIS][COMMENT] comment 길이:", comment ? (typeof comment === 'string' ? comment.length : 'N/A') : 0);
+      
       if (comment) {
         setScoreComment(comment);
-        console.log("[ANALYSIS] 코멘트 로드 성공:", comment);
+        console.log("[ANALYSIS][COMMENT] 코멘트 로드 성공, state에 설정:", comment);
       } else {
-        console.log("[ANALYSIS] 코멘트 없음");
+        console.log("[ANALYSIS][COMMENT] 코멘트 없음 (null 또는 빈 값)");
       }
-    } catch (error) {
-      console.error("[ANALYSIS] 코멘트 로드 실패:", error);
+    } catch (error: any) {
+      console.error("[ANALYSIS][COMMENT] 코멘트 로드 실패:", {
+        message: error?.message,
+        status: error?.status,
+        data: error?.data,
+        stack: error?.stack,
+        error: error,
+      });
       setScoreComment(null);
     } finally {
       setScoreCommentLoading(false);
+      console.log("[ANALYSIS][COMMENT] 코멘트 로드 완료, loading: false");
     }
   }, []);
 

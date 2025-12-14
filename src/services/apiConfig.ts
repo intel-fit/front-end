@@ -271,6 +271,11 @@ export const requestAI = async <T = any>(
     }
 
     console.log("✅ AI 서버 응답 성공");
+    console.log("📦 AI 서버 응답 데이터:", JSON.stringify(data, null, 2));
+    console.log("📦 AI 서버 응답 데이터 타입:", typeof data);
+    if (typeof data === 'object' && data !== null) {
+      console.log("📦 AI 서버 응답 데이터 키들:", Object.keys(data));
+    }
     return data;
   } catch (error: any) {
     // 타임아웃 에러

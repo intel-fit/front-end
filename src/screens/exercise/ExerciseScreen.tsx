@@ -6386,10 +6386,91 @@ const StretchDetailContent = ({
 
             // 문자열 형태의 설명
             if (typeof instructions === "string" && instructions.length > 0) {
-              const lines = instructions
+              // 운동 설명과 동일한 방식으로 Step 처리
+              const stepMatches: Array<{ number: string; content: string }> =
+                [];
+
+              // 먼저 줄바꿈으로 분리
+              const instructionLines = instructions
                 .split("\n")
                 .filter((line) => line.trim());
-              return lines.map((line: string, idx: number) => (
+
+              instructionLines.forEach((line) => {
+                // 한 줄에 여러 Step이 쉼표로 구분되어 있을 수 있음
+                // "Step: 1 ..., Step:2 ..., Step:3 ..." 형식 처리
+
+                // Step: 또는 ,Step: 패턴으로 분리
+                const stepParts = line
+                  .split(/(?:^|,\s*)Step:/i)
+                  .filter((part) => part.trim());
+                const foundSteps: Array<{
+                  stepNum: number;
+                  description: string;
+                }> = [];
+
+                stepParts.forEach((part) => {
+                  // Step: 다음에 오는 숫자와 설명 추출
+                  const stepMatch = part.match(/^\s*(\d+)\s*(.+)$/);
+                  if (stepMatch) {
+                    const stepNum = parseInt(stepMatch[1], 10);
+                    let description = stepMatch[2].trim();
+                    // 끝의 쉼표, 점, 공백 제거
+                    description = description.replace(/[,\.\s]+$/, "").trim();
+
+                    if (description) {
+                      foundSteps.push({ stepNum, description });
+                    }
+                  }
+                });
+
+                // Step: 패턴으로 분리되지 않은 경우, 정규식으로 다시 시도
+                if (foundSteps.length === 0) {
+                  const stepRegex = /Step:\s*(\d+)\s*([^,]+?)(?=,\s*Step:|$)/gi;
+                  let match;
+
+                  while ((match = stepRegex.exec(line)) !== null) {
+                    const stepNum = parseInt(match[1], 10);
+                    let description = match[2].trim();
+                    description = description.replace(/[,\.\s]+$/, "").trim();
+
+                    if (description) {
+                      foundSteps.push({ stepNum, description });
+                    }
+                  }
+                }
+
+                // 찾은 Step들을 stepMatches에 추가
+                foundSteps.forEach(({ stepNum, description }) => {
+                  stepMatches.push({
+                    number: stepNum.toString(),
+                    content: description,
+                  });
+                });
+              });
+
+              // Step 패턴이 있으면 Step 기준으로 렌더링
+              if (stepMatches.length > 0) {
+                return stepMatches.map((step, idx) => {
+                  return (
+                    <View key={idx}>
+                      <View style={styles.stretchDetailStep}>
+                        <Text style={styles.stretchDetailStepNumber}>
+                          {step.number}
+                        </Text>
+                        <Text style={styles.stretchDetailStepTitle}>
+                          {step.content}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                });
+              }
+
+              // Step 패턴이 없으면 기존대로 줄바꿈으로 분리
+              const fallbackLines = instructions
+                .split("\n")
+                .filter((line) => line.trim());
+              return fallbackLines.map((line: string, idx: number) => (
                 <Text key={idx} style={styles.stretchDetailStepText}>
                   {line.trim()}
                 </Text>
