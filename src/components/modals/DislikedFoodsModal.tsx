@@ -11,61 +11,61 @@ import {
   Alert,
   ActivityIndicator,
   Dimensions,
+  Keyboard,
 } from "react-native";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { userPreferencesAPI } from "../../services/userPreferencesAPI";
+import type { ExclusionResponse } from "../../types";
 
 const { width } = Dimensions.get("window");
 
 interface DislikedFoodsModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave?: (foods: string[]) => void;
+  userId: string;
+  onUpdate?: () => void;
 }
 
 const DislikedFoodsModal = ({
   visible,
   onClose,
-  onSave,
+  userId,
+  onUpdate,
 }: DislikedFoodsModalProps) => {
-  const [dislikedFoods, setDislikedFoods] = useState<string[]>([]);
-  const [originalFoods, setOriginalFoods] = useState<string[]>([]);
+  const [dislikedFoods, setDislikedFoods] = useState<ExclusionResponse[]>([]);
   const [inputValue, setInputValue] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(false);
+  const [processing, setProcessing] = useState(false);
 
-  // 모달이 열릴 때 데이터 로드
   useEffect(() => {
-    if (visible) {
+    if (visible && userId) {
       loadDislikedFoods();
     }
-  }, [visible]);
+  }, [visible, userId]);
 
-  // 변경사항 감지
-  useEffect(() => {
-    const changed =
-      JSON.stringify(dislikedFoods.sort()) !==
-      JSON.stringify(originalFoods.sort());
-    setHasChanges(changed);
-  }, [dislikedFoods, originalFoods]);
-
+  /**
+   * 비선호 식단 목록 불러오기
+   */
   const loadDislikedFoods = async () => {
     try {
-      setLoading(true);
-      const foods = await userPreferencesAPI.getDislikedFoods();
+      setInitialLoading(true);
+      const foods = await userPreferencesAPI.getExclusions(userId);
       setDislikedFoods(foods);
-      setOriginalFoods(foods);
-      setHasChanges(false);
     } catch (error: any) {
-      console.error("Failed to load disliked foods", error);
+      console.error("비선호 식단 조회 실패:", error);
       Alert.alert("오류", "금지 식단을 불러오는데 실패했습니다.");
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
     }
   };
 
-  const handleAdd = () => {
+  /**
+   * 음식 추가 핸들러
+   * - 쉼표로 구분된 여러 음식을 한 번에 입력 가능
+   * - 예: "굴비, 다랑어" 또는 "오이"
+   */
+  const handleAdd = async () => {
     const trimmed = inputValue.trim();
 
     if (!trimmed) {
@@ -73,73 +73,94 @@ const DislikedFoodsModal = ({
       return;
     }
 
-    if (dislikedFoods.includes(trimmed)) {
-      Alert.alert("알림", "이미 추가된 음식입니다.");
+    // 쉼표로 구분하여 배열로 변환 (공백 제거)
+    const foodsToAdd = trimmed
+      .split(",")
+      .map((food) => food.trim())
+      .filter((food) => food.length > 0);
+
+    if (foodsToAdd.length === 0) {
+      Alert.alert("알림", "유효한 음식 이름을 입력해주세요.");
       return;
     }
 
-    setDislikedFoods((prev) => [...prev, trimmed]);
-    setInputValue("");
+    // 중복 검사 (기존 목록의 food_name과 비교)
+    const duplicates = foodsToAdd.filter((newFood) =>
+      dislikedFoods.some((item) => {
+        // item.food_name이 "굴비, 다랑어" 형태일 수 있으므로
+        // 쉼표로 분리해서 각각 비교
+        const existingFoods = item.food_name.split(",").map((f) => f.trim());
+        return existingFoods.includes(newFood);
+      })
+    );
+
+    if (duplicates.length > 0) {
+      Alert.alert(
+        "알림",
+        `이미 목록에 있는 음식입니다: ${duplicates.join(", ")}`
+      );
+      return;
+    }
+
+    try {
+      setProcessing(true);
+      Keyboard.dismiss();
+
+      // API 호출: 배열 전달
+      const newFood = await userPreferencesAPI.addExclusions(
+        userId,
+        foodsToAdd
+      );
+
+      // 응답: { id: 1, food_name: "굴비, 다랑어", reason: "taste" }
+      // 목록에 추가
+      setDislikedFoods((prev) => [...prev, newFood]);
+      setInputValue("");
+
+      Alert.alert("완료", `"${newFood.food_name}"이(가) 추가되었습니다.`);
+
+      if (onUpdate) onUpdate();
+    } catch (error: any) {
+      console.error("음식 추가 실패:", error);
+      Alert.alert("오류", "음식을 추가하지 못했습니다.");
+    } finally {
+      setProcessing(false);
+    }
   };
 
-  const handleRemove = (food: string) => {
-    Alert.alert("삭제", `"${food}"를 삭제하시겠습니까?`, [
+  /**
+   * 음식 삭제 핸들러
+   * @param id exclusion_id (비선호 식단 저장한 식단의 id)
+   * @param name 표시용 음식 이름 (food_name)
+   */
+  const handleRemove = (id: number, name: string) => {
+    Alert.alert("삭제", `"${name}"을(를) 제외 목록에서 삭제하시겠습니까?`, [
       { text: "취소", style: "cancel" },
       {
         text: "삭제",
         style: "destructive",
-        onPress: () => {
-          setDislikedFoods((prev) => prev.filter((f) => f !== food));
+        onPress: async () => {
+          try {
+            setProcessing(true);
+
+            // API 호출: exclusion_id로 삭제
+            await userPreferencesAPI.deleteExclusion(id);
+
+            // 로컬 상태 업데이트
+            setDislikedFoods((prev) => prev.filter((item) => item.id !== id));
+
+            Alert.alert("완료", "삭제되었습니다.");
+
+            if (onUpdate) onUpdate();
+          } catch (error: any) {
+            console.error("삭제 실패:", error);
+            Alert.alert("오류", "삭제에 실패했습니다.");
+          } finally {
+            setProcessing(false);
+          }
         },
       },
     ]);
-  };
-
-  const handleSave = async () => {
-    try {
-      setLoading(true);
-
-      await userPreferencesAPI.saveDislikedFoods(dislikedFoods);
-
-      Alert.alert("성공", "금지 식단이 저장되었습니다.");
-      setOriginalFoods(dislikedFoods);
-      setHasChanges(false);
-
-      if (onSave) {
-        onSave(dislikedFoods);
-      }
-
-      onClose();
-    } catch (error: any) {
-      console.error("Failed to save disliked foods", error);
-      Alert.alert("오류", error.message || "저장에 실패했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleClose = () => {
-    if (hasChanges) {
-      Alert.alert(
-        "변경사항",
-        "저장하지 않은 변경사항이 있습니다. 나가시겠습니까?",
-        [
-          { text: "취소", style: "cancel" },
-          {
-            text: "나가기",
-            style: "destructive",
-            onPress: () => {
-              setDislikedFoods(originalFoods);
-              setInputValue("");
-              setHasChanges(false);
-              onClose();
-            },
-          },
-        ]
-      );
-    } else {
-      onClose();
-    }
   };
 
   return (
@@ -147,7 +168,7 @@ const DislikedFoodsModal = ({
       visible={visible}
       transparent={true}
       animationType="slide"
-      onRequestClose={handleClose}
+      onRequestClose={onClose}
     >
       <View style={styles.overlay}>
         <LinearGradient
@@ -158,7 +179,7 @@ const DislikedFoodsModal = ({
         <View style={styles.container}>
           {/* 헤더 */}
           <View style={styles.header}>
-            <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <Icon name="close" size={28} color="#ffffff" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>금지 식단 설정</Text>
@@ -169,14 +190,13 @@ const DislikedFoodsModal = ({
           <View style={styles.infoBox}>
             <Icon name="information-circle" size={20} color="#4a90e2" />
             <Text style={styles.infoText}>
-              알레르기나 선호하지 않는 음식을 추가하면 식단 추천에서 제외됩니다.
+              쉼표(,)로 구분하여 여러 음식을 한 번에 추가할 수 있습니다.
+              {"\n"}
+              예: 굴비, 다랑어, 오이
             </Text>
           </View>
 
-          <ScrollView
-            style={styles.content}
-            showsVerticalScrollIndicator={false}
-          >
+          <View style={styles.content}>
             {/* 입력 필드 */}
             <View style={styles.inputSection}>
               <Text style={styles.sectionTitle}>음식 추가</Text>
@@ -193,103 +213,118 @@ const DislikedFoodsModal = ({
                   />
                   <TextInput
                     style={styles.input}
-                    placeholder="예: 땅콩, 우유, 새우"
+                    placeholder="예: 굴비, 다랑어, 오이"
                     placeholderTextColor="#666666"
                     value={inputValue}
                     onChangeText={setInputValue}
                     onSubmitEditing={handleAdd}
                     returnKeyType="done"
+                    editable={!processing}
                   />
                 </LinearGradient>
                 <TouchableOpacity
                   style={[
                     styles.addBtn,
-                    !inputValue.trim() && styles.addBtnDisabled,
+                    (!inputValue.trim() || processing) && styles.addBtnDisabled,
                   ]}
                   onPress={handleAdd}
-                  disabled={!inputValue.trim()}
+                  disabled={!inputValue.trim() || processing}
                 >
                   <LinearGradient
                     colors={["#e3ff7c", "#a8e063"]}
                     style={styles.addBtnGradient}
                   >
-                    <Icon name="add" size={28} color="#111111" />
+                    {processing ? (
+                      <ActivityIndicator size="small" color="#111111" />
+                    ) : (
+                      <Icon name="add" size={28} color="#111111" />
+                    )}
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
             </View>
 
             {/* 금지 식단 목록 */}
-            <View style={styles.listSection}>
+            <View style={{ flex: 1 }}>
               <Text style={styles.sectionTitle}>
                 금지 식단 목록 ({dislikedFoods.length})
               </Text>
 
-              {dislikedFoods.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Icon name="restaurant-outline" size={60} color="#666666" />
-                  <Text style={styles.emptyText}>
-                    아직 추가된 금지 식단이 없습니다.
-                  </Text>
-                  <Text style={styles.emptySubtext}>
-                    위에서 음식을 추가해보세요.
-                  </Text>
+              {initialLoading ? (
+                <View style={styles.centerState}>
+                  <ActivityIndicator size="large" color="#a8e063" />
                 </View>
               ) : (
-                <View style={styles.foodList}>
-                  {dislikedFoods.map((food, index) => (
-                    <View key={index} style={styles.foodItem}>
-                      <LinearGradient
-                        colors={[
-                          "rgba(255,255,255,0.08)",
-                          "rgba(255,255,255,0.04)",
-                        ]}
-                        style={styles.foodItemGradient}
-                      >
-                        <View style={styles.foodItemLeft}>
-                          <View style={styles.foodItemIcon}>
-                            <Icon name="ban" size={18} color="#ef4444" />
-                          </View>
-                          <Text style={styles.foodName}>{food}</Text>
-                        </View>
-                        <TouchableOpacity
-                          onPress={() => handleRemove(food)}
-                          style={styles.removeBtn}
-                        >
-                          <Icon name="close-circle" size={24} color="#ef4444" />
-                        </TouchableOpacity>
-                      </LinearGradient>
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={styles.listContent}
+                >
+                  {dislikedFoods.length === 0 ? (
+                    <View style={styles.emptyState}>
+                      <Icon
+                        name="restaurant-outline"
+                        size={60}
+                        color="#666666"
+                      />
+                      <Text style={styles.emptyText}>
+                        아직 추가된 금지 식단이 없습니다.
+                      </Text>
+                      <Text style={styles.emptySubText}>
+                        위 입력창에서 원하는 음식을 추가해보세요.
+                      </Text>
                     </View>
-                  ))}
-                </View>
+                  ) : (
+                    <View style={styles.foodList}>
+                      {dislikedFoods.map((item) => (
+                        <View key={item.id} style={styles.foodItem}>
+                          <LinearGradient
+                            colors={[
+                              "rgba(255,255,255,0.08)",
+                              "rgba(255,255,255,0.04)",
+                            ]}
+                            style={styles.foodItemGradient}
+                          >
+                            <View style={styles.foodItemLeft}>
+                              <View style={styles.foodItemIcon}>
+                                <Icon name="ban" size={18} color="#ef4444" />
+                              </View>
+                              <Text style={styles.foodName}>
+                                {item.food_name}
+                              </Text>
+                            </View>
+
+                            <TouchableOpacity
+                              onPress={() =>
+                                handleRemove(item.id, item.food_name)
+                              }
+                              style={styles.removeBtn}
+                              disabled={processing}
+                            >
+                              <Icon
+                                name="close-circle"
+                                size={24}
+                                color="#ef4444"
+                              />
+                            </TouchableOpacity>
+                          </LinearGradient>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                  <View style={{ height: 100 }} />
+                </ScrollView>
               )}
             </View>
-          </ScrollView>
+          </View>
 
-          {/* 저장 버튼 */}
+          {/* 닫기 버튼 */}
           <View style={styles.footer}>
-            <TouchableOpacity
-              style={[
-                styles.saveBtn,
-                (!hasChanges || loading) && styles.saveBtnDisabled,
-              ]}
-              onPress={handleSave}
-              disabled={!hasChanges || loading}
-            >
+            <TouchableOpacity style={styles.saveBtn} onPress={onClose}>
               <LinearGradient
                 colors={["#e3ff7c", "#a8e063"]}
                 style={styles.saveBtnGradient}
               >
-                {loading ? (
-                  <ActivityIndicator size="small" color="#111111" />
-                ) : (
-                  <>
-                    <Icon name="checkmark" size={24} color="#111111" />
-                    <Text style={styles.saveBtnText}>
-                      {hasChanges ? "저장하기" : "저장됨"}
-                    </Text>
-                  </>
-                )}
+                <Text style={styles.saveBtnText}>닫기</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -329,7 +364,7 @@ const styles = StyleSheet.create({
   },
   infoBox: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     backgroundColor: "#1e3a5f",
     padding: 16,
     marginHorizontal: 20,
@@ -339,9 +374,9 @@ const styles = StyleSheet.create({
   },
   infoText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 13,
     color: "#ffffff",
-    lineHeight: 20,
+    lineHeight: 18,
   },
   content: {
     flex: 1,
@@ -349,7 +384,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
   },
   inputSection: {
-    marginBottom: 32,
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 16,
@@ -394,8 +429,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  listSection: {
-    marginBottom: 100,
+  centerState: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 40,
   },
   emptyState: {
     alignItems: "center",
@@ -409,10 +447,13 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 8,
   },
-  emptySubtext: {
+  emptySubText: {
     fontSize: 14,
     color: "#666666",
     textAlign: "center",
+  },
+  listContent: {
+    paddingBottom: 20,
   },
   foodList: {
     gap: 12,
@@ -467,9 +508,6 @@ const styles = StyleSheet.create({
   saveBtn: {
     borderRadius: 12,
     overflow: "hidden",
-  },
-  saveBtnDisabled: {
-    opacity: 0.5,
   },
   saveBtnGradient: {
     flexDirection: "row",

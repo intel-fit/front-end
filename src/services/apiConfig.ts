@@ -29,6 +29,12 @@ export const request = async <T = any>(
   // 저장된 토큰 가져오기
   const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
 
+  // 🔍 토큰 디버깅 로그 추가
+  console.log(
+    "🔑 토큰 확인:",
+    token ? `토큰 있음 (${token.substring(0, 20)}...)` : "❌ 토큰 없음"
+  );
+
   // 요청 헤더 설정
   const headers: HeadersInit = {
     "Content-Type": "application/json",
@@ -42,27 +48,30 @@ export const request = async <T = any>(
 
   try {
     // 서버에 요청 전송
-    console.log("API 요청:", `${API_BASE_URL}${endpoint}`);
+    // 📌 한글로 디코딩된 URL 로그
+    const fullUrl = `${API_BASE_URL}${endpoint}`;
+    const decodedUrl = decodeURIComponent(fullUrl);
+    console.log("API 요청:", decodedUrl);
     console.log("요청 옵션:", { method: options.method || "GET", headers });
 
     // POST/PUT 요청인 경우 본문도 로깅
-  if (
-    options.body &&
-    (options.method === "POST" ||
-      options.method === "PUT" ||
-      options.method === "PATCH" ||
-      options.method === "DELETE") 
-  ) {
-  try {
-    const bodyData =
-      typeof options.body === "string"
-        ? JSON.parse(options.body)
-        : options.body;
-    console.log("요청 본문:", JSON.stringify(bodyData, null, 2));
-  } catch (e) {
-    console.log("요청 본문 (원본):", options.body);
-  }
-}
+    if (
+      options.body &&
+      (options.method === "POST" ||
+        options.method === "PUT" ||
+        options.method === "PATCH" ||
+        options.method === "DELETE")
+    ) {
+      try {
+        const bodyData =
+          typeof options.body === "string"
+            ? JSON.parse(options.body)
+            : options.body;
+        console.log("요청 본문:", JSON.stringify(bodyData, null, 2));
+      } catch (e) {
+        console.log("요청 본문 (원본):", options.body);
+      }
+    }
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,

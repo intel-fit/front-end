@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   Alert,
   ActivityIndicator,
   Modal,
@@ -18,9 +17,15 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
-import { recommendedMealAPI, userPreferencesAPI } from "../../services";
+// 🔹 authAPI import 추가
+import {
+  recommendedMealAPI,
+  userPreferencesAPI,
+  authAPI,
+} from "../../services";
 import { LinearGradient } from "expo-linear-gradient";
 import DislikedFoodsModal from "../../components/modals/DislikedFoodsModal";
+import type { ExclusionResponse } from "../../types";
 
 const { width } = Dimensions.get("window");
 
@@ -32,6 +37,7 @@ const LOADING_MESSAGES = [
   "거의 다 됐어요! 조금만 기다려주세요...",
 ];
 
+// ✅ 로딩 오버레이 컴포넌트
 const LoadingOverlay = ({
   visible,
   messages = LOADING_MESSAGES,
@@ -268,7 +274,6 @@ const MealsSelectionModal = ({
               colors={["rgba(26,26,46,0.98)", "rgba(22,33,62,0.98)"]}
               style={mealsModalStyles.content}
             >
-              {/* 헤더 */}
               <View style={mealsModalStyles.header}>
                 <Icon name="restaurant" size={28} color="#e3ff7c" />
                 <Text style={mealsModalStyles.title}>끼니 수 선택</Text>
@@ -278,7 +283,6 @@ const MealsSelectionModal = ({
                 하루에 몇 끼를 드시나요?
               </Text>
 
-              {/* 끼니 선택 버튼들 */}
               <View style={mealsModalStyles.optionsContainer}>
                 {[1, 2, 3].map((num) => (
                   <TouchableOpacity
@@ -344,7 +348,6 @@ const MealsSelectionModal = ({
                 ))}
               </View>
 
-              {/* 닫기 버튼 */}
               <TouchableOpacity
                 style={mealsModalStyles.closeButton}
                 onPress={onClose}
@@ -460,8 +463,6 @@ const mealsModalStyles = StyleSheet.create({
 });
 
 const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
-  console.log(`🔄 ${dayIndex}일차 변환 시작`);
-
   let breakfast, lunch, dinner;
 
   if (tempDay.meals && tempDay.meals.length > 0) {
@@ -470,8 +471,6 @@ const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
     dinner = tempDay.meals.find((m: any) => m.mealType === "DINNER");
 
     if (!breakfast && !lunch && !dinner) {
-      console.log(`⚠️ ${dayIndex}일차는 SNACK만 있음 - 변환 시작`);
-
       const snacks = tempDay.meals.filter((m: any) => m.mealType === "SNACK");
 
       if (snacks.length >= 1) {
@@ -495,10 +494,6 @@ const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
           mealTypeName: "저녁",
         };
       }
-
-      console.log(
-        `✅ SNACK 변환 완료: 아침=${!!breakfast}, 점심=${!!lunch}, 저녁=${!!dinner}`
-      );
     }
   }
 
@@ -592,18 +587,22 @@ const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
 
 const MealRecommendScreen = () => {
   const navigation = useNavigation();
+  const [userId, setUserId] = useState<string>("");
+
   const [screen, setScreen] = useState<"welcome" | "meals">("welcome");
   const [showDislikedModal, setShowDislikedModal] = useState(false);
 
   const [weeklyMeals, setWeeklyMeals] = useState<any[]>([]);
   const [currentDay, setCurrentDay] = useState(0);
-  const [excludedIngredients, setExcludedIngredients] = useState<string[]>([]);
-  const [newIngredient, setNewIngredient] = useState("");
+
+  const [excludedIngredients, setExcludedIngredients] = useState<
+    ExclusionResponse[]
+  >([]);
+
   const [loading, setLoading] = useState(false);
   const [savedMeals, setSavedMeals] = useState<any[]>([]);
   const [currentPlanId, setCurrentPlanId] = useState<number | null>(null);
 
-  // ✅ 끼니 수 관련 state
   const [mealsPerDay, setMealsPerDay] = useState(3);
   const [showMealsModal, setShowMealsModal] = useState(false);
 
@@ -617,38 +616,43 @@ const MealRecommendScreen = () => {
     }).start();
   }, [screen]);
 
+  // 🔹 비선호 식단 목록 로드 함수 - userId를 파라미터로 받음
+  const loadExclusions = async (currentUserId: string) => {
+    try {
+      const data = await userPreferencesAPI.getExclusions(currentUserId);
+      setExcludedIngredients(data);
+      console.log("✅ 비선호 음식 로드 완료:", data.length, "개");
+    } catch (error) {
+      console.error("비선호 음식 로드 실패:", error);
+    }
+  };
+
+  // 🔹 유저 데이터 로드 함수
+  const loadUserData = async () => {
+    try {
+      // 1. 프로필 조회하여 userId 획득
+      const profile = await authAPI.getProfile();
+      const currentUserId = profile.userId;
+      setUserId(currentUserId);
+      console.log("✅ 유저 ID 로드 완료:", currentUserId);
+
+      // 2. 획득한 userId로 비선호 식단 조회
+      await loadExclusions(currentUserId);
+
+      // 3. 저장된 식단 불러오기
+      await loadSavedMeals();
+    } catch (error) {
+      console.error("사용자 데이터 로드 실패:", error);
+    }
+  };
+
+  // 🔹 useEffect에서 loadUserData 호출
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        console.log("========== GET 테스트 시작 ==========");
-        try {
-          const result = await userPreferencesAPI.getUserPreferences();
-          console.log("✅ GET 성공:", result);
-          console.log("✅ 비선호 음식:", result.dislikedFoods);
-        } catch (testError) {
-          console.error("❌ GET 실패:", testError);
-        }
-        console.log("========== GET 테스트 완료 ==========");
-
-        const dislikedFoods = await userPreferencesAPI.getDislikedFoods();
-        setExcludedIngredients(dislikedFoods);
-
-        console.log("✅ 비선호 음식 로드 완료:", dislikedFoods.length, "개");
-
-        await loadSavedMeals();
-      } catch (error) {
-        console.error("데이터 로드 실패:", error);
-        try {
-          const stored = await AsyncStorage.getItem("excludedIngredients");
-          if (stored) {
-            setExcludedIngredients(JSON.parse(stored));
-          }
-        } catch (e) {
-          console.error("로컬 스토리지 읽기 실패:", e);
-        }
-      }
+    const init = async () => {
+      console.log("========== 초기 데이터 로드 ==========");
+      await loadUserData();
     };
-    loadData();
+    init();
   }, []);
 
   const loadSavedMeals = async () => {
@@ -657,8 +661,6 @@ const MealRecommendScreen = () => {
       const localMeals = localStored ? JSON.parse(localStored) : [];
 
       const serverPlans = await recommendedMealAPI.getSavedMealPlans();
-
-      console.log("📦 서버에서 받은 plans:", serverPlans.length);
 
       const bundleMap = new Map<string, any>();
 
@@ -689,16 +691,7 @@ const MealRecommendScreen = () => {
         description: `${bundle.mealCount}일 식단`,
       }));
 
-      console.log("✅ 그룹화된 서버 번들:", serverBundles.length);
-
       const allMeals = [...localMeals, ...serverBundles];
-
-      console.log("📋 저장된 식단:", {
-        로컬: localMeals.length,
-        서버: serverBundles.length,
-        합계: allMeals.length,
-      });
-
       setSavedMeals(allMeals);
     } catch (error) {
       console.error("저장된 식단 불러오기 실패:", error);
@@ -725,28 +718,7 @@ const MealRecommendScreen = () => {
 
     try {
       console.log("🍽️ 임시 식단 생성 시작");
-      console.log(`📊 끼니 수: ${mealsPerDay}끼`);
-
       const tempMeals = await recommendedMealAPI.getWeeklyMealPlan(mealsPerDay);
-
-      console.log("=== 📦 API 응답 원본 ===");
-      console.log("응답 배열 길이:", tempMeals.length);
-      console.log("전체 응답:", JSON.stringify(tempMeals, null, 2));
-
-      tempMeals.forEach((day, index) => {
-        console.log(`\n=== ${index + 1}일차 상세 ===`);
-        console.log("dayIndex:", day.dayIndex);
-        console.log("meals 배열:", day.meals);
-        console.log("meals 길이:", day.meals?.length || 0);
-
-        day.meals?.forEach((meal, mealIdx) => {
-          console.log(`  - ${meal.mealType}:`, {
-            id: meal.id,
-            foods개수: meal.foods?.length || 0,
-            totalCalories: meal.totalCalories,
-          });
-        });
-      });
 
       if (!tempMeals || tempMeals.length === 0) {
         throw new Error("식단 생성에 실패했습니다.");
@@ -756,25 +728,7 @@ const MealRecommendScreen = () => {
 
       const weekData = tempMeals.map((tempDay, index) => {
         const transformed = transformTempMealToUI(tempDay, index + 1);
-
-        console.log(`\n=== ${index + 1}일차 변환 후 ===`);
-        console.log("totalCalories:", transformed.totalCalories);
-        console.log("아침 음식 수:", transformed.breakfast.meals.length);
-        console.log("점심 음식 수:", transformed.lunch.meals.length);
-        console.log("저녁 음식 수:", transformed.dinner.meals.length);
-
         return transformed;
-      });
-
-      console.log("\n=== 📊 최종 weekData ===");
-      console.log("weekData 길이:", weekData.length);
-      weekData.forEach((day, idx) => {
-        console.log(`${idx + 1}일차:`, {
-          totalCalories: day.totalCalories,
-          아침: day.breakfast.meals.length,
-          점심: day.lunch.meals.length,
-          저녁: day.dinner.meals.length,
-        });
       });
 
       setWeeklyMeals(weekData);
@@ -800,8 +754,6 @@ const MealRecommendScreen = () => {
 
     try {
       console.log("🍽️ 1일 식단 생성 시작");
-      console.log(`📊 끼니 수: ${mealsPerDay}끼`);
-
       const tempMeals = await recommendedMealAPI.getDailyMealPlan(mealsPerDay);
 
       if (!tempMeals || tempMeals.length === 0) {
@@ -822,14 +774,11 @@ const MealRecommendScreen = () => {
       Alert.alert("성공", "오늘의 맞춤 식단이 생성되었습니다! 🎉");
     } catch (error: any) {
       console.error("❌ 1일 식단 추천 실패:", error);
-
-      // 500 에러인 경우 더 친절한 메시지
       let errorMessage = error.message || "식단을 불러오는데 실패했습니다.";
       if (error.status === 500) {
         errorMessage =
           "서버에 일시적인 문제가 발생했습니다.\n잠시 후 다시 시도해주세요.";
       }
-
       Alert.alert("오류", errorMessage);
     } finally {
       setLoading(false);
@@ -854,20 +803,6 @@ const MealRecommendScreen = () => {
       };
 
       updated[currentDay] = dayMeals;
-
-      console.log(
-        `${mealArray[mealIndex].liked ? "💚" : "🤍"} ${
-          mealArray[mealIndex].name
-        } 좋아요 ${mealArray[mealIndex].liked ? "활성화" : "비활성화"}`
-      );
-
-      // TODO: 나중에 API 연결
-      // if (mealArray[mealIndex].liked) {
-      //   await userPreferencesAPI.addLikedFood(mealArray[mealIndex].name);
-      // } else {
-      //   await userPreferencesAPI.removeLikedFood(mealArray[mealIndex].name);
-      // }
-
       return updated;
     });
   };
@@ -955,62 +890,6 @@ const MealRecommendScreen = () => {
     });
   };
 
-  const handleSaveMealPlanLocally = async () => {
-    try {
-      setLoading(true);
-
-      const mealsForHistory = weeklyMeals.map((d) => ({
-        totalCalories: d.totalCalories,
-        carbs: d.carbs,
-        protein: d.protein,
-        fat: d.fat,
-        breakfast: d.breakfast,
-        lunch: d.lunch,
-        dinner: d.dinner,
-      }));
-
-      const mealPlanToSave = {
-        id: `local_${Date.now()}`,
-        date: new Date().toLocaleDateString("ko-KR"),
-        planName: weeklyMeals[0]?.planName || "AI 식단",
-        description: weeklyMeals[0]?.description || "AI가 생성한 식단",
-        totalCalories: weeklyMeals[0]?.totalCalories || 0,
-        totalCarbs: weeklyMeals[0]?.carbs || 0,
-        totalProtein: weeklyMeals[0]?.protein || 0,
-        totalFat: weeklyMeals[0]?.fat || 0,
-        createdAt: new Date().toISOString(),
-        meals: mealsForHistory,
-        isLocalMeal: true,
-      };
-
-      const stored = await AsyncStorage.getItem("savedMealPlans");
-      const existingMeals = stored ? JSON.parse(stored) : [];
-
-      const updatedMeals = [mealPlanToSave, ...existingMeals].slice(0, 20);
-      await AsyncStorage.setItem(
-        "savedMealPlans",
-        JSON.stringify(updatedMeals)
-      );
-
-      console.log("💾 로컬 저장 완료:", mealPlanToSave.id);
-
-      Alert.alert("저장 완료", "식단이 기기에 저장되었습니다! 🎉", [
-        {
-          text: "확인",
-          onPress: async () => {
-            await loadSavedMeals();
-            setScreen("welcome");
-          },
-        },
-      ]);
-    } catch (error: any) {
-      console.error("로컬 저장 실패:", error);
-      Alert.alert("오류", "식단 저장에 실패했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleSaveMealPlan = async () => {
     try {
       setLoading(true);
@@ -1062,10 +941,7 @@ const MealRecommendScreen = () => {
                   "savedMealPlans",
                   JSON.stringify(updatedMeals)
                 );
-
-                console.log("🗑️ 로컬 식단 삭제:", meal.id);
               } else {
-                console.log("🗑️ 서버 번들 삭제:", meal.bundleId || meal.id);
                 await recommendedMealAPI.deleteBundle(meal.bundleId || meal.id);
               }
 
@@ -1100,7 +976,13 @@ const MealRecommendScreen = () => {
             onCancel={handleCancelLoading}
           />
 
-          {/* ✅ 끼니 선택 모달 */}
+          <DislikedFoodsModal
+            visible={showDislikedModal}
+            userId={userId}
+            onClose={() => setShowDislikedModal(false)}
+            onUpdate={() => loadExclusions(userId)}
+          />
+
           <MealsSelectionModal
             visible={showMealsModal}
             currentMeals={mealsPerDay}
@@ -1145,7 +1027,6 @@ const MealRecommendScreen = () => {
             </Animated.View>
 
             <View style={styles.mainActions}>
-              {/* 1. 7일 추천 식단 받기 */}
               <TouchableOpacity
                 style={styles.primaryButton}
                 onPress={handleGetRecommendation}
@@ -1170,7 +1051,6 @@ const MealRecommendScreen = () => {
                 </LinearGradient>
               </TouchableOpacity>
 
-              {/* 2. 1일 추천 식단 받기 */}
               <TouchableOpacity
                 style={styles.primaryButton}
                 onPress={handleGetSingleDayRecommendation}
@@ -1195,10 +1075,9 @@ const MealRecommendScreen = () => {
                 </LinearGradient>
               </TouchableOpacity>
 
-              {/* 3. 금지 식재료 관리 */}
               <TouchableOpacity
                 style={styles.secondaryButton}
-                onPress={() => setShowDislikedModal(true)} // 변경
+                onPress={() => setShowDislikedModal(true)}
                 activeOpacity={0.8}
               >
                 <LinearGradient
@@ -1219,7 +1098,6 @@ const MealRecommendScreen = () => {
                 </LinearGradient>
               </TouchableOpacity>
 
-              {/* ✅ 4. 끼니 수정하기 */}
               <TouchableOpacity
                 style={styles.secondaryButton}
                 onPress={() => setShowMealsModal(true)}
@@ -1247,8 +1125,8 @@ const MealRecommendScreen = () => {
                 <View style={styles.glassCard}>
                   <Text style={styles.excludedPreviewLabel}>제외된 식재료</Text>
                   <View style={styles.tagList}>
-                    {excludedIngredients.map((ingredient, index) => (
-                      <View key={index} style={styles.tag}>
+                    {excludedIngredients.map((item) => (
+                      <View key={item.id} style={styles.tag}>
                         <LinearGradient
                           colors={[
                             "rgba(239,68,68,0.2)",
@@ -1256,7 +1134,7 @@ const MealRecommendScreen = () => {
                           ]}
                           style={styles.tagGradient}
                         >
-                          <Text style={styles.tagText}>{ingredient}</Text>
+                          <Text style={styles.tagText}>{item.food_name}</Text>
                         </LinearGradient>
                       </View>
                     ))}
@@ -1543,7 +1421,7 @@ const MealRecommendScreen = () => {
                 </LinearGradient>
               </View>
 
-              {/* ✅ 아침 */}
+              {/* 아침 */}
               <View style={styles.mealCardContainer}>
                 <LinearGradient
                   colors={["rgba(255,255,255,0.08)", "rgba(255,255,255,0.04)"]}
@@ -1667,7 +1545,7 @@ const MealRecommendScreen = () => {
                 </LinearGradient>
               </View>
 
-              {/* ✅ 점심 */}
+              {/* 점심 */}
               <View style={styles.mealCardContainer}>
                 <LinearGradient
                   colors={["rgba(255,255,255,0.08)", "rgba(255,255,255,0.04)"]}
@@ -1791,7 +1669,7 @@ const MealRecommendScreen = () => {
                 </LinearGradient>
               </View>
 
-              {/* ✅ 저녁 */}
+              {/* 저녁 */}
               <View style={styles.mealCardContainer}>
                 <LinearGradient
                   colors={["rgba(255,255,255,0.08)", "rgba(255,255,255,0.04)"]}
@@ -2267,148 +2145,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(239,68,68,0.1)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  excludedForm: {
-    flex: 1,
-  },
-  excludedFormContent: {
-    paddingHorizontal: 20,
-    paddingTop: 30,
-    paddingBottom: 40,
-  },
-  inputGroup: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 30,
-  },
-  inputWrapper: {
-    flex: 1,
-    borderRadius: 16,
-    overflow: "hidden",
-  },
-  inputGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: 16,
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
-  textInput: {
-    flex: 1,
-    height: 52,
-    color: "#ffffff",
-    fontSize: 15,
-    letterSpacing: 0.3,
-  },
-  addButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    overflow: "hidden",
-    shadowColor: "#E3FF7C",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  addButtonGradient: {
-    width: "100%",
-    height: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  excludedList: {
-    gap: 12,
-    marginBottom: 30,
-    minHeight: 200,
-  },
-  excludedItem: {
-    borderRadius: 14,
-    overflow: "hidden",
-  },
-  excludedItemGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: 14,
-  },
-  excludedItemLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    gap: 12,
-  },
-  excludedItemIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(239,68,68,0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  excludedItemText: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#ffffff",
-    flex: 1,
-    letterSpacing: 0.3,
-  },
-  removeButton: {
-    width: 32,
-    height: 32,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 60,
-    paddingHorizontal: 40,
-  },
-  emptyMessage: {
-    textAlign: "center",
-    color: "#6b7280",
-    fontSize: 16,
-    fontWeight: "600",
-    marginTop: 16,
-    marginBottom: 8,
-    letterSpacing: 0.3,
-  },
-  emptySubtext: {
-    textAlign: "center",
-    color: "#4b5563",
-    fontSize: 14,
-    letterSpacing: 0.2,
-  },
-  completeButton: {
-    borderRadius: 16,
-    overflow: "hidden",
-    shadowColor: "#E3FF7C",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  completeButtonGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 18,
-  },
-  completeButtonText: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#111827",
-    letterSpacing: 0.5,
   },
   mealDateContainer: {
     paddingHorizontal: 20,
