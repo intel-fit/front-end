@@ -20,6 +20,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import { recommendedMealAPI, userPreferencesAPI } from "../../services";
 import { LinearGradient } from "expo-linear-gradient";
+import DislikedFoodsModal from "../../components/modals/DislikedFoodsModal";
+
 const { width } = Dimensions.get("window");
 
 const LOADING_MESSAGES = [
@@ -590,9 +592,8 @@ const transformTempMealToUI = (tempDay: any, dayIndex: number) => {
 
 const MealRecommendScreen = () => {
   const navigation = useNavigation();
-  const [screen, setScreen] = useState<
-    "welcome" | "excludedIngredients" | "meals"
-  >("welcome");
+  const [screen, setScreen] = useState<"welcome" | "meals">("welcome");
+  const [showDislikedModal, setShowDislikedModal] = useState(false);
 
   const [weeklyMeals, setWeeklyMeals] = useState<any[]>([]);
   const [currentDay, setCurrentDay] = useState(0);
@@ -821,114 +822,18 @@ const MealRecommendScreen = () => {
       Alert.alert("성공", "오늘의 맞춤 식단이 생성되었습니다! 🎉");
     } catch (error: any) {
       console.error("❌ 1일 식단 추천 실패:", error);
-      
+
       // 500 에러인 경우 더 친절한 메시지
       let errorMessage = error.message || "식단을 불러오는데 실패했습니다.";
       if (error.status === 500) {
-        errorMessage = "서버에 일시적인 문제가 발생했습니다.\n잠시 후 다시 시도해주세요.";
+        errorMessage =
+          "서버에 일시적인 문제가 발생했습니다.\n잠시 후 다시 시도해주세요.";
       }
-      
+
       Alert.alert("오류", errorMessage);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleAddExcludedIngredient = async () => {
-    const trimmed = newIngredient.trim();
-
-    if (!trimmed) {
-      return;
-    }
-
-    if (excludedIngredients.includes(trimmed)) {
-      Alert.alert("알림", "이미 추가된 식재료입니다.");
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      try {
-        const result = await userPreferencesAPI.addDislikedFoods(
-          excludedIngredients,
-          [trimmed]
-        );
-
-        setExcludedIngredients(result.updatedList);
-        await AsyncStorage.setItem(
-          "excludedIngredients",
-          JSON.stringify(result.updatedList)
-        );
-
-        setNewIngredient("");
-        console.log("✅ 비선호 음식 추가 완료 (서버):", result.updatedList);
-        return;
-      } catch (serverError: any) {
-        console.warn("⚠️ 서버 저장 실패, 로컬만 저장:", serverError.message);
-
-        if (
-          serverError.message?.includes("서버 내부 오류") ||
-          serverError.status === 500
-        ) {
-          const updatedList = [...excludedIngredients, trimmed];
-          setExcludedIngredients(updatedList);
-          await AsyncStorage.setItem(
-            "excludedIngredients",
-            JSON.stringify(updatedList)
-          );
-
-          setNewIngredient("");
-          Alert.alert(
-            "일부 성공",
-            "식재료가 기기에 저장되었습니다.\n(서버 동기화는 백엔드 수정 후 가능합니다)"
-          );
-          console.log("✅ 비선호 음식 추가 완료 (로컬만):", updatedList);
-          return;
-        }
-
-        throw serverError;
-      }
-    } catch (error: any) {
-      console.error("비선호 음식 추가 실패:", error);
-      Alert.alert("오류", error.message || "식재료 추가에 실패했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRemoveExcludedIngredient = async (ingredient: string) => {
-    Alert.alert("삭제", `"${ingredient}"를 삭제하시겠습니까?`, [
-      { text: "취소", style: "cancel" },
-      {
-        text: "삭제",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            setLoading(true);
-
-            const result = await userPreferencesAPI.removeDislikedFood(
-              excludedIngredients,
-              ingredient
-            );
-
-            setExcludedIngredients(result.updatedList);
-
-            await AsyncStorage.setItem(
-              "excludedIngredients",
-              JSON.stringify(result.updatedList)
-            );
-
-            console.log("✅ 비선호 음식 삭제 완료:", result.updatedList);
-          } catch (error: any) {
-            console.error("비선호 음식 삭제 실패:", error);
-            Alert.alert("오류", error.message || "식재료 삭제에 실패했습니다.");
-          } finally {
-            setLoading(false);
-          }
-        },
-      },
-    ]);
   };
 
   // ✅ 좋아요 토글 함수
@@ -1293,7 +1198,7 @@ const MealRecommendScreen = () => {
               {/* 3. 금지 식재료 관리 */}
               <TouchableOpacity
                 style={styles.secondaryButton}
-                onPress={() => setScreen("excludedIngredients")}
+                onPress={() => setShowDislikedModal(true)} // 변경
                 activeOpacity={0.8}
               >
                 <LinearGradient
@@ -1459,136 +1364,6 @@ const MealRecommendScreen = () => {
                 })}
               </View>
             )}
-          </ScrollView>
-        </SafeAreaView>
-      </View>
-    );
-  }
-
-  if (screen === "excludedIngredients") {
-    return (
-      <View style={styles.container}>
-        <LinearGradient
-          colors={["#0a0a0a", "#1a1a2e", "#16213e"]}
-          style={StyleSheet.absoluteFill}
-        />
-
-        <SafeAreaView style={styles.safeArea} edges={["top"]}>
-          <View style={styles.header}>
-            <TouchableOpacity
-              onPress={() => setScreen("welcome")}
-              style={styles.backButton}
-            >
-              <View style={styles.iconButton}>
-                <Icon name="chevron-back" size={24} color="#ffffff" />
-              </View>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>금지 식재료</Text>
-            <View style={{ width: 40 }} />
-          </View>
-
-          <ScrollView
-            style={styles.excludedForm}
-            contentContainerStyle={styles.excludedFormContent}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.inputGroup}>
-              <View style={styles.inputWrapper}>
-                <LinearGradient
-                  colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
-                  style={styles.inputGradient}
-                >
-                  <Icon
-                    name="search"
-                    size={20}
-                    color="#6b7280"
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    style={styles.textInput}
-                    value={newIngredient}
-                    onChangeText={setNewIngredient}
-                    onSubmitEditing={handleAddExcludedIngredient}
-                    placeholder="알러지 식재료를 입력하세요"
-                    placeholderTextColor="#6b7280"
-                  />
-                </LinearGradient>
-              </View>
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={handleAddExcludedIngredient}
-                activeOpacity={0.8}
-              >
-                <LinearGradient
-                  colors={["#e3ff7c", "#a8e063"]}
-                  style={styles.addButtonGradient}
-                >
-                  <Icon name="add" size={28} color="#111827" />
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.excludedList}>
-              {excludedIngredients.map((ingredient, index) => (
-                <Animated.View
-                  key={index}
-                  style={[styles.excludedItem, { opacity: fadeAnim }]}
-                >
-                  <LinearGradient
-                    colors={[
-                      "rgba(255,255,255,0.08)",
-                      "rgba(255,255,255,0.04)",
-                    ]}
-                    style={styles.excludedItemGradient}
-                  >
-                    <View style={styles.excludedItemLeft}>
-                      <View style={styles.excludedItemIcon}>
-                        <Icon name="ban" size={18} color="#ef4444" />
-                      </View>
-                      <Text style={styles.excludedItemText}>{ingredient}</Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.removeButton}
-                      onPress={() => handleRemoveExcludedIngredient(ingredient)}
-                      activeOpacity={0.7}
-                    >
-                      <Icon name="close-circle" size={24} color="#ef4444" />
-                    </TouchableOpacity>
-                  </LinearGradient>
-                </Animated.View>
-              ))}
-
-              {excludedIngredients.length === 0 && (
-                <View style={styles.emptyState}>
-                  <Icon name="restaurant-outline" size={64} color="#374151" />
-                  <Text style={styles.emptyMessage}>
-                    등록된 금지 식재료가 없습니다
-                  </Text>
-                  <Text style={styles.emptySubtext}>
-                    알러지나 선호하지 않는 식재료를 추가하세요
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            <TouchableOpacity
-              style={styles.completeButton}
-              onPress={() => setScreen("welcome")}
-              activeOpacity={0.9}
-            >
-              <LinearGradient
-                colors={["#e3ff7c", "#a8e063"]}
-                style={styles.completeButtonGradient}
-              >
-                <Icon
-                  name="checkmark-circle"
-                  size={22}
-                  color="#111827"
-                  style={{ marginRight: 8 }}
-                />
-                <Text style={styles.completeButtonText}>완료</Text>
-              </LinearGradient>
-            </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>
       </View>

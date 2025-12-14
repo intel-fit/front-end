@@ -1,10 +1,6 @@
 // src/services/userPreferencesAPI.ts
 import { request } from "./apiConfig";
-import type {
-  UserPreferencesResponse,
-  AddDislikedFoodResponse,
-  RemoveDislikedFoodResponse,
-} from "../types";
+import type { UserPreferencesResponse } from "../types";
 
 export const userPreferencesAPI = {
   /**
@@ -43,20 +39,24 @@ export const userPreferencesAPI = {
     }
   },
 
-  //Post 비선호 음식 추거ㅏ
-  addDislikedFood: async (
-    foodName: string
-  ): Promise<AddDislikedFoodResponse> => {
+  /**
+   * 금지 식단 전체 저장 (덮어쓰기)
+   * POST /api/user/preferences/disliked
+   * Body: { "dislikedFoods": ["땅콩", "우유", "새우"] }
+   */
+  saveDislikedFoods: async (
+    dislikedFoods: string[]
+  ): Promise<{ dislikedFoods: string[] }> => {
     try {
-      console.log("➕ 비선호 음식 추가:", foodName);
+      console.log("💾 금지 식단 전체 저장:", dislikedFoods);
 
       const requestBody = {
-        foodName,
+        dislikedFoods,
       };
 
       console.log("📤 요청 본문:", requestBody);
 
-      const response = await request<AddDislikedFoodResponse>(
+      const response = await request<{ dislikedFoods: string[] }>(
         "/api/user/preferences/disliked",
         {
           method: "POST",
@@ -64,70 +64,11 @@ export const userPreferencesAPI = {
         }
       );
 
-      console.log("✅ 비선호 음식 추가 성공:", response);
+      console.log("✅ 금지 식단 저장 성공:", response);
       return response;
     } catch (error: any) {
-      console.error("❌ 비선호 음식 추가 실패:", error);
-      throw new Error(error.message || "비선호 음식 추가에 실패했습니다.");
-    }
-  },
-
-  /**
-   * 비선호 음식 여러 개 추가 (편의 함수)
-   */
-  addDislikedFoods: async (
-    currentList: string[],
-    newFoods: string[]
-  ): Promise<{ updatedList: string[] }> => {
-    try {
-      console.log("➕ 비선호 음식 여러 개 추가:", newFoods);
-
-      let lastResponse: AddDislikedFoodResponse | null = null;
-
-      for (const food of newFoods) {
-        lastResponse = await userPreferencesAPI.addDislikedFood(food);
-      }
-
-      return {
-        updatedList: lastResponse?.dislikedFoods || [
-          ...currentList,
-          ...newFoods,
-        ],
-      };
-    } catch (error: any) {
-      console.error("❌ 비선호 음식 여러 개 추가 실패:", error);
-      throw error;
-    }
-  },
-
-  /**
-   * 비선호 음식 삭제
-   * DELETE /api/user/preferences/disliked/{foodName}
-   */
-  removeDislikedFood: async (
-    currentList: string[],
-    foodName: string
-  ): Promise<{ updatedList: string[] }> => {
-    try {
-      console.log("🗑️ 비선호 음식 삭제:", foodName);
-
-      const url = `/api/user/preferences/disliked/${encodeURIComponent(
-        foodName
-      )}`;
-
-      const response = await request<RemoveDislikedFoodResponse>(url, {
-        method: "DELETE",
-      });
-
-      console.log("✅ 비선호 음식 삭제 성공:", response);
-
-      return {
-        updatedList:
-          response.dislikedFoods || currentList.filter((f) => f !== foodName),
-      };
-    } catch (error: any) {
-      console.error("❌ 비선호 음식 삭제 실패:", error);
-      throw new Error(error.message || "비선호 음식 삭제에 실패했습니다.");
+      console.error("❌ 금지 식단 저장 실패:", error);
+      throw new Error(error.message || "금지 식단 저장에 실패했습니다.");
     }
   },
 };

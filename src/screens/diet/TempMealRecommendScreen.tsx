@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  TextInput,
   Alert,
   ActivityIndicator,
   Dimensions,
@@ -20,6 +21,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../navigation/types";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { userPreferencesAPI, recommendedMealAPI } from "../../services";
 
 import { TempDayMeal } from "../../services/recommendedMealAPI";
@@ -174,6 +176,227 @@ const LoadingOverlay = ({
   );
 };
 
+// ✅ 끼니 선택 모달
+const MealsSelectionModal = ({
+  visible,
+  currentMeals,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  currentMeals: number;
+  onSelect: (meals: number) => void;
+  onClose: () => void;
+}) => {
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity
+        style={mealsModalStyles.overlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <View style={mealsModalStyles.container}>
+          <TouchableOpacity activeOpacity={1}>
+            <LinearGradient
+              colors={["rgba(26,26,46,0.98)", "rgba(22,33,62,0.98)"]}
+              style={mealsModalStyles.content}
+            >
+              {/* 헤더 */}
+              <View style={mealsModalStyles.header}>
+                <Icon name="restaurant" size={28} color="#e3ff7c" />
+                <Text style={mealsModalStyles.title}>끼니 수 선택</Text>
+              </View>
+
+              <Text style={mealsModalStyles.subtitle}>
+                하루에 몇 끼를 드시나요?
+              </Text>
+
+              {/* 끼니 선택 버튼들 */}
+              <View style={mealsModalStyles.optionsContainer}>
+                {[1, 2, 3].map((num) => (
+                  <TouchableOpacity
+                    key={num}
+                    style={mealsModalStyles.optionButton}
+                    onPress={() => {
+                      onSelect(num);
+                      onClose();
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <LinearGradient
+                      colors={
+                        currentMeals === num
+                          ? ["#e3ff7c", "#a8e063"]
+                          : ["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]
+                      }
+                      style={mealsModalStyles.optionGradient}
+                    >
+                      <View style={mealsModalStyles.optionContent}>
+                        <View style={mealsModalStyles.optionIconContainer}>
+                          {currentMeals === num ? (
+                            <Icon
+                              name="checkmark-circle"
+                              size={32}
+                              color="#111827"
+                            />
+                          ) : (
+                            <Icon
+                              name="ellipse-outline"
+                              size={32}
+                              color="#ffffff"
+                            />
+                          )}
+                        </View>
+                        <View style={mealsModalStyles.optionTextContainer}>
+                          <Text
+                            style={[
+                              mealsModalStyles.optionNumber,
+                              currentMeals === num &&
+                                mealsModalStyles.optionNumberActive,
+                            ]}
+                          >
+                            {num}끼
+                          </Text>
+                          <Text
+                            style={[
+                              mealsModalStyles.optionDesc,
+                              currentMeals === num &&
+                                mealsModalStyles.optionDescActive,
+                            ]}
+                          >
+                            {num === 1
+                              ? "하루 1끼"
+                              : num === 2
+                              ? "아침 + 점심 또는 점심 + 저녁"
+                              : "아침 + 점심 + 저녁"}
+                          </Text>
+                        </View>
+                      </View>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* 닫기 버튼 */}
+              <TouchableOpacity
+                style={mealsModalStyles.closeButton}
+                onPress={onClose}
+                activeOpacity={0.8}
+              >
+                <Text style={mealsModalStyles.closeButtonText}>취소</Text>
+              </TouchableOpacity>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+};
+
+const mealsModalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  container: {
+    width: "85%",
+    maxWidth: 400,
+  },
+  content: {
+    borderRadius: 24,
+    padding: 28,
+    borderWidth: 1,
+    borderColor: "rgba(227,255,124,0.2)",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    marginBottom: 12,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#ffffff",
+    letterSpacing: 0.5,
+  },
+  subtitle: {
+    fontSize: 15,
+    color: "#9ca3af",
+    textAlign: "center",
+    marginBottom: 28,
+    letterSpacing: 0.3,
+  },
+  optionsContainer: {
+    gap: 12,
+    marginBottom: 24,
+  },
+  optionButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  optionGradient: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  optionContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 18,
+    gap: 16,
+  },
+  optionIconContainer: {
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  optionTextContainer: {
+    flex: 1,
+  },
+  optionNumber: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#ffffff",
+    marginBottom: 4,
+    letterSpacing: 0.3,
+  },
+  optionNumberActive: {
+    color: "#111827",
+  },
+  optionDesc: {
+    fontSize: 13,
+    color: "#9ca3af",
+    letterSpacing: 0.2,
+  },
+  optionDescActive: {
+    color: "rgba(17,24,39,0.7)",
+  },
+  closeButton: {
+    paddingVertical: 14,
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  closeButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#9ca3af",
+    letterSpacing: 0.3,
+  },
+});
+
 // UI에 표시할 데이터 구조
 interface MealItem {
   mealType: string;
@@ -194,14 +417,21 @@ interface FoodItem {
 const TempMealRecommendScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
 
-  const [screen, setScreen] = useState<"input" | "result">("input");
+  const [screen, setScreen] = useState<
+    "input" | "excludedIngredients" | "result"
+  >("input");
   const [currentDayTab, setCurrentDayTab] = useState(0);
   const [excludedFoods, setExcludedFoods] = useState<string[]>([]);
+  const [newIngredient, setNewIngredient] = useState("");
   const [selectedPeriod, setSelectedPeriod] = useState<"daily" | "weekly">(
     "daily"
   );
   const [recommendedMeals, setRecommendedMeals] = useState<MealItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+
+  // ✅ 끼니 수 관련 state
+  const [mealsPerDay, setMealsPerDay] = useState(3);
+  const [showMealsModal, setShowMealsModal] = useState(false);
 
   // 토큰 부족 상태 관리
   const [isTokenDepleted, setIsTokenDepleted] = useState<boolean>(false);
@@ -213,6 +443,16 @@ const TempMealRecommendScreen: React.FC = () => {
     fat: 0,
   });
 
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  }, [screen]);
+
   useEffect(() => {
     loadUserData();
   }, []);
@@ -223,8 +463,22 @@ const TempMealRecommendScreen: React.FC = () => {
       if (preferences.dislikedFoods) {
         setExcludedFoods(preferences.dislikedFoods);
       }
+      console.log(
+        "✅ 비선호 음식 로드 완료:",
+        preferences.dislikedFoods?.length || 0,
+        "개"
+      );
     } catch (error) {
       console.error("사용자 데이터 로드 실패:", error);
+      // 로컬 스토리지에서 불러오기 시도
+      try {
+        const stored = await AsyncStorage.getItem("excludedIngredients");
+        if (stored) {
+          setExcludedFoods(JSON.parse(stored));
+        }
+      } catch (e) {
+        console.error("로컬 스토리지 읽기 실패:", e);
+      }
     }
   };
 
@@ -250,8 +504,11 @@ const TempMealRecommendScreen: React.FC = () => {
     try {
       setLoading(true);
 
+      console.log("🍽️ 임시 식단 생성 시작");
+      console.log(`📊 끼니 수: ${mealsPerDay}끼`);
+
       const weeklyData: TempDayMeal[] =
-        await recommendedMealAPI.getWeeklyMealPlan();
+        await recommendedMealAPI.getWeeklyMealPlan(mealsPerDay);
 
       if (!weeklyData || weeklyData.length === 0) {
         throw new Error("추천된 식단 데이터가 없습니다.");
@@ -384,42 +641,145 @@ const TempMealRecommendScreen: React.FC = () => {
     }
   };
 
-  return (
-    <View style={styles.container}>
-      <LinearGradient
-        colors={["#0a0a0a", "#1a1a2e", "#16213e", "#0f3460"]}
-        style={StyleSheet.absoluteFill}
-      />
+  // ✅ 금지 식재료 추가
+  const handleAddExcludedIngredient = async () => {
+    const trimmed = newIngredient.trim();
 
-      <SafeAreaView style={styles.safeArea} edges={["top"]}>
-        <LoadingOverlay
-          visible={loading}
-          messages={LOADING_MESSAGES}
-          onCancel={handleCancelLoading}
+    if (!trimmed) {
+      return;
+    }
+
+    if (excludedFoods.includes(trimmed)) {
+      Alert.alert("알림", "이미 추가된 식재료입니다.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      try {
+        const result = await userPreferencesAPI.addDislikedFoods(
+          excludedFoods,
+          [trimmed]
+        );
+
+        setExcludedFoods(result.updatedList);
+        await AsyncStorage.setItem(
+          "excludedIngredients",
+          JSON.stringify(result.updatedList)
+        );
+
+        setNewIngredient("");
+        console.log("✅ 비선호 음식 추가 완료 (서버):", result.updatedList);
+        return;
+      } catch (serverError: any) {
+        console.warn("⚠️ 서버 저장 실패, 로컬만 저장:", serverError.message);
+
+        if (
+          serverError.message?.includes("서버 내부 오류") ||
+          serverError.status === 500
+        ) {
+          const updatedList = [...excludedFoods, trimmed];
+          setExcludedFoods(updatedList);
+          await AsyncStorage.setItem(
+            "excludedIngredients",
+            JSON.stringify(updatedList)
+          );
+
+          setNewIngredient("");
+          Alert.alert(
+            "일부 성공",
+            "식재료가 기기에 저장되었습니다.\n(서버 동기화는 백엔드 수정 후 가능합니다)"
+          );
+          console.log("✅ 비선호 음식 추가 완료 (로컬만):", updatedList);
+          return;
+        }
+
+        throw serverError;
+      }
+    } catch (error: any) {
+      console.error("비선호 음식 추가 실패:", error);
+      Alert.alert("오류", error.message || "식재료 추가에 실패했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ 금지 식재료 삭제
+  const handleRemoveExcludedIngredient = async (ingredient: string) => {
+    Alert.alert("삭제", `"${ingredient}"를 삭제하시겠습니까?`, [
+      { text: "취소", style: "cancel" },
+      {
+        text: "삭제",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setLoading(true);
+
+            const result = await userPreferencesAPI.removeDislikedFood(
+              excludedFoods,
+              ingredient
+            );
+
+            setExcludedFoods(result.updatedList);
+
+            await AsyncStorage.setItem(
+              "excludedIngredients",
+              JSON.stringify(result.updatedList)
+            );
+
+            console.log("✅ 비선호 음식 삭제 완료:", result.updatedList);
+          } catch (error: any) {
+            console.error("비선호 음식 삭제 실패:", error);
+            Alert.alert("오류", error.message || "식재료 삭제에 실패했습니다.");
+          } finally {
+            setLoading(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  // ✅ input 화면 (웰컴 화면)
+  if (screen === "input") {
+    return (
+      <View style={styles.container}>
+        <LinearGradient
+          colors={["#0a0a0a", "#1a1a2e", "#16213e", "#0f3460"]}
+          style={StyleSheet.absoluteFill}
         />
 
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => {
-              if (screen === "result") {
-                setScreen("input");
-              } else {
-                navigation.goBack();
-              }
-            }}
-            style={styles.backButton}
-          >
-            <View style={styles.iconButton}>
-              <Icon name="chevron-back" size={24} color="#ffffff" />
-            </View>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>
-            {screen === "result" ? "추천 결과" : "식단 추천"}
-          </Text>
-          <View style={{ width: 40 }} />
-        </View>
+        <SafeAreaView style={styles.safeArea} edges={["top"]}>
+          <LoadingOverlay
+            visible={loading}
+            messages={LOADING_MESSAGES}
+            onCancel={handleCancelLoading}
+          />
 
-        {screen === "input" && (
+          {/* ✅ 끼니 선택 모달 */}
+          <MealsSelectionModal
+            visible={showMealsModal}
+            currentMeals={mealsPerDay}
+            onSelect={(num) => {
+              setMealsPerDay(num);
+              console.log(`✅ 끼니 수 변경: ${num}끼`);
+            }}
+            onClose={() => setShowMealsModal(false)}
+          />
+
+          <View style={styles.header}>
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              <View style={styles.iconButton}>
+                <Icon name="chevron-back" size={24} color="#ffffff" />
+              </View>
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>식단 추천</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
           <ScrollView
             style={styles.contentWrapper}
             showsVerticalScrollIndicator={false}
@@ -469,6 +829,75 @@ const TempMealRecommendScreen: React.FC = () => {
                 </TouchableOpacity>
               </LinearGradient>
             </View>
+
+            {/* ✅ 금지 식재료 관리 버튼 */}
+            <TouchableOpacity
+              style={styles.settingButton}
+              onPress={() => setScreen("excludedIngredients")}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
+                style={styles.settingButtonGradient}
+              >
+                <Icon
+                  name="remove-circle-outline"
+                  size={20}
+                  color="#ffffff"
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={styles.settingButtonText}>
+                  금지 식재료 관리
+                  {excludedFoods.length > 0 && ` (${excludedFoods.length})`}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* ✅ 끼니 수정하기 버튼 */}
+            <TouchableOpacity
+              style={styles.settingButton}
+              onPress={() => setShowMealsModal(true)}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
+                style={styles.settingButtonGradient}
+              >
+                <Icon
+                  name="restaurant-outline"
+                  size={20}
+                  color="#ffffff"
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={styles.settingButtonText}>
+                  끼니 수정하기 ({mealsPerDay}끼)
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* 금지 식재료 미리보기 */}
+            {excludedFoods.length > 0 && (
+              <View style={styles.excludedPreview}>
+                <View style={styles.glassCard}>
+                  <Text style={styles.excludedPreviewLabel}>제외된 식재료</Text>
+                  <View style={styles.tagList}>
+                    {excludedFoods.map((ingredient, index) => (
+                      <View key={index} style={styles.tag}>
+                        <LinearGradient
+                          colors={[
+                            "rgba(239,68,68,0.2)",
+                            "rgba(239,68,68,0.1)",
+                          ]}
+                          style={styles.tagGradient}
+                        >
+                          <Text style={styles.tagText}>{ingredient}</Text>
+                        </LinearGradient>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            )}
 
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -521,13 +950,7 @@ const TempMealRecommendScreen: React.FC = () => {
                     Alert.alert(
                       "프리미엄 기능",
                       "7일 식단 추천은 프리미엄 전용입니다.\n업그레이드 하시겠습니까?",
-                      [
-                        { text: "취소", style: "cancel" },
-                        {
-                          text: "이동",
-                          onPress: () => navigation.navigate("MyPage" as never),
-                        },
-                      ]
+                      [{ text: "취소", style: "cancel" }]
                     )
                   }
                   activeOpacity={0.8}
@@ -629,216 +1052,359 @@ const TempMealRecommendScreen: React.FC = () => {
               </View>
             )}
           </ScrollView>
-        )}
+        </SafeAreaView>
+      </View>
+    );
+  }
 
-        {screen === "result" && (
-          <View style={{ flex: 1 }}>
-            <View style={styles.dayTabsWrapper}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.dayTabsContent}
-              >
-                {Array.from({ length: 7 }).map((_, index) => {
-                  const isLocked = index > 0;
-                  const isActive = currentDayTab === index;
+  // ✅ 금지 식재료 관리 화면
+  if (screen === "excludedIngredients") {
+    return (
+      <View style={styles.container}>
+        <LinearGradient
+          colors={["#0a0a0a", "#1a1a2e", "#16213e"]}
+          style={StyleSheet.absoluteFill}
+        />
 
-                  return (
-                    <TouchableOpacity
-                      key={index}
-                      onPress={() => handleTabPress(index)}
-                      activeOpacity={0.8}
-                      style={styles.dayTabTouch}
-                    >
-                      {isActive ? (
-                        <LinearGradient
-                          colors={["#e3ff7c", "#a8e063"]}
-                          style={styles.dayTabActive}
-                        >
-                          <Text style={styles.dayTabTextActive}>
-                            {index + 1}일차
-                          </Text>
-                        </LinearGradient>
-                      ) : (
-                        <View
-                          style={[
-                            styles.dayTab,
-                            isLocked && styles.dayTabLocked,
-                          ]}
-                        >
-                          {isLocked && (
-                            <Icon
-                              name="lock-closed"
-                              size={14}
-                              color="#9ca3af"
-                              style={{ marginRight: 4 }}
-                            />
-                          )}
-                          <Text style={styles.dayTabText}>{index + 1}일차</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-
-            <ScrollView
-              style={styles.contentWrapper}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.resultContainer}
+        <SafeAreaView style={styles.safeArea} edges={["top"]}>
+          <View style={styles.header}>
+            <TouchableOpacity
+              onPress={() => setScreen("input")}
+              style={styles.backButton}
             >
-              <View style={styles.nutritionCard}>
+              <View style={styles.iconButton}>
+                <Icon name="chevron-back" size={24} color="#ffffff" />
+              </View>
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>금지 식재료</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <ScrollView
+            style={styles.excludedForm}
+            contentContainerStyle={styles.excludedFormContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.inputGroup}>
+              <View style={styles.inputWrapper}>
                 <LinearGradient
                   colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
-                  style={styles.nutritionCardGradient}
+                  style={styles.inputGradient}
                 >
-                  <View style={styles.nutritionHeader}>
-                    <Text style={styles.nutritionTitle}>오늘의 영양 섭취</Text>
-                    <View style={styles.totalCalBadge}>
-                      <Icon name="flame" size={14} color="#111827" />
-                      <Text style={styles.totalCalText}>
-                        {dailyNutrition.calories} kcal
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.nutritionRow}>
-                    <View style={styles.nutrientItem}>
-                      <Text style={styles.nutrientLabel}>탄수화물</Text>
-                      <Text style={styles.nutrientValue}>
-                        {dailyNutrition.carbs}g
-                      </Text>
-                    </View>
-                    <View style={styles.nutrientDivider} />
-                    <View style={styles.nutrientItem}>
-                      <Text style={styles.nutrientLabel}>단백질</Text>
-                      <Text style={styles.nutrientValue}>
-                        {dailyNutrition.protein}g
-                      </Text>
-                    </View>
-                    <View style={styles.nutrientDivider} />
-                    <View style={styles.nutrientItem}>
-                      <Text style={styles.nutrientLabel}>지방</Text>
-                      <Text style={styles.nutrientValue}>
-                        {dailyNutrition.fat}g
-                      </Text>
-                    </View>
-                  </View>
+                  <Icon
+                    name="search"
+                    size={20}
+                    color="#6b7280"
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.textInput}
+                    value={newIngredient}
+                    onChangeText={setNewIngredient}
+                    onSubmitEditing={handleAddExcludedIngredient}
+                    placeholder="알러지 식재료를 입력하세요"
+                    placeholderTextColor="#6b7280"
+                  />
                 </LinearGradient>
               </View>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={handleAddExcludedIngredient}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={["#e3ff7c", "#a8e063"]}
+                  style={styles.addButtonGradient}
+                >
+                  <Icon name="add" size={28} color="#111827" />
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
 
-              {recommendedMeals.map((meal, index) => (
-                <View key={index} style={styles.mealCardContainer}>
+            <View style={styles.excludedList}>
+              {excludedFoods.map((ingredient, index) => (
+                <Animated.View
+                  key={index}
+                  style={[styles.excludedItem, { opacity: fadeAnim }]}
+                >
                   <LinearGradient
                     colors={[
                       "rgba(255,255,255,0.08)",
                       "rgba(255,255,255,0.04)",
                     ]}
-                    style={styles.mealCard}
+                    style={styles.excludedItemGradient}
                   >
-                    <View style={styles.mealCardHeader}>
-                      <View style={styles.mealTitleRow}>
-                        <View style={styles.mealIconContainer}>
-                          <LinearGradient
-                            colors={
-                              meal.mealTypeName === "아침"
-                                ? [
-                                    "rgba(251,191,36,0.3)",
-                                    "rgba(251,191,36,0.1)",
-                                  ]
-                                : meal.mealTypeName === "점심"
-                                ? [
-                                    "rgba(251,146,60,0.3)",
-                                    "rgba(251,146,60,0.1)",
-                                  ]
-                                : [
-                                    "rgba(139,92,246,0.3)",
-                                    "rgba(139,92,246,0.1)",
-                                  ]
-                            }
-                            style={styles.mealIcon}
-                          >
-                            <Text style={styles.mealEmoji}>
-                              {meal.mealTypeName === "아침"
-                                ? "🌅"
-                                : meal.mealTypeName === "점심"
-                                ? "☀️"
-                                : "🌙"}
-                            </Text>
-                          </LinearGradient>
-                        </View>
-                        <View>
-                          <Text style={styles.mealName}>
-                            {meal.mealTypeName}
-                          </Text>
-                          <Text style={styles.mealTime}>
-                            {meal.mealTypeName === "아침"
-                              ? "07:00 - 09:00"
-                              : meal.mealTypeName === "점심"
-                              ? "12:00 - 14:00"
-                              : "18:00 - 20:00"}
-                          </Text>
-                        </View>
+                    <View style={styles.excludedItemLeft}>
+                      <View style={styles.excludedItemIcon}>
+                        <Icon name="ban" size={18} color="#ef4444" />
                       </View>
-                      <View style={styles.mealCaloriesContainer}>
-                        <Text style={styles.mealCalories}>
-                          {meal.totalCalories}
-                        </Text>
-                        <Text style={styles.mealCaloriesUnit}>kcal</Text>
-                      </View>
+                      <Text style={styles.excludedItemText}>{ingredient}</Text>
                     </View>
-
-                    <View style={styles.foodsList}>
-                      {meal.foods.map((food, fIdx) => (
-                        <View key={fIdx} style={styles.foodTag}>
-                          <LinearGradient
-                            colors={[
-                              "rgba(227,255,124,0.2)",
-                              "rgba(168,224,99,0.1)",
-                            ]}
-                            style={styles.foodTagItemGradient}
-                          >
-                            <Text style={styles.foodName}>
-                              {food.foodName} {food.servingSize}g
-                            </Text>
-                            <Text style={styles.foodCalories}>
-                              ({food.calories}kcal)
-                            </Text>
-                          </LinearGradient>
-                        </View>
-                      ))}
-                    </View>
+                    <TouchableOpacity
+                      style={styles.removeButton}
+                      onPress={() => handleRemoveExcludedIngredient(ingredient)}
+                      activeOpacity={0.7}
+                    >
+                      <Icon name="close-circle" size={24} color="#ef4444" />
+                    </TouchableOpacity>
                   </LinearGradient>
-                </View>
+                </Animated.View>
               ))}
 
-              <View style={styles.resultActions}>
-                <TouchableOpacity
-                  style={styles.saveButtonContainer}
-                  onPress={handleSave}
-                  disabled={loading}
-                  activeOpacity={0.9}
-                >
-                  <LinearGradient
-                    colors={["#e3ff7c", "#a8e063"]}
-                    style={styles.saveButtonGradient}
-                  >
-                    <Icon name="bookmark" size={20} color="#111827" />
-                    <Text style={styles.saveButtonText}>이 식단 저장하기</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
+              {excludedFoods.length === 0 && (
+                <View style={styles.emptyState}>
+                  <Icon name="restaurant-outline" size={64} color="#374151" />
+                  <Text style={styles.emptyMessage}>
+                    등록된 금지 식재료가 없습니다
+                  </Text>
+                  <Text style={styles.emptySubtext}>
+                    알러지나 선호하지 않는 식재료를 추가하세요
+                  </Text>
+                </View>
+              )}
+            </View>
 
-                <TouchableOpacity
-                  style={styles.retryButton}
-                  onPress={() => setScreen("input")}
-                >
-                  <Text style={styles.retryButtonText}>다시 설정하기</Text>
-                </TouchableOpacity>
-              </View>
+            <TouchableOpacity
+              style={styles.completeButton}
+              onPress={() => setScreen("input")}
+              activeOpacity={0.9}
+            >
+              <LinearGradient
+                colors={["#e3ff7c", "#a8e063"]}
+                style={styles.completeButtonGradient}
+              >
+                <Icon
+                  name="checkmark-circle"
+                  size={22}
+                  color="#111827"
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={styles.completeButtonText}>완료</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  // ✅ 결과 화면
+  return (
+    <View style={styles.container}>
+      <LinearGradient
+        colors={["#0a0a0a", "#1a1a2e", "#16213e", "#0f3460"]}
+        style={StyleSheet.absoluteFill}
+      />
+
+      <SafeAreaView style={styles.safeArea} edges={["top"]}>
+        <LoadingOverlay
+          visible={loading}
+          messages={LOADING_MESSAGES}
+          onCancel={handleCancelLoading}
+        />
+
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => setScreen("input")}
+            style={styles.backButton}
+          >
+            <View style={styles.iconButton}>
+              <Icon name="chevron-back" size={24} color="#ffffff" />
+            </View>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>추천 결과</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <View style={{ flex: 1 }}>
+          <View style={styles.dayTabsWrapper}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.dayTabsContent}
+            >
+              {Array.from({ length: 7 }).map((_, index) => {
+                const isLocked = index > 0;
+                const isActive = currentDayTab === index;
+
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    onPress={() => handleTabPress(index)}
+                    activeOpacity={0.8}
+                    style={styles.dayTabTouch}
+                  >
+                    {isActive ? (
+                      <LinearGradient
+                        colors={["#e3ff7c", "#a8e063"]}
+                        style={styles.dayTabActive}
+                      >
+                        <Text style={styles.dayTabTextActive}>
+                          {index + 1}일차
+                        </Text>
+                      </LinearGradient>
+                    ) : (
+                      <View
+                        style={[styles.dayTab, isLocked && styles.dayTabLocked]}
+                      >
+                        {isLocked && (
+                          <Icon
+                            name="lock-closed"
+                            size={14}
+                            color="#9ca3af"
+                            style={{ marginRight: 4 }}
+                          />
+                        )}
+                        <Text style={styles.dayTabText}>{index + 1}일차</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           </View>
-        )}
+
+          <ScrollView
+            style={styles.contentWrapper}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.resultContainer}
+          >
+            <View style={styles.nutritionCard}>
+              <LinearGradient
+                colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
+                style={styles.nutritionCardGradient}
+              >
+                <View style={styles.nutritionHeader}>
+                  <Text style={styles.nutritionTitle}>오늘의 영양 섭취</Text>
+                  <View style={styles.totalCalBadge}>
+                    <Icon name="flame" size={14} color="#111827" />
+                    <Text style={styles.totalCalText}>
+                      {dailyNutrition.calories} kcal
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.nutritionRow}>
+                  <View style={styles.nutrientItem}>
+                    <Text style={styles.nutrientLabel}>탄수화물</Text>
+                    <Text style={styles.nutrientValue}>
+                      {dailyNutrition.carbs}g
+                    </Text>
+                  </View>
+                  <View style={styles.nutrientDivider} />
+                  <View style={styles.nutrientItem}>
+                    <Text style={styles.nutrientLabel}>단백질</Text>
+                    <Text style={styles.nutrientValue}>
+                      {dailyNutrition.protein}g
+                    </Text>
+                  </View>
+                  <View style={styles.nutrientDivider} />
+                  <View style={styles.nutrientItem}>
+                    <Text style={styles.nutrientLabel}>지방</Text>
+                    <Text style={styles.nutrientValue}>
+                      {dailyNutrition.fat}g
+                    </Text>
+                  </View>
+                </View>
+              </LinearGradient>
+            </View>
+
+            {recommendedMeals.map((meal, index) => (
+              <View key={index} style={styles.mealCardContainer}>
+                <LinearGradient
+                  colors={["rgba(255,255,255,0.08)", "rgba(255,255,255,0.04)"]}
+                  style={styles.mealCard}
+                >
+                  <View style={styles.mealCardHeader}>
+                    <View style={styles.mealTitleRow}>
+                      <View style={styles.mealIconContainer}>
+                        <LinearGradient
+                          colors={
+                            meal.mealTypeName === "아침"
+                              ? ["rgba(251,191,36,0.3)", "rgba(251,191,36,0.1)"]
+                              : meal.mealTypeName === "점심"
+                              ? ["rgba(251,146,60,0.3)", "rgba(251,146,60,0.1)"]
+                              : ["rgba(139,92,246,0.3)", "rgba(139,92,246,0.1)"]
+                          }
+                          style={styles.mealIcon}
+                        >
+                          <Text style={styles.mealEmoji}>
+                            {meal.mealTypeName === "아침"
+                              ? "🌅"
+                              : meal.mealTypeName === "점심"
+                              ? "☀️"
+                              : "🌙"}
+                          </Text>
+                        </LinearGradient>
+                      </View>
+                      <View>
+                        <Text style={styles.mealName}>{meal.mealTypeName}</Text>
+                        <Text style={styles.mealTime}>
+                          {meal.mealTypeName === "아침"
+                            ? "07:00 - 09:00"
+                            : meal.mealTypeName === "점심"
+                            ? "12:00 - 14:00"
+                            : "18:00 - 20:00"}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.mealCaloriesContainer}>
+                      <Text style={styles.mealCalories}>
+                        {meal.totalCalories}
+                      </Text>
+                      <Text style={styles.mealCaloriesUnit}>kcal</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.foodsList}>
+                    {meal.foods.map((food, fIdx) => (
+                      <View key={fIdx} style={styles.foodTag}>
+                        <LinearGradient
+                          colors={[
+                            "rgba(227,255,124,0.2)",
+                            "rgba(168,224,99,0.1)",
+                          ]}
+                          style={styles.foodTagItemGradient}
+                        >
+                          <Text style={styles.foodName}>
+                            {food.foodName} {food.servingSize}g
+                          </Text>
+                          <Text style={styles.foodCalories}>
+                            ({food.calories}kcal)
+                          </Text>
+                        </LinearGradient>
+                      </View>
+                    ))}
+                  </View>
+                </LinearGradient>
+              </View>
+            ))}
+
+            <View style={styles.resultActions}>
+              <TouchableOpacity
+                style={styles.saveButtonContainer}
+                onPress={handleSave}
+                disabled={loading}
+                activeOpacity={0.9}
+              >
+                <LinearGradient
+                  colors={["#e3ff7c", "#a8e063"]}
+                  style={styles.saveButtonGradient}
+                >
+                  <Icon name="bookmark" size={20} color="#111827" />
+                  <Text style={styles.saveButtonText}>이 식단 저장하기</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={() => setScreen("input")}
+              >
+                <Text style={styles.retryButtonText}>다시 설정하기</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
       </SafeAreaView>
     </View>
   );
@@ -978,6 +1544,68 @@ const styles = StyleSheet.create({
   },
   premiumButtonText: { fontSize: 15, fontWeight: "700", color: "#111827" },
 
+  // ✅ 설정 버튼 스타일 (금지 식재료, 끼니 수정)
+  settingButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+    marginBottom: 12,
+  },
+  settingButtonGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    borderRadius: 16,
+  },
+  settingButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#ffffff",
+    letterSpacing: 0.3,
+  },
+
+  // 금지 식재료 미리보기
+  excludedPreview: {
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  glassCard: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  excludedPreviewLabel: {
+    fontSize: 15,
+    color: "#9ca3af",
+    marginBottom: 16,
+    fontWeight: "600",
+    letterSpacing: 0.3,
+  },
+  tagList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  tag: {
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  tagGradient: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+  },
+  tagText: {
+    fontSize: 14,
+    color: "#ffffff",
+    fontWeight: "500",
+  },
+
   section: { marginBottom: 24 },
   sectionHeader: {
     flexDirection: "row",
@@ -1071,6 +1699,150 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     textAlign: "center",
     lineHeight: 20,
+  },
+
+  // ✅ 금지 식재료 관리 화면 스타일
+  excludedForm: {
+    flex: 1,
+  },
+  excludedFormContent: {
+    paddingHorizontal: 20,
+    paddingTop: 30,
+    paddingBottom: 40,
+  },
+  inputGroup: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 30,
+  },
+  inputWrapper: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  inputGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 16,
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  textInput: {
+    flex: 1,
+    height: 52,
+    color: "#ffffff",
+    fontSize: 15,
+    letterSpacing: 0.3,
+  },
+  addButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#E3FF7C",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  addButtonGradient: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  excludedList: {
+    gap: 12,
+    marginBottom: 30,
+    minHeight: 200,
+  },
+  excludedItem: {
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  excludedItemGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 14,
+  },
+  excludedItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    gap: 12,
+  },
+  excludedItemIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(239,68,68,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  excludedItemText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#ffffff",
+    flex: 1,
+    letterSpacing: 0.3,
+  },
+  removeButton: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyMessage: {
+    textAlign: "center",
+    color: "#6b7280",
+    fontSize: 16,
+    fontWeight: "600",
+    marginTop: 16,
+    marginBottom: 8,
+    letterSpacing: 0.3,
+  },
+  emptySubtext: {
+    textAlign: "center",
+    color: "#4b5563",
+    fontSize: 14,
+    letterSpacing: 0.2,
+  },
+  completeButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#E3FF7C",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  completeButtonGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 18,
+  },
+  completeButtonText: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#111827",
+    letterSpacing: 0.5,
   },
 
   // 결과 화면 스타일
