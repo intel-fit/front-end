@@ -22,9 +22,14 @@ import { RootStackParamList } from "../../navigation/types";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { userPreferencesAPI, recommendedMealAPI } from "../../services";
-
+// 🔹 authAPI 추가 import
+import {
+  userPreferencesAPI,
+  recommendedMealAPI,
+  authAPI,
+} from "../../services";
 import { TempDayMeal } from "../../services/recommendedMealAPI";
+import type { ExclusionResponse } from "../../types";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 const { width } = Dimensions.get("window");
@@ -37,6 +42,9 @@ const LOADING_MESSAGES = [
   "거의 다 됐어요! 조금만 기다려주세요...",
 ];
 
+// ... (LoadingOverlay, MealsSelectionModal, mealsModalStyles, Interface 등은 기존과 동일하므로 생략) ...
+// (위쪽 코드는 변경사항이 없으므로 그대로 두시면 됩니다. TempMealRecommendScreen 컴포넌트 내부만 수정합니다.)
+
 const LoadingOverlay = ({
   visible,
   messages = LOADING_MESSAGES,
@@ -46,6 +54,7 @@ const LoadingOverlay = ({
   messages?: string[];
   onCancel?: () => void;
 }) => {
+  // ... 기존 코드 유지
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const spinAnim = useRef(new Animated.Value(0)).current;
@@ -176,7 +185,6 @@ const LoadingOverlay = ({
   );
 };
 
-// ✅ 끼니 선택 모달
 const MealsSelectionModal = ({
   visible,
   currentMeals,
@@ -417,11 +425,16 @@ interface FoodItem {
 const TempMealRecommendScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
 
+  // 🔹 [변경] 하드코딩 제거 후 state로 관리
+  const [userId, setUserId] = useState<string>("");
+
   const [screen, setScreen] = useState<
     "input" | "excludedIngredients" | "result"
   >("input");
   const [currentDayTab, setCurrentDayTab] = useState(0);
-  const [excludedFoods, setExcludedFoods] = useState<string[]>([]);
+
+  const [excludedFoods, setExcludedFoods] = useState<ExclusionResponse[]>([]);
+
   const [newIngredient, setNewIngredient] = useState("");
   const [selectedPeriod, setSelectedPeriod] = useState<"daily" | "weekly">(
     "daily"
@@ -429,11 +442,9 @@ const TempMealRecommendScreen: React.FC = () => {
   const [recommendedMeals, setRecommendedMeals] = useState<MealItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
 
-  // ✅ 끼니 수 관련 state
   const [mealsPerDay, setMealsPerDay] = useState(3);
   const [showMealsModal, setShowMealsModal] = useState(false);
 
-  // 토큰 부족 상태 관리
   const [isTokenDepleted, setIsTokenDepleted] = useState<boolean>(false);
 
   const [dailyNutrition, setDailyNutrition] = useState({
@@ -453,24 +464,29 @@ const TempMealRecommendScreen: React.FC = () => {
     }).start();
   }, [screen]);
 
+  // 🔹 [변경] 데이터 로드 로직 수정: 프로필 조회 후 -> 식단 조회
   useEffect(() => {
-    loadUserData();
+    const init = async () => {
+      await loadUserData();
+    };
+    init();
   }, []);
 
   const loadUserData = async () => {
     try {
-      const preferences = await userPreferencesAPI.getUserPreferences();
-      if (preferences.dislikedFoods) {
-        setExcludedFoods(preferences.dislikedFoods);
-      }
-      console.log(
-        "✅ 비선호 음식 로드 완료:",
-        preferences.dislikedFoods?.length || 0,
-        "개"
-      );
+      // 1. 프로필 조회하여 userId 획득
+      const profile = await authAPI.getProfile();
+      const currentUserId = profile.userId;
+      setUserId(currentUserId);
+      console.log("✅ 유저 ID 로드 완료:", currentUserId);
+
+      // 2. 획득한 userId로 비선호 식단 조회
+      const exclusions = await userPreferencesAPI.getExclusions(currentUserId);
+      setExcludedFoods(exclusions);
+      console.log("✅ 비선호 음식 로드 완료:", exclusions.length, "개");
     } catch (error) {
       console.error("사용자 데이터 로드 실패:", error);
-      // 로컬 스토리지에서 불러오기 시도
+      // 실패 시 로컬 스토리지 시도 (userId가 없으면 기능 제한될 수 있음)
       try {
         const stored = await AsyncStorage.getItem("excludedIngredients");
         if (stored) {
@@ -583,10 +599,10 @@ const TempMealRecommendScreen: React.FC = () => {
       ) {
         setIsTokenDepleted(true);
       } else {
-        // 500 에러인 경우 더 친절한 메시지
         let finalErrorMessage = errorMessage || "식단 생성에 실패했습니다.";
         if (error.status === 500) {
-          finalErrorMessage = "서버에 일시적인 문제가 발생했습니다.\n잠시 후 다시 시도해주세요.";
+          finalErrorMessage =
+            "서버에 일시적인 문제가 발생했습니다.\n잠시 후 다시 시도해주세요.";
         }
         Alert.alert("오류", finalErrorMessage);
       }
@@ -645,11 +661,20 @@ const TempMealRecommendScreen: React.FC = () => {
   const handleAddExcludedIngredient = async () => {
     const trimmed = newIngredient.trim();
 
-    if (!trimmed) {
+    if (!trimmed) return;
+    if (!userId) {
+      Alert.alert(
+        "오류",
+        "유저 정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요."
+      );
       return;
     }
 
-    if (excludedFoods.includes(trimmed)) {
+    const isDuplicate = excludedFoods.some(
+      (item) => item.food_name === trimmed
+    );
+
+    if (isDuplicate) {
       Alert.alert("알림", "이미 추가된 식재료입니다.");
       return;
     }
@@ -657,46 +682,19 @@ const TempMealRecommendScreen: React.FC = () => {
     try {
       setLoading(true);
 
-      try {
-        const result = await userPreferencesAPI.addDislikedFoods(
-          excludedFoods,
-          [trimmed]
-        );
+      // 🔹 [변경] state로 저장된 userId 사용
+      const newItem = await userPreferencesAPI.addExclusions(userId, [trimmed]);
 
-        setExcludedFoods(result.updatedList);
-        await AsyncStorage.setItem(
-          "excludedIngredients",
-          JSON.stringify(result.updatedList)
-        );
+      const updatedList = [...excludedFoods, newItem];
+      setExcludedFoods(updatedList);
 
-        setNewIngredient("");
-        console.log("✅ 비선호 음식 추가 완료 (서버):", result.updatedList);
-        return;
-      } catch (serverError: any) {
-        console.warn("⚠️ 서버 저장 실패, 로컬만 저장:", serverError.message);
+      await AsyncStorage.setItem(
+        "excludedIngredients",
+        JSON.stringify(updatedList)
+      );
 
-        if (
-          serverError.message?.includes("서버 내부 오류") ||
-          serverError.status === 500
-        ) {
-          const updatedList = [...excludedFoods, trimmed];
-          setExcludedFoods(updatedList);
-          await AsyncStorage.setItem(
-            "excludedIngredients",
-            JSON.stringify(updatedList)
-          );
-
-          setNewIngredient("");
-          Alert.alert(
-            "일부 성공",
-            "식재료가 기기에 저장되었습니다.\n(서버 동기화는 백엔드 수정 후 가능합니다)"
-          );
-          console.log("✅ 비선호 음식 추가 완료 (로컬만):", updatedList);
-          return;
-        }
-
-        throw serverError;
-      }
+      setNewIngredient("");
+      console.log("✅ 비선호 음식 추가 완료:", newItem);
     } catch (error: any) {
       console.error("비선호 음식 추가 실패:", error);
       Alert.alert("오류", error.message || "식재료 추가에 실패했습니다.");
@@ -706,8 +704,8 @@ const TempMealRecommendScreen: React.FC = () => {
   };
 
   // ✅ 금지 식재료 삭제
-  const handleRemoveExcludedIngredient = async (ingredient: string) => {
-    Alert.alert("삭제", `"${ingredient}"를 삭제하시겠습니까?`, [
+  const handleRemoveExcludedIngredient = async (id: number, name: string) => {
+    Alert.alert("삭제", `"${name}"를 삭제하시겠습니까?`, [
       { text: "취소", style: "cancel" },
       {
         text: "삭제",
@@ -716,19 +714,17 @@ const TempMealRecommendScreen: React.FC = () => {
           try {
             setLoading(true);
 
-            const result = await userPreferencesAPI.removeDislikedFood(
-              excludedFoods,
-              ingredient
-            );
+            await userPreferencesAPI.deleteExclusion(id);
 
-            setExcludedFoods(result.updatedList);
+            const updatedList = excludedFoods.filter((item) => item.id !== id);
+            setExcludedFoods(updatedList);
 
             await AsyncStorage.setItem(
               "excludedIngredients",
-              JSON.stringify(result.updatedList)
+              JSON.stringify(updatedList)
             );
 
-            console.log("✅ 비선호 음식 삭제 완료:", result.updatedList);
+            console.log("✅ 비선호 음식 삭제 완료 (ID):", id);
           } catch (error: any) {
             console.error("비선호 음식 삭제 실패:", error);
             Alert.alert("오류", error.message || "식재료 삭제에 실패했습니다.");
@@ -739,6 +735,9 @@ const TempMealRecommendScreen: React.FC = () => {
       },
     ]);
   };
+
+  // ... (나머지 render 코드는 UI만 그리므로 수정사항 없이 위에서 제공한 코드와 동일합니다.
+  //      styles나 loadingStyles도 동일합니다.)
 
   // ✅ input 화면 (웰컴 화면)
   if (screen === "input") {
@@ -756,7 +755,6 @@ const TempMealRecommendScreen: React.FC = () => {
             onCancel={handleCancelLoading}
           />
 
-          {/* ✅ 끼니 선택 모달 */}
           <MealsSelectionModal
             visible={showMealsModal}
             currentMeals={mealsPerDay}
@@ -881,8 +879,8 @@ const TempMealRecommendScreen: React.FC = () => {
                 <View style={styles.glassCard}>
                   <Text style={styles.excludedPreviewLabel}>제외된 식재료</Text>
                   <View style={styles.tagList}>
-                    {excludedFoods.map((ingredient, index) => (
-                      <View key={index} style={styles.tag}>
+                    {excludedFoods.map((item) => (
+                      <View key={item.id} style={styles.tag}>
                         <LinearGradient
                           colors={[
                             "rgba(239,68,68,0.2)",
@@ -890,7 +888,7 @@ const TempMealRecommendScreen: React.FC = () => {
                           ]}
                           style={styles.tagGradient}
                         >
-                          <Text style={styles.tagText}>{ingredient}</Text>
+                          <Text style={styles.tagText}>{item.food_name}</Text>
                         </LinearGradient>
                       </View>
                     ))}
@@ -1122,9 +1120,9 @@ const TempMealRecommendScreen: React.FC = () => {
             </View>
 
             <View style={styles.excludedList}>
-              {excludedFoods.map((ingredient, index) => (
+              {excludedFoods.map((item, index) => (
                 <Animated.View
-                  key={index}
+                  key={item.id}
                   style={[styles.excludedItem, { opacity: fadeAnim }]}
                 >
                   <LinearGradient
@@ -1138,11 +1136,15 @@ const TempMealRecommendScreen: React.FC = () => {
                       <View style={styles.excludedItemIcon}>
                         <Icon name="ban" size={18} color="#ef4444" />
                       </View>
-                      <Text style={styles.excludedItemText}>{ingredient}</Text>
+                      <Text style={styles.excludedItemText}>
+                        {item.food_name}
+                      </Text>
                     </View>
                     <TouchableOpacity
                       style={styles.removeButton}
-                      onPress={() => handleRemoveExcludedIngredient(ingredient)}
+                      onPress={() =>
+                        handleRemoveExcludedIngredient(item.id, item.food_name)
+                      }
                       activeOpacity={0.7}
                     >
                       <Icon name="close-circle" size={24} color="#ef4444" />

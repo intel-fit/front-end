@@ -210,17 +210,20 @@ export interface UserPreferencesResponse {
 }
 
 // 비선호 음식 추가 응답 타입
-export interface AddDislikedFoodResponse {
-  success: boolean;
-  message?: string;
-  dislikedFoods: string[];
+export interface ExclusionResponse {
+  id: number;
+  food_name: string;
+  reason: string; // "taste"
 }
-
 // 비선호 음식 삭제 응답 타입
 export interface RemoveDislikedFoodResponse {
   success: boolean;
   message?: string;
   dislikedFoods: string[];
+}
+//비선호 음식 삭제 응답 타입
+export interface DeleteExclusionResponse {
+  status: string; // 예: "deleted"
 }
 // 홈 화면 응답 타입
 export interface HomeResponse {
