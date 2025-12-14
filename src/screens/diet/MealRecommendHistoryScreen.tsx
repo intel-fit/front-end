@@ -14,6 +14,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { recommendedMealAPI } from "../../services";
+import { authAPI } from "../../services";
 
 type DayMealFood = {
   name: string;
@@ -78,7 +79,38 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
   // ========== Normalizers ==========
   const toNumber = (v: any, def = 0) =>
     typeof v === "number" && !Number.isNaN(v) ? v : Number(v ?? def) || def;
+  const handleNewRecommendPress = async () => {
+    try {
+      setLoading(true);
 
+      // 사용자 프로필 조회
+      const profile = await authAPI.getProfile();
+
+      console.log("✅ 멤버십 타입:", profile.membershipType);
+
+      // 멤버십 타입에 따라 다른 화면으로 이동
+      if (profile.membershipType === "FREE") {
+        console.log("➡️ 무료 회원 - TempRoutineRecommendScreen으로 이동");
+        navigation.navigate("TempMealRecommend");
+      } else {
+        console.log("➡️ 프리미엄 회원 - RoutineRecommendNew로 이동");
+        navigation.navigate("MealRecommend");
+      }
+    } catch (error: any) {
+      console.error("❌ 프로필 조회 실패:", error);
+      Alert.alert("오류", "사용자 정보를 불러오는데 실패했습니다.", [
+        {
+          text: "확인",
+          onPress: () => {
+            // 실패 시 기본적으로 무료 버전으로 이동
+            navigation.navigate("TempMealRecommendScreen");
+          },
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
   const normalizeMealBlock = (raw: any): DayMealBlock | undefined => {
     if (!raw) return undefined;
 
@@ -571,14 +603,18 @@ const MealRecommendHistoryScreen = ({ navigation }: any) => {
               {!isEditMode && (
                 <TouchableOpacity
                   style={styles.newRecommendBtn}
-                  onPress={() => navigation.navigate("MealRecommend")}
+                  onPress={handleNewRecommendPress}
+                  disabled={loading}
                 >
-                  <Text style={styles.newRecommendBtnText}>
-                    새 식단 추천받기
-                  </Text>
+                  {loading ? (
+                    <ActivityIndicator size="small" color="#111827" />
+                  ) : (
+                    <Text style={styles.newRecommendBtnText}>
+                      새 식단 추천받기
+                    </Text>
+                  )}
                 </TouchableOpacity>
               )}
-
               {bundles.map((bundle) => (
                 <TouchableOpacity
                   key={bundle.bundleId}

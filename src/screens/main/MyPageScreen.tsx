@@ -18,8 +18,6 @@ import AIAnalysisModal from "../../components/modals/AIAnalysisModal";
 import MyPlanModal from "../../components/modals/MyPlanModal";
 import PaymentMethodModal from "../../components/modals/PaymentMethodModal";
 import ProfileEditModal from "../../components/modals/ProfileEditModal";
-import RoutineRecommendModal from "../../components/modals/RoutineRecommendModal";
-import MealRecommendModal from "../../components/modals/MealRecommendModal";
 import DeleteAccountModal from "../../components/modals/DeleteAccountModal";
 import PremiumModal from "../../components/modals/PremiumModal";
 import { useRoute } from "@react-navigation/native";
@@ -185,17 +183,17 @@ const MyPageScreen = ({ navigation }: any) => {
 
   const handleDeleteAccount = async () => {
     // 프로필 데이터에서 카카오 사용자 여부 확인
-    const isKakaoUser = profileData && (
-      (profileData as any).loginType === "KAKAO" ||
-      (profileData as any).provider === "KAKAO" ||
-      (profileData as any).kakaoId !== undefined
-    );
+    const isKakaoUser =
+      profileData &&
+      ((profileData as any).loginType === "KAKAO" ||
+        (profileData as any).provider === "KAKAO" ||
+        (profileData as any).kakaoId !== undefined);
 
     if (isKakaoUser) {
       // 카카오 사용자: unlink API 호출
       try {
         await authAPI.kakaoUnlink();
-        
+
         // 성공하면 카카오 사용자 → 탈퇴 완료
         Alert.alert(
           "탈퇴 완료",
@@ -218,7 +216,10 @@ const MyPageScreen = ({ navigation }: any) => {
         );
       } catch (error: any) {
         console.error("카카오 unlink 실패:", error);
-        Alert.alert("오류", error.message || "카카오 연결 해제에 실패했습니다.");
+        Alert.alert(
+          "오류",
+          error.message || "카카오 연결 해제에 실패했습니다."
+        );
       }
     } else {
       // 일반 사용자: 회원탈퇴 모달 열기
@@ -538,22 +539,13 @@ const MyPageScreen = ({ navigation }: any) => {
         navigation={navigation}
       />
 
-      {/* ⚠️ 중복되었던 PaymentMethodModal 제거됨 */}
-
       <ProfileEditModal
         isOpen={isProfileEditModalOpen}
         onClose={() => setIsProfileEditModalOpen(false)}
         profileData={profileData}
         onProfileUpdate={fetchProfile}
       />
-      <RoutineRecommendModal
-        isOpen={isRoutineRecommendModalOpen}
-        onClose={() => setIsRoutineRecommendModalOpen(false)}
-      />
-      <MealRecommendModal
-        isOpen={isMealRecommendModalOpen}
-        onClose={() => setIsMealRecommendModalOpen(false)}
-      />
+
       <DeleteAccountModal
         isOpen={isDeleteAccountModalOpen}
         onClose={() => setIsDeleteAccountModalOpen(false)}

@@ -1,5 +1,5 @@
-import { request } from "./apiConfig";
-
+import { request, requestAI, ACCESS_TOKEN_KEY } from "./apiConfig";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 /**
  * 운동 루틴 추천 API
  */
@@ -86,7 +86,38 @@ export const recommendedExerciseAPI = {
       throw error;
     }
   },
+  /**
+   * [NEW] 7일치 주간 운동 루틴 생성 (AI 서버)
+   */
+  generateWeeklyExercisePlan: async (data: any): Promise<any> => {
+    try {
+      console.log("📅 주간 루틴 생성 요청 (AI)");
 
+      // 1. 토큰 가져오기
+      const token = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+      // 만약 ACCESS_TOKEN_KEY import가 안되면 문자열 "accessToken" 등을 직접 쓰셔도 됩니다.
+      // 예: const token = await AsyncStorage.getItem("accessToken");
+
+      console.log("🔑 토큰 존재 여부:", !!token);
+
+      // 2. 헤더에 토큰 추가하여 요청 보내기
+      const response = await requestAI("/ai/exercise_plan", {
+        // 찾으신 경로 사용
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // 🔥 핵심: 이 줄이 있어야 401이 해결됩니다.
+        },
+        body: JSON.stringify(data),
+      });
+
+      console.log("✅ 주간 루틴 생성 성공");
+      return response;
+    } catch (error: any) {
+      console.error("❌ 주간 루틴 생성 실패:", error);
+      throw error;
+    }
+  },
   /**
    * 2. 운동 플랜 저장
    * @param planId - 저장할 플랜 ID
@@ -196,6 +227,90 @@ export const recommendedExerciseAPI = {
       }
 
       throw error;
+    }
+  },
+
+  /**
+   * 6. 추천받은 운동 목록 조회
+   */
+  getRecommendedExercises: async (): Promise<any> => {
+    try {
+      console.log("📋 추천받은 운동 목록 조회");
+
+      const response = await request(
+        `/api/exercise-recommendations/recommended-exercises`,
+        {
+          method: "GET",
+        }
+      );
+
+      console.log("✅ 추천받은 운동 조회 성공:", response);
+      return response;
+    } catch (error: any) {
+      console.error("❌ 추천받은 운동 조회 실패:", error);
+
+      if (error.status === 401) {
+        throw new Error("로그인이 필요합니다.");
+      }
+
+      throw error;
+    }
+  },
+
+  getRecommendedHistory: async (): Promise<any> => {
+    try {
+      console.log("📅 운동 추천 내역 조회 요청");
+      // GET 요청 전송
+      const response = await request(
+        "/api/exercise-recommendations/recommended-exercises",
+        {
+          method: "GET",
+        }
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ 내역 조회 실패:", error);
+      throw error;
+    }
+  },
+  saveWeeklyExercisePlan: async (data: { days: any[] }): Promise<any> => {
+    try {
+      console.log("💾 주간 운동 플랜 저장 요청");
+
+      // 백엔드가 알려준 저장 API 주소: /api/exercise-recommendations/weekly/save
+      const response = await request(
+        "/api/exercise-recommendations/weekly/save",
+        {
+          method: "POST",
+          body: JSON.stringify(data),
+        }
+      );
+
+      console.log("✅ 주간 운동 플랜 저장 성공");
+      return response;
+    } catch (error: any) {
+      console.error("❌ 주간 운동 플랜 저장 실패:", error);
+      throw error;
+    }
+  },
+  saveTempSummary: async (data: {
+    date: string;
+    focus: string;
+    durationMin: number;
+    kcal: number;
+    exerciseCount: number;
+    title: string;
+  }): Promise<any> => {
+    try {
+      console.log("📝 추천 요약(TEMP) 저장 요청:", data.date, data.title);
+      const response = await request("/api/exercise-recommendations/temp", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return response;
+    } catch (error) {
+      console.error("❌ 추천 요약(TEMP) 저장 실패:", error);
+      throw error; // 에러를 상위로 던져서 저장 프로세스를 중단할지 결정
     }
   },
 };
