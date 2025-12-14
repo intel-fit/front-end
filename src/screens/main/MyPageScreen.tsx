@@ -376,40 +376,6 @@ const MyPageScreen = ({ navigation }: any) => {
             </TouchableOpacity>
 
             <View style={styles.subSeparator} />
-
-            <TouchableOpacity
-              style={styles.linkItem}
-              onPress={() => navigation.navigate("PaymentSuccess")}
-            >
-              <Text style={[styles.linkText, { color: "#4ade80" }]}>
-                ✅ 결제 성공 화면
-              </Text>
-              <Icon name="chevron-forward" size={18} color="#4ade80" />
-            </TouchableOpacity>
-
-            <View style={styles.subSeparator} />
-
-            <TouchableOpacity
-              style={styles.linkItem}
-              onPress={() => navigation.navigate("PaymentFail")}
-            >
-              <Text style={[styles.linkText, { color: "#ef4444" }]}>
-                ❌ 결제 실패 화면
-              </Text>
-              <Icon name="chevron-forward" size={18} color="#ef4444" />
-            </TouchableOpacity>
-
-            <View style={styles.subSeparator} />
-
-            <TouchableOpacity
-              style={styles.linkItem}
-              onPress={() => navigation.navigate("PaymentCancel")}
-            >
-              <Text style={[styles.linkText, { color: "#f59e0b" }]}>
-                🚫 결제 취소 화면
-              </Text>
-              <Icon name="chevron-forward" size={18} color="#f59e0b" />
-            </TouchableOpacity>
           </View>
         </View>
 

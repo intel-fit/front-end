@@ -343,7 +343,7 @@ const TempMealRecommendScreen: React.FC = () => {
     protein: 0,
     fat: 0,
   });
-
+  const [selectedFoods, setSelectedFoods] = useState<Set<string>>(new Set());
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -412,6 +412,18 @@ const TempMealRecommendScreen: React.FC = () => {
     } catch (error: any) {
       console.error("비선호 음식 로드 실패:", error);
     }
+  };
+
+  const toggleFoodPreference = (foodName: string) => {
+    setSelectedFoods((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(foodName)) {
+        newSet.delete(foodName);
+      } else {
+        newSet.add(foodName);
+      }
+      return newSet;
+    });
   };
 
   const handleCancelLoading = () => {
@@ -499,7 +511,7 @@ const TempMealRecommendScreen: React.FC = () => {
         protein: Math.round(totalProt),
         fat: Math.round(totalFat),
       });
-
+      setSelectedFoods(new Set());
       setScreen("result");
       setCurrentDayTab(0);
 
@@ -531,11 +543,28 @@ const TempMealRecommendScreen: React.FC = () => {
     try {
       setLoading(true);
       console.log("💾 식단 저장 요청 (Server Commit)");
+
+      // ✅ 1. 식단 저장
       await recommendedMealAPI.saveTempMealPlan();
+
+      // ✅ 2. 선호 음식이 있으면 추가
+      if (selectedFoods.size > 0 && userId) {
+        try {
+          const foodsArray = Array.from(selectedFoods);
+          console.log("💚 선호 음식 저장:", foodsArray);
+          await userPreferencesAPI.addPreferences(userId, foodsArray);
+          console.log("✅ 선호 음식 저장 완료");
+        } catch (prefError) {
+          console.error("선호 음식 저장 실패:", prefError);
+          // 선호 음식 저장 실패해도 식단 저장은 성공했으므로 계속 진행
+        }
+      }
 
       Alert.alert(
         "저장 완료! 🎉",
-        "AI 추천 식단이 기록되었습니다.\n기록하기 화면에서 확인하세요.",
+        selectedFoods.size > 0
+          ? `AI 추천 식단이 기록되었습니다.\n${selectedFoods.size}개의 선호 음식도 추가되었습니다.`
+          : "AI 추천 식단이 기록되었습니다.\n기록하기 화면에서 확인하세요.",
         [
           {
             text: "확인",
@@ -943,7 +972,6 @@ const TempMealRecommendScreen: React.FC = () => {
       </View>
     );
   }
-
   return (
     <View style={styles.container}>
       <LinearGradient
@@ -972,6 +1000,7 @@ const TempMealRecommendScreen: React.FC = () => {
         </View>
 
         <View style={{ flex: 1 }}>
+          {/* 상단 요일 탭 */}
           <View style={styles.dayTabsWrapper}>
             <ScrollView
               horizontal
@@ -1024,6 +1053,7 @@ const TempMealRecommendScreen: React.FC = () => {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.resultContainer}
           >
+            {/* 영양 정보 카드 */}
             <View style={styles.nutritionCard}>
               <LinearGradient
                 colors={["rgba(255,255,255,0.1)", "rgba(255,255,255,0.05)"]}
@@ -1064,6 +1094,7 @@ const TempMealRecommendScreen: React.FC = () => {
               </LinearGradient>
             </View>
 
+            {/* 식단 리스트 렌더링 */}
             {recommendedMeals.map((meal, index) => (
               <View key={index} style={styles.mealCardContainer}>
                 <LinearGradient
@@ -1111,30 +1142,73 @@ const TempMealRecommendScreen: React.FC = () => {
                     </View>
                   </View>
 
+                  {/* 음식 목록 */}
                   <View style={styles.foodsList}>
-                    {meal.foods.map((food, fIdx) => (
-                      <View key={fIdx} style={styles.foodTag}>
-                        <LinearGradient
-                          colors={[
-                            "rgba(227,255,124,0.2)",
-                            "rgba(168,224,99,0.1)",
-                          ]}
-                          style={styles.foodTagItemGradient}
+                    {meal.foods.map((food, fIdx) => {
+                      const isSelected = selectedFoods.has(food.foodName);
+
+                      return (
+                        <TouchableOpacity
+                          key={fIdx}
+                          style={styles.foodTag}
+                          onPress={() => toggleFoodPreference(food.foodName)}
+                          activeOpacity={0.7}
                         >
-                          <Text style={styles.foodName}>
-                            {food.foodName} {food.servingSize}g
-                          </Text>
-                          <Text style={styles.foodCalories}>
-                            ({food.calories}kcal)
-                          </Text>
-                        </LinearGradient>
-                      </View>
-                    ))}
+                          <LinearGradient
+                            colors={
+                              isSelected
+                                ? [
+                                    "rgba(227,255,124,0.3)",
+                                    "rgba(168,224,99,0.2)",
+                                  ]
+                                : [
+                                    "rgba(227,255,124,0.2)",
+                                    "rgba(168,224,99,0.1)",
+                                  ]
+                            }
+                            style={styles.foodTagItemGradient}
+                          >
+                            {/* 1. 음식 이름 & 용량 */}
+                            <Text style={styles.foodName}>
+                              {food.foodName} {food.servingSize}g
+                            </Text>
+
+                            {/* 2. 칼로리 */}
+                            <Text style={styles.foodCalories}>
+                              ({food.calories}kcal)
+                            </Text>
+
+                            <Icon
+                              name={isSelected ? "heart" : "heart-outline"}
+                              size={16}
+                              color={isSelected ? "#ff0000ff" : "#6b7280"}
+                              ㄴ
+                            />
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
                 </LinearGradient>
               </View>
             ))}
 
+            {/* 선호 음식 정보 표시 (리스트 하단) */}
+            {selectedFoods.size > 0 && (
+              <View style={styles.selectedFoodsInfo}>
+                <LinearGradient
+                  colors={["rgba(227,255,124,0.2)", "rgba(168,224,99,0.1)"]}
+                  style={styles.selectedFoodsInfoGradient}
+                >
+                  <Icon name="heart" size={20} color="#e3ff7c" />
+                  <Text style={styles.selectedFoodsText}>
+                    {selectedFoods.size}개의 음식을 선호 식단으로 선택했습니다
+                  </Text>
+                </LinearGradient>
+              </View>
+            )}
+
+            {/* 하단 버튼 액션 */}
             <View style={styles.resultActions}>
               <TouchableOpacity
                 style={styles.saveButtonContainer}
@@ -1147,7 +1221,11 @@ const TempMealRecommendScreen: React.FC = () => {
                   style={styles.saveButtonGradient}
                 >
                   <Icon name="bookmark" size={20} color="#111827" />
-                  <Text style={styles.saveButtonText}>이 식단 저장하기</Text>
+                  <Text style={styles.saveButtonText}>
+                    {selectedFoods.size > 0
+                      ? `이 식단 저장하기 (선호 음식 ${selectedFoods.size}개)`
+                      : "이 식단 저장하기"}
+                  </Text>
                 </LinearGradient>
               </TouchableOpacity>
 
@@ -1337,6 +1415,26 @@ const styles = StyleSheet.create({
   contentWrapper: { flex: 1 },
   contentContainer: { paddingHorizontal: 20, paddingBottom: 40 },
   resultContainer: { paddingHorizontal: 20, paddingBottom: 40, paddingTop: 10 },
+  // ✅ 선호 음식 안내 스타일 추가
+  selectedFoodsInfo: {
+    marginBottom: 16,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  selectedFoodsInfoGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "rgba(227,255,124,0.3)",
+    borderRadius: 12,
+  },
+  selectedFoodsText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#e3ff7c",
+  },
 
   header: {
     flexDirection: "row",
