@@ -39,6 +39,8 @@ const HomeScreen = ({ navigation }: any) => {
   const [todayExerciseCount, setTodayExerciseCount] = useState(0);
   const [todayCalories, setTodayCalories] = useState(0);
   const [inBodyData, setInBodyData] = useState<any>(null);
+  // 각 날짜별 운동 시간(분) 데이터
+  const [dailyWorkoutMinutes, setDailyWorkoutMinutes] = useState<Record<string, number>>({});
   const isLoadingRef = useRef(false);
 
   // 멤버십 정보 state
@@ -120,6 +122,31 @@ const HomeScreen = ({ navigation }: any) => {
 
       const nutritionResults = await Promise.all(nutritionPromises);
       console.log('🏠 [홈 화면] 이번 주 칼로리 데이터 조회 완료 (7일):', nutritionResults);
+
+      // 각 날짜에 대해 운동 시간 조회 (병렬 처리 - 7번 호출)
+      console.log('🏠 [홈 화면] 이번 주 운동 시간 데이터 조회 시작 (7일 병렬 호출)');
+      const workoutTimePromises = weekDates.map(async (date, index) => {
+        try {
+          console.log(`📡 [홈 화면] ${index + 1}/7 - ${date} 운동 시간 조회 중...`);
+          const progress = await homeAPI.getTodayProgress(date);
+          const minutes = progress.minutes || 0;
+          console.log(`✅ [홈 화면] ${index + 1}/7 - ${date} 운동 시간: ${minutes}분`);
+          return { date, minutes };
+        } catch (error) {
+          console.error(`❌ [홈 화면] ${index + 1}/7 - ${date} 운동 시간 조회 실패:`, error);
+          return { date, minutes: 0 };
+        }
+      });
+
+      const workoutTimeResults = await Promise.all(workoutTimePromises);
+      console.log('🏠 [홈 화면] 이번 주 운동 시간 데이터 조회 완료 (7일):', workoutTimeResults);
+
+      // 운동 시간 데이터를 state에 저장
+      const workoutMinutesMap: Record<string, number> = {};
+      workoutTimeResults.forEach(({ date, minutes }) => {
+        workoutMinutesMap[date] = minutes;
+      });
+      setDailyWorkoutMinutes(prev => ({ ...prev, ...workoutMinutesMap }));
 
       // 기존 데이터와 병합 (칼로리 데이터 업데이트)
       let updatedData: DailyProgressWeekItem[] = [];
@@ -797,15 +824,17 @@ const HomeScreen = ({ navigation }: any) => {
                       {(() => {
                         const dayProgress = getDayProgress(d);
                         const calories = dayProgress?.totalCalorie ?? 0;
-                        const rate = dayProgress?.exerciseRate ?? 0;
+                        const dateStr = formatDateToString(d);
+                        // 해당 날짜의 운동 시간(분) 가져오기
+                        const workoutMinutes = dailyWorkoutMinutes[dateStr] ?? 0;
 
                         return (
                           <>
                             <Text style={styles.calendarCalories}>
                               {`${Math.round(calories)}k`}
                             </Text>
-                            <Text style={styles.calendarPercentage}>
-                              {`${Math.round(rate)}%`}
+                            <Text style={styles.calendarWorkoutTime}>
+                              {workoutMinutes > 0 ? `${workoutMinutes}분` : ''}
                             </Text>
                           </>
                         );
@@ -1120,6 +1149,14 @@ const styles = StyleSheet.create({
     lineHeight: 14.5,
   },
   calendarPercentage: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#ffffff",
+    textAlign: "center",
+    height: 15,
+    lineHeight: 14.5,
+  },
+  calendarWorkoutTime: {
     fontSize: 12,
     fontWeight: "500",
     color: "#ffffff",

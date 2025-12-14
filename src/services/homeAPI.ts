@@ -156,6 +156,45 @@ export const homeAPI = {
     }
   },
 
+  // 오늘 또는 특정 날짜의 운동 달성률과 칼로리 조회
+  // GET /api/daily-progress/today?date={date}
+  getTodayProgress: async (date: string): Promise<{
+    date: string;
+    exerciseRate: number;
+    totalCalorie: number;
+    totalExerciseSeconds: number;
+    minutes: number;
+    seconds: number;
+  }> => {
+    try {
+      console.log('📡 [오늘 진행률] API 호출: GET /api/daily-progress/today', { date });
+      const response = await request<{
+        date: string;
+        exerciseRate: number;
+        totalCalorie: number;
+        totalExerciseSeconds: number;
+        minutes: number;
+        seconds: number;
+      }>(`/api/daily-progress/today?date=${encodeURIComponent(date)}`, {
+        method: 'GET',
+      });
+      
+      console.log('✅ [오늘 진행률] 데이터 수신:', response);
+      return response;
+    } catch (error: any) {
+      console.error('❌ [오늘 진행률] API 호출 실패:', error);
+      // 에러 시 기본값 반환
+      return {
+        date,
+        exerciseRate: 0,
+        totalCalorie: 0,
+        totalExerciseSeconds: 0,
+        minutes: 0,
+        seconds: 0,
+      };
+    }
+  },
+
   // 영양 목표 조회
   // GET /food/nutrition-goal/get?user_id={user_id}&date={date}
   getNutritionGoal: async (date: string): Promise<any> => {
