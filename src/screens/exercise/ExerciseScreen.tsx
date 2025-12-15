@@ -59,6 +59,10 @@ interface Activity {
   externalId?: string; // 운동/스트레칭 외부 ID
   saveTitle?: string;
   groupKey?: string;
+  category?: string;
+  title?: string;
+  targetMuscle?: string;
+  bodyPart?: string;
 }
 
 const DETAIL_TIME_REGEX = /(오전|오후)\s*\d{1,2}:\d{2}/gi;
