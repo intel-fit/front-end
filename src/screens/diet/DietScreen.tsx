@@ -991,18 +991,27 @@ const DietScreen = ({navigation, route}: any) => {
                         }}
                         activeOpacity={0.7}
                       >
-                        <View style={[
-                          styles.monthDateBadge,
-                          isToday && !isSelected && styles.monthDateBadgeToday,
-                          isSelected && styles.monthDateBadgeSelected
-                        ]}>
-                          <Text style={[
-                            styles.monthDateText,
-                            isToday && !isSelected && styles.monthDateTextToday,
-                            isSelected && styles.monthDateTextSelected,
-                            !isToday && !isSelected && styles.monthDateTextNotSelected,
-                            !isCurrentMonth && styles.monthDateTextMuted
-                          ]}>
+                        <View
+                          style={[
+                            styles.monthDateBadge,
+                            isSelected
+                              ? styles.monthDateBadgeSelected
+                              : isToday
+                              ? styles.monthDateBadgeToday
+                              : null,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.monthDateText,
+                              isSelected
+                                ? styles.monthDateTextSelected
+                                : isToday
+                                ? styles.monthDateTextToday
+                                : styles.monthDateTextNotSelected,
+                              !isCurrentMonth && styles.monthDateTextMuted,
+                            ]}
+                          >
                             {d.getDate()}
                           </Text>
                         </View>
@@ -1093,14 +1102,14 @@ const DietScreen = ({navigation, route}: any) => {
                         <View
                           style={[
                             styles.calendarNumberInner,
-                            isToday && !isSelected && styles.calendarNumberToday,
+                            isToday && styles.calendarNumberToday,
                             isSelected && styles.calendarNumberSelected,
                           ]}
                         >
                           <Text
                             style={[
                               styles.calendarNumberText,
-                              isToday && !isSelected && styles.calendarNumberTextToday,
+                              isToday && styles.calendarNumberTextToday,
                               isSelected && styles.calendarNumberSelectedText,
                               !isToday && !isSelected && styles.calendarNumberTextNotSelected,
                             ]}
@@ -1633,7 +1642,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   monthDateBadge: {
-    minWidth: 28,
+    width: 28,
     height: 28,
     borderRadius: 14,
     justifyContent: 'center',
@@ -1662,6 +1671,7 @@ const styles = StyleSheet.create({
   },
   monthDateBadgeSelected: {
     backgroundColor: '#e3ff7c',
+    borderRadius: 14,
   },
   monthDateTextSelected: {
     color: '#000',
@@ -1692,6 +1702,7 @@ const styles = StyleSheet.create({
   },
   calendarNumberSelected: {
     backgroundColor: '#e3ff7c',
+    borderRadius: 14,
   },
   calendarNumberText: {
     fontSize: 16,

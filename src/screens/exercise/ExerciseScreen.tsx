@@ -4114,15 +4114,15 @@ const ExerciseScreen = ({ navigation }: any) => {
                         <View
                           style={[
                             styles.calendarNumberInner,
-                            isSelected && styles.calendarNumberSelected,
                             isToday && styles.calendarNumberToday,
+                            isSelected && styles.calendarNumberSelected,
                           ]}
                         >
                           <Text
                             style={[
                               styles.calendarNumberText,
-                              isSelected && styles.calendarNumberSelectedText,
                               isToday && styles.calendarNumberTodayText,
+                              isSelected && styles.calendarNumberSelectedText,
                             ]}
                           >
                             {label}
@@ -5179,7 +5179,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   calendarNumberToday: {
-    backgroundColor: "#e3ff7c",
+    backgroundColor: "#ffffff",
   },
   calendarNumberText: {
     fontSize: 16,
