@@ -2917,21 +2917,22 @@ const AnalysisScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1c1c1c",
+    backgroundColor: colors.background,
   },
   header: {
-    height: 50,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.background,
     position: "relative",
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#ffffff",
+    fontSize: 20,
+    fontWeight: "700",
+    color: colors.text,
   },
   content: {
     flex: 1,
@@ -2940,6 +2941,7 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     alignSelf: "center",
     width: "100%",
+    paddingTop: 12,
     paddingHorizontal: 20,
     paddingBottom: 100,
   },

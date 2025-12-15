@@ -1101,7 +1101,19 @@ const ExerciseScreen = ({ navigation }: any) => {
 
     try {
       const response = await getTodayWorkoutTime(finalUserId);
-      setTodayTotalWorkoutSeconds(response.totalSeconds || 0);
+      console.log("[EXERCISE][TIME] getTodayWorkoutTime 응답 받음:", {
+        totalSeconds: response.totalSeconds,
+        response,
+      });
+      const totalSeconds = response.totalSeconds || 0;
+      setTodayTotalWorkoutSeconds(totalSeconds);
+
+      // 달력의 오늘 운동 시간도 즉시 반영
+      const todayStr = formatDateToString(new Date());
+      setDailyWorkoutSeconds((prev) => ({
+        ...prev,
+        [todayStr]: totalSeconds,
+      }));
     } catch (e) {
       console.error("[EXERCISE][TIME] 오늘 운동 시간 조회 실패:", e);
       setTodayTotalWorkoutSeconds(0);
@@ -3725,6 +3737,13 @@ const ExerciseScreen = ({ navigation }: any) => {
               prev.filter((activity) => activity.id !== workoutId)
             );
 
+                // 진행률 및 달력 데이터 새로고침
+                await loadTodayProgress();
+                await loadWeeklyCalories();
+                if (workoutDate) {
+                  await loadCalendarCalories([workoutDate]);
+                }
+
             // eventBus로 운동 삭제 이벤트 발생 (캘린더 새로고침용)
             eventBus.emit("workoutSessionDeleted", {
               sessionId: sessionId || null,
@@ -3817,6 +3836,11 @@ const ExerciseScreen = ({ navigation }: any) => {
               // 오늘 날짜라면 홈/분석 쪽에서도 시간이 바로 0으로 반영되도록
               try {
                 await loadTodayWorkoutTime();
+                await loadTodayProgress();
+                await loadWeeklyCalories();
+                if (targetDateStr) {
+                  await loadCalendarCalories([targetDateStr]);
+                }
               } catch (e) {
                 console.error(
                   "[WORKOUT][DELETE_ALL] 오늘 운동 시간 재조회 실패:",
@@ -4509,6 +4533,8 @@ const ExerciseScreen = ({ navigation }: any) => {
             try {
               await loadTodayWorkoutTime(); // ✅ 오늘 운동 시간 업데이트
               await loadWeeklyCalories();
+              const todayStr = formatDateToString(new Date());
+              await loadCalendarCalories([todayStr]); // ✅ 오늘 캘린더 운동시간 갱신
             } catch (error) {
               console.error(
                 "[PROGRESS] 운동 완료 후 주간 진행률 새로고침 실패:",
