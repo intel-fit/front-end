@@ -229,11 +229,200 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
   };
 
   const handleDelete = async (plan: ExercisePlan) => {
-    Alert.alert("알림", "서버 삭제 기능이 아직 연동되지 않았습니다.");
-  };
+    Alert.alert("삭제 확인", `"${plan.planName}"을(를) 삭제하시겠습니까?`, [
+      {
+        text: "취소",
+        style: "cancel",
+      },
+      {
+        text: "삭제",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setLoading(true);
 
+            // "나의 주간 운동 일정"인 경우
+            if (plan.planId.startsWith("weekly_history")) {
+              // 모든 날짜 추출
+              const dates = plan.days
+                .map((dayExercises) => dayExercises[0]?.date)
+                .filter(Boolean);
+
+              if (dates.length === 0) {
+                Alert.alert("오류", "삭제할 날짜 정보가 없습니다.");
+                return;
+              }
+
+              console.log(`🗑️ 총 ${dates.length}일 삭제 시작...`);
+
+              let successCount = 0;
+              let failCount = 0;
+
+              // 각 날짜를 개별적으로 삭제
+              for (const date of dates) {
+                try {
+                  console.log(`📅 ${date} 삭제 중...`);
+                  const result =
+                    await recommendedExerciseAPI.deleteRecommendedExerciseByDate(
+                      date
+                    );
+
+                  // 응답에 deletedCount 체크
+                  if (result && result.deletedCount > 0) {
+                    successCount++;
+                    console.log(
+                      `✅ ${date} 삭제 성공 (${result.deletedCount}개)`
+                    );
+                  } else {
+                    failCount++;
+                    console.log(`⚠️ ${date} 삭제할 데이터 없음`);
+                  }
+                } catch (err) {
+                  failCount++;
+                  console.error(`❌ ${date} 삭제 실패:`, err);
+                }
+              }
+
+              if (successCount > 0) {
+                Alert.alert(
+                  "삭제 완료",
+                  `${successCount}일치 운동이 삭제되었습니다.${
+                    failCount > 0 ? `\n(${failCount}일치는 삭제 실패)` : ""
+                  }`
+                );
+              } else {
+                Alert.alert(
+                  "알림",
+                  "삭제할 데이터가 없거나 삭제에 실패했습니다."
+                );
+              }
+            }
+            // "오늘의 추천"인 경우
+            else if (plan.planId.startsWith("daily_")) {
+              const today = new Date().toISOString().split("T")[0];
+              console.log(`📅 ${today} 삭제 중...`);
+
+              const result =
+                await recommendedExerciseAPI.deleteRecommendedExerciseByDate(
+                  today
+                );
+
+              if (result && result.deletedCount > 0) {
+                Alert.alert("성공", "오늘의 추천이 삭제되었습니다.");
+              } else {
+                Alert.alert("알림", "삭제할 데이터가 없습니다.");
+              }
+            } else {
+              Alert.alert("알림", "이 플랜은 삭제할 수 없습니다.");
+              return;
+            }
+
+            // 삭제 후 목록 새로고침
+            await loadExercisePlans();
+          } catch (error: any) {
+            console.error("❌ 삭제 중 오류:", error);
+            Alert.alert(
+              "오류",
+              error.message || "삭제 중 문제가 발생했습니다."
+            );
+          } finally {
+            setLoading(false);
+          }
+        },
+      },
+    ]);
+  };
   const handleBulkDelete = async () => {
-    Alert.alert("알림", "서버 삭제 기능이 아직 연동되지 않았습니다.");
+    if (selectedPlanIds.length === 0) return;
+
+    Alert.alert(
+      "일괄 삭제",
+      `선택한 ${selectedPlanIds.length}개의 플랜을 삭제하시겠습니까?`,
+      [
+        {
+          text: "취소",
+          style: "cancel",
+        },
+        {
+          text: "삭제",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setLoading(true);
+
+              const selectedPlans = plans.filter((p) =>
+                selectedPlanIds.includes(p.planId)
+              );
+
+              let totalSuccess = 0;
+              let totalFail = 0;
+
+              for (const plan of selectedPlans) {
+                if (plan.planId.startsWith("weekly_history")) {
+                  const dates = plan.days
+                    .map((dayExercises) => dayExercises[0]?.date)
+                    .filter(Boolean);
+
+                  for (const date of dates) {
+                    try {
+                      const result =
+                        await recommendedExerciseAPI.deleteRecommendedExerciseByDate(
+                          date
+                        );
+                      if (result && result.deletedCount > 0) {
+                        totalSuccess++;
+                      } else {
+                        totalFail++;
+                      }
+                    } catch (err) {
+                      totalFail++;
+                    }
+                  }
+                } else if (plan.planId.startsWith("daily_")) {
+                  const today = new Date().toISOString().split("T")[0];
+                  try {
+                    const result =
+                      await recommendedExerciseAPI.deleteRecommendedExerciseByDate(
+                        today
+                      );
+                    if (result && result.deletedCount > 0) {
+                      totalSuccess++;
+                    } else {
+                      totalFail++;
+                    }
+                  } catch (err) {
+                    totalFail++;
+                  }
+                }
+              }
+
+              if (totalSuccess > 0) {
+                Alert.alert(
+                  "삭제 완료",
+                  `${totalSuccess}일치 운동이 삭제되었습니다.${
+                    totalFail > 0 ? `\n(${totalFail}일치는 삭제 실패)` : ""
+                  }`
+                );
+              } else {
+                Alert.alert("알림", "삭제할 데이터가 없습니다.");
+              }
+
+              setSelectedPlanIds([]);
+              setIsEditMode(false);
+              await loadExercisePlans();
+            } catch (error: any) {
+              console.error("❌ 일괄 삭제 중 오류:", error);
+              Alert.alert(
+                "오류",
+                error.message || "삭제 중 문제가 발생했습니다."
+              );
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const currentDayExercises = selectedPlan?.days?.[selectedDay] || [];
@@ -257,9 +446,7 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
                 setIsEditMode(true);
               }
             }}
-          >
-            <Text style={styles.editBtn}>{isEditMode ? "완료" : "편집"}</Text>
-          </TouchableOpacity>
+          ></TouchableOpacity>
         )}
         {!plans.length && <View style={{ width: 28 }} />}
       </View>
@@ -441,25 +628,41 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
                 style={styles.dayTabsContainer}
                 contentContainerStyle={styles.dayTabs}
               >
-                {selectedPlan.days.map((_, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.dayTab,
-                      selectedDay === index && styles.dayTabActive,
-                    ]}
-                    onPress={() => setSelectedDay(index)}
-                  >
-                    <Text
+                {selectedPlan.days.map((dayExercises, index) => {
+                  // 해당 day의 날짜 추출 (첫 번째 운동의 date 필드 사용)
+                  const dateStr = dayExercises[0]?.date;
+                  let displayText = `${index + 1}일차`; // 기본값
+
+                  if (dateStr) {
+                    // 날짜를 파싱해서 "MM/DD (요일)" 형식으로 표시
+                    const date = new Date(dateStr);
+                    const month = date.getMonth() + 1;
+                    const day = date.getDate();
+                    const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+                    const weekday = weekdays[date.getDay()];
+                    displayText = `${month}/${day} (${weekday})`;
+                  }
+
+                  return (
+                    <TouchableOpacity
+                      key={index}
                       style={[
-                        styles.dayTabText,
-                        selectedDay === index && styles.dayTabTextActive,
+                        styles.dayTab,
+                        selectedDay === index && styles.dayTabActive,
                       ]}
+                      onPress={() => setSelectedDay(index)}
                     >
-                      {index + 1}일차
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                      <Text
+                        style={[
+                          styles.dayTabText,
+                          selectedDay === index && styles.dayTabTextActive,
+                        ]}
+                      >
+                        {displayText}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </ScrollView>
             )}
 
@@ -475,7 +678,16 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
                       <Text style={styles.exerciseIconText}>💪</Text>
                     </View>
                     <View style={styles.exerciseInfo}>
-                      <Text style={styles.exerciseName}>{exercise.name}</Text>
+                      <View style={styles.exerciseNameRow}>
+                        <Text style={styles.exerciseName}>{exercise.name}</Text>
+                        {exercise.target && (
+                          <View style={styles.targetBadge}>
+                            <Text style={styles.targetBadgeText}>
+                              {exercise.target}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
                       <Text style={styles.exerciseDetail}>
                         {exercise.sets ? `${exercise.sets}세트 ` : ""}
                         {exercise.reps ? `${exercise.reps}회 ` : ""}
@@ -684,9 +896,47 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   exerciseIconText: { fontSize: 32 },
-  exerciseInfo: { flex: 1, gap: 6 },
-  exerciseName: { fontSize: 16, fontWeight: "600", color: "#ffffff" },
-  exerciseDetail: { fontSize: 14, color: "#aaaaaa" },
+  exerciseInfo: {
+    flex: 1,
+    gap: 6,
+  },
+  exerciseNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+  },
+  exerciseName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#ffffff",
+  },
+  targetBadge: {
+    backgroundColor: "#4a90e2",
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  targetBadgeText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#ffffff",
+  },
+  setsBadge: {
+    backgroundColor: "#e3ff7c",
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  setsBadgeText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#111111",
+  },
+  exerciseDetail: {
+    fontSize: 14,
+    color: "#aaaaaa",
+  },
 });
 
 export default RoutineRecommendScreen;
