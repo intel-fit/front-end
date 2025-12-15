@@ -329,58 +329,6 @@ const MyPageScreen = ({ navigation }: any) => {
 
         <View style={styles.separator} />
 
-        {/* 테스트 섹션 */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🧪 개발 테스트 (개발 전용)</Text>
-          <View style={styles.sectionLinks}>
-            {/* 멤버십 전환 버튼 */}
-            <TouchableOpacity
-              style={styles.linkItem}
-              onPress={handleToggleMembership}
-            >
-              <View style={styles.linkItemWithBadge}>
-                <Text
-                  style={[
-                    styles.linkText,
-                    {
-                      color:
-                        currentMembershipType === "PREMIUM"
-                          ? "#FFD700"
-                          : NEW_COLORS.accent,
-                    },
-                  ]}
-                >
-                  {currentMembershipType === "FREE" ? "🆓 → 💎" : "💎 → 🆓"}{" "}
-                  무료/유료 전환
-                </Text>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    currentMembershipType === "PREMIUM" && styles.premiumBadge,
-                  ]}
-                >
-                  <Text style={styles.statusBadgeText}>
-                    {currentMembershipType === "FREE" ? "FREE" : "PREMIUM"}
-                  </Text>
-                </View>
-              </View>
-              <Icon
-                name="swap-horizontal"
-                size={20}
-                color={
-                  currentMembershipType === "PREMIUM"
-                    ? "#FFD700"
-                    : NEW_COLORS.accent
-                }
-              />
-            </TouchableOpacity>
-
-            <View style={styles.subSeparator} />
-          </View>
-        </View>
-
-        <View style={styles.separator} />
-
         {/* 구독/결제 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>💳 구독/결제</Text>
