@@ -13,7 +13,6 @@ import {
   Platform,
   StatusBar,
 } from "react-native";
-import { Picker } from "@react-native-picker/picker";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { authAPI } from "../../services";
@@ -22,8 +21,8 @@ import PasswordChangeModal from "./PasswordChangeModal";
 interface ProfileEditModalProps {
   isOpen: boolean;
   onClose: () => void;
-  profileData: any; // 부모로부터 받은 프로필 데이터
-  onProfileUpdate: () => void; // 저장 후 부모 컴포넌트 새로고침
+  profileData: any;
+  onProfileUpdate: () => void;
 }
 
 const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
@@ -34,12 +33,9 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
-
-  // 비밀번호 변경 모달 state
   const [isPasswordChangeModalOpen, setIsPasswordChangeModalOpen] =
     useState(false);
 
-  // 편집 가능한 필드들
   const [profileData, setProfileData] = useState({
     name: "",
     height: "",
@@ -50,7 +46,6 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
     workoutDaysPerWeek: "",
   });
 
-  // 읽기 전용 필드들
   const [readOnlyData, setReadOnlyData] = useState({
     email: "",
     userId: "",
@@ -60,7 +55,6 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
   const [editingField, setEditingField] = useState<string | null>(null);
   const [tempValue, setTempValue] = useState("");
 
-  // 초기 데이터 설정
   useEffect(() => {
     if (initialProfileData && isOpen) {
       setProfileData({
@@ -81,10 +75,9 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
     }
   }, [initialProfileData, isOpen]);
 
-  // handleFieldClick 수정 (비밀번호 모달 열기)
   const handleFieldClick = (field: string) => {
     if (field === "password") {
-      setIsPasswordChangeModalOpen(true); // 비밀번호 모달 열기
+      setIsPasswordChangeModalOpen(true);
       return;
     }
     setEditingField(field);
@@ -102,12 +95,15 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
     setTempValue("");
   };
 
-  // 프로필 저장 (API 호출)
+  const handleCancel = () => {
+    setEditingField(null);
+    setTempValue("");
+  };
+
   const handleSaveProfile = async () => {
     try {
       setLoading(true);
 
-      // API로 전송할 데이터 준비
       const updateData = {
         name: profileData.name,
         height: Number(profileData.height),
@@ -118,12 +114,11 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
         workoutDaysPerWeek: profileData.workoutDaysPerWeek,
       };
 
-      // API 호출
       const response = await authAPI.updateProfile(updateData);
 
       if (response.success) {
         Alert.alert("성공", "프로필이 수정되었습니다.");
-        onProfileUpdate(); // 부모 컴포넌트에 새로고침 요청
+        onProfileUpdate();
         onClose();
       } else {
         Alert.alert("오류", response.message || "프로필 수정에 실패했습니다.");
@@ -136,12 +131,10 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
     }
   };
 
-  // 성별을 한글로 표시
   const getGenderText = (gender: string) => {
-    return gender === "M" ? "남성" : gender === "F" ? "여성" : "";
+    return gender === "M" ? "남성" : gender === "F" ? "여성" : "선택 안 됨";
   };
 
-  // 운동 목표를 한글로 표시
   const getHealthGoalText = (goal: string) => {
     switch (goal) {
       case "DIET":
@@ -155,8 +148,122 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
       case "MAINTENANCE":
         return "유지";
       default:
-        return goal;
+        return "선택 안 됨";
     }
+  };
+
+  // 성별 선택 옵션 렌더링
+  const renderGenderSelector = () => (
+    <View style={styles.selectorContainer}>
+      <Text style={styles.selectorLabel}>성별을 선택하세요</Text>
+      <View style={styles.optionButtons}>
+        <TouchableOpacity
+          style={[
+            styles.optionButton,
+            tempValue === "M" && styles.optionButtonActive,
+          ]}
+          onPress={() => setTempValue("M")}
+        >
+          <Icon
+            name="male"
+            size={20}
+            color={tempValue === "M" ? NEW_COLORS.background : NEW_COLORS.text}
+          />
+          <Text
+            style={[
+              styles.optionButtonText,
+              tempValue === "M" && styles.optionButtonTextActive,
+            ]}
+          >
+            남성
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.optionButton,
+            tempValue === "F" && styles.optionButtonActive,
+          ]}
+          onPress={() => setTempValue("F")}
+        >
+          <Icon
+            name="female"
+            size={20}
+            color={tempValue === "F" ? NEW_COLORS.background : NEW_COLORS.text}
+          />
+          <Text
+            style={[
+              styles.optionButtonText,
+              tempValue === "F" && styles.optionButtonTextActive,
+            ]}
+          >
+            여성
+          </Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.editActionButtons}>
+        <TouchableOpacity onPress={handleCancel} style={styles.cancelButton}>
+          <Text style={styles.cancelButtonText}>취소</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleSave} style={styles.confirmButton}>
+          <Text style={styles.confirmButtonText}>확인</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  // 운동 목표 선택 옵션 렌더링
+  const renderHealthGoalSelector = () => {
+    const goals = [
+      { label: "다이어트", value: "DIET", icon: "flame" },
+      { label: "벌크업", value: "BULK", icon: "barbell" },
+      { label: "린매스", value: "LEAN_MASS", icon: "fitness" },
+      { label: "근육 증가", value: "MUSCLE_GAIN", icon: "body" },
+      { label: "유지", value: "MAINTENANCE", icon: "heart" },
+    ];
+
+    return (
+      <View style={styles.selectorContainer}>
+        <Text style={styles.selectorLabel}>운동 목표를 선택하세요</Text>
+        <View style={styles.goalGrid}>
+          {goals.map((goal) => (
+            <TouchableOpacity
+              key={goal.value}
+              style={[
+                styles.goalOption,
+                tempValue === goal.value && styles.goalOptionActive,
+              ]}
+              onPress={() => setTempValue(goal.value)}
+            >
+              <Icon
+                name={goal.icon as any}
+                size={24}
+                color={
+                  tempValue === goal.value
+                    ? NEW_COLORS.background
+                    : NEW_COLORS.text
+                }
+              />
+              <Text
+                style={[
+                  styles.goalOptionText,
+                  tempValue === goal.value && styles.goalOptionTextActive,
+                ]}
+              >
+                {goal.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <View style={styles.editActionButtons}>
+          <TouchableOpacity onPress={handleCancel} style={styles.cancelButton}>
+            <Text style={styles.cancelButtonText}>취소</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleSave} style={styles.confirmButton}>
+            <Text style={styles.confirmButtonText}>확인</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   };
 
   return (
@@ -175,9 +282,10 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
         <View style={styles.overlay}>
           <KeyboardAvoidingView
             style={styles.modalContent}
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            keyboardVerticalOffset={0}
           >
+            {/* 헤더 */}
             <View
               style={[
                 styles.nav,
@@ -187,7 +295,7 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
               ]}
             >
               <TouchableOpacity onPress={onClose} style={styles.navBtn}>
-                <Icon name="chevron-back" size={24} color={NEW_COLORS.text} />
+                <Icon name="chevron-back" size={26} color={NEW_COLORS.text} />
               </TouchableOpacity>
               <Text style={styles.navTitle}>정보 수정</Text>
               <TouchableOpacity
@@ -201,11 +309,7 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                 {loading ? (
                   <ActivityIndicator size="small" color={NEW_COLORS.accent} />
                 ) : (
-                  <Text
-                    style={[styles.navBtnText, { color: NEW_COLORS.accent }]}
-                  >
-                    저장
-                  </Text>
+                  <Text style={styles.saveText}>저장</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -216,44 +320,50 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
+              {/* 프로필 섹션 */}
               <View style={styles.profileSection}>
                 <View style={styles.avatar}>
                   <Icon
                     name="person-circle-outline"
-                    size={60}
+                    size={70}
                     color={NEW_COLORS.text_secondary}
                   />
                 </View>
                 <View style={styles.profileInfo}>
                   <Text style={styles.profileName}>{profileData.name}님</Text>
                   <TouchableOpacity style={styles.editAvatarBtn}>
-                    <Icon name="camera" size={16} color={NEW_COLORS.accent} />
+                    <Icon name="camera" size={18} color={NEW_COLORS.accent} />
+                    <Text style={styles.editAvatarText}>사진 변경</Text>
                   </TouchableOpacity>
                 </View>
               </View>
 
+              {/* 정보 목록 */}
               <View style={styles.infoList}>
                 {/* 이름 */}
                 {editingField === "name" ? (
-                  <View style={[styles.infoItem, styles.editingItem]}>
-                    <Text style={styles.infoLabel}>이름</Text>
-                    <View style={styles.editControls}>
-                      <TextInput
-                        style={styles.editInput}
-                        value={tempValue}
-                        onChangeText={setTempValue}
-                        placeholder="이름"
-                        placeholderTextColor={NEW_COLORS.placeholder}
-                      />
+                  <View style={styles.editingCard}>
+                    <Text style={styles.editingLabel}>이름</Text>
+                    <TextInput
+                      style={styles.fullWidthInput}
+                      value={tempValue}
+                      onChangeText={setTempValue}
+                      placeholder="이름을 입력하세요"
+                      placeholderTextColor={NEW_COLORS.placeholder}
+                      autoFocus
+                    />
+                    <View style={styles.editActionButtons}>
+                      <TouchableOpacity
+                        onPress={handleCancel}
+                        style={styles.cancelButton}
+                      >
+                        <Text style={styles.cancelButtonText}>취소</Text>
+                      </TouchableOpacity>
                       <TouchableOpacity
                         onPress={handleSave}
-                        style={styles.saveEditBtn}
+                        style={styles.confirmButton}
                       >
-                        <Icon
-                          name="checkmark"
-                          size={18}
-                          color={NEW_COLORS.text}
-                        />
+                        <Text style={styles.confirmButtonText}>확인</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -261,13 +371,21 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                   <TouchableOpacity
                     style={styles.infoItem}
                     onPress={() => handleFieldClick("name")}
+                    activeOpacity={0.7}
                   >
-                    <Text style={styles.infoLabel}>이름</Text>
-                    <View style={styles.infoValueWithArrow}>
+                    <View style={styles.infoLeft}>
+                      <Icon
+                        name="person-outline"
+                        size={20}
+                        color={NEW_COLORS.text_secondary}
+                      />
+                      <Text style={styles.infoLabel}>이름</Text>
+                    </View>
+                    <View style={styles.infoRight}>
                       <Text style={styles.infoValue}>{profileData.name}</Text>
                       <Icon
                         name="chevron-forward"
-                        size={16}
+                        size={18}
                         color={NEW_COLORS.text_secondary}
                       />
                     </View>
@@ -275,17 +393,29 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                 )}
 
                 {/* 이메일 (읽기 전용) */}
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>이메일</Text>
-                  <Text style={[styles.infoValue, styles.readOnlyValue]}>
-                    {readOnlyData.email}
-                  </Text>
+                <View style={[styles.infoItem, styles.readOnlyItem]}>
+                  <View style={styles.infoLeft}>
+                    <Icon
+                      name="mail-outline"
+                      size={20}
+                      color={NEW_COLORS.text_secondary}
+                    />
+                    <Text style={styles.infoLabel}>이메일</Text>
+                  </View>
+                  <Text style={styles.readOnlyValue}>{readOnlyData.email}</Text>
                 </View>
 
                 {/* 아이디 (읽기 전용) */}
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>아이디</Text>
-                  <Text style={[styles.infoValue, styles.readOnlyValue]}>
+                <View style={[styles.infoItem, styles.readOnlyItem]}>
+                  <View style={styles.infoLeft}>
+                    <Icon
+                      name="at-outline"
+                      size={20}
+                      color={NEW_COLORS.text_secondary}
+                    />
+                    <Text style={styles.infoLabel}>아이디</Text>
+                  </View>
+                  <Text style={styles.readOnlyValue}>
                     {readOnlyData.userId}
                   </Text>
                 </View>
@@ -294,119 +424,129 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                 <TouchableOpacity
                   style={styles.infoItem}
                   onPress={() => handleFieldClick("password")}
+                  activeOpacity={0.7}
                 >
-                  <Text style={styles.infoLabel}>비밀번호</Text>
-                  <View style={styles.infoValueWithArrow}>
-                    <Text
-                      style={[styles.infoValue, { color: NEW_COLORS.accent }]}
-                    >
-                      재설정
-                    </Text>
+                  <View style={styles.infoLeft}>
                     <Icon
-                      name="lock-closed"
-                      size={16}
+                      name="lock-closed-outline"
+                      size={20}
+                      color={NEW_COLORS.text_secondary}
+                    />
+                    <Text style={styles.infoLabel}>비밀번호</Text>
+                  </View>
+                  <View style={styles.infoRight}>
+                    <Text style={styles.accentValue}>변경하기</Text>
+                    <Icon
+                      name="chevron-forward"
+                      size={18}
                       color={NEW_COLORS.accent}
                     />
                   </View>
                 </TouchableOpacity>
 
                 {/* 생년월일 (읽기 전용) */}
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>생년월일</Text>
-                  <Text style={[styles.infoValue, styles.readOnlyValue]}>
+                <View style={[styles.infoItem, styles.readOnlyItem]}>
+                  <View style={styles.infoLeft}>
+                    <Icon
+                      name="calendar-outline"
+                      size={20}
+                      color={NEW_COLORS.text_secondary}
+                    />
+                    <Text style={styles.infoLabel}>생년월일</Text>
+                  </View>
+                  <Text style={styles.readOnlyValue}>
                     {readOnlyData.birthDate}
                   </Text>
                 </View>
 
-               
-
                 {/* 성별 */}
                 {editingField === "gender" ? (
-                  <View style={[styles.infoItem, styles.editingItem]}>
-                    <Text style={styles.infoLabel}>성별</Text>
-                    <View style={styles.editControls}>
-                      <View style={styles.pickerContainer}>
-                        <Picker
-                          selectedValue={tempValue}
-                          onValueChange={setTempValue}
-                          style={styles.picker}
-                          dropdownIconColor={NEW_COLORS.text_secondary}
-                          itemStyle={styles.pickerItem}
-                        >
-                          {/* 텍스트 색상을 검은색으로 변경 */}
-                          <Picker.Item label="남성" value="M" color="black" />
-                          <Picker.Item label="여성" value="F" color="black" />
-                        </Picker>
-                      </View>
-                      <TouchableOpacity
-                        onPress={handleSave}
-                        style={styles.saveEditBtn}
-                      >
-                        <Icon
-                          name="checkmark"
-                          size={18}
-                          color={NEW_COLORS.text}
-                        />
-                      </TouchableOpacity>
-                    </View>
+                  <View style={styles.editingCard}>
+                    {renderGenderSelector()}
                   </View>
                 ) : (
                   <TouchableOpacity
                     style={styles.infoItem}
                     onPress={() => handleFieldClick("gender")}
+                    activeOpacity={0.7}
                   >
-                    <Text style={styles.infoLabel}>성별</Text>
-                    <View style={styles.infoValueWithArrow}>
+                    <View style={styles.infoLeft}>
+                      <Icon
+                        name={profileData.gender === "M" ? "male" : "female"}
+                        size={20}
+                        color={NEW_COLORS.text_secondary}
+                      />
+                      <Text style={styles.infoLabel}>성별</Text>
+                    </View>
+                    <View style={styles.infoRight}>
                       <Text style={styles.infoValue}>
                         {getGenderText(profileData.gender)}
                       </Text>
                       <Icon
                         name="chevron-forward"
-                        size={16}
+                        size={18}
                         color={NEW_COLORS.text_secondary}
                       />
                     </View>
                   </TouchableOpacity>
                 )}
 
-                {/* 신체정보 (키, 몸무게) */}
+                {/* 신체정보 */}
                 {editingField === "bodyInfo" ? (
-                  <View style={[styles.infoItem, styles.editingItem]}>
-                    <Text style={styles.infoLabel}>신체정보</Text>
-                    <View
-                      style={[styles.editControls, styles.bodyInfoControls]}
-                    >
-                      <TextInput
-                        style={[styles.editInput, styles.bodyInput]}
-                        value={profileData.height}
-                        onChangeText={(text) =>
-                          setProfileData((prev) => ({ ...prev, height: text }))
-                        }
-                        placeholder="키"
-                        keyboardType="numeric"
-                        placeholderTextColor={NEW_COLORS.placeholder}
-                      />
-                      <Text style={styles.unit}>cm</Text>
-                      <TextInput
-                        style={[styles.editInput, styles.bodyInput]}
-                        value={profileData.weight}
-                        onChangeText={(text) =>
-                          setProfileData((prev) => ({ ...prev, weight: text }))
-                        }
-                        placeholder="몸무게"
-                        keyboardType="numeric"
-                        placeholderTextColor={NEW_COLORS.placeholder}
-                      />
-                      <Text style={styles.unit}>kg</Text>
+                  <View style={styles.editingCard}>
+                    <Text style={styles.editingLabel}>신체정보</Text>
+                    <View style={styles.bodyInfoInputs}>
+                      <View style={styles.bodyInputGroup}>
+                        <Text style={styles.bodyInputLabel}>키</Text>
+                        <View style={styles.bodyInputWrapper}>
+                          <TextInput
+                            style={styles.bodyInput}
+                            value={profileData.height}
+                            onChangeText={(text) =>
+                              setProfileData((prev) => ({
+                                ...prev,
+                                height: text,
+                              }))
+                            }
+                            placeholder="0"
+                            keyboardType="numeric"
+                            placeholderTextColor={NEW_COLORS.placeholder}
+                          />
+                          <Text style={styles.bodyUnit}>cm</Text>
+                        </View>
+                      </View>
+                      <View style={styles.bodyInputGroup}>
+                        <Text style={styles.bodyInputLabel}>몸무게</Text>
+                        <View style={styles.bodyInputWrapper}>
+                          <TextInput
+                            style={styles.bodyInput}
+                            value={profileData.weight}
+                            onChangeText={(text) =>
+                              setProfileData((prev) => ({
+                                ...prev,
+                                weight: text,
+                              }))
+                            }
+                            placeholder="0"
+                            keyboardType="numeric"
+                            placeholderTextColor={NEW_COLORS.placeholder}
+                          />
+                          <Text style={styles.bodyUnit}>kg</Text>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={styles.editActionButtons}>
+                      <TouchableOpacity
+                        onPress={handleCancel}
+                        style={styles.cancelButton}
+                      >
+                        <Text style={styles.cancelButtonText}>취소</Text>
+                      </TouchableOpacity>
                       <TouchableOpacity
                         onPress={() => setEditingField(null)}
-                        style={styles.saveEditBtn}
+                        style={styles.confirmButton}
                       >
-                        <Icon
-                          name="checkmark"
-                          size={18}
-                          color={NEW_COLORS.text}
-                        />
+                        <Text style={styles.confirmButtonText}>확인</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -414,15 +554,23 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                   <TouchableOpacity
                     style={styles.infoItem}
                     onPress={() => setEditingField("bodyInfo")}
+                    activeOpacity={0.7}
                   >
-                    <Text style={styles.infoLabel}>신체정보</Text>
-                    <View style={styles.infoValueWithArrow}>
+                    <View style={styles.infoLeft}>
+                      <Icon
+                        name="body-outline"
+                        size={20}
+                        color={NEW_COLORS.text_secondary}
+                      />
+                      <Text style={styles.infoLabel}>신체정보</Text>
+                    </View>
+                    <View style={styles.infoRight}>
                       <Text style={styles.infoValue}>
                         {profileData.height}cm / {profileData.weight}kg
                       </Text>
                       <Icon
                         name="chevron-forward"
-                        size={16}
+                        size={18}
                         color={NEW_COLORS.text_secondary}
                       />
                     </View>
@@ -431,27 +579,32 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
 
                 {/* 목표 체중 */}
                 {editingField === "weightGoal" ? (
-                  <View style={[styles.infoItem, styles.editingItem]}>
-                    <Text style={styles.infoLabel}>목표 체중</Text>
-                    <View style={styles.editControls}>
+                  <View style={styles.editingCard}>
+                    <Text style={styles.editingLabel}>목표 체중</Text>
+                    <View style={styles.inlineInputWrapper}>
                       <TextInput
-                        style={styles.editInput}
+                        style={styles.inlineInput}
                         value={tempValue}
                         onChangeText={setTempValue}
                         placeholder="목표 체중"
                         keyboardType="numeric"
                         placeholderTextColor={NEW_COLORS.placeholder}
+                        autoFocus
                       />
-                      <Text style={styles.unit}>kg</Text>
+                      <Text style={styles.inlineUnit}>kg</Text>
+                    </View>
+                    <View style={styles.editActionButtons}>
+                      <TouchableOpacity
+                        onPress={handleCancel}
+                        style={styles.cancelButton}
+                      >
+                        <Text style={styles.cancelButtonText}>취소</Text>
+                      </TouchableOpacity>
                       <TouchableOpacity
                         onPress={handleSave}
-                        style={styles.saveEditBtn}
+                        style={styles.confirmButton}
                       >
-                        <Icon
-                          name="checkmark"
-                          size={18}
-                          color={NEW_COLORS.text}
-                        />
+                        <Text style={styles.confirmButtonText}>확인</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -459,15 +612,23 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                   <TouchableOpacity
                     style={styles.infoItem}
                     onPress={() => handleFieldClick("weightGoal")}
+                    activeOpacity={0.7}
                   >
-                    <Text style={styles.infoLabel}>목표 체중</Text>
-                    <View style={styles.infoValueWithArrow}>
+                    <View style={styles.infoLeft}>
+                      <Icon
+                        name="flag-outline"
+                        size={20}
+                        color={NEW_COLORS.text_secondary}
+                      />
+                      <Text style={styles.infoLabel}>목표 체중</Text>
+                    </View>
+                    <View style={styles.infoRight}>
                       <Text style={styles.infoValue}>
                         {profileData.weightGoal}kg
                       </Text>
                       <Icon
                         name="chevron-forward"
-                        size={16}
+                        size={18}
                         color={NEW_COLORS.text_secondary}
                       />
                     </View>
@@ -476,70 +637,30 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
 
                 {/* 운동 목표 */}
                 {editingField === "healthGoal" ? (
-                  <View style={[styles.infoItem, styles.editingItem]}>
-                    <Text style={styles.infoLabel}>운동 목표</Text>
-                    <View style={styles.editControls}>
-                      <View style={styles.pickerContainer}>
-                        <Picker
-                          selectedValue={tempValue}
-                          onValueChange={setTempValue}
-                          style={styles.picker}
-                          dropdownIconColor={NEW_COLORS.text_secondary}
-                          itemStyle={styles.pickerItem}
-                        >
-                          {/* 텍스트 색상을 검은색으로 변경 */}
-                          <Picker.Item
-                            label="다이어트"
-                            value="DIET"
-                            color="black"
-                          />
-                          <Picker.Item
-                            label="벌크업"
-                            value="BULK"
-                            color="black"
-                          />
-                          <Picker.Item
-                            label="린매스"
-                            value="LEAN_MASS"
-                            color="black"
-                          />
-                          <Picker.Item
-                            label="근육 증가"
-                            value="MUSCLE_GAIN"
-                            color="black"
-                          />
-                          <Picker.Item
-                            label="유지"
-                            value="MAINTENANCE"
-                            color="black"
-                          />
-                        </Picker>
-                      </View>
-                      <TouchableOpacity
-                        onPress={handleSave}
-                        style={styles.saveEditBtn}
-                      >
-                        <Icon
-                          name="checkmark"
-                          size={18}
-                          color={NEW_COLORS.text}
-                        />
-                      </TouchableOpacity>
-                    </View>
+                  <View style={styles.editingCard}>
+                    {renderHealthGoalSelector()}
                   </View>
                 ) : (
                   <TouchableOpacity
                     style={styles.infoItem}
                     onPress={() => handleFieldClick("healthGoal")}
+                    activeOpacity={0.7}
                   >
-                    <Text style={styles.infoLabel}>운동 목표</Text>
-                    <View style={styles.infoValueWithArrow}>
+                    <View style={styles.infoLeft}>
+                      <Icon
+                        name="trophy-outline"
+                        size={20}
+                        color={NEW_COLORS.text_secondary}
+                      />
+                      <Text style={styles.infoLabel}>운동 목표</Text>
+                    </View>
+                    <View style={styles.infoRight}>
                       <Text style={styles.infoValue}>
                         {getHealthGoalText(profileData.healthGoal)}
                       </Text>
                       <Icon
                         name="chevron-forward"
-                        size={16}
+                        size={18}
                         color={NEW_COLORS.text_secondary}
                       />
                     </View>
@@ -548,26 +669,28 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
 
                 {/* 주간 운동 일수 */}
                 {editingField === "workoutDaysPerWeek" ? (
-                  <View style={[styles.infoItem, styles.editingItem]}>
-                    <Text style={styles.infoLabel}>주간 운동 일수</Text>
-                    <View style={styles.editControls}>
-                      <TextInput
-                        style={styles.editInput}
-                        value={tempValue}
-                        onChangeText={setTempValue}
-                        placeholder="예: 3-4일"
-                        placeholderTextColor={NEW_COLORS.placeholder}
-                        keyboardType="numeric"
-                      />
+                  <View style={styles.editingCard}>
+                    <Text style={styles.editingLabel}>주간 운동 일수</Text>
+                    <TextInput
+                      style={styles.fullWidthInput}
+                      value={tempValue}
+                      onChangeText={setTempValue}
+                      placeholder="예: 3-4일"
+                      placeholderTextColor={NEW_COLORS.placeholder}
+                      autoFocus
+                    />
+                    <View style={styles.editActionButtons}>
+                      <TouchableOpacity
+                        onPress={handleCancel}
+                        style={styles.cancelButton}
+                      >
+                        <Text style={styles.cancelButtonText}>취소</Text>
+                      </TouchableOpacity>
                       <TouchableOpacity
                         onPress={handleSave}
-                        style={styles.saveEditBtn}
+                        style={styles.confirmButton}
                       >
-                        <Icon
-                          name="checkmark"
-                          size={18}
-                          color={NEW_COLORS.text}
-                        />
+                        <Text style={styles.confirmButtonText}>확인</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -575,15 +698,23 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                   <TouchableOpacity
                     style={[styles.infoItem, styles.infoItemLast]}
                     onPress={() => handleFieldClick("workoutDaysPerWeek")}
+                    activeOpacity={0.7}
                   >
-                    <Text style={styles.infoLabel}>주간 운동 일수</Text>
-                    <View style={styles.infoValueWithArrow}>
+                    <View style={styles.infoLeft}>
+                      <Icon
+                        name="barbell-outline"
+                        size={20}
+                        color={NEW_COLORS.text_secondary}
+                      />
+                      <Text style={styles.infoLabel}>주간 운동 일수</Text>
+                    </View>
+                    <View style={styles.infoRight}>
                       <Text style={styles.infoValue}>
                         {profileData.workoutDaysPerWeek || "설정 안 됨"}
                       </Text>
                       <Icon
                         name="chevron-forward"
-                        size={16}
+                        size={18}
                         color={NEW_COLORS.text_secondary}
                       />
                     </View>
@@ -595,7 +726,6 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
         </View>
       </Modal>
 
-      {/* 비밀번호 변경 모달 */}
       <PasswordChangeModal
         isOpen={isPasswordChangeModalOpen}
         onClose={() => setIsPasswordChangeModalOpen(false)}
@@ -634,26 +764,26 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: NEW_COLORS.border_dark,
     backgroundColor: NEW_COLORS.background,
-    position: "relative",
   },
   navBtn: {
-    padding: 4,
-    minWidth: 40,
+    padding: 8,
+    minWidth: 60,
     justifyContent: "center",
     alignItems: "center",
   },
-  navBtnText: {
-    fontSize: 16,
-    color: NEW_COLORS.text,
-    fontWeight: "600",
-  },
   navTitle: {
-    position: "absolute",
-    left: "50%",
-    transform: [{ translateX: -50 }],
     fontSize: 18,
     fontWeight: "700",
     color: NEW_COLORS.text,
+    position: "absolute",
+    left: 0,
+    right: 0,
+    textAlign: "center",
+  },
+  saveText: {
+    fontSize: 16,
+    color: NEW_COLORS.accent,
+    fontWeight: "600",
   },
   body: {
     flex: 1,
@@ -665,53 +795,80 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     padding: 24,
-    paddingHorizontal: 20,
     gap: 16,
+    backgroundColor: NEW_COLORS.card_bg,
+    marginHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 24,
+    borderRadius: 16,
   },
   avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     backgroundColor: NEW_COLORS.border_dark,
     justifyContent: "center",
     alignItems: "center",
-    flexShrink: 0,
   },
   profileInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+    flex: 1,
+    gap: 8,
   },
   profileName: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
     color: NEW_COLORS.text,
   },
   editAvatarBtn: {
-    padding: 8,
-    borderRadius: 15,
-    backgroundColor: NEW_COLORS.card_bg,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: NEW_COLORS.background,
+    borderRadius: 20,
+    alignSelf: "flex-start",
+  },
+  editAvatarText: {
+    fontSize: 13,
+    color: NEW_COLORS.accent,
+    fontWeight: "600",
   },
   infoList: {
     paddingHorizontal: 20,
+    gap: 12,
   },
   infoItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: NEW_COLORS.border_dark,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: NEW_COLORS.card_bg,
+    borderRadius: 12,
+    minHeight: 60,
   },
   infoItemLast: {
-    borderBottomWidth: 0,
+    marginBottom: 0,
+  },
+  readOnlyItem: {
+    opacity: 0.7,
+  },
+  infoLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
   },
   infoLabel: {
     fontSize: 16,
-    color: NEW_COLORS.text_secondary,
+    color: NEW_COLORS.text,
     fontWeight: "500",
-    minWidth: 100,
-    flexShrink: 0,
+  },
+  infoRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   infoValue: {
     fontSize: 16,
@@ -719,88 +876,187 @@ const styles = StyleSheet.create({
     fontWeight: "400",
   },
   readOnlyValue: {
+    fontSize: 15,
     color: NEW_COLORS.text_secondary,
     fontWeight: "400",
   },
-  infoValueWithArrow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
+  accentValue: {
+    fontSize: 15,
+    color: NEW_COLORS.accent,
+    fontWeight: "600",
   },
-  editingItem: {
+  editingCard: {
     backgroundColor: NEW_COLORS.card_bg,
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginHorizontal: -20,
-    borderBottomWidth: 0,
+    borderRadius: 12,
+    padding: 20,
+    gap: 16,
   },
-  editControls: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    flex: 1,
-    justifyContent: "flex-end",
+  editingLabel: {
+    fontSize: 16,
+    color: NEW_COLORS.text,
+    fontWeight: "600",
+    marginBottom: 4,
   },
-  editInput: {
-    backgroundColor: NEW_COLORS.border_dark,
+  fullWidthInput: {
+    backgroundColor: NEW_COLORS.background,
     borderWidth: 1,
     borderColor: NEW_COLORS.border_light,
-    borderRadius: 6,
-    padding: 10,
-    paddingHorizontal: 12,
-    fontSize: 15,
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 16,
     color: NEW_COLORS.text,
-    minWidth: 120,
-    flex: 1,
   },
-  bodyInfoControls: {
-    gap: 6,
-    flexWrap: "nowrap",
+  inlineInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: NEW_COLORS.background,
+    borderWidth: 1,
+    borderColor: NEW_COLORS.border_light,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    height: 50,
+  },
+  inlineInput: {
+    flex: 1,
+    fontSize: 16,
+    color: NEW_COLORS.text,
+    padding: 0,
+  },
+  inlineUnit: {
+    fontSize: 16,
+    color: NEW_COLORS.text_secondary,
+    marginLeft: 8,
+  },
+  bodyInfoInputs: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  bodyInputGroup: {
+    flex: 1,
+    gap: 8,
+  },
+  bodyInputLabel: {
+    fontSize: 14,
+    color: NEW_COLORS.text_secondary,
+    fontWeight: "500",
+  },
+  bodyInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: NEW_COLORS.background,
+    borderWidth: 1,
+    borderColor: NEW_COLORS.border_light,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    height: 50,
   },
   bodyInput: {
-    minWidth: 50,
-    maxWidth: 65,
+    flex: 1,
+    fontSize: 16,
+    color: NEW_COLORS.text,
     textAlign: "center",
-    fontSize: 14,
-    padding: 8,
+    padding: 0,
   },
-  unit: {
-    fontSize: 15,
+  bodyUnit: {
+    fontSize: 14,
     color: NEW_COLORS.text_secondary,
   },
-  saveEditBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 6,
-    backgroundColor: NEW_COLORS.accent,
-    justifyContent: "center",
-    alignItems: "center",
-    flexShrink: 0,
+  editActionButtons: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 8,
   },
-  saveEditBtnText: {
-    fontSize: 18,
-    color: NEW_COLORS.text,
-  },
-  pickerContainer: {
-    backgroundColor: NEW_COLORS.border_dark,
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: NEW_COLORS.background,
     borderWidth: 1,
     borderColor: NEW_COLORS.border_light,
-    borderRadius: 6,
-    flex: 1,
-    minWidth: 120,
-    height: 40,
-    overflow: "hidden",
-    justifyContent: "center",
+    alignItems: "center",
   },
-  picker: {
+  cancelButtonText: {
+    fontSize: 16,
     color: NEW_COLORS.text,
-    height: 40,
-    backgroundColor: "transparent",
+    fontWeight: "600",
   },
-  pickerItem: {
-    color: "black",
+  confirmButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: NEW_COLORS.accent,
+    alignItems: "center",
+  },
+  confirmButtonText: {
+    fontSize: 16,
+    color: NEW_COLORS.background,
+    fontWeight: "700",
+  },
+  // 선택자 스타일
+  selectorContainer: {
+    gap: 16,
+  },
+  selectorLabel: {
     fontSize: 15,
+    color: NEW_COLORS.text_secondary,
+    fontWeight: "500",
+    marginBottom: 4,
+  },
+  optionButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  optionButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 10,
+    backgroundColor: NEW_COLORS.background,
+    borderWidth: 2,
+    borderColor: NEW_COLORS.border_light,
+  },
+  optionButtonActive: {
+    backgroundColor: NEW_COLORS.accent,
+    borderColor: NEW_COLORS.accent,
+  },
+  optionButtonText: {
+    fontSize: 16,
+    color: NEW_COLORS.text,
+    fontWeight: "600",
+  },
+  optionButtonTextActive: {
+    color: NEW_COLORS.background,
+  },
+  goalGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  goalOption: {
+    width: "48%",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 10,
+    backgroundColor: NEW_COLORS.background,
+    borderWidth: 2,
+    borderColor: NEW_COLORS.border_light,
+  },
+  goalOptionActive: {
+    backgroundColor: NEW_COLORS.accent,
+    borderColor: NEW_COLORS.accent,
+  },
+  goalOptionText: {
+    fontSize: 15,
+    color: NEW_COLORS.text,
+    fontWeight: "600",
+  },
+  goalOptionTextActive: {
+    color: NEW_COLORS.background,
   },
 });
 

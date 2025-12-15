@@ -318,7 +318,9 @@ export const recommendedExerciseAPI = {
    * 7. 임시 추천 운동 요약 조회 (TempSummary)
    * @param date - 날짜 (yyyy-MM-dd 형식)
    */
-  getTempSummary: async (date: string): Promise<{
+  getTempSummary: async (
+    date: string
+  ): Promise<{
     date: string;
     focus: string;
     durationMin: number;
@@ -348,6 +350,35 @@ export const recommendedExerciseAPI = {
       if (error.status === 404) {
         // 데이터가 없을 경우 null 반환
         return null as any;
+      }
+
+      throw error;
+    }
+  },
+  /**
+   * 8. 날짜별 추천받은 운동 삭제
+   * @param date - 삭제할 날짜 (yyyy-MM-dd)
+   * 명세서 기준: DELETE /api/exercise-recommendations/temp?startDate=...&endDate=...
+   */
+  deleteRecommendedExerciseByDate: async (date: string): Promise<any> => {
+    try {
+      console.log("🗑️ 날짜별 운동 삭제 (명세서 기반 수정):", date);
+
+      // 📸 사진에 나온 대로 startDate와 endDate를 동일하게 설정하여 요청
+      const response = await request(
+        `/api/exercise-recommendations/temp?startDate=${date}&endDate=${date}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      console.log("✅ 날짜별 운동 삭제 성공:", response);
+      return response;
+    } catch (error: any) {
+      console.error("❌ 날짜별 운동 삭제 실패:", error);
+
+      if (error.status === 401) {
+        throw new Error("로그인이 필요합니다.");
       }
 
       throw error;
