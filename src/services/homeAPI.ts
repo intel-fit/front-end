@@ -60,6 +60,24 @@ const getUserId = async (): Promise<string> => {
   }
 };
 
+// 코멘트 응답(JSON 문자열 또는 텍스트)에서 랜덤 한 줄을 추출
+const extractRandomComment = (raw: string): string => {
+  if (!raw) return "";
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed?.comments) && parsed.comments.length > 0) {
+      const idx = Math.floor(Math.random() * parsed.comments.length);
+      return parsed.comments[idx] ?? "";
+    }
+    if (typeof parsed?.comment === "string") {
+      return parsed.comment;
+    }
+  } catch {
+    // 파싱 실패 시 raw 그대로 사용
+  }
+  return raw;
+};
+
 export const homeAPI = {
   // 홈 화면 메인 정보 조회
   getHomeData: async (date?: string): Promise<HomeResponse> => {
@@ -217,14 +235,7 @@ export const homeAPI = {
 
       const data = await response.text(); // 문자열 반환
       console.log('[HOME] 일일 운동 코멘트 응답:', data);
-      
-      // JSON 문자열인 경우 파싱하여 comment 필드만 추출
-      try {
-        const parsed = JSON.parse(data);
-        return parsed.comment || data || '';
-      } catch {
-        return data || '';
-      }
+      return extractRandomComment(data) || '';
     } catch (error: any) {
       console.error('[HOME] 일일 운동 코멘트 API 호출 실패:', error);
       return '';
@@ -252,14 +263,7 @@ export const homeAPI = {
 
       const data = await response.text();
       console.log('[HOME] 주간 운동 코멘트 응답:', data);
-      
-      // JSON 문자열인 경우 파싱하여 comment 필드만 추출
-      try {
-        const parsed = JSON.parse(data);
-        return parsed.comment || data || '';
-      } catch {
-        return data || '';
-      }
+      return extractRandomComment(data) || '';
     } catch (error: any) {
       console.error('[HOME] 주간 운동 코멘트 API 호출 실패:', error);
       return '';
@@ -287,14 +291,7 @@ export const homeAPI = {
 
       const data = await response.text();
       console.log('[HOME] 월간 운동 코멘트 응답:', data);
-      
-      // JSON 문자열인 경우 파싱하여 comment 필드만 추출
-      try {
-        const parsed = JSON.parse(data);
-        return parsed.comment || data || '';
-      } catch {
-        return data || '';
-      }
+      return extractRandomComment(data) || '';
     } catch (error: any) {
       console.error('[HOME] 월간 운동 코멘트 API 호출 실패:', error);
       return '';
@@ -322,14 +319,7 @@ export const homeAPI = {
 
       const data = await response.text();
       console.log('[HOME] 일일 영양 코멘트 응답:', data);
-      
-      // JSON 문자열인 경우 파싱하여 comment 필드만 추출
-      try {
-        const parsed = JSON.parse(data);
-        return parsed.comment || data || '';
-      } catch {
-        return data || '';
-      }
+      return extractRandomComment(data) || '';
     } catch (error: any) {
       console.error('[HOME] 일일 영양 코멘트 API 호출 실패:', error);
       return '';
@@ -357,14 +347,7 @@ export const homeAPI = {
 
       const data = await response.text();
       console.log('[HOME] 주간 영양 코멘트 응답:', data);
-      
-      // JSON 문자열인 경우 파싱하여 comment 필드만 추출
-      try {
-        const parsed = JSON.parse(data);
-        return parsed.comment || data || '';
-      } catch {
-        return data || '';
-      }
+      return extractRandomComment(data) || '';
     } catch (error: any) {
       console.error('[HOME] 주간 영양 코멘트 API 호출 실패:', error);
       return '';
@@ -392,14 +375,7 @@ export const homeAPI = {
 
       const data = await response.text();
       console.log('[HOME] 월간 영양 코멘트 응답:', data);
-      
-      // JSON 문자열인 경우 파싱하여 comment 필드만 추출
-      try {
-        const parsed = JSON.parse(data);
-        return parsed.comment || data || '';
-      } catch {
-        return data || '';
-      }
+      return extractRandomComment(data) || '';
     } catch (error: any) {
       console.error('[HOME] 월간 영양 코멘트 API 호출 실패:', error);
       return '';

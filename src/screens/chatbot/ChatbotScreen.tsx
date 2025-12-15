@@ -561,7 +561,10 @@ const ChatbotScreen = ({ navigation }: any) => {
         <View
           style={[
             styles.chatinputContainer,
-            { paddingBottom: insets.bottom > 0 ? Math.max(insets.bottom, 4) : 4 },
+            {
+              // 하단바와 적당한 거리 유지
+              paddingBottom: 5,
+            },
           ]}
         >
           <TextInput
@@ -631,7 +634,7 @@ const styles = StyleSheet.create({
   },
   scrollViewContent: {
     flexGrow: 1,
-    paddingBottom: 10,
+    paddingBottom: 0,
   },
   mainContent: {
     flex: 1,
@@ -800,7 +803,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   messagesContainer: {
-    paddingBottom: 10,
+    paddingBottom: 4,
   },
   message: {
     maxWidth: "80%",
@@ -831,7 +834,7 @@ const styles = StyleSheet.create({
   chatinputContainer: {
     flexDirection: "row",
     paddingHorizontal: 10,
-    paddingTop: 8,
+    paddingTop: 6,
     backgroundColor: NEW_COLORS.card_bg,
     borderTopWidth: 1,
     borderTopColor: NEW_COLORS.separator,
