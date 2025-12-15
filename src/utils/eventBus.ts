@@ -4,8 +4,17 @@ type EventMap = {
     exerciseName?: string | null;
     workoutDate?: string | null;
   };
+  workoutSessionSaved: {
+    sessionId?: string | number | null;
+    exerciseName?: string | null;
+    workoutDate?: string | null;
+  };
   inbodyUpdated: {
     measurementDate?: string | null;
+  };
+  mealDeleted: {
+    date?: string | null;
+    mealId?: number | null;
   };
 };
 

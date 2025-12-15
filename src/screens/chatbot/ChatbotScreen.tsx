@@ -12,6 +12,7 @@ import {
   Alert,
   ActivityIndicator,
   Animated,
+  Dimensions,
 } from "react-native";
 import {
   SafeAreaView,
@@ -29,11 +30,15 @@ interface Message {
   text: string;
 }
 
+const { width } = Dimensions.get("window");
+
 const ChatbotScreen = ({ navigation }: any) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const insets = useSafeAreaInsets();
 
@@ -58,6 +63,13 @@ const ChatbotScreen = ({ navigation }: any) => {
     loadSettings();
     loadUserId();
     loadMembershipInfo();
+    
+    // 페이드 인 애니메이션
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
   }, []);
 
   // ✅ 챗봇 히스토리 로드
@@ -214,6 +226,11 @@ const ChatbotScreen = ({ navigation }: any) => {
     setMessages((prev) => [...prev, { type: "user", text: userMessage }]);
     setIsLoading(true);
 
+    // 메시지 추가 후 스크롤
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+
     try {
       const botResponse = await chatAPI.sendMessage(
         userId,
@@ -223,6 +240,11 @@ const ChatbotScreen = ({ navigation }: any) => {
       );
 
       setMessages((prev) => [...prev, { type: "bot", text: botResponse }]);
+      
+      // 봇 응답 후 스크롤
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
 
       await loadMembershipInfo();
     } catch (error: any) {
@@ -251,15 +273,6 @@ const ChatbotScreen = ({ navigation }: any) => {
       }
 
       setMessages((prev) => [...prev, { type: "bot", text: errorMessage }]);
-
-      if (
-        error.message?.includes("로그인") ||
-        error.message?.includes("인증")
-      ) {
-        setTimeout(() => {
-          navigation.replace("Login");
-        }, 1500);
-      }
     } finally {
       setIsLoading(false);
     }
@@ -361,28 +374,22 @@ const ChatbotScreen = ({ navigation }: any) => {
     }
   };
 
-  const renderPremiumBadge = () => {
-    if (membershipType === "PREMIUM") {
-      return (
-        <View style={styles.premiumBadge}>
-          <Icon name="star" size={14} color="#FFD700" />
-          <Text style={styles.premiumBadgeText}>프리미엄 무제한</Text>
-        </View>
-      );
-    }
-    return null;
-  };
-
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       {!isInTab && (
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backIcon}>←</Text>
+          <TouchableOpacity 
+            onPress={() => navigation.goBack()}
+            style={styles.headerButton}
+          >
+            <Icon name="arrow-back" size={24} color={COLORS.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>AI 챗봇</Text>
-          <TouchableOpacity onPress={() => setIsSettingsModalOpen(true)}>
-            <Icon name="settings-outline" size={24} color={NEW_COLORS.text} />
+          <Text style={styles.headerTitle}>AI 코치</Text>
+          <TouchableOpacity 
+            onPress={() => setIsSettingsModalOpen(true)}
+            style={styles.headerButton}
+          >
+            <Icon name="settings-outline" size={24} color={COLORS.text} />
           </TouchableOpacity>
         </View>
       )}
@@ -392,98 +399,92 @@ const ChatbotScreen = ({ navigation }: any) => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
-        {/* ✅ ScrollView로 전체 감싸기 */}
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollViewContent}
-          showsVerticalScrollIndicator={false}
-          bounces={true}
+        <Animated.View 
+          style={[
+            styles.content,
+            { opacity: fadeAnim }
+          ]}
         >
-          <View style={styles.mainContent}>
+          <ScrollView
+            ref={scrollViewRef}
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollViewContent}
+            showsVerticalScrollIndicator={false}
+            bounces={true}
+            onContentSizeChange={() => {
+              scrollViewRef.current?.scrollToEnd({ animated: true });
+            }}
+          >
             {messages.length === 0 && !showHistory ? (
-              <>
-                <View style={styles.welcomeHeader}>
-                  <View style={styles.welcomeSection}>
-                    <Text style={styles.title}>안녕하세요!</Text>
-                    <Text style={styles.subtitle}>어떻게 도와드릴까요?</Text>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.settingsButton}
-                    onPress={() => setIsSettingsModalOpen(true)}
-                  >
-                    <Icon
-                      name="settings-outline"
-                      size={28}
-                      color={NEW_COLORS.accent}
-                    />
-                    <Text style={styles.settingsButtonText}>채팅 설정</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.badgeContainer}>
-                  {renderPremiumBadge()}
-                  <View style={styles.currentSettingsBadge}>
-                    <Icon
-                      name="checkmark-circle"
-                      size={16}
-                      color={NEW_COLORS.accent}
-                    />
-                    <Text style={styles.currentSettingsBadgeText}>
-                      {getModeText()} · {getStyleText()}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.botImageContainer}>
+              <View style={styles.emptyState}>
+                <View style={styles.avatarContainer}>
                   <LinearGradient
-                    colors={["#e3ff7c20", "#d4f05a10"]}
-                    style={styles.botImageGradient}
+                    colors={[COLORS.primary, COLORS.primaryDark]}
+                    style={styles.avatarGradient}
                   >
-                    <Text style={styles.botEmoji}>🤖</Text>
+                    <Text style={styles.avatarEmoji}>🤖</Text>
                   </LinearGradient>
+                </View>
+                
+                <Text style={styles.greetingTitle}>안녕하세요!</Text>
+                <Text style={styles.greetingSubtitle}>
+                  AI 코치가 도와드리겠습니다
+                </Text>
+
+                {membershipType === "PREMIUM" && (
+                  <View style={styles.premiumBadge}>
+                    <Icon name="star" size={16} color="#FFD700" />
+                    <Text style={styles.premiumText}>프리미엄 무제한</Text>
+                  </View>
+                )}
+
+                <View style={styles.settingsInfo}>
+                  <Icon name="checkmark-circle" size={16} color={COLORS.primary} />
+                  <Text style={styles.settingsText}>
+                    {getModeText()} · {getStyleText()}
+                  </Text>
                 </View>
 
                 <View style={styles.quickActions}>
                   <TouchableOpacity
-                    style={styles.actionBtn}
+                    style={styles.quickActionCard}
                     onPress={() => handleQuickSelect("exercise")}
                     activeOpacity={0.7}
                   >
                     <LinearGradient
-                      colors={["#e3ff7c", "#d4f05a"]}
-                      style={styles.actionBtnGradient}
+                      colors={[COLORS.primary, COLORS.primaryDark]}
+                      style={styles.quickActionGradient}
                     >
-                      <Text style={styles.actionIcon}>🏋️</Text>
-                      <Text style={styles.actionText}>운동 추천</Text>
+                      <Text style={styles.quickActionEmoji}>💪</Text>
+                      <Text style={styles.quickActionText}>운동 추천</Text>
                     </LinearGradient>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.actionBtn}
+                    style={styles.quickActionCard}
                     onPress={() => handleQuickSelect("food")}
                     activeOpacity={0.7}
                   >
                     <LinearGradient
-                      colors={["#e3ff7c", "#d4f05a"]}
-                      style={styles.actionBtnGradient}
+                      colors={[COLORS.primary, COLORS.primaryDark]}
+                      style={styles.quickActionGradient}
                     >
-                      <Text style={styles.actionIcon}>🍗</Text>
-                      <Text style={styles.actionText}>식단 추천</Text>
+                      <Text style={styles.quickActionEmoji}>🍎</Text>
+                      <Text style={styles.quickActionText}>식단 추천</Text>
                     </LinearGradient>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.actionBtn}
+                    style={styles.quickActionCard}
                     onPress={() => handleQuickSelect("plan")}
                     activeOpacity={0.7}
                   >
                     <LinearGradient
-                      colors={["#e3ff7c", "#d4f05a"]}
-                      style={styles.actionBtnGradient}
+                      colors={[COLORS.primary, COLORS.primaryDark]}
+                      style={styles.quickActionGradient}
                     >
-                      <Text style={styles.actionIcon}>📅</Text>
-                      <Text style={styles.actionText}>계획 수립</Text>
+                      <Text style={styles.quickActionEmoji}>📋</Text>
+                      <Text style={styles.quickActionText}>계획 수립</Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
@@ -493,60 +494,49 @@ const ChatbotScreen = ({ navigation }: any) => {
                   onPress={handleShowHistory}
                   disabled={isLoadingHistory}
                 >
-                  <Icon
-                    name="time-outline"
-                    size={20}
-                    color={NEW_COLORS.accent}
-                  />
+                  <Icon name="time-outline" size={18} color={COLORS.primary} />
                   <Text style={styles.historyButtonText}>
                     {isLoadingHistory ? "불러오는 중..." : "이전 대화 보기"}
                   </Text>
                 </TouchableOpacity>
-              </>
+              </View>
             ) : (
               <>
                 <View style={styles.chatHeader}>
-                  {renderPremiumBadge()}
-                  <View style={styles.currentSettingsInline}>
-                    <Icon
-                      name="radio-button-on"
-                      size={12}
-                      color={NEW_COLORS.accent}
-                    />
-                    <Text style={styles.currentSettingsInlineText}>
-                      {getModeText()} · {getStyleText()}
-                    </Text>
+                  <View style={styles.chatHeaderLeft}>
+                    {membershipType === "PREMIUM" && (
+                      <View style={styles.premiumBadgeSmall}>
+                        <Icon name="star" size={12} color="#FFD700" />
+                      </View>
+                    )}
+                    <View style={styles.settingsBadge}>
+                      <Icon name="radio-button-on" size={10} color={COLORS.primary} />
+                      <Text style={styles.settingsBadgeText}>
+                        {getModeText()} · {getStyleText()}
+                      </Text>
+                    </View>
                   </View>
-
-                  <TouchableOpacity
-                    style={styles.newChatButton}
-                    onPress={handleNewChat}
-                  >
-                    <Icon
-                      name="add-circle-outline"
-                      size={20}
-                      color={NEW_COLORS.accent}
-                    />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.settingsButtonSmall}
-                    onPress={() => setIsSettingsModalOpen(true)}
-                  >
-                    <Icon
-                      name="settings-outline"
-                      size={20}
-                      color={NEW_COLORS.text_secondary}
-                    />
-                  </TouchableOpacity>
+                  
+                  <View style={styles.chatHeaderRight}>
+                    <TouchableOpacity
+                      style={styles.headerIconButton}
+                      onPress={handleNewChat}
+                    >
+                      <Icon name="add-circle-outline" size={22} color={COLORS.textSecondary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.headerIconButton}
+                      onPress={() => setIsSettingsModalOpen(true)}
+                    >
+                      <Icon name="settings-outline" size={22} color={COLORS.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 {isLoadingHistory && (
-                  <View style={styles.loadingHistory}>
-                    <ActivityIndicator size="small" color={NEW_COLORS.accent} />
-                    <Text style={styles.loadingHistoryText}>
-                      대화 기록 불러오는 중...
-                    </Text>
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="small" color={COLORS.primary} />
+                    <Text style={styles.loadingText}>대화 기록 불러오는 중...</Text>
                   </View>
                 )}
 
@@ -555,46 +545,57 @@ const ChatbotScreen = ({ navigation }: any) => {
                     <View
                       key={index}
                       style={[
-                        styles.messageWrapper,
-                        msg.type === "user" && styles.userMessageWrapper,
+                        styles.messageRow,
+                        msg.type === "user" ? styles.userMessageRow : styles.botMessageRow,
                       ]}
                     >
                       {msg.type === "bot" && (
                         <View style={styles.botAvatar}>
-                          <Text style={styles.botAvatarEmoji}>🤖</Text>
+                          <LinearGradient
+                            colors={[COLORS.primary, COLORS.primaryDark]}
+                            style={styles.botAvatarGradient}
+                          >
+                            <Text style={styles.botAvatarEmoji}>🤖</Text>
+                          </LinearGradient>
                         </View>
                       )}
+                      
                       {msg.type === "user" ? (
                         <LinearGradient
-                          colors={["#e3ff7c", "#d4f05a"]}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          style={[styles.message, styles.userMessage]}
+                          colors={[COLORS.primary, COLORS.primaryDark]}
+                          style={[styles.messageBubble, styles.userBubble]}
                         >
                           <Text style={styles.userMessageText}>{msg.text}</Text>
                         </LinearGradient>
                       ) : (
-                        <View style={[styles.message, styles.botMessage]}>
+                        <View style={[styles.messageBubble, styles.botBubble]}>
                           <Text style={styles.botMessageText}>{msg.text}</Text>
                         </View>
                       )}
+                      
                       {msg.type === "user" && (
                         <View style={styles.userAvatar}>
-                          <Icon name="person" size={16} color="#000" />
+                          <Icon name="person" size={18} color={COLORS.primary} />
                         </View>
                       )}
                     </View>
                   ))}
+                  
                   {isLoading && (
-                    <View style={[styles.messageWrapper, styles.botMessageWrapper]}>
+                    <View style={[styles.messageRow, styles.botMessageRow]}>
                       <View style={styles.botAvatar}>
-                        <Text style={styles.botAvatarEmoji}>🤖</Text>
+                        <LinearGradient
+                          colors={[COLORS.primary, COLORS.primaryDark]}
+                          style={styles.botAvatarGradient}
+                        >
+                          <Text style={styles.botAvatarEmoji}>🤖</Text>
+                        </LinearGradient>
                       </View>
-                      <View style={[styles.message, styles.botMessage, styles.loadingMessage]}>
+                      <View style={[styles.messageBubble, styles.botBubble, styles.typingBubble]}>
                         <View style={styles.typingIndicator}>
-                          <View style={[styles.dot, styles.dot1]} />
-                          <View style={[styles.dot, styles.dot2]} />
-                          <View style={[styles.dot, styles.dot3]} />
+                          <View style={[styles.typingDot, styles.typingDot1]} />
+                          <View style={[styles.typingDot, styles.typingDot2]} />
+                          <View style={[styles.typingDot, styles.typingDot3]} />
                         </View>
                       </View>
                     </View>
@@ -602,34 +603,34 @@ const ChatbotScreen = ({ navigation }: any) => {
                 </View>
               </>
             )}
-          </View>
-        </ScrollView>
+          </ScrollView>
+        </Animated.View>
 
         <View
           style={[
-            styles.chatinputContainer,
+            styles.inputContainer,
             { 
               paddingBottom: isInTab 
                 ? 2 
-                : (insets.bottom > 0 ? Math.max(insets.bottom, 4) : 4)
+                : (insets.bottom > 0 ? Math.max(insets.bottom, 8) : 8)
             },
           ]}
         >
           <View style={styles.inputWrapper}>
             <TextInput
-              style={styles.messageInput}
+              style={styles.input}
               placeholder="메시지를 입력하세요..."
+              placeholderTextColor={COLORS.textSecondary}
               value={inputValue}
               onChangeText={setInputValue}
               onSubmitEditing={handleSend}
-              placeholderTextColor={NEW_COLORS.text_secondary}
               multiline
               maxLength={500}
             />
             <TouchableOpacity
               style={[
-                styles.sendBtn,
-                inputValue.trim() === "" && styles.sendBtnDisabled,
+                styles.sendButton,
+                (inputValue.trim() === "" || isLoading) && styles.sendButtonDisabled,
               ]}
               onPress={handleSend}
               disabled={inputValue.trim() === "" || isLoading}
@@ -655,41 +656,45 @@ const ChatbotScreen = ({ navigation }: any) => {
   );
 };
 
-const NEW_COLORS = {
-  background: "#1a1a1a",
-  text: "#f0f0f0",
-  text_secondary: "#a0a0a0",
-  accent: "#e3ff7c",
-  card_bg: "#252525",
-  separator: "#3a3a3a",
-  delete_color: "#ff6b6b",
+const COLORS = {
+  background: "#0a0a0a",
+  surface: "#151515",
+  surfaceLight: "#1f1f1f",
+  text: "#ffffff",
+  textSecondary: "#888888",
+  primary: "#e3ff7c",
+  primaryDark: "#d4f05a",
+  border: "#2a2a2a",
+  premium: "#FFD700",
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: NEW_COLORS.background,
+    backgroundColor: COLORS.background,
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 16,
     paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: NEW_COLORS.separator,
+    borderBottomColor: COLORS.border,
   },
-  backIcon: {
-    fontSize: 24,
-    color: NEW_COLORS.text,
-    fontWeight: "bold",
+  headerButton: {
+    padding: 4,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: NEW_COLORS.text,
+    fontSize: 20,
+    fontWeight: "700",
+    color: COLORS.text,
+    letterSpacing: -0.5,
   },
   keyboardView: {
+    flex: 1,
+  },
+  content: {
     flex: 1,
   },
   scrollView: {
@@ -697,128 +702,116 @@ const styles = StyleSheet.create({
   },
   scrollViewContent: {
     flexGrow: 1,
-    paddingBottom: 10,
+    paddingBottom: 20,
   },
-  mainContent: {
+  emptyState: {
     flex: 1,
-    padding: 20,
-  },
-  welcomeHeader: {
     alignItems: "center",
-    marginTop: 20,
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    paddingTop: 40,
+    paddingBottom: 20,
   },
-  welcomeSection: {
-    alignItems: "center",
+  avatarContainer: {
+    marginBottom: 32,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: NEW_COLORS.text,
-    marginBottom: 8,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 18,
-    color: NEW_COLORS.text_secondary,
-    fontWeight: "400",
-  },
-  settingsButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: NEW_COLORS.card_bg,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: NEW_COLORS.accent,
-  },
-  settingsButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: NEW_COLORS.accent,
-  },
-  badgeContainer: {
-    flexDirection: "row",
+  avatarGradient: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     justifyContent: "center",
     alignItems: "center",
-    flexWrap: "wrap",
-    gap: 12,
-    marginTop: 16,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  avatarEmoji: {
+    fontSize: 60,
+  },
+  greetingTitle: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: COLORS.text,
+    marginBottom: 8,
+    letterSpacing: -1,
+  },
+  greetingSubtitle: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    marginBottom: 24,
+    fontWeight: "400",
   },
   premiumBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: "#FFD70020",
-    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: `${COLORS.premium}15`,
+    borderRadius: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: `${COLORS.premium}30`,
   },
-  premiumBadgeText: {
-    fontSize: 12,
-    color: "#FFD700",
+  premiumText: {
+    fontSize: 13,
+    color: COLORS.premium,
     fontWeight: "600",
   },
-  currentSettingsBadge: {
+  premiumBadgeSmall: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: `${COLORS.premium}20`,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 8,
+  },
+  settingsInfo: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: `${NEW_COLORS.accent}20`,
-    borderRadius: 16,
+    paddingVertical: 10,
+    backgroundColor: `${COLORS.primary}15`,
+    borderRadius: 20,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: `${COLORS.primary}30`,
   },
-  currentSettingsBadgeText: {
-    fontSize: 12,
-    color: NEW_COLORS.accent,
-    fontWeight: "500",
-  },
-  botImageContainer: {
-    alignItems: "center",
-    marginVertical: 40,
-    padding: 20,
-  },
-  botImageGradient: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: NEW_COLORS.accent,
-  },
-  botEmoji: {
-    fontSize: 80,
+  settingsText: {
+    fontSize: 13,
+    color: COLORS.primary,
+    fontWeight: "600",
   },
   quickActions: {
-    flexDirection: "row",
-    justifyContent: "space-around",
+    width: "100%",
     gap: 12,
+    marginBottom: 32,
   },
-  actionBtn: {
-    flex: 1,
+  quickActionCard: {
     borderRadius: 20,
     overflow: "hidden",
-    shadowColor: NEW_COLORS.accent,
+    shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  actionBtnGradient: {
-    padding: 20,
+  quickActionGradient: {
+    padding: 24,
     alignItems: "center",
     justifyContent: "center",
     minHeight: 100,
   },
-  actionIcon: {
+  quickActionEmoji: {
     fontSize: 36,
     marginBottom: 8,
   },
-  actionText: {
-    fontSize: 14,
+  quickActionText: {
+    fontSize: 16,
     fontWeight: "700",
     color: "#000000",
     letterSpacing: 0.3,
@@ -826,208 +819,218 @@ const styles = StyleSheet.create({
   historyButton: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
     gap: 8,
-    marginTop: 32,
     paddingVertical: 14,
     paddingHorizontal: 24,
-    backgroundColor: NEW_COLORS.card_bg,
+    backgroundColor: COLORS.surface,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: NEW_COLORS.separator,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    borderColor: COLORS.border,
   },
   historyButtonText: {
     fontSize: 15,
     fontWeight: "600",
-    color: NEW_COLORS.accent,
-  },
-  loadingHistory: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 12,
-    gap: 8,
-  },
-  loadingHistoryText: {
-    fontSize: 14,
-    color: NEW_COLORS.text_secondary,
+    color: COLORS.primary,
   },
   chatHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingBottom: 12,
-    marginBottom: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
-  currentSettingsInline: {
+  chatHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  chatHeaderRight: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  settingsBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: NEW_COLORS.card_bg,
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  currentSettingsInlineText: {
-    fontSize: 11,
-    color: NEW_COLORS.text_secondary,
+  settingsBadgeText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: "500",
   },
-  newChatButton: {
-    padding: 8,
-    backgroundColor: NEW_COLORS.card_bg,
-    borderRadius: 12,
+  headerIconButton: {
+    padding: 6,
   },
-  settingsButtonSmall: {
-    padding: 8,
-    backgroundColor: NEW_COLORS.card_bg,
-    borderRadius: 12,
-  },
-  messagesContainer: {
-    paddingBottom: 10,
-  },
-  messageWrapper: {
+  loadingContainer: {
     flexDirection: "row",
-    alignItems: "flex-end",
-    marginBottom: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
     gap: 8,
   },
-  userMessageWrapper: {
+  loadingText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  messagesContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  messageRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    marginBottom: 20,
+    gap: 10,
+  },
+  userMessageRow: {
     justifyContent: "flex-end",
   },
-  botMessageWrapper: {
+  botMessageRow: {
     justifyContent: "flex-start",
   },
   botAvatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: NEW_COLORS.card_bg,
+    overflow: "hidden",
+    marginBottom: 4,
+  },
+  botAvatarGradient: {
+    width: "100%",
+    height: "100%",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: NEW_COLORS.accent,
   },
   botAvatarEmoji: {
-    fontSize: 20,
+    fontSize: 18,
   },
   userAvatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: NEW_COLORS.accent,
+    backgroundColor: `${COLORS.primary}20`,
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: 4,
+    borderWidth: 2,
+    borderColor: `${COLORS.primary}40`,
   },
-  message: {
-    maxWidth: "75%",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  messageBubble: {
+    maxWidth: width * 0.75,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
     borderRadius: 20,
   },
-  userMessage: {
+  userBubble: {
     borderBottomRightRadius: 4,
-    shadowColor: NEW_COLORS.accent,
-    shadowOffset: { width: 0, height: 2 },
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 12,
+    elevation: 6,
   },
-  botMessage: {
-    backgroundColor: NEW_COLORS.card_bg,
+  botBubble: {
+    backgroundColor: COLORS.surface,
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: NEW_COLORS.separator,
+    borderColor: COLORS.border,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  loadingMessage: {
-    paddingVertical: 16,
+  typingBubble: {
+    paddingVertical: 18,
+    paddingHorizontal: 20,
   },
   userMessageText: {
     color: "#000000",
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 16,
+    lineHeight: 24,
     fontWeight: "500",
+    letterSpacing: 0.2,
   },
   botMessageText: {
-    color: NEW_COLORS.text,
-    fontSize: 15,
-    lineHeight: 22,
+    color: COLORS.text,
+    fontSize: 16,
+    lineHeight: 24,
     fontWeight: "400",
+    letterSpacing: 0.1,
   },
   typingIndicator: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 6,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: NEW_COLORS.text_secondary,
+  typingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.primary,
   },
-  dot1: {
+  typingDot1: {
     opacity: 0.4,
   },
-  dot2: {
-    opacity: 0.6,
+  typingDot2: {
+    opacity: 0.7,
   },
-  dot3: {
-    opacity: 0.8,
+  typingDot3: {
+    opacity: 1,
   },
-  chatinputContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    backgroundColor: NEW_COLORS.background,
+  inputContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    backgroundColor: COLORS.background,
     borderTopWidth: 1,
-    borderTopColor: NEW_COLORS.separator,
+    borderTopColor: COLORS.border,
   },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "flex-end",
-    gap: 10,
-    backgroundColor: NEW_COLORS.card_bg,
+    gap: 12,
+    backgroundColor: COLORS.surface,
     borderRadius: 28,
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: NEW_COLORS.separator,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
   },
-  messageInput: {
+  input: {
     flex: 1,
     backgroundColor: "transparent",
-    borderRadius: 24,
+    borderRadius: 22,
     paddingHorizontal: 18,
     paddingVertical: 12,
-    fontSize: 15,
-    color: NEW_COLORS.text,
-    maxHeight: 100,
+    fontSize: 16,
+    color: COLORS.text,
+    maxHeight: 120,
     minHeight: 44,
+    lineHeight: 22,
   },
-  sendBtn: {
+  sendButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: NEW_COLORS.accent,
+    backgroundColor: COLORS.primary,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: NEW_COLORS.accent,
-    shadowOffset: { width: 0, height: 2 },
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 5,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  sendBtnDisabled: {
-    backgroundColor: NEW_COLORS.separator,
-    opacity: 0.5,
+  sendButtonDisabled: {
+    backgroundColor: COLORS.border,
+    opacity: 0.4,
     shadowOpacity: 0,
     elevation: 0,
   },

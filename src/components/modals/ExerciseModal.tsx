@@ -320,6 +320,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
     ]
   );
   const prefetchedInstructionUrlsRef = useRef<Set<string>>(new Set());
+  const detailScrollViewRef = useRef<ScrollView>(null);
   // 이미지 로드 실패 추적 (URL을 키로 사용)
   const [failedImageUrls, setFailedImageUrls] = useState<Set<string>>(new Set());
   // 운동별 피드백 상태 관리 (운동 이름을 키로 사용)
@@ -633,6 +634,10 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({
     (direction: "prev" | "next") => {
       cacheCurrentExerciseSets();
       persistCurrentExerciseState();
+      // 다음 버튼을 눌렀을 때 스크롤을 맨 위로
+      if (direction === "next") {
+        detailScrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      }
       onSequenceNavigate?.(direction);
     },
     [cacheCurrentExerciseSets, persistCurrentExerciseState, onSequenceNavigate]
@@ -1758,7 +1763,7 @@ const getExerciseDisplayName = React.useCallback(
                       }} 
                       style={styles.backBtnTop}
                     >
-                      <Icon name="arrow-back" size={24} color="#ffffff" />
+                      <Icon name="arrow-back" size={24} color="#000000" />
                     </TouchableOpacity>
                     <Text style={styles.detailHeaderTitle}>
                       {getExerciseDisplayName(
@@ -1766,34 +1771,6 @@ const getExerciseDisplayName = React.useCallback(
                       )}
                     </Text>
                     <View style={styles.detailHeaderActions}>
-                      {!isCompleted && (
-                      <TouchableOpacity
-                        style={styles.headerIconBtn}
-                        onPress={() => setShowExerciseListModal(true)}
-                        activeOpacity={0.85}
-                      >
-                        <Icon name="menu-outline" size={20} color="#ffffff" />
-                      </TouchableOpacity>
-                      )}
-                      {mode !== "edit" && !isCompleted && (
-                      <TouchableOpacity
-                        style={[
-                          styles.timerBadge,
-                          !isWorkoutTimerRunning && styles.timerBadgePaused,
-                        ]}
-                        onPress={toggleWorkoutTimer}
-                        activeOpacity={0.85}
-                      >
-                        <Icon
-                          name={isWorkoutTimerRunning ? "time-outline" : "play-outline"}
-                          size={16}
-                          color="#ffffff"
-                        />
-                        <Text style={styles.timerBadgeText}>
-                          {formatWorkoutTimer(workoutTimerSeconds)}
-                        </Text>
-                      </TouchableOpacity>
-                      )}
                     </View>
                   </View>
                 </View>
@@ -1812,42 +1789,15 @@ const getExerciseDisplayName = React.useCallback(
                     </Text>
                   </View>
                   <View style={styles.headerRightRow}>
-                    {!isCompleted && (
-                    <TouchableOpacity
-                      style={styles.headerIconBtn}
-                      onPress={() => setShowExerciseListModal(true)}
-                      activeOpacity={0.85}
-                    >
-                      <Icon name="menu-outline" size={20} color="#ffffff" />
-                    </TouchableOpacity>
-                    )}
-                    {mode !== "edit" && !isCompleted && (
-                    <TouchableOpacity
-                      style={[
-                        styles.timerBadge,
-                        !isWorkoutTimerRunning && styles.timerBadgePaused,
-                      ]}
-                      onPress={toggleWorkoutTimer}
-                      activeOpacity={0.85}
-                    >
-                      <Icon
-                        name={isWorkoutTimerRunning ? "time-outline" : "play-outline"}
-                        size={16}
-                        color="#ffffff"
-                      />
-                      <Text style={styles.timerBadgeText}>
-                        {formatWorkoutTimer(workoutTimerSeconds)}
-                      </Text>
-                    </TouchableOpacity>
-                    )}
                     <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                      <Icon name="close" size={12} color="#ffffff" />
+                      <Icon name="close" size={12} color="#000000" />
                     </TouchableOpacity>
                   </View>
                 </View>
               )}
 
               <ScrollView
+                ref={detailScrollViewRef}
                 style={styles.detailScroll}
                 contentContainerStyle={styles.detailScrollContent}
                 keyboardShouldPersistTaps="handled"
@@ -1910,7 +1860,7 @@ const getExerciseDisplayName = React.useCallback(
                         }
                       }}
                     >
-                      <Icon name="chevron-back" size={24} color="#ffffff" />
+                      <Icon name="chevron-back" size={24} color="#000000" />
                     </TouchableOpacity>
                   )}
                   {/* 오른쪽 버튼: 운동이 2개 이상이고, 현재가 마지막이 아니면 표시 */}
@@ -1953,7 +1903,7 @@ const getExerciseDisplayName = React.useCallback(
                         }
                       }}
                     >
-                      <Icon name="chevron-forward" size={24} color="#ffffff" />
+                      <Icon name="chevron-forward" size={24} color="#000000" />
                     </TouchableOpacity>
                   )}
                 </View>
@@ -1970,7 +1920,7 @@ const getExerciseDisplayName = React.useCallback(
                     <Icon
                       name={showInstructionsSection ? "chevron-up" : "chevron-down"}
                       size={18}
-                      color="#ffffff"
+                      color="#000000"
                     />
                   </TouchableOpacity>
                   {showInstructionsSection && (
@@ -2055,16 +2005,6 @@ const getExerciseDisplayName = React.useCallback(
                 </View>
 
                 <View style={styles.setsContainer}>
-                  <View style={styles.addSetButtonWrapper}>
-                    <TouchableOpacity
-                      style={styles.addSetCircleButton}
-                      onPress={handleAddSet}
-                      activeOpacity={0.85}
-                    >
-                      <Icon name="add" size={20} color="#0c0c0c" />
-                    </TouchableOpacity>
-                  </View>
-
                   <View style={styles.setsList}>
                     {sets.map((set) => (
                       <ExerciseSetItem
@@ -2079,9 +2019,6 @@ const getExerciseDisplayName = React.useCallback(
                             handleRemoveSet(set.id);
                           }
                         }}
-                        onOrderChange={(order) =>
-                          handleOrderChange(set.id, order)
-                        }
                         onWeightChange={(weight) =>
                           handleSetChange(set.id, "weight", weight)
                         }
@@ -2090,6 +2027,16 @@ const getExerciseDisplayName = React.useCallback(
                         }
                       />
                     ))}
+                  </View>
+                  <View style={styles.addSetButtonWrapper}>
+                    <TouchableOpacity
+                      style={styles.addSetButton}
+                      onPress={handleAddSet}
+                      activeOpacity={0.85}
+                    >
+                      <Icon name="add-circle" size={24} color="#4CAF50" />
+                      <Text style={styles.addSetButtonText}>세트 추가</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
                 </ScrollView>
@@ -2156,82 +2103,90 @@ const getExerciseDisplayName = React.useCallback(
                     });
                   };
 
+                  const hasFeedback = currentFeedback.feedback !== null;
+                  
                   return (
                     <View style={styles.feedbackSection}>
-                      <Text style={styles.feedbackTitle}>이 운동 어땠나요?</Text>
-                      <View style={styles.feedbackButtonsRow}>
-                        <TouchableOpacity
-                          style={[
-                            styles.feedbackButton,
-                            currentFeedback.intensity === "heavy" &&
-                              styles.feedbackButtonSelected,
-                          ]}
-                          onPress={() => handleIntensityClick("heavy")}
-                        >
-                          <Text
+                      {/* 난이도 섹션 - 피드백이 있을 때만 표시 */}
+                      {hasFeedback && (
+                        <View style={styles.intensitySection}>
+                          <View style={styles.intensityTitleRow}>
+                            <Text style={styles.intensityTitle}>난이도는 어땠나요?</Text>
+                            <View style={styles.intensityButtonsRow}>
+                              <TouchableOpacity
+                                style={[
+                                  styles.intensityButton,
+                                  currentFeedback.intensity === "heavy" &&
+                                    styles.intensityButtonSelected,
+                                ]}
+                                onPress={() => handleIntensityClick("heavy")}
+                              >
+                                <Text
+                                  style={[
+                                    styles.intensityButtonText,
+                                    currentFeedback.intensity === "heavy" &&
+                                      styles.intensityButtonTextSelected,
+                                  ]}
+                                >
+                                  무거워요
+                                </Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[
+                                  styles.intensityButton,
+                                  currentFeedback.intensity === "light" &&
+                                    styles.intensityButtonSelected,
+                                ]}
+                                onPress={() => handleIntensityClick("light")}
+                              >
+                                <Text
+                                  style={[
+                                    styles.intensityButtonText,
+                                    currentFeedback.intensity === "light" &&
+                                      styles.intensityButtonTextSelected,
+                                  ]}
+                                >
+                                  가벼워요
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        </View>
+                      )}
+                      
+                      {/* 이 운동 어땠나요 섹션 */}
+                      <View style={styles.feedbackTitleRow}>
+                        <Text style={styles.feedbackTitle}>이 운동 어땠나요?</Text>
+                        <View style={styles.feedbackButtonsRow}>
+                          <TouchableOpacity
                             style={[
-                              styles.feedbackButtonText,
-                              currentFeedback.intensity === "heavy" &&
-                                styles.feedbackButtonTextSelected,
-                            ]}
-                          >
-                            무거워요
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.feedbackButton,
-                            currentFeedback.intensity === "light" &&
-                              styles.feedbackButtonSelected,
-                          ]}
-                          onPress={() => handleIntensityClick("light")}
-                        >
-                          <Text
-                            style={[
-                              styles.feedbackButtonText,
-                              currentFeedback.intensity === "light" &&
-                                styles.feedbackButtonTextSelected,
-                            ]}
-                          >
-                            가벼워요
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.feedbackButton,
-                            currentFeedback.feedback === "like" &&
-                              styles.feedbackButtonSelected,
-                          ]}
-                          onPress={() => handleFeedbackClick("like")}
-                        >
-                          <Text
-                            style={[
-                              styles.feedbackButtonText,
+                              styles.feedbackIconButton,
                               currentFeedback.feedback === "like" &&
-                                styles.feedbackButtonTextSelected,
+                                styles.feedbackIconButtonSelected,
                             ]}
+                            onPress={() => handleFeedbackClick("like")}
                           >
-                            좋아요
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.feedbackButton,
-                            currentFeedback.feedback === "dislike" &&
-                              styles.feedbackButtonSelected,
-                          ]}
-                          onPress={() => handleFeedbackClick("dislike")}
-                        >
-                          <Text
+                            <Icon 
+                              name="thumbs-up" 
+                              size={20} 
+                              color={currentFeedback.feedback === "like" ? "#ffffff" : "#666666"} 
+                            />
+                          </TouchableOpacity>
+                          <TouchableOpacity
                             style={[
-                              styles.feedbackButtonText,
+                              styles.feedbackIconButton,
                               currentFeedback.feedback === "dislike" &&
-                                styles.feedbackButtonTextSelected,
+                                styles.feedbackIconButtonSelected,
                             ]}
+                            onPress={() => handleFeedbackClick("dislike")}
                           >
-                            싫어요
-                          </Text>
-                        </TouchableOpacity>
+                            <Icon 
+                              name="thumbs-down" 
+                              size={20} 
+                              color={currentFeedback.feedback === "dislike" ? "#ffffff" : "#666666"} 
+                            />
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
                   );
@@ -2246,27 +2201,34 @@ const getExerciseDisplayName = React.useCallback(
                       onPress={() => handleSequenceNavigatePress("prev")}
                       disabled={!hasPrevSequence}
                     >
+                      <Icon 
+                        name="chevron-back" 
+                        size={18} 
+                        color={hasPrevSequence ? "#000000" : "#cccccc"} 
+                        style={{ marginRight: 6 }}
+                      />
                       <Text
                         style={[
                           styles.sequenceControlText,
                           !hasPrevSequence && styles.sequenceControlTextDisabled,
                         ]}
                       >
-                        이전 운동
+                        이전
                       </Text>
                     </TouchableOpacity>
                     {!isCompleted && (
                       <TouchableOpacity
-                        style={[styles.sequenceControlButton, styles.sequenceTimerButton]}
+                        style={styles.sequenceTimerButton}
                         onPress={toggleWorkoutTimer}
+                        activeOpacity={0.85}
                       >
-                        <Text style={styles.sequenceTimerLabel}>타이머</Text>
-                        <Text
-                          style={[
-                            styles.sequenceTimerValue,
-                            !isWorkoutTimerRunning && styles.sequenceTimerValuePaused,
-                          ]}
-                        >
+                        <Icon 
+                          name={isWorkoutTimerRunning ? "time" : "time-outline"} 
+                          size={18} 
+                          color="#4CAF50" 
+                          style={{ marginRight: 6 }}
+                        />
+                        <Text style={styles.sequenceTimerText}>
                           {formatWorkoutTimer(workoutTimerSeconds)}
                         </Text>
                       </TouchableOpacity>
@@ -2285,28 +2247,27 @@ const getExerciseDisplayName = React.useCallback(
                           !canNextExercise && styles.sequenceControlTextDisabled,
                         ]}
                       >
-                        다음 운동
+                        다음
                       </Text>
+                      <Icon 
+                        name="chevron-forward" 
+                        size={18} 
+                        color={canNextExercise ? "#000000" : "#cccccc"} 
+                        style={{ marginLeft: 6 }}
+                      />
                     </TouchableOpacity>
                   </View>
                 )}
-                <TouchableOpacity
-                  style={[
-                    styles.endWorkoutBtn,
-                    !canFinishWorkout && styles.endWorkoutBtnDisabled,
-                  ]}
-                  onPress={handleSave}
-                  disabled={!canFinishWorkout}
-                >
-                  <Text
-                    style={[
-                      styles.endWorkoutBtnText,
-                      !canFinishWorkout && styles.endWorkoutBtnTextDisabled,
-                    ]}
+                {canFinishWorkout && (
+                  <TouchableOpacity
+                    style={styles.endWorkoutBtn}
+                    onPress={handleSave}
                   >
-                    운동 끝내기
-                  </Text>
-                </TouchableOpacity>
+                    <Text style={styles.endWorkoutBtnText}>
+                      운동 끝내기
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           )}
@@ -2322,10 +2283,10 @@ const getExerciseDisplayName = React.useCallback(
             >
               <View style={styles.addExerciseModal}>
                 {!fullScreen && (
-                  <View style={styles.modalHeader}>
+                  <View style={[styles.modalHeader, styles.addExerciseModalHeader]}>
                     <View style={styles.headerLeft}>
                     </View>
-                    <Text style={styles.modalTitle}>종목 추가</Text>
+                    <Text style={[styles.modalTitle, styles.addExerciseModalTitle]}>종목 추가</Text>
                     <View style={styles.headerRight}>
                       <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                         <Icon name="close" size={12} color="#ffffff" />
@@ -2630,16 +2591,6 @@ const getExerciseDisplayName = React.useCallback(
                 </View>
 
                 <View style={styles.setsContainer}>
-                  <View style={styles.addSetButtonWrapper}>
-                    <TouchableOpacity
-                      style={styles.addSetCircleButton}
-                      onPress={handleAddSet}
-                      activeOpacity={0.85}
-                    >
-                      <Icon name="add" size={20} color="#0c0c0c" />
-                    </TouchableOpacity>
-                  </View>
-
                   <View style={styles.setsList}>
                     {sets.map((set) => (
                       <ExerciseSetItem
@@ -2654,9 +2605,6 @@ const getExerciseDisplayName = React.useCallback(
                             handleRemoveSet(set.id);
                           }
                         }}
-                        onOrderChange={(order) =>
-                          handleOrderChange(set.id, order)
-                        }
                         onWeightChange={(weight) =>
                           handleSetChange(set.id, "weight", weight)
                         }
@@ -2665,6 +2613,16 @@ const getExerciseDisplayName = React.useCallback(
                         }
                       />
                     ))}
+                  </View>
+                  <View style={styles.addSetButtonWrapper}>
+                    <TouchableOpacity
+                      style={styles.addSetButton}
+                      onPress={handleAddSet}
+                      activeOpacity={0.85}
+                    >
+                      <Icon name="add-circle" size={24} color="#4CAF50" />
+                      <Text style={styles.addSetButtonText}>세트 추가</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
                 </ScrollView>
@@ -2676,23 +2634,16 @@ const getExerciseDisplayName = React.useCallback(
                   allSetsCompleted && !isCompleted && styles.footerWithFeedback,
                 ]}
               >
-                <TouchableOpacity
-                  style={[
-                    styles.endWorkoutBtn,
-                    !canFinishWorkout && styles.endWorkoutBtnDisabled,
-                  ]}
-                  onPress={handleSave}
-                  disabled={!canFinishWorkout}
-                >
-                  <Text
-                    style={[
-                      styles.endWorkoutBtnText,
-                      !canFinishWorkout && styles.endWorkoutBtnTextDisabled,
-                    ]}
+                {canFinishWorkout && (
+                  <TouchableOpacity
+                    style={styles.endWorkoutBtn}
+                    onPress={handleSave}
                   >
-                    운동 끝내기
-                  </Text>
-                </TouchableOpacity>
+                    <Text style={styles.endWorkoutBtnText}>
+                      운동 끝내기
+                    </Text>
+                  </TouchableOpacity>
+                )}
                 {allSetsCompleted && !isCompleted && (() => {
                   const currentExerciseName = getExerciseDisplayName(
                     selectedExercise || exerciseData || { name: "" }
@@ -2746,82 +2697,90 @@ const getExerciseDisplayName = React.useCallback(
                     });
                   };
 
+                  const hasFeedback = currentFeedback.feedback !== null;
+                  
                   return (
                     <View style={styles.feedbackSection}>
-                      <Text style={styles.feedbackTitle}>이 운동 어땠나요?</Text>
-                      <View style={styles.feedbackButtonsRow}>
-                        <TouchableOpacity
-                          style={[
-                            styles.feedbackButton,
-                            currentFeedback.intensity === "heavy" &&
-                              styles.feedbackButtonSelected,
-                          ]}
-                          onPress={() => handleIntensityClick("heavy")}
-                        >
-                          <Text
+                      {/* 난이도 섹션 - 피드백이 있을 때만 표시 */}
+                      {hasFeedback && (
+                        <View style={styles.intensitySection}>
+                          <View style={styles.intensityTitleRow}>
+                            <Text style={styles.intensityTitle}>난이도는 어땠나요?</Text>
+                            <View style={styles.intensityButtonsRow}>
+                              <TouchableOpacity
+                                style={[
+                                  styles.intensityButton,
+                                  currentFeedback.intensity === "heavy" &&
+                                    styles.intensityButtonSelected,
+                                ]}
+                                onPress={() => handleIntensityClick("heavy")}
+                              >
+                                <Text
+                                  style={[
+                                    styles.intensityButtonText,
+                                    currentFeedback.intensity === "heavy" &&
+                                      styles.intensityButtonTextSelected,
+                                  ]}
+                                >
+                                  무거워요
+                                </Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[
+                                  styles.intensityButton,
+                                  currentFeedback.intensity === "light" &&
+                                    styles.intensityButtonSelected,
+                                ]}
+                                onPress={() => handleIntensityClick("light")}
+                              >
+                                <Text
+                                  style={[
+                                    styles.intensityButtonText,
+                                    currentFeedback.intensity === "light" &&
+                                      styles.intensityButtonTextSelected,
+                                  ]}
+                                >
+                                  가벼워요
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        </View>
+                      )}
+                      
+                      {/* 이 운동 어땠나요 섹션 */}
+                      <View style={styles.feedbackTitleRow}>
+                        <Text style={styles.feedbackTitle}>이 운동 어땠나요?</Text>
+                        <View style={styles.feedbackButtonsRow}>
+                          <TouchableOpacity
                             style={[
-                              styles.feedbackButtonText,
-                              currentFeedback.intensity === "heavy" &&
-                                styles.feedbackButtonTextSelected,
-                            ]}
-                          >
-                            무거워요
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.feedbackButton,
-                            currentFeedback.intensity === "light" &&
-                              styles.feedbackButtonSelected,
-                          ]}
-                          onPress={() => handleIntensityClick("light")}
-                        >
-                          <Text
-                            style={[
-                              styles.feedbackButtonText,
-                              currentFeedback.intensity === "light" &&
-                                styles.feedbackButtonTextSelected,
-                            ]}
-                          >
-                            가벼워요
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.feedbackButton,
-                            currentFeedback.feedback === "like" &&
-                              styles.feedbackButtonSelected,
-                          ]}
-                          onPress={() => handleFeedbackClick("like")}
-                        >
-                          <Text
-                            style={[
-                              styles.feedbackButtonText,
+                              styles.feedbackIconButton,
                               currentFeedback.feedback === "like" &&
-                                styles.feedbackButtonTextSelected,
+                                styles.feedbackIconButtonSelected,
                             ]}
+                            onPress={() => handleFeedbackClick("like")}
                           >
-                            좋아요
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.feedbackButton,
-                            currentFeedback.feedback === "dislike" &&
-                              styles.feedbackButtonSelected,
-                          ]}
-                          onPress={() => handleFeedbackClick("dislike")}
-                        >
-                          <Text
+                            <Icon 
+                              name="thumbs-up" 
+                              size={20} 
+                              color={currentFeedback.feedback === "like" ? "#ffffff" : "#666666"} 
+                            />
+                          </TouchableOpacity>
+                          <TouchableOpacity
                             style={[
-                              styles.feedbackButtonText,
+                              styles.feedbackIconButton,
                               currentFeedback.feedback === "dislike" &&
-                                styles.feedbackButtonTextSelected,
+                                styles.feedbackIconButtonSelected,
                             ]}
+                            onPress={() => handleFeedbackClick("dislike")}
                           >
-                            싫어요
-                          </Text>
-                        </TouchableOpacity>
+                            <Icon 
+                              name="thumbs-down" 
+                              size={20} 
+                              color={currentFeedback.feedback === "dislike" ? "#ffffff" : "#666666"} 
+                            />
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
                   );
@@ -2950,21 +2909,21 @@ const styles = StyleSheet.create({
     backgroundColor: "#2a2a2a",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    height: "70%", // 고정 비율 높이 상향
+    height: "85%", // 고정 비율 높이 상향
     minHeight: 0,
     overflow: "hidden",
   },
   fullScreenContainer: {
     flex: 1,
-    backgroundColor: "#0c0c0c",
+    backgroundColor: "#ffffff",
   },
   fullScreenContent: {
     flex: 1,
-    backgroundColor: "#0c0c0c",
+    backgroundColor: "#ffffff",
   },
   fullScreenHeader: {
     paddingHorizontal: 20,
-    backgroundColor: "#0c0c0c",
+    backgroundColor: "#ffffff",
     paddingTop: 16,
     paddingBottom: 2,
   },
@@ -2992,7 +2951,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 18,
     fontWeight: "600",
-    color: "#ffffff",
+    color: "#000000",
     textAlign: "center",
   },
   detailHeaderActions: {
@@ -3022,7 +2981,7 @@ const styles = StyleSheet.create({
   },
   exerciseDetailModal: {
     flex: 1,
-    backgroundColor: "#0c0c0c",
+    backgroundColor: "#ffffff",
   },
   detailKeyboardAvoider: {
     flex: 1,
@@ -3033,7 +2992,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: "#404040",
+    borderBottomColor: "#e8e8e8",
+    backgroundColor: "#ffffff",
+  },
+  addExerciseModalHeader: {
+    backgroundColor: "#252525",
+    borderBottomColor: "#3a3a3a",
+  },
+  addExerciseModalTitle: {
+    color: "#ffffff",
   },
   headerLeft: {
     width: 52,
@@ -3052,14 +3019,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "#f5f5f5",
     justifyContent: "center",
     alignItems: "center",
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#ffffff",
+    color: "#000000",
     flex: 1,
     textAlign: "center",
   },
@@ -3084,22 +3051,48 @@ const styles = StyleSheet.create({
   timerBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 18,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
+    gap: 6,
+    backgroundColor: "#000000",
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 0,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   timerBadgePaused: {
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "#f5f5f5",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
   },
   timerBadgeText: {
     color: "#ffffff",
-    fontSize: 13,
-    fontWeight: "600",
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  timerBadgeTextPaused: {
+    color: "#666666",
+  },
+  timerBadgeInline: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#f0f9f0",
+    borderRadius: 20,
+    minWidth: 80,
+    borderWidth: 1,
+    borderColor: "#4CAF50",
+  },
+  timerBadgeTextInline: {
+    color: "#4CAF50",
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 0.5,
   },
   methodBtn: {
     paddingHorizontal: 10,
@@ -3116,13 +3109,15 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 0,
     marginBottom: 24,
-    backgroundColor: "#333333",
-    borderRadius: 10,
+    backgroundColor: "#f8f8f8",
+    borderRadius: 12,
     padding: 16,
+    borderWidth: 1,
+    borderColor: "#e8e8e8",
   },
   instructionTitle: {
-    fontSize: 13,
-    color: "#ffffff",
+    fontSize: 14,
+    color: "#000000",
     fontWeight: "600",
     marginBottom: 0,
   },
@@ -3133,9 +3128,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   instructionText: {
-    fontSize: 12,
-    color: "#cccccc",
-    lineHeight: 17,
+    fontSize: 13,
+    color: "#666666",
+    lineHeight: 20,
   },
   instructionList: {
     marginTop: 12,
@@ -3145,8 +3140,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   instructionNumber: {
-    fontSize: 12,
-    color: "#ffffff",
+    fontSize: 13,
+    color: "#000000",
     fontWeight: "600",
     marginRight: 8,
     minWidth: 20,
@@ -3156,13 +3151,14 @@ const styles = StyleSheet.create({
   },
   exerciseImageContainer: {
     position: "relative",
-    width: "100%",
     height: 270,
     marginTop: 0,
     marginBottom: 24,
-    backgroundColor: "#1a1a1a",
+    marginHorizontal: 20,
+    backgroundColor: "#f8f8f8",
     justifyContent: "center",
     alignItems: "center",
+    borderRadius: 16,
   },
   exerciseImageLarge: {
     width: "100%",
@@ -3179,39 +3175,10 @@ const styles = StyleSheet.create({
     left: 12,
     top: "50%",
     marginTop: -16,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  exerciseImageNavRight: {
-    position: "absolute",
-    right: 12,
-    top: "50%",
-    marginTop: -16,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    color: "#666666",
-    fontSize: 14,
-  },
-  addSetButtonWrapper: {
-    alignItems: "center",
-    marginTop: 0,
-    marginBottom: 12,
-  },
-  addSetCircleButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#e3ff7c",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
@@ -3220,46 +3187,136 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  exerciseImageNavRight: {
+    position: "absolute",
+    right: 12,
+    top: "50%",
+    marginTop: -16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  loadingText: {
+    color: "#999999",
+    fontSize: 14,
+  },
+  addSetButtonWrapper: {
+    alignItems: "center",
+    marginTop: 12,
+    marginBottom: 16,
+    paddingHorizontal: 0,
+  },
+  addSetButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f0f9f0",
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderWidth: 1.5,
+    borderColor: "#4CAF50",
+    borderStyle: "dashed",
+    width: "100%",
+    gap: 8,
+  },
+  addSetButtonText: {
+    color: "#4CAF50",
+    fontSize: 16,
+    fontWeight: "700",
+  },
   feedbackSection: {
     marginTop: 0,
     marginHorizontal: 0,
     marginBottom: 12,
   },
-  feedbackTitle: {
-    fontSize: 18,
+  intensitySection: {
+    marginBottom: 24,
+  },
+  intensityTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+  },
+  intensityTitle: {
+    fontSize: 16,
     fontWeight: "600",
+    color: "#000000",
+    marginBottom: 0,
+    flex: 1,
+  },
+  intensityButtonsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "nowrap",
+  },
+  intensityButton: {
+    backgroundColor: "#f8f8f8",
+    borderWidth: 1.5,
+    borderColor: "#e0e0e0",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 80,
+  },
+  intensityButtonSelected: {
+    backgroundColor: "#4CAF50",
+    borderColor: "#4CAF50",
+  },
+  intensityButtonText: {
+    color: "#666666",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  intensityButtonTextSelected: {
     color: "#ffffff",
-    marginBottom: 16,
-    textAlign: "center",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  feedbackTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+  },
+  feedbackTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#000000",
+    marginBottom: 0,
+    flex: 1,
   },
   feedbackButtonsRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "nowrap",
   },
-  feedbackButton: {
-    width: "48%",
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#000000",
-    borderRadius: 8,
-    paddingVertical: 14,
+  feedbackIconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#f8f8f8",
+    borderWidth: 2,
+    borderColor: "#e0e0e0",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
   },
-  feedbackButtonSelected: {
-    backgroundColor: "#d6ff4b",
-    borderColor: "#d6ff4b",
-  },
-  feedbackButtonText: {
-    color: "#000000",
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  feedbackButtonTextSelected: {
-    color: "#000000",
-    fontWeight: "600",
+  feedbackIconButtonSelected: {
+    backgroundColor: "#4CAF50",
+    borderColor: "#4CAF50",
   },
   exerciseListOverlay: {
     flex: 1,
@@ -3388,22 +3445,33 @@ const styles = StyleSheet.create({
     borderBottomColor: "#f0f0f0",
   },
   endWorkoutBtn: {
-    backgroundColor: "#404040",
-    paddingVertical: 10,
-    borderRadius: 12,
+    backgroundColor: "#000000",
+    paddingVertical: 18,
+    borderRadius: 14,
     alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+    marginTop: 12,
   },
   endWorkoutBtnDisabled: {
-    backgroundColor: "#2a2a2a",
-    opacity: 0.5,
+    backgroundColor: "#e8e8e8",
+    opacity: 1,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   endWorkoutBtnText: {
     color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 17,
+    fontWeight: "700",
+    letterSpacing: 0.3,
   },
   endWorkoutBtnTextDisabled: {
-    color: "#888888",
+    color: "#999999",
   },
   instructionScroll: {
     maxHeight: 260,
@@ -3669,6 +3737,7 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     flex: 1,
     minHeight: 0,
+    width: "100%",
   },
   setsHeader: {
     flexDirection: "row",
@@ -3696,6 +3765,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
     paddingTop: 0,
     paddingBottom: 12,
+    width: "100%",
   },
   setControlBtn: {
     width: 32,
@@ -3831,7 +3901,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 0,
     paddingTop: 16,
-    backgroundColor: "#2a2a2a",
+    backgroundColor: "#ffffff",
+    borderTopWidth: 1,
+    borderTopColor: "#e8e8e8",
   },
   footerExtended: {
     flexDirection: "column",
@@ -3863,23 +3935,25 @@ const styles = StyleSheet.create({
   commentLabel: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#ffffff",
+    color: "#000000",
   },
   commentInputWrapper: {
-    backgroundColor: "#1f1f1f",
+    backgroundColor: "#f8f8f8",
     borderRadius: 12,
     padding: 16,
     gap: 8,
+    borderWidth: 1,
+    borderColor: "#e8e8e8",
   },
   commentInput: {
     minHeight: 60,
-    color: "#ffffff",
+    color: "#000000",
     fontSize: 14,
     lineHeight: 20,
   },
   commentCounter: {
     fontSize: 12,
-    color: "#888888",
+    color: "#999999",
     textAlign: "right",
   },
   sequenceControlContainer: {
@@ -3896,39 +3970,45 @@ const styles = StyleSheet.create({
   sequenceControlButton: {
     flex: 1,
     borderRadius: 12,
-    backgroundColor: "#272727",
-    paddingVertical: 8,
+    backgroundColor: "#f8f8f8",
+    paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#e8e8e8",
+    flexDirection: "row",
+    minHeight: 48,
   },
   sequenceControlButtonDisabled: {
-    backgroundColor: "#1a1a1a",
-    opacity: 0.4,
+    backgroundColor: "#f5f5f5",
+    opacity: 0.5,
+    borderColor: "#e0e0e0",
   },
   sequenceControlText: {
-    color: "#ffffff",
-    fontSize: 14,
+    color: "#000000",
+    fontSize: 15,
     fontWeight: "600",
   },
   sequenceControlTextDisabled: {
-    color: "#888888",
+    color: "#cccccc",
   },
   sequenceTimerButton: {
-    gap: 6,
-    paddingVertical: 10,
+    flex: 1,
+    borderRadius: 12,
+    backgroundColor: "#f0f9f0",
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "#4CAF50",
+    flexDirection: "row",
+    minHeight: 48,
   },
-  sequenceTimerLabel: {
-    color: "#bbbbbb",
-    fontSize: 12,
-    fontWeight: "500",
-  },
-  sequenceTimerValue: {
-    color: "#ffffff",
+  sequenceTimerText: {
+    color: "#4CAF50",
     fontSize: 16,
     fontWeight: "700",
-  },
-  sequenceTimerValuePaused: {
-    color: "#ffb84d",
+    letterSpacing: 0.5,
   },
   commentSendButton: {
     backgroundColor: "#e3ff7c",

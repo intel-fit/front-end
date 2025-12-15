@@ -14,7 +14,7 @@ import {
   SafeAreaView,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
-import { authAPI } from "../../services";
+import { authAPI, mealAPI } from "../../services";
 
 const healthGoalOptions = [
   { label: "벌크업", value: "BULK" },
@@ -183,6 +183,24 @@ const KakaoOnboardingScreen = ({ navigation }: any) => {
       };
 
       const response = await authAPI.submitOnboarding(onboardingData);
+
+      // 기본 칼로리 목표 2000으로 설정
+      try {
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        await mealAPI.setNutritionGoal({
+          targetCalories: 2000,
+          targetCarbs: 0,
+          targetProtein: 0,
+          targetFat: 0,
+          goalType: 'MANUAL',
+          date: todayStr,
+        });
+        console.log('✅ 기본 칼로리 목표 2000 설정 완료');
+      } catch (goalError) {
+        console.error('기본 칼로리 목표 설정 실패:', goalError);
+        // 칼로리 목표 설정 실패해도 온보딩은 성공으로 처리
+      }
 
       setLoading(false);
 

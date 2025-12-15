@@ -15,6 +15,7 @@ import {colors} from '../../theme/colors';
 import {useDate} from '../../contexts/DateContext';
 import {mealAPI, recommendedMealAPI, homeAPI} from '../../services';
 import {useFocusEffect} from '@react-navigation/native';
+import {eventBus} from '../../utils/eventBus';
 // 진행률 API 호출 제거
 // import {fetchWeeklyProgress, fetchMonthlyProgress} from '../../utils/exerciseApi';
 import type {DailyMealsResponse, DailyMeal, NutritionGoal, DailyProgressWeekItem, AddMealRequest} from '../../types';
@@ -458,9 +459,47 @@ const DietScreen = ({navigation, route}: any) => {
               await mealAPI.deleteMeal(mealId);
               Alert.alert('성공', '식사가 삭제되었습니다.');
               
+              const dateStr = formatDateToString(dateToFetch);
+              
               // 삭제 후 데이터 새로고침
               await fetchDailyMeals(dateToFetch);
               await loadRecommendedMealsForDate(dateToFetch);
+              
+              // 달력 칼로리 데이터 새로고침
+              if (showMonthView) {
+                // 월간 달력인 경우 해당 월의 모든 날짜
+                const year = monthBase.getFullYear();
+                const month = monthBase.getMonth() + 1;
+                const firstOfMonth = new Date(year, month - 1, 1);
+                const nextMonth = new Date(year, month, 1);
+                const daysInMonth = Math.round((nextMonth.getTime() - firstOfMonth.getTime()) / (1000 * 60 * 60 * 24));
+                const monthDates = Array.from({ length: daysInMonth }).map((_, i) => {
+                  const d = new Date(year, month - 1, i + 1);
+                  return formatDateToString(d);
+                });
+                await loadCalendarCalories(monthDates);
+              } else {
+                // 주간 달력인 경우 이번 주 7일
+                const getStartOfWeek = (d: Date) => {
+                  const n = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                  const diff = n.getDay();
+                  n.setDate(n.getDate() - diff);
+                  return n;
+                };
+                const startOfWeek = getStartOfWeek(dateToFetch);
+                const weekDates = Array.from({ length: 7 }).map((_, i) => {
+                  const d = new Date(
+                    startOfWeek.getFullYear(),
+                    startOfWeek.getMonth(),
+                    startOfWeek.getDate() + i
+                  );
+                  return formatDateToString(d);
+                });
+                await loadCalendarCalories(weekDates);
+              }
+              
+              // eventBus로 식사 삭제 이벤트 발생 (캘린더와 홈 화면 새로고침용)
+              eventBus.emit('mealDeleted', { date: dateStr, mealId });
             } catch (error: any) {
               console.error('식사 삭제 실패:', error);
               let errorMessage = '식사 삭제에 실패했습니다.';
