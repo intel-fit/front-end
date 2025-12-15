@@ -34,7 +34,10 @@ import {
   saveWorkoutTitle,
   fetchSavedWorkouts,
 } from "../../utils/exerciseApi";
-import type { SavedWorkoutGroup } from "../../utils/exerciseApi";
+import type {
+  SavedWorkoutGroup,
+  SavedWorkoutRecord,
+} from "../../utils/exerciseApi";
 import { getExerciseGoalSummary } from "../../utils/exerciseGoalApi";
 import { eventBus } from "../../utils/eventBus";
 import { useDate } from "../../contexts/DateContext";
@@ -506,7 +509,9 @@ const ExerciseScreen = ({ navigation }: any) => {
     Record<string, number>
   >({});
   // 달력에 표시할 운동 시간 데이터 (날짜별, 초 단위)
-  const [dailyWorkoutSeconds, setDailyWorkoutSeconds] = useState<Record<string, number>>({});
+  const [dailyWorkoutSeconds, setDailyWorkoutSeconds] = useState<
+    Record<string, number>
+  >({});
   const [showMonthView, setShowMonthView] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isIntroVisible, setIsIntroVisible] = useState(false);
@@ -949,12 +954,7 @@ const ExerciseScreen = ({ navigation }: any) => {
     (async () => {
       try {
         const storedUserId = await AsyncStorage.getItem("userId");
-        console.log(
-          "[EXERCISE][DEBUG] AsyncStorage에서 가져온 userId:",
-          storedUserId
-        );
         setUserId(storedUserId);
-        console.log("[EXERCISE][DEBUG] state에 설정된 userId:", storedUserId);
       } finally {
         setUserIdLoaded(true);
       }
@@ -990,9 +990,7 @@ const ExerciseScreen = ({ navigation }: any) => {
   // 오늘 진행률 로드 (게이지 표시용)
   const loadTodayProgress = React.useCallback(async () => {
     try {
-      console.log("[PROGRESS] 오늘 진행률 로드 시작");
       const data = await fetchTodayProgress();
-      console.log("[PROGRESS] 오늘 진행률 API 응답:", data);
       setTodayProgress(data);
     } catch (e) {
       console.error("[PROGRESS] 오늘 진행률 로드 실패:", e);
@@ -1003,9 +1001,7 @@ const ExerciseScreen = ({ navigation }: any) => {
   // 주간 칼로리 합계 로드 (이번 주)
   const loadWeeklyCalories = React.useCallback(async () => {
     try {
-      console.log("[PROGRESS] 주간 진행률 로드 시작");
       const data = await fetchWeeklyProgress();
-      console.log("[PROGRESS] 주간 진행률 API 응답:", data);
       const progressArray = Array.isArray(data) ? data : [];
       setWeeklyProgress(progressArray);
       const sum = Array.isArray(data)
@@ -1034,8 +1030,6 @@ const ExerciseScreen = ({ navigation }: any) => {
 
   // 오늘의 총 운동 시간 조회
   const loadTodayWorkoutTime = React.useCallback(async () => {
-    console.log("[EXERCISE][TIME] loadTodayWorkoutTime 호출됨", { userId });
-
     let finalUserId: number | null = null;
 
     // 1. state의 userId를 숫자로 변환 시도
@@ -1043,28 +1037,16 @@ const ExerciseScreen = ({ navigation }: any) => {
       const parsed = parseInt(userId, 10);
       if (!isNaN(parsed)) {
         finalUserId = parsed;
-        console.log(
-          "[EXERCISE][TIME] state userId를 숫자로 변환:",
-          finalUserId
-        );
       }
     }
 
     // 2. 숫자 변환 실패 시 AsyncStorage에서 가져오기
     if (!finalUserId) {
       const userIdStr = await AsyncStorage.getItem("userId");
-      console.log(
-        "[EXERCISE][TIME] AsyncStorage에서 가져온 userId:",
-        userIdStr
-      );
       if (userIdStr && userIdStr.trim() !== "") {
         const parsed = parseInt(userIdStr, 10);
         if (!isNaN(parsed)) {
           finalUserId = parsed;
-          console.log(
-            "[EXERCISE][TIME] AsyncStorage userId를 숫자로 변환:",
-            finalUserId
-          );
         }
       }
     }
@@ -1083,7 +1065,6 @@ const ExerciseScreen = ({ navigation }: any) => {
               .join("")
           );
           const payload = JSON.parse(jsonPayload);
-          console.log("[EXERCISE][TIME] JWT payload:", payload);
 
           // userPk를 우선 확인 (숫자 ID), 그 다음 userId, 마지막으로 sub
           if (payload.userPk) {
@@ -1093,7 +1074,6 @@ const ExerciseScreen = ({ navigation }: any) => {
                 : parseInt(payload.userPk, 10);
             if (!isNaN(parsed)) {
               finalUserId = parsed;
-              console.log("[EXERCISE][TIME] JWT에서 userPk 추출:", finalUserId);
             }
           } else if (payload.userId) {
             const parsed =
@@ -1102,13 +1082,11 @@ const ExerciseScreen = ({ navigation }: any) => {
                 : parseInt(payload.userId, 10);
             if (!isNaN(parsed)) {
               finalUserId = parsed;
-              console.log("[EXERCISE][TIME] JWT에서 userId 추출:", finalUserId);
             }
           } else if (payload.sub) {
             const parsed = parseInt(payload.sub, 10);
             if (!isNaN(parsed)) {
               finalUserId = parsed;
-              console.log("[EXERCISE][TIME] JWT에서 sub 추출:", finalUserId);
             }
           }
         }
@@ -1118,20 +1096,11 @@ const ExerciseScreen = ({ navigation }: any) => {
     }
 
     if (!finalUserId) {
-      console.log("[EXERCISE][TIME] userId를 찾을 수 없음, 함수 종료");
       return;
     }
 
     try {
-      console.log(
-        "[EXERCISE][TIME] getTodayWorkoutTime 호출 시작:",
-        finalUserId
-      );
       const response = await getTodayWorkoutTime(finalUserId);
-      console.log("[EXERCISE][TIME] getTodayWorkoutTime 응답 받음:", {
-        totalSeconds: response.totalSeconds,
-        response,
-      });
       setTodayTotalWorkoutSeconds(response.totalSeconds || 0);
     } catch (e) {
       console.error("[EXERCISE][TIME] 오늘 운동 시간 조회 실패:", e);
@@ -1190,7 +1159,6 @@ const ExerciseScreen = ({ navigation }: any) => {
               .join("")
           );
           const payload = JSON.parse(jsonPayload);
-          console.log("[EXERCISE][SAVED][DEBUG] JWT payload:", payload);
 
           // userPk를 우선 확인 (숫자 ID), 그 다음 userId, 마지막으로 sub
           if (payload.userPk) {
@@ -1200,10 +1168,6 @@ const ExerciseScreen = ({ navigation }: any) => {
                 : parseInt(payload.userPk, 10);
             if (!isNaN(parsed)) {
               finalUserId = parsed;
-              console.log(
-                "[EXERCISE][SAVED][DEBUG] JWT에서 userPk 추출:",
-                finalUserId
-              );
             }
           } else if (payload.userId) {
             const parsed =
@@ -1212,19 +1176,11 @@ const ExerciseScreen = ({ navigation }: any) => {
                 : parseInt(payload.userId, 10);
             if (!isNaN(parsed)) {
               finalUserId = parsed;
-              console.log(
-                "[EXERCISE][SAVED][DEBUG] JWT에서 userId 추출:",
-                finalUserId
-              );
             }
           } else if (payload.sub) {
             const parsed = parseInt(payload.sub, 10);
             if (!isNaN(parsed)) {
               finalUserId = parsed;
-              console.log(
-                "[EXERCISE][SAVED][DEBUG] JWT에서 sub 추출:",
-                finalUserId
-              );
             }
           }
         }
@@ -1281,11 +1237,26 @@ const ExerciseScreen = ({ navigation }: any) => {
 
       // savedWorkouts를 allActivities로 변환하여 추가
       // 서버 데이터를 기준으로 현재 날짜의 저장된 운동을 재구성
+
+      // 이미지 로드를 위한 정보 수집 (setAllActivities 내부에서 수집)
+      let imageLoadTasks: Array<{
+        activityId: number;
+        externalId?: string;
+        exerciseName: string;
+      }> = [];
+
       setAllActivities((prev) => {
         const currentDateStr = dateStr;
         const newActivities: Activity[] = [];
         const serverSessionIds = new Set<string>();
         const serverActivityKeys = new Set<string>();
+
+        // 이미지 로드 태스크 수집 (이 함수 내부에서)
+        const tasks: Array<{
+          activityId: number;
+          externalId?: string;
+          exerciseName: string;
+        }> = [];
 
         // 서버에서 가져온 데이터로 Activity 생성
         mergedGroups.forEach((group) => {
@@ -1338,8 +1309,9 @@ const ExerciseScreen = ({ navigation }: any) => {
                 session.externalId ||
                 undefined;
 
+              const activityId = Date.now() + Math.random();
               const activity: Activity = {
-                id: Date.now() + Math.random(), // 고유 ID 생성
+                id: activityId, // 고유 ID 생성
                 name: exerciseName,
                 details: buildDetailsFromSets(sets),
                 time: firstRecord.workoutDate
@@ -1353,6 +1325,15 @@ const ExerciseScreen = ({ navigation }: any) => {
                 isCompleted: true,
                 externalId: externalId,
               };
+
+              // 이미지 로드가 필요한 경우 태스크 추가 (exerciseName이 있으면 무조건 추가)
+              if (exerciseName && exerciseName.trim()) {
+                tasks.push({
+                  activityId,
+                  externalId,
+                  exerciseName: exerciseName.trim(),
+                });
+              }
 
               if (__DEV__ && !externalId) {
                 console.warn("[EXERCISE][SAVED] externalId 없음:", {
@@ -1465,22 +1446,176 @@ const ExerciseScreen = ({ navigation }: any) => {
           result.push(activity);
         });
 
-        console.log("[EXERCISE][SAVED] 저장된 운동 기록 재구성:", {
-          prevCount: prev.length,
-          filteredPrevCount: filteredPrev.length,
-          newCount: newActivities.length,
-          resultCount: result.length,
-          removedCount: prev.length - filteredPrev.length,
-          addedCount: result.length - filteredPrev.length,
-          activities: newActivities.map((a) => ({
-            name: a.name,
-            sessionId: a.sessionId,
-            setsCount: a.sets?.length || 0,
-          })),
-        });
+        if (__DEV__) {
+          console.log("[EXERCISE][SAVED] 저장된 운동 기록 재구성:", {
+            prevCount: prev.length,
+            newCount: newActivities.length,
+            resultCount: result.length,
+            imageLoadTasksCount: tasks.length,
+          });
+        }
+
+        // 이미지 로드 태스크를 외부 변수에 할당
+        imageLoadTasks = tasks;
 
         return result;
       });
+
+      // 저장된 운동의 이미지 로드 (병렬 처리)
+      // setAllActivities 완료 후 실행되도록 setTimeout 사용
+      // imageLoadTasks는 setAllActivities 내부에서 할당되므로, 약간의 지연 후 확인
+      setTimeout(() => {
+        // imageLoadTasks가 할당되었는지 확인
+        if (imageLoadTasks.length > 0) {
+          if (__DEV__) {
+            console.log(
+              "[EXERCISE][SAVED] 이미지 로드 시작:",
+              imageLoadTasks.length,
+              "개"
+            );
+          }
+          const loadImages = async () => {
+            const imageLoadPromises = imageLoadTasks.map(async (task) => {
+              try {
+                let imageUrl: string | undefined;
+
+                // 1. externalId로 이미지 로드 시도
+                if (task.externalId) {
+                  // 현재 캐시 확인
+                  setExerciseImages((currentImages) => {
+                    if (currentImages[task.externalId!]) {
+                      imageUrl = currentImages[task.externalId!];
+                      return currentImages; // 변경 없음
+                    }
+                    return currentImages;
+                  });
+
+                  if (!imageUrl) {
+                    try {
+                      const detail = await fetchExerciseDetail(task.externalId);
+                      imageUrl =
+                        detail?.imageUrl ||
+                        detail?.image ||
+                        detail?.imgUrl ||
+                        detail?.photoUrl;
+
+                      if (imageUrl) {
+                        // 캐시에 저장
+                        setExerciseImages((prev) => ({
+                          ...prev,
+                          [task.externalId!]: imageUrl!,
+                        }));
+                        prefetchImage(imageUrl);
+                      }
+                    } catch (error) {
+                      console.warn(
+                        "[EXERCISE][SAVED] externalId로 이미지 로드 실패:",
+                        {
+                          externalId: task.externalId,
+                          exerciseName: task.exerciseName,
+                          error: error instanceof Error ? error.message : error,
+                        }
+                      );
+                    }
+                  }
+                }
+
+                // 2. externalId로 실패했거나 없으면 이름으로 검색
+                if (!imageUrl && task.exerciseName) {
+                  const nameKey = task.exerciseName.toLowerCase();
+
+                  // 현재 캐시 확인
+                  setExerciseImagesByName((currentImagesByName) => {
+                    if (currentImagesByName[nameKey]) {
+                      imageUrl = currentImagesByName[nameKey];
+                      return currentImagesByName; // 변경 없음
+                    }
+                    return currentImagesByName;
+                  });
+
+                  if (!imageUrl) {
+                    try {
+                      const keywords = generateSearchKeywords(
+                        task.exerciseName
+                      );
+                      const keywordList =
+                        keywords && keywords.length > 0
+                          ? keywords
+                          : [task.exerciseName];
+
+                      for (const keyword of keywordList) {
+                        try {
+                          const response = await fetchExercises({
+                            keyword,
+                            size: 1,
+                            page: 0,
+                          });
+                          const first = response?.content?.[0];
+                          imageUrl =
+                            first?.imageUrl ||
+                            first?.image ||
+                            first?.imgUrl ||
+                            first?.photoUrl;
+
+                          if (imageUrl) {
+                            // 캐시에 저장
+                            setExerciseImagesByName((prev) => ({
+                              ...prev,
+                              [nameKey]: imageUrl!,
+                            }));
+                            prefetchImage(imageUrl);
+                            break;
+                          }
+                        } catch (error) {
+                          // 다음 키워드 시도
+                        }
+                      }
+                    } catch (error) {
+                      console.warn(
+                        "[EXERCISE][SAVED] 이름으로 이미지 검색 실패:",
+                        {
+                          exerciseName: task.exerciseName,
+                          error: error instanceof Error ? error.message : error,
+                        }
+                      );
+                    }
+                  }
+                }
+
+                // 3. 이미지를 찾았으면 Activity 업데이트
+                if (imageUrl) {
+                  setAllActivities((prev) =>
+                    prev.map((activity) =>
+                      activity.id === task.activityId
+                        ? { ...activity, imageUrl }
+                        : activity
+                    )
+                  );
+                } else {
+                  console.warn("[EXERCISE][SAVED] 이미지를 찾지 못함:", {
+                    activityId: task.activityId,
+                    externalId: task.externalId,
+                    exerciseName: task.exerciseName,
+                  });
+                }
+              } catch (error) {
+                console.warn("[EXERCISE][SAVED] 이미지 로드 중 오류:", {
+                  task,
+                  error: error instanceof Error ? error.message : error,
+                });
+              }
+            });
+
+            // 모든 이미지 로드 완료 대기 (병렬 처리)
+            await Promise.all(imageLoadPromises);
+          };
+
+          // 비동기로 이미지 로드 시작
+          loadImages().catch((error) => {
+            console.error("[EXERCISE][SAVED] 이미지 로드 실패:", error);
+          });
+        }
+      }, 200); // setAllActivities 완료 대기 (100ms -> 200ms로 증가)
 
       const sessionTitleMapFresh = new Map<string, string>();
       // filteredGroups 대신 mergedGroups 사용 (모든 세션 정보는 유지)
@@ -1545,11 +1680,29 @@ const ExerciseScreen = ({ navigation }: any) => {
     } catch (error) {
       console.error("[WORKOUT][SAVED] 불러오기 실패:", error);
       setSavedWorkouts([]);
-      setSavedWorkoutsError("저장된 운동을 불러오지 못했어요.");
+      // 네트워크 오류나 서버 오류인 경우에만 에러 메시지 표시
+      // 빈 배열은 정상적인 응답일 수 있음 (저장된 운동이 없는 경우)
+      if (error && typeof error === "object" && "status" in error) {
+        const status = (error as any).status;
+        if (status && status !== 200 && status !== 404) {
+          setSavedWorkoutsError("저장된 운동을 불러오지 못했어요.");
+        } else {
+          setSavedWorkoutsError(null); // 404는 정상 (저장된 운동 없음)
+        }
+      } else {
+        setSavedWorkoutsError("저장된 운동을 불러오지 못했어요.");
+      }
     } finally {
       setSavedWorkoutsLoading(false);
     }
-  }, [userId, selectedDate]);
+  }, [
+    userId,
+    selectedDate,
+    exerciseImages,
+    exerciseImagesByName,
+    prefetchImage,
+    generateSearchKeywords,
+  ]);
 
   React.useEffect(() => {
     if (!userIdLoaded) return;
@@ -2605,15 +2758,10 @@ const ExerciseScreen = ({ navigation }: any) => {
       (activity) => !isActivityFullyCompleted(activity)
     );
 
-    console.log("🏃 시작 가능한 운동:", availableActivities.length);
-
     if (availableActivities.length === 0) {
-      console.log("⚠️ 시작 가능한 운동이 없어서 운동 추가 모달 열기");
       handleWorkoutStartPress();
       return;
     }
-
-    console.log("✅ 운동 시작:", availableActivities[0].name);
 
     // 운동 시작 시점의 누적 시간 기록
     setWorkoutStartTime(todayTotalWorkoutSeconds);
@@ -2914,7 +3062,6 @@ const ExerciseScreen = ({ navigation }: any) => {
           const parsed: Activity[] = JSON.parse(saved);
           if (Array.isArray(parsed)) {
             setAllActivities(parsed);
-            console.log("✅ [LOAD] 저장된 운동 불러오기 완료");
             setInitialLoadComplete(true); // 로딩 완료 신호!
             return;
           }
@@ -2950,13 +3097,10 @@ const ExerciseScreen = ({ navigation }: any) => {
       const recommendedExercises =
         rawParams.recommendedExercises ||
         rawParams.params?.recommendedExercises;
-      const autoStart =
-        rawParams.autoStart ||
-        rawParams.params?.autoStart; // 홈에서 운동 시작하기 버튼 클릭 시 전달되는 플래그
+      const autoStart = rawParams.autoStart || rawParams.params?.autoStart; // 홈에서 운동 시작하기 버튼 클릭 시 전달되는 플래그
 
       // 홈에서 운동 시작하기 버튼 클릭 시 자동으로 시작
       if (autoStart) {
-        console.log("🏋️ [홈] 자동 운동 시작 요청");
         // 파라미터 초기화 (재실행 방지)
         navigation.setParams({
           autoStart: undefined,
@@ -3008,15 +3152,8 @@ const ExerciseScreen = ({ navigation }: any) => {
             );
 
             if (alreadyExists) {
-              console.log("⚠️ [AI] 이미 추가된 루틴입니다.");
               return prev;
             }
-
-            console.log("✅ [AI] 리스트에 운동 추가 완료!");
-            console.log(
-              "🔍 추가 후 전체 개수:",
-              prev.length + recommendedExercises.length
-            );
 
             return [...prev, ...recommendedExercises];
           });
@@ -3035,7 +3172,12 @@ const ExerciseScreen = ({ navigation }: any) => {
           );
         }, 500);
       }
-    }, [initialLoadComplete, route.params, selectedDate, handleStartWorkoutSequence])
+    }, [
+      initialLoadComplete,
+      route.params,
+      selectedDate,
+      handleStartWorkoutSequence,
+    ])
   );
   // (임시 API 테스트 버튼 제거)
 
@@ -3043,10 +3185,6 @@ const ExerciseScreen = ({ navigation }: any) => {
   const handleExerciseClick = (exercise: Activity) => {
     // 저장된 운동(saveTitle이 있는)은 클릭해도 모달을 열지 않음 (완료 상태로 유지)
     if (exercise.saveTitle && exercise.saveTitle.trim() !== "") {
-      console.log("[EXERCISE] 저장된 운동은 클릭 불가:", {
-        name: exercise.name,
-        saveTitle: exercise.saveTitle,
-      });
       return;
     }
 
@@ -3561,10 +3699,11 @@ const ExerciseScreen = ({ navigation }: any) => {
     // 운동 저장 후 서버에서 최신 데이터를 가져와서 중복 방지 및 일관성 유지
     if (!skipServerSave && serverSessionId) {
       // 약간의 지연을 두어 서버에 반영될 시간을 줌
+      // 저장 직후 조회 시 서버가 아직 반영하지 못할 수 있으므로 지연 시간 증가
       setTimeout(async () => {
         loadSavedWorkouts();
         await loadTodayProgress(); // 오늘 진행률 로드 (게이지 업데이트)
-      }, 800);
+      }, 1200); // 800ms -> 1200ms로 증가
     }
 
     // sessionId 반환 (ExerciseModal에서 사용)
@@ -3841,16 +3980,19 @@ const ExerciseScreen = ({ navigation }: any) => {
                             dayProgress?.totalCalorie ??
                             0;
                           // 해당 날짜의 운동 시간(초) 가져오기
-                          const totalSeconds = dailyWorkoutSeconds[dateStr] ?? 0;
-                          
+                          const totalSeconds =
+                            dailyWorkoutSeconds[dateStr] ?? 0;
+
                           // 운동 시간 포맷: 초만 있으면 "38s", 분이면 "39m", 60분 이상이면 "1h 39m"
-                          const formatWorkoutTime = (seconds: number): string => {
-                            if (seconds === 0) return '';
-                            
+                          const formatWorkoutTime = (
+                            seconds: number
+                          ): string => {
+                            if (seconds === 0) return "";
+
                             const hours = Math.floor(seconds / 3600);
                             const minutes = Math.floor((seconds % 3600) / 60);
                             const secs = seconds % 60;
-                            
+
                             if (hours > 0) {
                               // 60분 이상: "1h 39m"
                               return `${hours}h ${minutes}m`;
@@ -3958,15 +4100,15 @@ const ExerciseScreen = ({ navigation }: any) => {
                           0;
                         // 해당 날짜의 운동 시간(초) 가져오기
                         const totalSeconds = dailyWorkoutSeconds[dateStr] ?? 0;
-                        
+
                         // 운동 시간 포맷: 초만 있으면 "38s", 분이면 "39m", 60분 이상이면 "1h 39m"
                         const formatWorkoutTime = (seconds: number): string => {
-                          if (seconds === 0) return '';
-                          
+                          if (seconds === 0) return "";
+
                           const hours = Math.floor(seconds / 3600);
                           const minutes = Math.floor((seconds % 3600) / 60);
                           const secs = seconds % 60;
-                          
+
                           if (hours > 0) {
                             // 60분 이상: "1h 39m"
                             return `${hours}h ${minutes}m`;
@@ -4038,48 +4180,26 @@ const ExerciseScreen = ({ navigation }: any) => {
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
             >
-              {/* 🔍 디버깅: 조건 확인 */}
-              {(() => {
-                const shouldShow =
-                  hasIncompleteActivities && workoutActivities.length > 0;
-                console.log("🚨 시작 버튼 렌더링 체크:", {
-                  hasIncompleteActivities,
-                  workoutActivitiesLength: workoutActivities.length,
-                  shouldShow,
-                });
-
-                if (shouldShow) {
-                  console.log("✅ 시작 버튼 렌더링됨!");
-                } else {
-                  console.log("❌ 시작 버튼 조건 불만족");
-                }
-
-                return shouldShow ? (
-                  <TouchableOpacity
+              {hasIncompleteActivities && workoutActivities.length > 0 && (
+                <TouchableOpacity
+                  style={[
+                    styles.startWorkoutButton,
+                    { backgroundColor: "#4a9eff", padding: 15 },
+                  ]}
+                  onPress={() => {
+                    handleStartWorkoutSequence();
+                  }}
+                >
+                  <Text
                     style={[
-                      styles.startWorkoutButton,
-                      { backgroundColor: "#4a9eff", padding: 15 }, // 눈에 잘 보이게
+                      styles.startWorkoutButtonText,
+                      { color: "white", fontSize: 16 },
                     ]}
-                    onPress={() => {
-                      console.log("🎯🎯🎯 시작 버튼 클릭됨!");
-                      console.log(
-                        "workoutActivities:",
-                        workoutActivities.length
-                      );
-                      handleStartWorkoutSequence();
-                    }}
                   >
-                    <Text
-                      style={[
-                        styles.startWorkoutButtonText,
-                        { color: "white", fontSize: 16 },
-                      ]}
-                    >
-                      시작
-                    </Text>
-                  </TouchableOpacity>
-                ) : null;
-              })()}
+                    시작
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -4370,14 +4490,12 @@ const ExerciseScreen = ({ navigation }: any) => {
             return !alreadySavedBySession;
           });
 
-          console.log("[EXERCISE][COMPLETE] 필터링 결과:", {
-            totalExercises: exercises.length,
-            filteredCount: filteredExercises.length,
-            filtered: filteredExercises.map((ex) => ({
-              name: ex.name,
-              sessionId: ex.sessionId,
-            })),
-          });
+          if (__DEV__) {
+            console.log("[EXERCISE][COMPLETE] 필터링 결과:", {
+              totalExercises: exercises.length,
+              filteredCount: filteredExercises.length,
+            });
+          }
 
           setCompletedExercises(filteredExercises);
           setCompletionSummaryTitle("오늘의 운동");
@@ -4398,9 +4516,10 @@ const ExerciseScreen = ({ navigation }: any) => {
 
           // 운동 완료 후 서버에서 최신 데이터를 가져와서 중복 방지 및 일관성 유지
           // allActivities는 loadSavedWorkouts에서 자동으로 업데이트됨
+          // 저장 직후 조회 시 서버가 아직 반영하지 못할 수 있으므로 지연 시간 증가
           setTimeout(() => {
             loadSavedWorkouts();
-          }, 500);
+          }, 1000); // 500ms -> 1000ms로 증가
 
           handleModalClose();
         }}
@@ -4725,20 +4844,13 @@ const ExerciseScreen = ({ navigation }: any) => {
                           ex.externalId && ex.name
                             ? `${ex.externalId}__${ex.name}`
                             : null;
+                        // savedSessionIds만 확인 (서버에서 실제로 저장된 것만 제외)
+                        // pendingSessionIds는 확인하지 않음 (방금 저장한 운동도 표시해야 함)
                         const alreadySavedBySession =
-                          sessionId &&
-                          (savedSessionIds.has(sessionId) ||
-                            pendingSessionIds.has(sessionId));
-                        const alreadySavedByActivity =
-                          typeof activityId === "number" &&
-                          pendingActivityIds.has(activityId);
-                        const alreadySavedByExternal =
-                          externalKey && pendingExternalKeys.has(externalKey);
-                        return !(
-                          alreadySavedBySession ||
-                          alreadySavedByActivity ||
-                          alreadySavedByExternal
-                        );
+                          sessionId && savedSessionIds.has(sessionId);
+                        // pendingActivityIds와 pendingExternalKeys도 확인하지 않음
+                        // 운동 완료 모달에서는 완료된 운동을 모두 표시
+                        return !alreadySavedBySession;
                       }
                     );
 
