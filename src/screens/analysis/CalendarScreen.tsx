@@ -11,8 +11,9 @@ import { Ionicons as Icon } from '@expo/vector-icons';
 import {colors} from '../../theme/colors';
 import {useDate} from '../../contexts/DateContext';
 import {fetchWeeklyProgress, fetchMonthlyProgress} from '../../utils/exerciseApi';
-import {mealAPI} from '../../services';
+import {mealAPI, homeAPI} from '../../services';
 import type {DailyProgressWeekItem, NutritionGoal, DailyMealsResponse} from '../../types';
+import {eventBus} from '../../utils/eventBus';
 
 const CalendarScreen = ({navigation}: any) => {
   const [monthBase, setMonthBase] = useState(new Date());
@@ -35,7 +36,82 @@ const CalendarScreen = ({navigation}: any) => {
   const loadWeeklyProgress = async () => {
     try {
       const data = await fetchWeeklyProgress();
-      setWeeklyProgress(Array.isArray(data) ? data : []);
+      
+      // 이번 주의 날짜 범위 계산 (일~토)
+      const today = new Date();
+      const getStartOfWeek = (d: Date) => {
+        const n = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const diff = n.getDay();
+        n.setDate(n.getDate() - diff);
+        return n;
+      };
+      const startOfWeek = getStartOfWeek(today);
+      
+      // 이번 주의 각 날짜에 대해 칼로리 데이터 가져오기
+      const weekDates = Array.from({ length: 7 }).map((_, i) => {
+        const d = new Date(
+          startOfWeek.getFullYear(),
+          startOfWeek.getMonth(),
+          startOfWeek.getDate() + i
+        );
+        return formatDateToString(d);
+      });
+
+      // 각 날짜에 대해 영양성분 요약 조회 (병렬 처리)
+      const nutritionPromises = weekDates.map(async (date) => {
+        try {
+          const summary = await mealAPI.getNutritionSummary(date);
+          return { date, calories: summary.calories || 0 };
+        } catch (error) {
+          console.error(`영양성분 조회 실패 (${date}):`, error);
+          return { date, calories: 0 };
+        }
+      });
+
+      // 각 날짜에 대해 운동 시간 조회 (병렬 처리)
+      const workoutTimePromises = weekDates.map(async (date) => {
+        try {
+          const progress = await homeAPI.getTodayProgress(date);
+          return { date, totalSeconds: progress.totalExerciseSeconds || 0 };
+        } catch (error) {
+          console.error(`운동 시간 조회 실패 (${date}):`, error);
+          return { date, totalSeconds: 0 };
+        }
+      });
+
+      const [nutritionResults, workoutTimeResults] = await Promise.all([
+        Promise.all(nutritionPromises),
+        Promise.all(workoutTimePromises),
+      ]);
+      
+      // 기존 데이터와 병합 (칼로리 및 운동 시간 데이터 업데이트)
+      let updatedData: DailyProgressWeekItem[] = [];
+      
+      if (Array.isArray(data) && data.length > 0) {
+        updatedData = weekDates.map((date) => {
+          const existingItem = data.find((item) => item.date === date);
+          const nutritionItem = nutritionResults.find((item) => item.date === date);
+          const workoutItem = workoutTimeResults.find((item) => item.date === date);
+          
+          return {
+            date,
+            exerciseRate: existingItem?.exerciseRate ?? 0,
+            totalCalorie: nutritionItem?.calories ?? existingItem?.totalCalorie ?? 0,
+            // 운동 시간은 백엔드에서 exerciseRate로 계산되지만, 최신 데이터를 위해 재조회
+          };
+        });
+      } else {
+        updatedData = weekDates.map((date) => {
+          const nutritionItem = nutritionResults.find((item) => item.date === date);
+          return {
+            date,
+            exerciseRate: 0,
+            totalCalorie: nutritionItem?.calories ?? 0,
+          };
+        });
+      }
+      
+      setWeeklyProgress(updatedData);
     } catch (e) {
       console.error('주간 진행률 로드 실패:', e);
       setWeeklyProgress([]);
@@ -47,7 +123,71 @@ const CalendarScreen = ({navigation}: any) => {
     try {
       const yearMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
       const data = await fetchMonthlyProgress(yearMonth);
-      setMonthlyProgress(Array.isArray(data) ? data : []);
+      
+      // 해당 월의 모든 날짜 계산
+      const firstOfMonth = new Date(year, month, 1);
+      const nextMonth = new Date(year, month + 1, 1);
+      const daysInMonth = Math.round((nextMonth.getTime() - firstOfMonth.getTime()) / (1000 * 60 * 60 * 24));
+      const monthDates = Array.from({ length: daysInMonth }).map((_, i) => {
+        const d = new Date(year, month, i + 1);
+        return formatDateToString(d);
+      });
+
+      // 각 날짜에 대해 영양성분 요약 조회 (병렬 처리)
+      const nutritionPromises = monthDates.map(async (date) => {
+        try {
+          const summary = await mealAPI.getNutritionSummary(date);
+          return { date, calories: summary.calories || 0 };
+        } catch (error) {
+          console.error(`영양성분 조회 실패 (${date}):`, error);
+          return { date, calories: 0 };
+        }
+      });
+
+      // 각 날짜에 대해 운동 시간 조회 (병렬 처리)
+      const workoutTimePromises = monthDates.map(async (date) => {
+        try {
+          const progress = await homeAPI.getTodayProgress(date);
+          return { date, totalSeconds: progress.totalExerciseSeconds || 0 };
+        } catch (error) {
+          console.error(`운동 시간 조회 실패 (${date}):`, error);
+          return { date, totalSeconds: 0 };
+        }
+      });
+
+      const [nutritionResults, workoutTimeResults] = await Promise.all([
+        Promise.all(nutritionPromises),
+        Promise.all(workoutTimePromises),
+      ]);
+      
+      // 기존 데이터와 병합 (칼로리 및 운동 시간 데이터 업데이트)
+      let updatedData: DailyProgressWeekItem[] = [];
+      
+      if (Array.isArray(data) && data.length > 0) {
+        updatedData = monthDates.map((date) => {
+          const existingItem = data.find((item) => item.date === date);
+          const nutritionItem = nutritionResults.find((item) => item.date === date);
+          const workoutItem = workoutTimeResults.find((item) => item.date === date);
+          
+          return {
+            date,
+            exerciseRate: existingItem?.exerciseRate ?? 0,
+            totalCalorie: nutritionItem?.calories ?? existingItem?.totalCalorie ?? 0,
+            // 운동 시간은 백엔드에서 exerciseRate로 계산되지만, 최신 데이터를 위해 재조회
+          };
+        });
+      } else {
+        updatedData = monthDates.map((date) => {
+          const nutritionItem = nutritionResults.find((item) => item.date === date);
+          return {
+            date,
+            exerciseRate: 0,
+            totalCalorie: nutritionItem?.calories ?? 0,
+          };
+        });
+      }
+      
+      setMonthlyProgress(updatedData);
     } catch (e) {
       console.error('월별 진행률 로드 실패:', e);
       setMonthlyProgress([]);
@@ -119,6 +259,49 @@ const CalendarScreen = ({navigation}: any) => {
     });
     return unsubscribe;
   }, [navigation]);
+
+  // 식사 삭제 이벤트 리스너
+  useEffect(() => {
+    const unsubscribe = eventBus.on("mealDeleted", () => {
+      console.log("[CALENDAR] 식사 삭제 이벤트 수신, 캘린더 데이터 새로고침");
+      // 주간/월간 진행률과 오늘 식단 데이터 새로고침
+      loadWeeklyProgress();
+      loadMonthlyProgress(monthBase.getFullYear(), monthBase.getMonth());
+      fetchTodayMeals();
+    });
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, [monthBase]);
+
+  // 운동 저장/삭제 이벤트 리스너
+  useEffect(() => {
+    const unsubscribeSaved = eventBus.on("workoutSessionSaved", () => {
+      console.log("[CALENDAR] 운동 저장 이벤트 수신, 캘린더 데이터 새로고침");
+      // 주간/월간 진행률 새로고침 (운동 시간 업데이트)
+      // 약간의 지연을 두어 백엔드 데이터 업데이트 대기
+      setTimeout(() => {
+        loadWeeklyProgress();
+        loadMonthlyProgress(monthBase.getFullYear(), monthBase.getMonth());
+      }, 500);
+    });
+
+    const unsubscribeDeleted = eventBus.on("workoutSessionDeleted", () => {
+      console.log("[CALENDAR] 운동 삭제 이벤트 수신, 캘린더 데이터 새로고침");
+      // 주간/월간 진행률 새로고침 (운동 시간 업데이트)
+      // 약간의 지연을 두어 백엔드 데이터 업데이트 대기
+      setTimeout(() => {
+        loadWeeklyProgress();
+        loadMonthlyProgress(monthBase.getFullYear(), monthBase.getMonth());
+      }, 500);
+    });
+
+    return () => {
+      unsubscribeSaved?.();
+      unsubscribeDeleted?.();
+    };
+  }, [monthBase]);
 
   // 식단 데이터
   const meals = [

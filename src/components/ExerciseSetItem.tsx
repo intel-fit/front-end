@@ -18,7 +18,6 @@ interface ExerciseSetItemProps {
   onPressRemove: () => void;
   onWeightChange?: (weight: number) => void;
   onRepsChange?: (reps: number) => void;
-  onOrderChange?: (order: number) => void;
 }
 
 const ExerciseSetItem: React.FC<ExerciseSetItemProps> = ({
@@ -31,7 +30,6 @@ const ExerciseSetItem: React.FC<ExerciseSetItemProps> = ({
   onPressRemove,
   onWeightChange,
   onRepsChange,
-  onOrderChange,
 }) => {
   const isHighlighted = isActive || isCompleted;
 
@@ -49,36 +47,12 @@ const ExerciseSetItem: React.FC<ExerciseSetItemProps> = ({
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
         <View style={styles.deleteButtonCircle}>
-          <Icon name="remove" size={14} color="#ffffff" />
+          <Icon name="close" size={16} color="#ffffff" />
         </View>
       </TouchableOpacity>
 
-      {/* 세트 번호 - 편집 가능 */}
-      {onOrderChange ? (
-        <View style={styles.orderContainer}>
-          <TextInput
-            style={[
-              styles.orderInput,
-              isHighlighted ? styles.textActive : styles.textDefault,
-            ]}
-            value={(order ?? 1).toString()}
-            onChangeText={(text) => {
-              const num = parseInt(text) || 1;
-              onOrderChange(num);
-            }}
-            keyboardType="numeric"
-            editable={!isCompleted}
-          />
-          <Text
-            style={[
-              styles.orderUnit,
-              isHighlighted ? styles.textActive : styles.textDefault,
-            ]}
-          >
-            세트
-          </Text>
-        </View>
-      ) : (
+      {/* 세트 번호 */}
+      <View style={styles.setNumberContainer}>
         <Text
           style={[
             styles.setNumber,
@@ -87,32 +61,36 @@ const ExerciseSetItem: React.FC<ExerciseSetItemProps> = ({
         >
           {order ?? 1}세트
         </Text>
-      )}
+      </View>
 
       {/* 무게 */}
       {onWeightChange ? (
         <View style={styles.valueContainer}>
-          <TextInput
-            style={[
-              styles.valueInput,
-              isHighlighted ? styles.textActive : styles.textDefault,
-            ]}
-            value={(weight ?? 0).toString()}
-            onChangeText={(text) => {
-              const num = parseInt(text) || 0;
-              onWeightChange(num);
-            }}
-            keyboardType="numeric"
-            editable={!isCompleted}
-          />
-          <Text
-            style={[
-              styles.unit,
-              isHighlighted ? styles.textActive : styles.textDefault,
-            ]}
-          >
-            kg
-          </Text>
+          <View style={styles.inputWrapper}>
+            <TextInput
+              style={[
+                styles.valueInput,
+                isHighlighted ? styles.valueInputActive : styles.valueInputDefault,
+              ]}
+              value={(weight ?? 0).toString()}
+              onChangeText={(text) => {
+                const num = parseFloat(text) || 0;
+                onWeightChange(num);
+              }}
+              keyboardType="decimal-pad"
+              editable={!isCompleted}
+              placeholder="0"
+              placeholderTextColor="#999"
+            />
+            <Text
+              style={[
+                styles.unit,
+                isHighlighted ? styles.textActive : styles.textDefault,
+              ]}
+            >
+              kg
+            </Text>
+          </View>
         </View>
       ) : (
         <Text
@@ -128,27 +106,31 @@ const ExerciseSetItem: React.FC<ExerciseSetItemProps> = ({
       {/* 횟수 */}
       {onRepsChange ? (
         <View style={styles.valueContainer}>
-          <TextInput
-            style={[
-              styles.valueInput,
-              isHighlighted ? styles.textActive : styles.textDefault,
-            ]}
-            value={(reps ?? 0).toString()}
-            onChangeText={(text) => {
-              const num = parseInt(text) || 0;
-              onRepsChange(num);
-            }}
-            keyboardType="numeric"
-            editable={!isCompleted}
-          />
-          <Text
-            style={[
-              styles.unit,
-              isHighlighted ? styles.textActive : styles.textDefault,
-            ]}
-          >
-            회
-          </Text>
+          <View style={styles.inputWrapper}>
+            <TextInput
+              style={[
+                styles.valueInput,
+                isHighlighted ? styles.valueInputActive : styles.valueInputDefault,
+              ]}
+              value={(reps ?? 0).toString()}
+              onChangeText={(text) => {
+                const num = parseInt(text) || 0;
+                onRepsChange(num);
+              }}
+              keyboardType="number-pad"
+              editable={!isCompleted}
+              placeholder="0"
+              placeholderTextColor="#999"
+            />
+            <Text
+              style={[
+                styles.unit,
+                isHighlighted ? styles.textActive : styles.textDefault,
+              ]}
+            >
+              회
+            </Text>
+          </View>
         </View>
       ) : (
         <Text
@@ -161,20 +143,19 @@ const ExerciseSetItem: React.FC<ExerciseSetItemProps> = ({
         </Text>
       )}
 
-      {/* 체크박스 */}
+      {/* 완료 버튼 */}
       <TouchableOpacity
         style={[
-          styles.checkbox,
-          isCompleted ? styles.checkboxCompleted : styles.checkboxDefault,
+          styles.completeButton,
+          isCompleted ? styles.completeButtonActive : styles.completeButtonDefault,
         ]}
         onPress={onToggleComplete}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        {isCompleted && (
-          <Icon name="checkmark" size={18} color="#000000" />
-        )}
-        {!isCompleted && (
-          <Icon name="checkmark" size={18} color="#CCCCCC" />
+        {isCompleted ? (
+          <Icon name="checkmark-circle" size={28} color="#4CAF50" />
+        ) : (
+          <Icon name="ellipse-outline" size={28} color="#CCCCCC" />
         )}
       </TouchableOpacity>
     </View>
@@ -185,26 +166,32 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    marginHorizontal: 12,
-    marginBottom: 8,
-    borderRadius: 12,
+    justifyContent: "space-between",
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginHorizontal: 0,
+    marginBottom: 12,
+    borderRadius: 16,
     position: "relative",
+    borderWidth: 1.5,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
-      height: 1,
+      height: 2,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
     elevation: 2,
+    gap: 12,
+    width: "100%",
   },
   containerDefault: {
     backgroundColor: "#FFFFFF",
+    borderColor: "#E8E8E8",
   },
   containerActive: {
-    backgroundColor: "#E8FF8A",
+    backgroundColor: "#F0F9F0",
+    borderColor: "#4CAF50",
   },
   deleteButton: {
     position: "absolute",
@@ -213,67 +200,78 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   deleteButtonCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "#CCCCCC",
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#FF5252",
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  setNumberContainer: {
+    width: 60,
+    justifyContent: "center",
+    alignItems: "flex-start",
   },
   setNumber: {
-    fontSize: 14,
-    fontWeight: "400",
-    minWidth: 50,
-    marginRight: 12,
-  },
-  orderContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    minWidth: 60,
-    marginRight: 12,
-  },
-  orderInput: {
-    fontSize: 14,
-    fontWeight: "400",
-    minWidth: 30,
-    textAlign: "right",
-    padding: 0,
-  },
-  orderUnit: {
-    fontSize: 14,
-    fontWeight: "400",
-    marginLeft: 4,
+    fontSize: 15,
+    fontWeight: "600",
+    textAlign: "left",
   },
   weight: {
-    fontSize: 14,
-    fontWeight: "400",
+    fontSize: 15,
+    fontWeight: "600",
     flex: 1,
-    marginRight: 12,
+    maxWidth: "35%",
+    textAlign: "right",
   },
   reps: {
-    fontSize: 14,
-    fontWeight: "400",
+    fontSize: 15,
+    fontWeight: "600",
     flex: 1,
-    marginRight: 12,
+    maxWidth: "35%",
+    textAlign: "right",
   },
   valueContainer: {
     flex: 1,
+    maxWidth: "35%",
+  },
+  inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    marginRight: 12,
+    justifyContent: "flex-end",
+    backgroundColor: "#F8F8F8",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    width: "100%",
   },
   valueInput: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: "400",
+    fontSize: 16,
+    fontWeight: "600",
     textAlign: "right",
-    minWidth: 40,
+    width: 50,
     padding: 0,
+    color: "#000000",
+  },
+  valueInputDefault: {
+    color: "#000000",
+  },
+  valueInputActive: {
+    color: "#4CAF50",
   },
   unit: {
     fontSize: 14,
-    fontWeight: "400",
-    marginLeft: 4,
+    fontWeight: "600",
+    marginLeft: 6,
+    color: "#666666",
+    width: 24,
   },
   textDefault: {
     color: "#000000",
@@ -281,21 +279,18 @@ const styles = StyleSheet.create({
   textActive: {
     color: "#000000",
   },
-  checkbox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    borderWidth: 1,
+  completeButton: {
+    width: 50,
+    height: 50,
     justifyContent: "center",
     alignItems: "center",
+    flexShrink: 0,
   },
-  checkboxDefault: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E0E0E0",
+  completeButtonDefault: {
+    backgroundColor: "transparent",
   },
-  checkboxCompleted: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#000000",
+  completeButtonActive: {
+    backgroundColor: "transparent",
   },
 });
 

@@ -737,7 +737,10 @@ const HomeScreen = ({ navigation }: any) => {
     try {
       // 현재 시간 확인 (한국 시간대)
       const now = new Date();
-      const koreaTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+      // 한국 시간대로 변환 (UTC+9)
+      const koreaTimeOffset = 9 * 60; // 한국은 UTC+9
+      const utcTime = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
+      const koreaTime = new Date(utcTime + (koreaTimeOffset * 60 * 1000));
       const hours = koreaTime.getHours();
       const minutes = koreaTime.getMinutes();
       const currentTime = hours * 60 + minutes; // 분 단위로 변환
@@ -748,25 +751,29 @@ const HomeScreen = ({ navigation }: any) => {
       let targetMealType: "BREAKFAST" | "LUNCH" | "DINNER" | null = null;
       let mealTypeName = "";
 
-      // 00:00 - 4:00: 아침
-      if (currentTime >= 0 && currentTime < 4 * 60) {
+      // 00:00 - 10:00: 아침
+      if (currentTime >= 0 && currentTime < 10 * 60) {
         targetMealType = "BREAKFAST";
         mealTypeName = "아침";
+        console.log('[HOME] 시간대 판단: 아침 (0 <=', currentTime, '< 600)');
       }
-      // 4:00 - 18:00: 점심
-      else if (currentTime >= 4 * 60 && currentTime < 18 * 60) {
+      // 10:00 - 18:00: 점심
+      else if (currentTime >= 10 * 60 && currentTime < 18 * 60) {
         targetMealType = "LUNCH";
         mealTypeName = "점심";
+        console.log('[HOME] 시간대 판단: 점심 (600 <=', currentTime, '< 1080)');
       }
       // 18:00 - 24:00: 저녁
       else if (currentTime >= 18 * 60 && currentTime < 24 * 60) {
         targetMealType = "DINNER";
         mealTypeName = "저녁";
+        console.log('[HOME] 시간대 판단: 저녁 (1080 <=', currentTime, '< 1440)');
       }
-      // 00:00 - 4:00 범위가 아니면 아침 (새벽 시간대)
+      // 예외 처리 (현재는 발생하지 않지만 안전을 위해)
       else {
         targetMealType = "BREAKFAST";
         mealTypeName = "아침";
+        console.log('[HOME] 시간대 판단: 예외 처리 - 아침으로 설정 (currentTime:', currentTime, ')');
       }
 
       const today = new Date();
@@ -1001,6 +1008,21 @@ const HomeScreen = ({ navigation }: any) => {
     const unsubscribe = eventBus.on("inbodyUpdated", () => {
       console.log("[HOME] 인바디 업데이트 이벤트 수신, 인바디 데이터 새로고침");
       loadInBodyData();
+    });
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, []);
+
+  // 식사 삭제 이벤트 리스너
+  useEffect(() => {
+    const unsubscribe = eventBus.on("mealDeleted", () => {
+      console.log("[HOME] 식사 삭제 이벤트 수신, 식단 데이터 새로고침");
+      // 식단 추천 데이터 새로고침
+      loadMealRecommendation();
+      // 주간 진행률 데이터 새로고침 (캘린더 칼로리 업데이트)
+      loadWeeklyProgress();
     });
 
     return () => {

@@ -2125,6 +2125,16 @@ const ExerciseScreen = ({ navigation }: any) => {
       loadGoalData();
       loadTodayProgress(); // 오늘 진행률 로드 (게이지 업데이트)
 
+      // eventBus로 운동 저장 이벤트 발생 (캘린더 새로고침용)
+      const workoutDate = selectedDate 
+        ? `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
+        : null;
+      eventBus.emit("workoutSessionSaved", {
+        sessionId: response.sessionId,
+        exerciseName: trimmedTitle,
+        workoutDate: workoutDate,
+      });
+
       // 운동 제목 저장 후 주간 진행률을 다시 가져와서 게이지 업데이트
       // 서버에서 exerciseRate 계산에 시간이 걸릴 수 있으므로 여러 번 재시도
       const retryLoadProgress = async (
@@ -3579,6 +3589,12 @@ const ExerciseScreen = ({ navigation }: any) => {
         style: "destructive",
         onPress: async () => {
           try {
+            // 삭제할 운동 정보 저장 (이벤트 발생용)
+            const deletedActivity = allActivities.find((activity) => activity.id === workoutId);
+            const workoutDate = selectedDate 
+              ? `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
+              : null;
+
             // 서버 API 호출 (sessionId가 있으면)
             if (sessionId) {
               await deleteWorkoutSession(sessionId);
@@ -3589,6 +3605,13 @@ const ExerciseScreen = ({ navigation }: any) => {
             setAllActivities((prev) =>
               prev.filter((activity) => activity.id !== workoutId)
             );
+
+            // eventBus로 운동 삭제 이벤트 발생 (캘린더 새로고침용)
+            eventBus.emit("workoutSessionDeleted", {
+              sessionId: sessionId || null,
+              exerciseName: deletedActivity?.title || null,
+              workoutDate: workoutDate,
+            });
           } catch (e) {
             console.error("[WORKOUT][DELETE] 삭제 실패:", e);
             Alert.alert("오류", "운동 삭제 중 오류가 발생했습니다.");

@@ -14,7 +14,7 @@ import {
   Linking,
 } from 'react-native';
 import {Picker} from '@react-native-picker/picker';
-import {authAPI} from '../../services';
+import {authAPI, mealAPI} from '../../services';
 
 const SignupScreen = ({navigation}: any) => {
   // 회원가입 단계 관리 (1~5단계)
@@ -374,6 +374,24 @@ const SignupScreen = ({navigation}: any) => {
       const response = await authAPI.signup(signupData);
       
       if (response.success) {
+        // 기본 칼로리 목표 2000으로 설정
+        try {
+          const today = new Date();
+          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+          await mealAPI.setNutritionGoal({
+            targetCalories: 2000,
+            targetCarbs: 0,
+            targetProtein: 0,
+            targetFat: 0,
+            goalType: 'MANUAL',
+            date: todayStr,
+          });
+          console.log('✅ 기본 칼로리 목표 2000 설정 완료');
+        } catch (goalError) {
+          console.error('기본 칼로리 목표 설정 실패:', goalError);
+          // 칼로리 목표 설정 실패해도 회원가입은 성공으로 처리
+        }
+        
         setShowCompleteScreen(true);
       } else {
         const errorMessage = response.message || '회원가입에 실패했습니다';
