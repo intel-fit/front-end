@@ -940,7 +940,9 @@ const ExerciseScreen = ({ navigation }: any) => {
     };
 
     loadActivityImages();
-  }, [activities, exerciseImages, exerciseImagesByName, prefetchImage]);
+    // exerciseImages, exerciseImagesByName는 이미지가 로드될 때마다 변경되므로
+    // 의존성에서 제거하여 불필요한 재실행 방지 (이미지가 필요한 활동만 체크)
+  }, [activities, prefetchImage]);
 
   const COMPLETED_COUNT_KEY_BASE = "workoutCompletedThisWeek";
   const ACTIVITIES_KEY_BASE = "user_activities_v1";
@@ -1013,14 +1015,12 @@ const ExerciseScreen = ({ navigation }: any) => {
       const completedDays = progressArray.filter(
         (item) => item?.exerciseRate === 100
       );
-      console.log(
-        "[PROGRESS] exerciseRate가 100인 날짜:",
-        completedDays.map((d) => d.date)
-      );
-      console.log(
-        "[PROGRESS] exerciseRate가 100인 날짜 개수:",
-        completedDays.length
-      );
+      if (__DEV__ && completedDays.length > 0) {
+        console.log(
+          "[PROGRESS] 주간 완료:",
+          `${completedDays.length}일 / 총 ${progressArray.length}일, 칼로리: ${sum}kcal`
+        );
+      }
     } catch (e) {
       console.error("주간 칼로리 로드 실패:", e);
       setWeeklyCalories(0);
@@ -1698,10 +1698,8 @@ const ExerciseScreen = ({ navigation }: any) => {
   }, [
     userId,
     selectedDate,
-    exerciseImages,
-    exerciseImagesByName,
-    prefetchImage,
-    generateSearchKeywords,
+    // exerciseImages, exerciseImagesByName 제거 - 이미지 로드는 별도 useEffect에서 처리
+    // prefetchImage, generateSearchKeywords는 안정적인 함수이므로 제거
   ]);
 
   React.useEffect(() => {
@@ -1729,95 +1727,83 @@ const ExerciseScreen = ({ navigation }: any) => {
   ]);
 
   // 기록하기 탭에 들어올 때마다 이번 주 진행률을 다시 계산
+  // 주의: useEffect에서 이미 loadWeeklyCalories()를 호출하므로,
+  // useFocusEffect에서는 completedCount만 업데이트하고 API 호출은 최소화
   useFocusEffect(
     React.useCallback(() => {
       if (!userIdLoaded) return;
 
-      const refreshThisWeekProgress = async () => {
-        try {
-          // 서버에서 이번 주 진행률 데이터 가져오기
-          const weeklyData = await fetchWeeklyProgress();
-          if (!Array.isArray(weeklyData)) return;
+      // weeklyProgress가 이미 있으면 그것을 사용하여 completedCount만 업데이트
+      // API 호출은 useEffect에서 이미 했으므로 중복 호출 방지
+      const updateCompletedCount = () => {
+        if (!weeklyProgress || weeklyProgress.length === 0) return;
 
-          // 이번 주 시작일 계산
-          const now = new Date();
-          const thisWeekStart = new Date(now);
-          thisWeekStart.setDate(now.getDate() - now.getDay()); // 일요일로 설정
-          thisWeekStart.setHours(0, 0, 0, 0);
+        // 이번 주 시작일 계산
+        const now = new Date();
+        const thisWeekStart = new Date(now);
+        thisWeekStart.setDate(now.getDate() - now.getDay()); // 일요일로 설정
+        thisWeekStart.setHours(0, 0, 0, 0);
 
-          const today = new Date();
-          const todayEnd = new Date(
-            today.getFullYear(),
-            today.getMonth(),
-            today.getDate(),
-            23,
-            59,
-            59,
-            999
-          );
+        const today = new Date();
+        const todayEnd = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate(),
+          23,
+          59,
+          59,
+          999
+        );
 
-          // 이번 주 완료된 날짜 개수 계산 (exerciseRate가 100인 날짜)
-          const completedDates = new Set<string>();
-          weeklyData.forEach((item) => {
-            if (!item || !item.date) return;
-            try {
-              const itemDate = new Date(item.date);
-              if (isNaN(itemDate.getTime())) return;
+        // 이번 주 완료된 날짜 개수 계산 (exerciseRate가 100인 날짜)
+        const completedDates = new Set<string>();
+        weeklyProgress.forEach((item) => {
+          if (!item || !item.date) return;
+          try {
+            const itemDate = new Date(item.date);
+            if (isNaN(itemDate.getTime())) return;
 
-              const itemDateOnly = new Date(
-                itemDate.getFullYear(),
-                itemDate.getMonth(),
-                itemDate.getDate()
-              );
-              const weekStartOnly = new Date(
-                thisWeekStart.getFullYear(),
-                thisWeekStart.getMonth(),
-                thisWeekStart.getDate()
-              );
-              const todayEndOnly = new Date(
-                todayEnd.getFullYear(),
-                todayEnd.getMonth(),
-                todayEnd.getDate()
-              );
+            const itemDateOnly = new Date(
+              itemDate.getFullYear(),
+              itemDate.getMonth(),
+              itemDate.getDate()
+            );
+            const weekStartOnly = new Date(
+              thisWeekStart.getFullYear(),
+              thisWeekStart.getMonth(),
+              thisWeekStart.getDate()
+            );
+            const todayEndOnly = new Date(
+              todayEnd.getFullYear(),
+              todayEnd.getMonth(),
+              todayEnd.getDate()
+            );
 
-              // 이번 주 범위 내에 있고, exerciseRate가 100이면 완료된 날짜로 간주
-              if (
-                itemDateOnly >= weekStartOnly &&
-                itemDateOnly <= todayEndOnly &&
-                item.exerciseRate === 100
-              ) {
-                const dateKey = `${itemDateOnly.getFullYear()}-${String(
-                  itemDateOnly.getMonth() + 1
-                ).padStart(2, "0")}-${String(itemDateOnly.getDate()).padStart(
-                  2,
-                  "0"
-                )}`;
-                completedDates.add(dateKey);
-              }
-            } catch (error) {
-              // 날짜 파싱 에러 무시
+            // 이번 주 범위 내에 있고, exerciseRate가 100이면 완료된 날짜로 간주
+            if (
+              itemDateOnly >= weekStartOnly &&
+              itemDateOnly <= todayEndOnly &&
+              item.exerciseRate === 100
+            ) {
+              const dateKey = `${itemDateOnly.getFullYear()}-${String(
+                itemDateOnly.getMonth() + 1
+              ).padStart(2, "0")}-${String(itemDateOnly.getDate()).padStart(
+                2,
+                "0"
+              )}`;
+              completedDates.add(dateKey);
             }
-          });
+          } catch (error) {
+            // 날짜 파싱 에러 무시
+          }
+        });
 
-          const actualCompletedThisWeek = completedDates.size;
-
-          // completedThisWeek 업데이트
-          setCompletedCountPersist(actualCompletedThisWeek);
-
-          // weeklyProgress도 업데이트
-          setWeeklyProgress(weeklyData);
-          const sum = weeklyData.reduce(
-            (s: number, d) => s + Number(d?.totalCalorie || 0),
-            0
-          );
-          setWeeklyCalories(sum);
-        } catch (error) {
-          console.error("[PROGRESS] 이번 주 진행률 새로고침 실패:", error);
-        }
+        const actualCompletedThisWeek = completedDates.size;
+        setCompletedCountPersist(actualCompletedThisWeek);
       };
 
-      refreshThisWeekProgress();
-    }, [userIdLoaded, getStorageKey])
+      updateCompletedCount();
+    }, [userIdLoaded, weeklyProgress]) // weeklyProgress가 변경될 때만 업데이트
   );
 
   // 날짜를 yyyy-MM-dd 형식으로 변환
@@ -2279,20 +2265,23 @@ const ExerciseScreen = ({ navigation }: any) => {
       loadTodayProgress(); // 오늘 진행률 로드 (게이지 업데이트)
 
       // 운동 제목 저장 후 주간 진행률을 다시 가져와서 게이지 업데이트
-      // 서버에서 exerciseRate 계산에 시간이 걸릴 수 있으므로 여러 번 재시도
+      // 서버에서 exerciseRate 계산에 시간이 걸릴 수 있으므로 재시도 (최적화: 중복 호출 제거)
       const retryLoadProgress = async (
         retryCount: number = 0,
-        maxRetries: number = 3
+        maxRetries: number = 2 // 3 -> 2로 감소
       ) => {
         try {
-          // 목표 데이터와 주간 진행률을 함께 업데이트
-          await loadGoalData();
-          await loadWeeklyCalories();
-          await loadTodayProgress(); // 오늘 진행률 로드 (게이지 업데이트)
+          // 첫 번째 호출만 전체 데이터 로드
+          if (retryCount === 0) {
+            await loadGoalData();
+            await loadWeeklyCalories();
+            await loadTodayProgress();
+          }
 
           // exerciseRate가 업데이트되었는지 확인하기 위해 잠시 대기 후 다시 확인
           setTimeout(async () => {
             try {
+              // 재시도 시에는 주간 진행률만 확인 (중복 호출 최소화)
               const freshData = await fetchWeeklyProgress();
               if (Array.isArray(freshData)) {
                 setWeeklyProgress(freshData);
@@ -2301,9 +2290,6 @@ const ExerciseScreen = ({ navigation }: any) => {
                   0
                 );
                 setWeeklyCalories(sum);
-
-                // 오늘 진행률도 다시 로드 (게이지 업데이트)
-                await loadTodayProgress();
 
                 // 오늘 날짜의 exerciseRate 확인
                 const today = new Date();
@@ -2320,15 +2306,10 @@ const ExerciseScreen = ({ navigation }: any) => {
                 ) {
                   setTimeout(() => {
                     retryLoadProgress(retryCount + 1, maxRetries);
-                  }, 2000 * (retryCount + 1)); // 재시도마다 대기 시간 증가 (2초, 4초, 6초)
-                } else if (
-                  todayProgressItem &&
-                  todayProgressItem.exerciseRate === 100
-                ) {
-                  console.log(
-                    "[PROGRESS] exerciseRate 업데이트 확인됨:",
-                    todayProgressItem
-                  );
+                  }, 2000 * (retryCount + 1)); // 재시도마다 대기 시간 증가 (2초, 4초)
+                } else {
+                  // 완료되었거나 재시도 횟수 초과 시 오늘 진행률만 한 번 더 확인
+                  await loadTodayProgress();
                 }
               }
             } catch (error) {
@@ -3571,14 +3552,13 @@ const ExerciseScreen = ({ navigation }: any) => {
             }
           });
 
-          // 주간 진행률 전체를 다시 가져와서 게이지 업데이트
-          // 약간의 지연을 두어 서버에 반영될 시간을 줌
+          // 주간 진행률 업데이트는 이미 위에서 처리했으므로
+          // 오늘 진행률만 업데이트 (중복 호출 방지)
           setTimeout(async () => {
             try {
-              await loadWeeklyCalories();
-              await loadTodayProgress(); // 오늘 진행률 로드 (게이지 업데이트)
+              await loadTodayProgress(); // 오늘 진행률만 로드 (게이지 업데이트)
             } catch (error) {
-              console.error("[PROGRESS] 주간 진행률 새로고침 실패:", error);
+              console.error("[PROGRESS] 오늘 진행률 새로고침 실패:", error);
             }
           }, 500);
 
