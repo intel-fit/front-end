@@ -32,7 +32,7 @@ type ExercisePlan = {
   planName: string;
   createdAt: string;
   description?: string;
-  days: Exercise[][]; // 날짜별 운동 배열 (Day 1, Day 2...)
+  days: Exercise[][];
   isServerPlan: boolean;
 };
 
@@ -46,23 +46,18 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedPlanIds, setSelectedPlanIds] = useState<string[]>([]);
 
-  // 🔄 데이터 로드 함수 (서버 API 연동)
-  // 데이터 로드 함수
-  // 🔄 데이터 로드 함수 (1일 + 7일 통합)
+  // 🔄 데이터 로드 함수
   const loadExercisePlans = async () => {
     try {
       setLoading(true);
 
       console.log("🔄 운동 데이터 로드 시작...");
 
-      // 1. 두 API를 동시에 호출 (병렬 처리)
       const [dailyResponse, weeklyResponse] = await Promise.all([
-        // (1) 1일 추천 조회 (실패해도 빈 배열 반환하여 7일치는 보이게 함)
         recommendedExerciseAPI.getRecommendedExercises().catch((err) => {
           console.warn("⚠️ 1일 추천 조회 실패:", err);
           return [];
         }),
-        // (2) 7일 내역 조회 (실패해도 빈 객체 반환)
         recommendedExerciseAPI.getRecommendedHistory().catch((err) => {
           console.warn("⚠️ 7일 내역 조회 실패:", err);
           return {};
@@ -71,13 +66,10 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
 
       let combinedPlans: ExercisePlan[] = [];
 
-      // ------------------------------------------------------------
-      // 🅰️ [1일 추천 데이터 처리] (기존 로직 복구)
-      // ------------------------------------------------------------
+      // 🅰️ [1일 추천 데이터 처리]
       if (Array.isArray(dailyResponse) && dailyResponse.length > 0) {
         console.log(`📥 1일 추천 데이터: ${dailyResponse.length}개`);
 
-        // 타겟별로 그룹화 (예: 가슴, 등...)
         const groupedByTarget = dailyResponse.reduce(
           (acc: any, exercise: any) => {
             const target = exercise.target || "전신";
@@ -88,14 +80,13 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
           {}
         );
 
-        // 플랜 객체로 변환
         const dailyPlans = Object.entries(groupedByTarget).map(
           ([target, exs]: [string, any], index) => ({
             planId: `daily_${target}_${Date.now()}_${index}`,
             planName: `오늘의 추천 - ${target}`,
-            createdAt: new Date().toISOString(), // 생성일 (오늘)
+            createdAt: new Date().toISOString(),
             description: `${target} 집중 트레이닝 (1일)`,
-            days: [exs], // 1일치이므로 배열 안에 배열 하나 [[운동1, 운동2...]]
+            days: [exs],
             isServerPlan: true,
           })
         );
@@ -103,9 +94,7 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
         combinedPlans = [...combinedPlans, ...dailyPlans];
       }
 
-      // ------------------------------------------------------------
-      // 🅱️ [7일 내역 데이터 처리] (객체 형태 { "2025-12-14": [...] })
-      // ------------------------------------------------------------
+      // 🅱️ [7일 내역 데이터 처리]
       if (
         weeklyResponse &&
         typeof weeklyResponse === "object" &&
@@ -118,10 +107,8 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
           }개 감지`
         );
 
-        // 1. 날짜 오름차순 정렬
         const sortedDates = Object.keys(weeklyResponse).sort();
 
-        // 2. 날짜별 운동 리스트 추출
         const daysArray = sortedDates.map((date) => {
           const exercises = weeklyResponse[date] || [];
           return exercises.map((ex: any) => ({
@@ -135,7 +122,6 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
           }));
         });
 
-        // 3. 통합 플랜 생성 (데이터가 있는 경우만)
         if (daysArray.length > 0) {
           const weeklyPlan: ExercisePlan = {
             planId: `weekly_history_${Date.now()}`,
@@ -149,10 +135,7 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
         }
       }
 
-      // ------------------------------------------------------------
       // 🏁 최종 합치기 및 정렬
-      // ------------------------------------------------------------
-      // 최신순 정렬 (생성일 기준 내림차순)
       combinedPlans.sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -212,17 +195,49 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
     }
   };
 
+  // ✅ 수정된 멤버십 타입 확인 로직
   const handleNewRecommendPress = async () => {
     try {
       setLoading(true);
+      console.log("🔍 멤버십 타입 확인 중...");
+
       const profile = await authAPI.getProfile();
-      if (profile.membershipType === "FREE") {
+      console.log("📦 getProfile 응답:", JSON.stringify(profile, null, 2));
+
+      // profile이 직접 프로필 객체임 (profile.membershipType으로 바로 접근)
+      const membershipType = profile?.membershipType;
+      console.log("🎯 멤버십 타입:", membershipType);
+
+      // 멤버십 타입에 따른 네비게이션
+      if (!membershipType) {
+        console.warn("⚠️ 멤버십 타입이 없습니다. 기본값: 무료");
         navigation.navigate("TempRoutineRecommendScreen");
-      } else {
+      } else if (membershipType.toUpperCase() === "FREE") {
+        console.log("➡️  무료 페이지로 이동");
+        navigation.navigate("TempRoutineRecommendScreen");
+      } else if (membershipType.toUpperCase() === "PREMIUM") {
+        console.log("➡️  유료 페이지로 이동");
         navigation.navigate("RoutineRecommendNew");
+      } else {
+        // 예상치 못한 값인 경우
+        console.warn(`⚠️ 알 수 없는 멤버십 타입: ${membershipType}`);
+        navigation.navigate("TempRoutineRecommendScreen");
       }
-    } catch (error) {
-      navigation.navigate("TempRoutineRecommendScreen");
+    } catch (error: any) {
+      console.error("❌ 멤버십 확인 중 오류:", error);
+      console.error("오류 상세:", error.message);
+
+      // 에러 발생 시 무료 버전으로 이동
+      Alert.alert(
+        "알림",
+        "멤버십 정보를 확인할 수 없습니다.\n무료 버전으로 이동합니다.",
+        [
+          {
+            text: "확인",
+            onPress: () => navigation.navigate("TempRoutineRecommendScreen"),
+          },
+        ]
+      );
     } finally {
       setLoading(false);
     }
@@ -241,9 +256,7 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
           try {
             setLoading(true);
 
-            // "나의 주간 운동 일정"인 경우
             if (plan.planId.startsWith("weekly_history")) {
-              // 모든 날짜 추출
               const dates = plan.days
                 .map((dayExercises) => dayExercises[0]?.date)
                 .filter(Boolean);
@@ -258,7 +271,6 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
               let successCount = 0;
               let failCount = 0;
 
-              // 각 날짜를 개별적으로 삭제
               for (const date of dates) {
                 try {
                   console.log(`📅 ${date} 삭제 중...`);
@@ -267,7 +279,6 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
                       date
                     );
 
-                  // 응답에 deletedCount 체크
                   if (result && result.deletedCount > 0) {
                     successCount++;
                     console.log(
@@ -296,9 +307,7 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
                   "삭제할 데이터가 없거나 삭제에 실패했습니다."
                 );
               }
-            }
-            // "오늘의 추천"인 경우
-            else if (plan.planId.startsWith("daily_")) {
+            } else if (plan.planId.startsWith("daily_")) {
               const today = new Date().toISOString().split("T")[0];
               console.log(`📅 ${today} 삭제 중...`);
 
@@ -317,7 +326,6 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
               return;
             }
 
-            // 삭제 후 목록 새로고침
             await loadExercisePlans();
           } catch (error: any) {
             console.error("❌ 삭제 중 오류:", error);
@@ -332,6 +340,7 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
       },
     ]);
   };
+
   const handleBulkDelete = async () => {
     if (selectedPlanIds.length === 0) return;
 
@@ -476,7 +485,7 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
               <Text style={styles.emptyText}>저장된 추천 내역이 없습니다.</Text>
               <TouchableOpacity
                 style={styles.goToRecommendBtn}
-                onPress={() => navigation.navigate("RoutineRecommendNew")}
+                onPress={handleNewRecommendPress}
               >
                 <Text style={styles.goToRecommendBtnText}>
                   추천받으러 가기 →
@@ -620,7 +629,6 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
               </Text>
             </View>
 
-            {/* 7일 루틴일 경우에만 상단 탭 표시 */}
             {selectedPlan.days.length > 1 && (
               <ScrollView
                 horizontal
@@ -629,12 +637,10 @@ const RoutineRecommendScreen = ({ navigation }: any) => {
                 contentContainerStyle={styles.dayTabs}
               >
                 {selectedPlan.days.map((dayExercises, index) => {
-                  // 해당 day의 날짜 추출 (첫 번째 운동의 date 필드 사용)
                   const dateStr = dayExercises[0]?.date;
-                  let displayText = `${index + 1}일차`; // 기본값
+                  let displayText = `${index + 1}일차`;
 
                   if (dateStr) {
-                    // 날짜를 파싱해서 "MM/DD (요일)" 형식으로 표시
                     const date = new Date(dateStr);
                     const month = date.getMonth() + 1;
                     const day = date.getDate();
