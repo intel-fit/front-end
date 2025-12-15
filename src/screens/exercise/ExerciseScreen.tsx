@@ -3989,13 +3989,21 @@ const ExerciseScreen = ({ navigation }: any) => {
                         <View
                           style={[
                             styles.monthDateBadge,
-                            isSelected && styles.monthDateBadgeToday,
+                            isSelected
+                              ? styles.monthDateBadgeSelected
+                              : isToday
+                              ? styles.monthDateBadgeToday
+                              : null,
                           ]}
                         >
                           <Text
                             style={[
                               styles.monthDateText,
-                              isSelected && styles.monthDateTextToday,
+                              isSelected
+                                ? styles.monthDateTextSelected
+                                : isToday
+                                ? styles.monthDateTextToday
+                                : null,
                               !isCurrentMonth && styles.monthDateTextMuted,
                             ]}
                           >
@@ -4106,15 +4114,15 @@ const ExerciseScreen = ({ navigation }: any) => {
                         <View
                           style={[
                             styles.calendarNumberInner,
-                            isSelected && styles.calendarNumberSelected,
                             isToday && styles.calendarNumberToday,
+                            isSelected && styles.calendarNumberSelected,
                           ]}
                         >
                           <Text
                             style={[
                               styles.calendarNumberText,
-                              isSelected && styles.calendarNumberSelectedText,
                               isToday && styles.calendarNumberTodayText,
+                              isSelected && styles.calendarNumberSelectedText,
                             ]}
                           >
                             {label}
@@ -5119,6 +5127,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  monthDateBadgeSelected: {
+    backgroundColor: "#e3ff7c",
+  },
   monthDateBadgeToday: {
     backgroundColor: "#ffffff",
   },
@@ -5130,6 +5141,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   monthDateTextToday: {
+    color: "#000",
+  },
+  monthDateTextSelected: {
     color: "#000",
   },
   monthDateTextMuted: {
@@ -5161,10 +5175,11 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   calendarNumberSelected: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#e3ff7c",
+    borderRadius: 14,
   },
   calendarNumberToday: {
-    backgroundColor: "#e3ff7c",
+    backgroundColor: "#ffffff",
   },
   calendarNumberText: {
     fontSize: 16,
