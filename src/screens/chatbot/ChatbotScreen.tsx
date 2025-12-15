@@ -1,5 +1,5 @@
 // src/screens/chatbot/ChatbotScreen.tsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,13 +11,11 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
-  Animated,
 } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { chatAPI, ChatHistoryItem } from "../../services/chatAPI";
@@ -436,55 +434,32 @@ const ChatbotScreen = ({ navigation }: any) => {
                 </View>
 
                 <View style={styles.botImageContainer}>
-                  <LinearGradient
-                    colors={["#e3ff7c20", "#d4f05a10"]}
-                    style={styles.botImageGradient}
-                  >
-                    <Text style={styles.botEmoji}>🤖</Text>
-                  </LinearGradient>
+                  <Text style={styles.botEmoji}>🤖</Text>
                 </View>
 
                 <View style={styles.quickActions}>
                   <TouchableOpacity
                     style={styles.actionBtn}
                     onPress={() => handleQuickSelect("exercise")}
-                    activeOpacity={0.7}
                   >
-                    <LinearGradient
-                      colors={["#e3ff7c", "#d4f05a"]}
-                      style={styles.actionBtnGradient}
-                    >
-                      <Text style={styles.actionIcon}>🏋️</Text>
-                      <Text style={styles.actionText}>운동 추천</Text>
-                    </LinearGradient>
+                    <Text style={styles.actionIcon}>🏋️</Text>
+                    <Text style={styles.actionText}>운동 추천</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.actionBtn}
+                    style={[styles.actionBtn]}
                     onPress={() => handleQuickSelect("food")}
-                    activeOpacity={0.7}
                   >
-                    <LinearGradient
-                      colors={["#e3ff7c", "#d4f05a"]}
-                      style={styles.actionBtnGradient}
-                    >
-                      <Text style={styles.actionIcon}>🍗</Text>
-                      <Text style={styles.actionText}>식단 추천</Text>
-                    </LinearGradient>
+                    <Text style={styles.actionIcon}>🍗</Text>
+                    <Text style={styles.actionText}>식단 추천</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={styles.actionBtn}
                     onPress={() => handleQuickSelect("plan")}
-                    activeOpacity={0.7}
                   >
-                    <LinearGradient
-                      colors={["#e3ff7c", "#d4f05a"]}
-                      style={styles.actionBtnGradient}
-                    >
-                      <Text style={styles.actionIcon}>📅</Text>
-                      <Text style={styles.actionText}>계획 수립</Text>
-                    </LinearGradient>
+                    <Text style={styles.actionIcon}>📅</Text>
+                    <Text style={styles.actionText}>계획 수립</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -555,48 +530,26 @@ const ChatbotScreen = ({ navigation }: any) => {
                     <View
                       key={index}
                       style={[
-                        styles.messageWrapper,
-                        msg.type === "user" && styles.userMessageWrapper,
+                        styles.message,
+                        msg.type === "user"
+                          ? styles.userMessage
+                          : styles.botMessage,
                       ]}
                     >
-                      {msg.type === "bot" && (
-                        <View style={styles.botAvatar}>
-                          <Text style={styles.botAvatarEmoji}>🤖</Text>
-                        </View>
-                      )}
-                      {msg.type === "user" ? (
-                        <LinearGradient
-                          colors={["#e3ff7c", "#d4f05a"]}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          style={[styles.message, styles.userMessage]}
-                        >
-                          <Text style={styles.userMessageText}>{msg.text}</Text>
-                        </LinearGradient>
-                      ) : (
-                        <View style={[styles.message, styles.botMessage]}>
-                          <Text style={styles.botMessageText}>{msg.text}</Text>
-                        </View>
-                      )}
-                      {msg.type === "user" && (
-                        <View style={styles.userAvatar}>
-                          <Icon name="person" size={16} color="#000" />
-                        </View>
-                      )}
+                      <Text
+                        style={
+                          msg.type === "user"
+                            ? styles.userMessageText
+                            : styles.botMessageText
+                        }
+                      >
+                        {msg.text}
+                      </Text>
                     </View>
                   ))}
                   {isLoading && (
-                    <View style={[styles.messageWrapper, styles.botMessageWrapper]}>
-                      <View style={styles.botAvatar}>
-                        <Text style={styles.botAvatarEmoji}>🤖</Text>
-                      </View>
-                      <View style={[styles.message, styles.botMessage, styles.loadingMessage]}>
-                        <View style={styles.typingIndicator}>
-                          <View style={[styles.dot, styles.dot1]} />
-                          <View style={[styles.dot, styles.dot2]} />
-                          <View style={[styles.dot, styles.dot3]} />
-                        </View>
-                      </View>
+                    <View style={[styles.message, styles.botMessage]}>
+                      <Text style={styles.loadingText}>...</Text>
                     </View>
                   )}
                 </View>
@@ -608,39 +561,20 @@ const ChatbotScreen = ({ navigation }: any) => {
         <View
           style={[
             styles.chatinputContainer,
-            { 
-              paddingBottom: isInTab 
-                ? 2 
-                : (insets.bottom > 0 ? Math.max(insets.bottom, 4) : 4)
-            },
+            { paddingBottom: insets.bottom > 0 ? Math.max(insets.bottom, 4) : 4 },
           ]}
         >
-          <View style={styles.inputWrapper}>
-            <TextInput
-              style={styles.messageInput}
-              placeholder="메시지를 입력하세요..."
-              value={inputValue}
-              onChangeText={setInputValue}
-              onSubmitEditing={handleSend}
-              placeholderTextColor={NEW_COLORS.text_secondary}
-              multiline
-              maxLength={500}
-            />
-            <TouchableOpacity
-              style={[
-                styles.sendBtn,
-                inputValue.trim() === "" && styles.sendBtnDisabled,
-              ]}
-              onPress={handleSend}
-              disabled={inputValue.trim() === "" || isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator size="small" color="#000" />
-              ) : (
-                <Icon name="send" size={20} color="#000" />
-              )}
-            </TouchableOpacity>
-          </View>
+          <TextInput
+            style={styles.messageInput}
+            placeholder="무엇이든 물어보세요"
+            value={inputValue}
+            onChangeText={setInputValue}
+            onSubmitEditing={handleSend}
+            placeholderTextColor={NEW_COLORS.text_secondary}
+          />
+          <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
+            <Text style={styles.sendIcon}>➤</Text>
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
 
@@ -712,15 +646,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 32,
-    fontWeight: "700",
+    fontWeight: "bold",
     color: NEW_COLORS.text,
     marginBottom: 8,
-    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 18,
     color: NEW_COLORS.text_secondary,
-    fontWeight: "400",
   },
   settingsButton: {
     flexDirection: "row",
@@ -778,19 +710,9 @@ const styles = StyleSheet.create({
   botImageContainer: {
     alignItems: "center",
     marginVertical: 40,
-    padding: 20,
-  },
-  botImageGradient: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: NEW_COLORS.accent,
   },
   botEmoji: {
-    fontSize: 80,
+    fontSize: 120,
   },
   quickActions: {
     flexDirection: "row",
@@ -799,29 +721,24 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     flex: 1,
-    borderRadius: 20,
-    overflow: "hidden",
-    shadowColor: NEW_COLORS.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  actionBtnGradient: {
+    backgroundColor: NEW_COLORS.card_bg,
     padding: 20,
+    borderRadius: 20,
     alignItems: "center",
-    justifyContent: "center",
-    minHeight: 100,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   actionIcon: {
-    fontSize: 36,
+    fontSize: 32,
     marginBottom: 8,
   },
   actionText: {
     fontSize: 14,
-    fontWeight: "700",
-    color: "#000000",
-    letterSpacing: 0.3,
+    fontWeight: "600",
+    color: NEW_COLORS.text,
   },
   historyButton: {
     flexDirection: "row",
@@ -835,11 +752,6 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     borderColor: NEW_COLORS.separator,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
   },
   historyButtonText: {
     fontSize: 15,
@@ -890,146 +802,61 @@ const styles = StyleSheet.create({
   messagesContainer: {
     paddingBottom: 10,
   },
-  messageWrapper: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    marginBottom: 16,
-    gap: 8,
-  },
-  userMessageWrapper: {
-    justifyContent: "flex-end",
-  },
-  botMessageWrapper: {
-    justifyContent: "flex-start",
-  },
-  botAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: NEW_COLORS.card_bg,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: NEW_COLORS.accent,
-  },
-  botAvatarEmoji: {
-    fontSize: 20,
-  },
-  userAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: NEW_COLORS.accent,
-    justifyContent: "center",
-    alignItems: "center",
-  },
   message: {
-    maxWidth: "75%",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    maxWidth: "80%",
+    padding: 12,
     borderRadius: 20,
+    marginBottom: 12,
   },
   userMessage: {
-    borderBottomRightRadius: 4,
-    shadowColor: NEW_COLORS.accent,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    alignSelf: "flex-end",
+    backgroundColor: NEW_COLORS.accent,
   },
   botMessage: {
+    alignSelf: "flex-start",
     backgroundColor: NEW_COLORS.card_bg,
-    borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: NEW_COLORS.separator,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  loadingMessage: {
-    paddingVertical: 16,
   },
   userMessageText: {
     color: "#000000",
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: "500",
+    fontSize: 16,
   },
   botMessageText: {
     color: NEW_COLORS.text,
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: "400",
+    fontSize: 16,
   },
-  typingIndicator: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: NEW_COLORS.text_secondary,
-  },
-  dot1: {
-    opacity: 0.4,
-  },
-  dot2: {
-    opacity: 0.6,
-  },
-  dot3: {
-    opacity: 0.8,
+  loadingText: {
+    color: NEW_COLORS.text_secondary,
+    fontSize: 16,
   },
   chatinputContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    backgroundColor: NEW_COLORS.background,
+    flexDirection: "row",
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    backgroundColor: NEW_COLORS.card_bg,
     borderTopWidth: 1,
     borderTopColor: NEW_COLORS.separator,
-  },
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 10,
-    backgroundColor: NEW_COLORS.card_bg,
-    borderRadius: 28,
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: NEW_COLORS.separator,
+    gap: 12,
   },
   messageInput: {
     flex: 1,
-    backgroundColor: "transparent",
+    backgroundColor: NEW_COLORS.background,
     borderRadius: 24,
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
     paddingVertical: 12,
-    fontSize: 15,
+    fontSize: 16,
     color: NEW_COLORS.text,
-    maxHeight: 100,
-    minHeight: 44,
   },
   sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: NEW_COLORS.accent,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: NEW_COLORS.accent,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 5,
   },
-  sendBtnDisabled: {
-    backgroundColor: NEW_COLORS.separator,
-    opacity: 0.5,
-    shadowOpacity: 0,
-    elevation: 0,
+  sendIcon: {
+    color: "#000000",
+    fontSize: 20,
   },
 });
 
