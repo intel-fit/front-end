@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { authAPI } from "../../services";
+import { colors } from "../../theme/colors";
 import AIAnalysisModal from "../../components/modals/AIAnalysisModal";
 import MyPlanModal from "../../components/modals/MyPlanModal";
 import PaymentMethodModal from "../../components/modals/PaymentMethodModal";
@@ -568,13 +569,16 @@ const styles = StyleSheet.create({
   header: {
     paddingVertical: 16,
     paddingHorizontal: 20,
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
     alignItems: "center",
     justifyContent: "center",
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: "700",
-    color: NEW_COLORS.text,
+    color: colors.text,
   },
   content: {
     flex: 1,
