@@ -732,7 +732,7 @@ const InBodyScreen = ({ navigation, route }: any) => {
           0
       );
 
-      // 숫자 타입 검증 및 유효성 확인 (데이터가 없어도 API 호출 시도)
+      // 숫자 타입 검증 및 유효성 확인
       const finalWeight =
         weight !== undefined && !isNaN(weight) && isFinite(weight) ? weight : 0;
       const finalBodyFatPercentage =
@@ -748,6 +748,19 @@ const InBodyScreen = ({ navigation, route }: any) => {
           ? skeletalMuscleMass
           : 0;
       const finalDateStr = dateStr || todayStr;
+
+      // ✅ 인바디 입력값이 전혀 없으면 API 호출하지 않고 코멘트도 비움
+      if (
+        !inBodyData ||
+        (!finalWeight && !finalBodyFatPercentage && !finalSkeletalMuscleMass)
+      ) {
+        console.log(
+          "[INBODY][COMMENT] 인바디 입력값이 없어 코멘트 API 호출 생략"
+        );
+        setAiComment("");
+        setAiCommentLoading(false);
+        return;
+      }
 
       console.log(
         "[INBODY][COMMENT] API 호출 데이터 (인바디 데이터 없을 수 있음):",
