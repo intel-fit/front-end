@@ -1,13 +1,13 @@
 // src/screens/pay/PaymentSuccessScreen.tsx
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
+import { View, Text, StyleSheet, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons as Icon } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRoute } from "@react-navigation/native";
-import { paymentAPI, authAPI } from "../../services";
+import { paymentAPI } from "../../services";
 import { CommonActions } from "@react-navigation/native";
 
 const PaymentSuccessScreen = () => {
@@ -44,24 +44,19 @@ const PaymentSuccessScreen = () => {
       await AsyncStorage.removeItem("testMembershipType");
       console.log("✅ 로컬 PREMIUM 저장 완료");
 
-      // 4. ✅ 로그아웃 처리
-      await AsyncStorage.removeItem("accessToken");
-      await AsyncStorage.removeItem("refreshToken");
-      console.log("✅ 로그아웃 완료");
-
-      // 5. 안내 메시지 + 로그인 화면으로 이동
+      // 4. 안내 메시지 + 홈으로 이동
       Alert.alert(
         "업그레이드 완료! 🎉",
-        "프리미엄 회원이 되셨습니다!\n더 나은 서비스를 위해 다시 로그인해주세요.",
+        "프리미엄 회원이 되셨습니다!\n모든 기능을 자유롭게 이용하세요!",
         [
           {
-            text: "로그인하러 가기",
+            text: "홈으로 가기",
             onPress: () => {
-              // ✅ 스택 초기화하고 Login으로 이동
+              // ✅ 스택 초기화하고 Main(홈)으로 이동
               navigation.dispatch(
                 CommonActions.reset({
                   index: 0,
-                  routes: [{ name: "Login" }],
+                  routes: [{ name: "Main" }],
                 })
               );
             },
@@ -91,22 +86,17 @@ const PaymentSuccessScreen = () => {
       await AsyncStorage.removeItem("testMembershipType");
       console.log("✅ 로컬 PREMIUM 저장 완료");
 
-      // ✅ 로그아웃
-      await AsyncStorage.removeItem("accessToken");
-      await AsyncStorage.removeItem("refreshToken");
-      console.log("✅ 로그아웃 완료");
-
       Alert.alert(
         "업그레이드 완료! 🎉",
-        "프리미엄 회원이 되셨습니다!\n더 나은 서비스를 위해 다시 로그인해주세요.",
+        "프리미엄 회원이 되셨습니다!\n모든 기능을 자유롭게 이용하세요!",
         [
           {
-            text: "로그인하러 가기",
+            text: "홈으로 가기",
             onPress: () => {
               navigation.dispatch(
                 CommonActions.reset({
                   index: 0,
-                  routes: [{ name: "Login" }],
+                  routes: [{ name: "Main" }],
                 })
               );
             },
