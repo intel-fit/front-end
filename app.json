@@ -2,7 +2,7 @@
   "expo": {
     "name": "Intelfit",
     "slug": "intelfit-mobile",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "portrait",
     "scheme": "intelfit",
     "splash": {
@@ -38,7 +38,10 @@
               "pathPrefix": "/auth/kakao"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         },
         {
           "action": "VIEW",
@@ -47,7 +50,10 @@
               "scheme": "intelfit"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         },
         {
           "action": "VIEW",
@@ -57,16 +63,24 @@
               "host": "oauth"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
-      ]
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": ""
+        }
+      }
     },
     "extra": {
+      "kakaoAppKey": "b46c5ece88946636902899138451ac5e",
       "eas": {
-        "projectId": "e2d68caa-2c28-42d1-9faf-6a52d4016dda"
-      },
-      "kakaoAppKey": "b46c5ece88946636902899138451ac5e"
+        "projectId": "0f452949-f695-45d7-88d7-a695b910e551"
+      }
     },
-    "owner": "intelfit"
+    "owner": "a06246"
   }
 }
