@@ -4219,26 +4219,43 @@ const ExerciseScreen = ({ navigation }: any) => {
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
             >
-              {hasIncompleteActivities && workoutActivities.length > 0 && (
-                <TouchableOpacity
-                  style={[
-                    styles.startWorkoutButton,
-                    { backgroundColor: "#4a9eff", padding: 15 },
-                  ]}
-                  onPress={() => {
-                    handleStartWorkoutSequence();
-                  }}
-                >
-                  <Text
+              {(() => {
+                // 선택된 날짜가 오늘인지 확인
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const baseDate = selectedDate ? new Date(selectedDate) : today;
+                baseDate.setHours(0, 0, 0, 0);
+                const isToday = baseDate.getTime() === today.getTime();
+
+                if (
+                  !isToday ||
+                  !hasIncompleteActivities ||
+                  workoutActivities.length === 0
+                ) {
+                  return null;
+                }
+
+                return (
+                  <TouchableOpacity
                     style={[
-                      styles.startWorkoutButtonText,
-                      { color: "white", fontSize: 16 },
+                      styles.startWorkoutButton,
+                      { backgroundColor: "#4a9eff", padding: 15 },
                     ]}
+                    onPress={() => {
+                      handleStartWorkoutSequence();
+                    }}
                   >
-                    시작
-                  </Text>
-                </TouchableOpacity>
-              )}
+                    <Text
+                      style={[
+                        styles.startWorkoutButtonText,
+                        { color: "white", fontSize: 16 },
+                      ]}
+                    >
+                      시작
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })()}
             </View>
           </View>
 

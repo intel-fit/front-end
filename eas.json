@@ -8,17 +8,26 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "cache": {
+        "disabled": false
       }
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "cache": {
+        "disabled": false
       }
     },
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "cache": {
+        "disabled": false
       }
     }
   },
